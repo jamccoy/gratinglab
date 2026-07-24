@@ -53,9 +53,11 @@ All comparisons include:
 
 ### Installation
 
+Requires Python 3.12 (pinned in `.python-version`).
+
 ```bash
-# Install dependencies
-pip install -r requirements.txt
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
 ```
 
 ### Basic Usage
@@ -65,24 +67,26 @@ pip install -r requirements.txt
    # Analysis mode
    ANALYSIS_MODE = 'single'  # or 'multiple' or 'compare'
    SINGLE_FILE = 'data/your_sample.txt'
-   
-   # Grating specifications (UPDATE THESE FOR YOUR SAMPLE!)
-   PERIOD_EST = 315.15  # Groove spacing in nm (NOT 833 nm!)
-   EXPECTED_BLAZE_ANGLE = 30.0  # Expected blaze angle in degrees
-   
+
+   # Grating specifications (UPDATE THIS FOR YOUR SAMPLE!)
+   PERIOD_EST = 315.0  # Groove spacing in nm (NOT 833 nm!)
+
    # Row-group analysis (RECOMMENDED)
    USE_ROW_GROUPS = True  # Extract many measurements per image
    N_ROW_GROUPS = 20      # Number of spatial regions to analyze
-   
+
    # Analysis parameters
-   BLAZE_SIDE = 'left'    # Which facet to measure ('left' or 'right')
-   FACET_TRIM = 0.15      # Trim edges to avoid groove tops (0.1-0.3)
+   BLAZE_SIDE = 'negative_slope'  # 'negative_slope', 'positive_slope', or 'longer'
+   FACET_TRIM = 0.1               # Trim edges to avoid groove tops (0.1-0.3)
    ```
 
 2. **Run the analysis**:
    ```bash
-   python main.py
+   .venv/bin/python main.py
    ```
+
+   Paths in `config.py` resolve against the project root, so this works from any
+   working directory.
 
 3. **Review results**:
    - **Console output**: Statistical summary with SEM, p-values, significance
@@ -98,12 +102,11 @@ pip install -r requirements.txt
 #### Grating Specifications
 ```python
 # Groove spacing - MUST MATCH YOUR SAMPLE
-PERIOD_EST = 315.15  # nm (e.g., 315.15 nm for typical echelle gratings)
+PERIOD_EST = 315.0   # nm (e.g., ~315 nm for typical echelle gratings)
                      # NOT 833 nm! That's for a different grating type
 
-# Expected blaze angle for validation
-EXPECTED_BLAZE_ANGLE = 30.0  # degrees (e.g., 30° for echelle gratings)
-                             # Helps detect if you're measuring wrong facet
+SCAN_X_SIZE = 2.0    # um - fallback scan width, used only when the width
+                     # cannot be read from the data file header
 ```
 
 #### Row-Group Analysis (Highly Recommended)
@@ -118,21 +121,25 @@ N_ROW_GROUPS = 20       # Number of spatial regions (10-50 typical)
 
 #### Flattening (Background Removal)
 ```python
-FLATTEN_METHOD = 'polynomial'  # or 'level_grooves'
-FLATTEN_POLY_ORDER = 3         # 1-5, higher = more flexible background
-FLATTEN_EXCLUDE_EDGES = 0.05   # Exclude edge % to avoid boundary effects
-FLATTEN_FEATURE = 'groove'     # What to preserve: 'groove' or 'ridge'
+FLATTEN_METHOD = 'level_grooves'  # 'linear', 'polynomial', 'groove_peaks',
+                                  # or 'level_grooves'
+FLATTEN_POLY_ORDER = 2            # For 'polynomial' and 'level_grooves':
+                                  # 1=linear, 2=quadratic, 3=cubic
+FLATTEN_EXCLUDE_EDGES = 0.05      # Exclude edge fraction to avoid boundary effects
+FLATTEN_FEATURE = 'peaks'         # For 'level_grooves' only:
+                                  # 'peaks' (lands), 'troughs' (groove bottoms), 'both'
 ```
 
 **Key Point**: The flattening diagnostic plot shows the **averaged profile** to verify proper background removal, even when using row-group analysis. This ensures all subsequent measurements are accurate.
 
 #### Groove Detection
 ```python
-PROMINENCE_FACTOR = 0.3   # Peak detection sensitivity (0.1-1.0)
+PROMINENCE_FACTOR = 0.01  # Peak detection sensitivity
                           # Lower = detect more grooves (including noise)
                           # Higher = only strong grooves
-                          
-DISTANCE_FACTOR = 0.5     # Minimum separation between grooves
+
+DISTANCE_FACTOR = 0.3     # Minimum separation between grooves,
+                          # as a fraction of the period
                           # Prevents detecting multiple peaks per groove
 ```
 
@@ -140,10 +147,14 @@ DISTANCE_FACTOR = 0.5     # Minimum separation between grooves
 
 #### Facet Selection and Trimming
 ```python
-BLAZE_SIDE = 'left'      # Which facet to measure
-                         # 'left' or 'right' - depends on grating orientation
-                         
-FACET_TRIM = 0.15        # Fraction to trim from facet edges (0.0-0.5)
+BLAZE_SIDE = 'negative_slope'  # Which facet to measure. Selected by slope sign,
+                               # not by position, so it is orientation-independent:
+                               #   'negative_slope' - the down-sloping facet
+                               #   'positive_slope' - the up-sloping facet
+                               #   'longer'         - whichever facet is wider
+                               # Any other value raises ValueError.
+
+FACET_TRIM = 0.1         # Fraction to trim from facet edges (0.0-0.5)
                          # CRITICAL: Prevents measuring groove tops!
                          # 0.15 = use middle 70% of facet
                          # Increase if getting very low angles (measuring tops)
@@ -301,7 +312,7 @@ PERIOD_EST = 315.15  # Match your actual grating!
 FACET_TRIM = 0.20    # Use middle 60% of facet
 
 # Fix 3: Switch facet
-BLAZE_SIDE = 'right'  # Try the other side
+BLAZE_SIDE = 'positive_slope'  # Try the other facet
 ```
 
 ### Problem: No Grooves Detected
@@ -351,7 +362,7 @@ SHOW_FLATTENING_DIAGNOSTIC = True
 
 **Solution:**
 ```python
-BLAZE_SIDE = 'right'  # Switch to other facet
+BLAZE_SIDE = 'positive_slope'  # Switch to other facet
 ```
 
 ### Problem: Error Bars Seem Too Small
@@ -437,12 +448,22 @@ Individual groove measurements:
 ```
 afm_blaze_meas/
 ├── main.py                        # Entry point
+├── afm_gui.py                     # PyQt5 GUI (v0.1 - viewing only, no analysis)
 ├── README.md                      # This file
-├── requirements.txt               # Dependencies
+├── requirements.txt               # Pinned dependencies
+├── .python-version                # Python 3.12.9 (pyenv)
 ├── data/                          # Your AFM data files
-├── results/                       # Analysis outputs
+├── results/                       # Analysis outputs (git-ignored, regenerable)
+├── docs/
+│   ├── PROGRESS_SUMMARY.md        # Status and open work
+│   ├── stat_analysis.md           # Statistical methodology
+│   └── history/                   # Superseded migration guides (reference only)
+├── examples/
+│   └── uncertainty_demo.py        # Standalone demo of uncertainty decomposition
+├── experimental/
+│   └── hierarchical_stats/        # NOT integrated - see its README
 └── afm_analysis/                  # Main package
-    ├── config.py                  # ⚙️ CONFIGURE HERE
+    ├── config.py                  # ⚙️ CONFIGURE HERE (also defines PROJECT_ROOT)
     ├── analyzer.py                # Single-file analysis
     ├── workflows.py               # Analysis modes
     ├── core/                      # Core algorithms
@@ -456,9 +477,15 @@ afm_blaze_meas/
     │   └── analysis.py            # Statistical comparisons, p-values
     └── visualization/
         ├── diagnostics.py         # Flattening, groove detection plots
-        ├── statistics.py          # Histograms, bar charts (updated!)
+        ├── statistics.py          # Histograms, bar charts
         └── profiles.py            # AFM profile plots
 ```
+
+### Known limitation
+
+Row-group analysis produces many measurements of the *same* physical grooves, but the
+statistics treat them as independent samples. Reported SEMs and p-values are therefore
+optimistic. See `experimental/hierarchical_stats/README.md` — mean angles are unaffected.
 
 ---
 
@@ -521,7 +548,6 @@ SINGLE_FILE = 'data/test_sample.txt'
 
 # Set YOUR grating specs
 PERIOD_EST = 315.15  # YOUR groove spacing!
-EXPECTED_BLAZE_ANGLE = 30.0  # YOUR expected angle
 
 # Enable all diagnostics
 SHOW_2D_IMAGE = True
@@ -562,7 +588,7 @@ N_ROW_GROUPS = 20  # More measurements = better p-values
 
 # Consistent analysis
 FACET_TRIM = 0.15
-BLAZE_SIDE = 'left'
+BLAZE_SIDE = 'negative_slope'
 ```
 
 ### 3. Publication-Ready Analysis
@@ -609,7 +635,7 @@ If you use this software in your research, please cite:
 For questions or issues:
 - Check troubleshooting section above
 - Review diagnostic plots (especially flattening)
-- Verify PERIOD_EST and EXPECTED_BLAZE_ANGLE match your sample
+- Verify PERIOD_EST matches your sample
 - Open an issue on GitHub with diagnostic plots attached
 
 ---
@@ -641,4 +667,4 @@ For questions or issues:
 
 ---
 
-**Remember**: Always verify your `PERIOD_EST` (groove spacing) and `EXPECTED_BLAZE_ANGLE` match your actual grating before running analysis! The defaults are examples only.
+**Remember**: Always verify that `PERIOD_EST` (groove spacing) matches your actual grating before running analysis! The defaults are examples only.
