@@ -1,6 +1,17 @@
 # AFM Blaze Angle Analysis
 
-A comprehensive Python toolkit for analyzing Atomic Force Microscopy (AFM) data of diffraction gratings to measure blaze angles with high statistical precision. Features row-group analysis for maximizing measurements per image and rigorous uncertainty quantification.
+A Python toolkit for analyzing Atomic Force Microscopy (AFM) data of diffraction
+gratings. One pipeline, two outputs:
+
+- **Blaze angles** — facet angles measured per groove, with row-group analysis for
+  many measurements per image and statistical comparison across samples
+- **PCGrate boundary profiles** — the averaged groove shape, normalised to one
+  period and exported as `.ggp` for grating-efficiency modelling
+
+Both share the same front-end (loading, flattening, groove detection, groove
+windowing) and diverge only at the final step. That sharing is deliberate: these
+were once separate scripts with their own copies of that code, and they drifted
+apart until a bug fixed in one silently persisted in the other.
 
 ## Features
 
@@ -215,7 +226,7 @@ Batch process all files matching a pattern:
 
 ```python
 ANALYSIS_MODE = 'multiple'
-FILE_PATTERN = 'data/*.txt'
+FILE_PATTERN = '*.txt'   # matched inside data/, so no 'data/' prefix
 ```
 
 **Outputs:**
@@ -243,6 +254,41 @@ SAMPLES_TO_COMPARE = [
 - Temperature-dependent rate calculations with significance tests
 - Master vs. treated comparisons
 - Publication-ready comparison plots
+
+### PCGrate Boundary Profile Export
+
+A different output from the same measurement. Instead of fitting facet angles,
+this averages the detected grooves of one scan into a single representative
+groove, normalises it to one period, and writes a PCGrate `.ggp` boundary profile
+for grating-efficiency modelling.
+
+```python
+ANALYSIS_MODE = 'ggp'
+GGP_SOURCE_FILE = 'data/TASTE_ALS_A205_Ti_Pt_flatten.txt'
+GGP_N_POINTS = 2000          # Points in the exported profile
+GGP_APPLY_SMOOTHING = True   # Light smoothing to remove interpolation kinks
+GGP_SMOOTHING_WINDOW = 5
+```
+
+**Outputs:**
+- `results/averaged_groove_profile_<sample>.ggp` — the boundary profile
+- `results/groove_analysis_metrics_<sample>.txt` — depth, RMS slope, max sidewall
+  angle and curvature of the normalised profile
+
+**The `.ggp` format** is two header lines then one `x y` pair per line, both
+normalised — x runs 0 to 1 across exactly one period, y is height as a fraction of
+that period:
+
+```
+3 0 - Polygonal type
+Period: 1 PSC: 1
+0.000000 0.000000
+0.000500 0.000001
+```
+
+The header must **not** be commented. Writing these with `np.savetxt(header=...)`
+prepends `# `, which PCGrate rejects — the writer in `afm_analysis/io/ggp.py`
+always emits the correct form.
 
 ---
 
@@ -473,17 +519,25 @@ afm_blaze_meas/
 │   └── history/                   # Superseded migration guides (reference only)
 ├── examples/
 │   └── uncertainty_demo.py        # Standalone demo of uncertainty decomposition
+├── tests/
+│   ├── test_ggp_equivalence.py    # Boundary port must match the original script
+│   └── fixtures/                  # Reference .ggp from the pre-port script
 ├── experimental/
 │   └── hierarchical_stats/        # NOT integrated - see its README
+├── legacy/
+│   └── gebl_dose_metrology/       # 2023 dose/write-uniformity work, frozen
 └── afm_analysis/                  # Main package
     ├── config.py                  # ⚙️ CONFIGURE HERE (also defines PROJECT_ROOT)
     ├── analyzer.py                # Single-file analysis
-    ├── workflows.py               # Analysis modes
-    ├── core/                      # Core algorithms
-    │   ├── processing.py          # Data loading, flattening, row-group extraction
+    ├── workflows.py               # Analysis modes (incl. boundary export)
+    ├── core/                      # SHARED FRONT-END - used by both outputs
+    │   ├── processing.py          # Loading, flattening, groove detection/windowing
     │   └── analysis.py            # Blaze angle extraction with uncertainty
+    ├── boundary/                  # Back-end: PCGrate boundary profiles
+    │   └── average.py             # Groove averaging, normalisation, metrics
     ├── io/
-    │   └── file_io.py             # Save results
+    │   ├── file_io.py             # Save blaze results (TXT + CSV)
+    │   └── ggp.py                 # PCGrate .ggp writer
     ├── data/
     │   └── aggregation.py         # Combine scans, temperature grouping
     ├── stats/
@@ -493,6 +547,19 @@ afm_blaze_meas/
         ├── statistics.py          # Histograms, bar charts
         └── profiles.py            # AFM profile plots
 ```
+
+### Running the tests
+
+```bash
+.venv/bin/python tests/test_ggp_equivalence.py
+```
+
+This is the only test suite in the project. It pins the boundary-profile port to
+the output of the standalone script it replaced, so a refactor cannot silently
+change the exported profile.
+
+For the blaze path there is no test suite; the regression check is a diff of
+`results/analysis_data_*.csv` against a known-good run. See `docs/BASELINES.md`.
 
 ### Known limitation
 

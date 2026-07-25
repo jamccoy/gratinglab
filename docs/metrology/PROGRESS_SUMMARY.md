@@ -1,5 +1,39 @@
 # AFM Statistical Improvements - Progress Summary
 
+> **Status note (2026-07-24).** Everything below this box was written in February
+> 2026 and is kept for the reasoning it records. Its open questions have since been
+> answered — row-group analysis *was* implemented and is now the default
+> (`USE_ROW_GROUPS = True`, `N_ROW_GROUPS = 20`), so the "Recommendation" at the
+> foot of this file is done, not pending.
+>
+> **Where things actually stand:**
+>
+> | Item | State |
+> |---|---|
+> | Fit uncertainty tracking (Priority 1) | Done — Feb 2026 |
+> | Bar-chart SEM error bars (Priority 2a) | Done — Feb 2026 |
+> | Row-group analysis | Done — the open question below, now resolved |
+> | Environment rebuilt (Python 3.12, pinned deps) | Done — Jul 2026 |
+> | Paths made working-directory independent | Done — Jul 2026 |
+> | Scan-edge groove rejection | Done — Jul 2026, see below |
+> | PCGrate `.ggp` export folded into the package | Done — Jul 2026 |
+> | 2023 GEBL/PANTER work | Frozen in `legacy/` |
+> | **Row-group independence / hierarchical stats** | **Open — the main remaining correctness item** |
+> | Blaze-angle test suite | Open — none exists; see `docs/BASELINES.md` |
+> | GUI beyond viewing | Open — `afm_gui.py` is still v0.1 |
+>
+> **The scan-edge fix (Jul 2026)** removed grooves clipped by the edge of a scan,
+> where the facet is only partly present in the data. Four measurements had been
+> returning 2.4–3.6° for a ~30° facet. Effect: N 843 → 734, minimum angle
+> 2.40° → 25.58°, no fit below R² 0.95, and 280°C σ falling 3.04 → 1.65.
+>
+> **Still open, and the largest item:** row-group analysis yields ~100 measurements
+> per image that re-measure the *same* physical grooves, but the statistics divide
+> by `sqrt(N)` as though they were independent, so SEMs and p-values are optimistic.
+> Mean angles are unaffected. The half-finished fix is in
+> `experimental/hierarchical_stats/` — run its ICC check first to size the problem
+> before integrating anything.
+
 ## Overview
 
 **Goal:** Improve statistical analysis of AFM blaze angle measurements to properly quantify uncertainties and leverage all available data.
