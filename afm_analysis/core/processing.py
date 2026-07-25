@@ -239,18 +239,41 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
     return y_flat, background
 
 
-def find_groove_positions(x, y, period_nm, prominence_factor=0.3, distance_factor=0.7):
-    """Find positions of groove centers (minima)"""
+def find_groove_positions(x, y, period_nm, prominence_factor=0.3, distance_factor=0.7,
+                          edge_exclusion=0.0, return_n_edge_rejected=False):
+    """
+    Find positions of groove centers (minima)
+
+    Parameters:
+        edge_exclusion: reject centers lying within this many periods of either
+            end of the profile. A groove that close to the edge has no complete
+            facet in the data - the scan starts or stops part-way through it -
+            so any angle fitted to it is meaningless. 0.0 disables the check.
+        return_n_edge_rejected: also return how many centers were rejected
+
+    Returns:
+        peaks, or (peaks, n_rejected) if return_n_edge_rejected
+    """
     y_inv = -y  # Invert so grooves become peaks
     dx_nm = (x[1] - x[0]) * 1000
     period_idx = int(period_nm / dx_nm)
     height_range = np.max(y) - np.min(y)
     min_prominence = prominence_factor * height_range
-    
-    peaks, properties = find_peaks(y_inv, 
-                                   distance=int(distance_factor * period_idx), 
+
+    peaks, properties = find_peaks(y_inv,
+                                   distance=int(distance_factor * period_idx),
                                    prominence=min_prominence)
-    
+
+    n_rejected = 0
+    if edge_exclusion > 0 and len(peaks) > 0:
+        margin_idx = edge_exclusion * period_idx
+        last = len(x) - 1
+        keep = (peaks >= margin_idx) & (peaks <= last - margin_idx)
+        n_rejected = int((~keep).sum())
+        peaks = peaks[keep]
+
+    if return_n_edge_rejected:
+        return peaks, n_rejected
     return peaks
 
 

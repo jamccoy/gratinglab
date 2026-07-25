@@ -24,6 +24,11 @@ PERIOD_EST = 315.0  # nm (estimated grating period)
 # ============ ANALYSIS PARAMETERS ============
 PROMINENCE_FACTOR = 0.01  # Lower = more sensitive groove detection
 DISTANCE_FACTOR = 0.3     # Minimum spacing between grooves (fraction of period)
+EDGE_EXCLUSION_PERIODS = 0.6  # Reject grooves within this many periods of either
+                              # end of the scan line. Such a groove is real, but
+                              # the scan starts/stops part-way through it, so its
+                              # facet is clipped and any fitted angle is garbage.
+                              # 0 disables (restores the old behaviour).
 FACET_TRIM = 0.1          # Trim 10% from each end of facet (reduced from 20% to capture more data)
 BLAZE_SIDE = 'negative_slope'  # 'negative_slope', 'positive_slope', or 'longer'
 

@@ -141,7 +141,20 @@ PROMINENCE_FACTOR = 0.01  # Peak detection sensitivity
 DISTANCE_FACTOR = 0.3     # Minimum separation between grooves,
                           # as a fraction of the period
                           # Prevents detecting multiple peaks per groove
+
+EDGE_EXCLUSION_PERIODS = 0.6  # Reject grooves within this many periods of either
+                              # end of the scan line. Such a groove is real, but
+                              # the scan starts or stops part-way through it, so
+                              # its facet is clipped and the fitted angle is
+                              # meaningless. Set to 0 to disable.
 ```
+
+**Why edge exclusion matters**: without it, a groove sitting at the start of a scan line
+is fitted over a 5-6 pixel sliver instead of a full ~50 pixel facet, returning angles
+around 2-3° that are then averaged in with real ~30° measurements. It also equalises
+samples: how many edge grooves a scan has is pure luck of where the scan started
+relative to the grating phase, so leaving them in weights samples differently for no
+physical reason.
 
 ### Analysis Parameters
 

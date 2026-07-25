@@ -13,7 +13,7 @@ from .config import (
     FLATTEN_EXCLUDE_EDGES, FLATTEN_FEATURE, SHOW_2D_IMAGE,
     SHOW_INDIVIDUAL_GROOVES, SHOW_FULL_PROFILE, SHOW_FLATTENING_DIAGNOSTIC,
     SHOW_LOCAL_ANGLE_DISTRIBUTION, SHOW_ANALYZED_REGIONS,
-    USE_ROW_GROUPS, N_ROW_GROUPS  # NEW
+    USE_ROW_GROUPS, N_ROW_GROUPS, EDGE_EXCLUSION_PERIODS
 )
 from .core.processing import (
     raw_data, raw_data_multi_group,  # NEW: added raw_data_multi_group
@@ -96,7 +96,8 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
     all_angle_uncertainties = []
     all_groove_periods = []
     group_results = []  # Store results per group for diagnostics
-    
+    n_edge_rejected = 0  # Grooves dropped for sitting on a scan edge
+
     for group_idx, raw_y in enumerate(profiles_list):
         print(f"\n  Processing row group {group_idx + 1}/{N_ROW_GROUPS}...")
         
@@ -114,12 +115,16 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
                                       FLATTEN_METHOD, FLATTEN_FEATURE, period_nm_est)
         
         # Find grooves in this profile
-        groove_centers = find_groove_positions(raw_x, flat_y, period_nm_est,
+        groove_centers, n_edge = find_groove_positions(raw_x, flat_y, period_nm_est,
                                               prominence_factor=PROMINENCE_FACTOR,
-                                              distance_factor=DISTANCE_FACTOR)
-        
-        print(f"    Found {len(groove_centers)} grooves")
-        
+                                              distance_factor=DISTANCE_FACTOR,
+                                              edge_exclusion=EDGE_EXCLUSION_PERIODS,
+                                              return_n_edge_rejected=True)
+        n_edge_rejected += n_edge
+
+        edge_note = f" ({n_edge} rejected: clipped by scan edge)" if n_edge else ""
+        print(f"    Found {len(groove_centers)} grooves{edge_note}")
+
         if len(groove_centers) == 0:
             print(f"    No grooves detected in group {group_idx + 1}, skipping")
             continue
@@ -184,6 +189,9 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
     print(f"Total measurements: {len(all_blaze_angles)}")
     print(f"  (compared to ~{len(group_results) * 4} with traditional averaging)")
     print(f"Row groups processed: {len(group_results)}/{N_ROW_GROUPS}")
+    if n_edge_rejected:
+        print(f"Edge-clipped grooves rejected: {n_edge_rejected} "
+              f"(within {EDGE_EXCLUSION_PERIODS}x period of a scan edge)")
     
     # Calculate overall period statistics
     if len(all_groove_periods) > 0:
@@ -269,12 +277,15 @@ def _analyze_single_file_traditional(filename, show_plots=True):
     raw_x, raw_y, flat_y, background, period_nm_est = _process_profile(data, scan_x_size, show_plots)
     
     # Find grooves
-    groove_centers = find_groove_positions(raw_x, flat_y, period_nm_est,
+    groove_centers, n_edge_rejected = find_groove_positions(raw_x, flat_y, period_nm_est,
                                           prominence_factor=PROMINENCE_FACTOR,
-                                          distance_factor=DISTANCE_FACTOR)
-    
-    print(f"Found {len(groove_centers)} grooves")
-    
+                                          distance_factor=DISTANCE_FACTOR,
+                                          edge_exclusion=EDGE_EXCLUSION_PERIODS,
+                                          return_n_edge_rejected=True)
+
+    edge_note = f" ({n_edge_rejected} rejected: clipped by scan edge)" if n_edge_rejected else ""
+    print(f"Found {len(groove_centers)} grooves{edge_note}")
+
     if len(groove_centers) == 0:
         print("No grooves detected!")
         return None
