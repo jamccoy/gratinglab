@@ -54,9 +54,20 @@ SHOW_FLATTENING_DIAGNOSTIC = False  # Show before/after flattening comparison (n
 SHOW_LOCAL_ANGLE_DISTRIBUTION = True  # Show distribution of local angles within facets
 SHOW_ANALYZED_REGIONS = False  # Show which portions of facets are being analyzed (now per-group, can be verbose)
 
+# ============ PCGRATE BOUNDARY PROFILE EXPORT ============
+# Used by ANALYSIS_MODE = 'ggp'. Averages the grooves of one scan into a single
+# representative groove and writes it as a PCGrate .ggp boundary profile.
+GGP_SOURCE_FILE = 'data/TASTE_ALS_A205_Ti_Pt_flatten.txt'
+GGP_N_POINTS = 2000          # Points in the exported profile
+GGP_APPLY_SMOOTHING = True   # Light smoothing to remove interpolation kinks
+GGP_SMOOTHING_WINDOW = 5     # Larger = smoother
+GGP_MIN_HALF_WIDTH = 10      # Skip grooves whose symmetric half-extent is <= this
+                             # many samples (i.e. clipped by the scan edge)
+
 # ============ FILE SELECTION ============
-# Choose analysis mode: 'single', 'multiple', or 'compare'
-ANALYSIS_MODE = 'compare'  # 'single' for one file, 'multiple' for pattern matching, 'compare' for specific samples
+# Choose analysis mode: 'single', 'multiple', 'compare', or 'ggp'
+ANALYSIS_MODE = 'compare'  # 'single' for one file, 'multiple' for pattern matching,
+                           # 'compare' for specific samples, 'ggp' for a PCGrate profile
 
 # Single file mode
 SINGLE_FILE = 'data/150C_2um_flatten.txt'
