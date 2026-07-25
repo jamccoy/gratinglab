@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "gratinglab"
+version = "0.0.1"
+description = "Open comparison platform for diffraction grating efficiency analysis"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "BSD-3-Clause" }
+authors = [{ name = "Jake McCoy" }]
+keywords = ["diffraction", "grating", "efficiency", "rcwa", "x-ray", "spectroscopy"]
+classifiers = [
+    "Development Status :: 2 - Pre-Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: BSD License",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Physics",
+]
+dependencies = [
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "pydantic>=2.6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "matplotlib>=3.8", "pandas>=2.1"]
+
+[project.urls]
+Homepage = "https://github.com/jakemccoy/gratinglab"
+
+# Solver backends register here. A backend may live in its own distribution.
+[project.entry-points."gratinglab.solvers"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = ["error"]

@@ -1,0 +1,10 @@
+"PCGrate-SX 6.7.1 (c)1996-2020 I.I.G., Inc."
+
+synthetic_wavescan
+Solved at	1/1/2026	00:00:00
+Calculating time	00:00:01
+
+	Scan Step	"Eff.TE(-1,R)"	"Eff.TE(0,R)"	"Eff.TE(1,R)"
+" Wav., nm"	1.0	0.25000000	0.50000000	0.25000000
+" Wav., nm"	2.0	0.10000000	0.80000000	0.10000000
+" Wav., nm"	3.0	--	1.00000000	--
