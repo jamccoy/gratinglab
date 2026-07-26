@@ -26,7 +26,7 @@ class TestHeaderVariants:
     def test_canonical(self, tmp_path):
         ggp = read_ggp(write_variant(tmp_path, CANONICAL))
         assert ggp.header_variant == "canonical"
-        assert ggp.pcgrate_compatible
+        assert ggp.format_valid
         assert len(ggp.t) == 5
 
     def test_commented_canonical_parses_but_is_flagged(self, tmp_path):
@@ -35,7 +35,7 @@ class TestHeaderVariants:
             write_variant(tmp_path, "# 3 0 - Polygonal type\n# Period: 1 PSC: 1\n")
         )
         assert ggp.header_variant == "commented-canonical"
-        assert not ggp.pcgrate_compatible
+        assert not ggp.format_valid
         assert len(ggp.t) == 5
 
     def test_commented_columns_parses_but_is_flagged(self, tmp_path):
@@ -43,12 +43,12 @@ class TestHeaderVariants:
             write_variant(tmp_path, "# X(normalized_0-1) Y(normalized)\n")
         )
         assert ggp.header_variant == "commented-columns"
-        assert not ggp.pcgrate_compatible
+        assert not ggp.format_valid
 
     def test_no_header_at_all(self, tmp_path):
         ggp = read_ggp(write_variant(tmp_path, ""))
         assert ggp.header_variant == "none"
-        assert not ggp.pcgrate_compatible
+        assert not ggp.format_valid
 
     def test_all_variants_give_identical_data(self, tmp_path):
         datasets = [
@@ -164,7 +164,7 @@ class TestRealFiles:
             pytest.skip("panter1.ggp not in corpus")
 
         ggp = read_ggp(path)
-        assert ggp.pcgrate_compatible
+        assert ggp.format_valid
         assert ggp.header_variant == "canonical"
         assert len(ggp.t) == 82
         assert ggp.depth == pytest.approx(0.3119, abs=1e-4)

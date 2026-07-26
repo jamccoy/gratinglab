@@ -1,4 +1,4 @@
-"""PCGrate importer.
+"""Efficiency-table importer.
 
 Split in two: unit tests against a small committed fixture, and corpus tests
 that parse the real exported tables. The corpus tests are verification item 1
@@ -9,7 +9,7 @@ checkable without running any solver.
 import numpy as np
 import pytest
 
-from gratinglab.io.pcgrate import read_pcgrate, read_scan, to_scan
+from gratinglab.io.efficiency_table import read_table, read_scan, to_scan
 from gratinglab.result import EfficiencyScan
 
 from .conftest import reference_dir
@@ -17,27 +17,27 @@ from .conftest import reference_dir
 
 class TestSyntheticFixture:
     def test_header_metadata(self, synthetic_wavescan):
-        table = read_pcgrate(synthetic_wavescan)
+        table = read_table(synthetic_wavescan)
         assert table.version == "PCGrate-SX 6.7.1"
         assert table.problem_name == "synthetic_wavescan"
         assert table.solved_at == "1/1/2026 00:00:00"
         assert table.calculating_time == "00:00:01"
 
     def test_orders_come_from_headers(self, synthetic_wavescan):
-        table = read_pcgrate(synthetic_wavescan)
+        table = read_table(synthetic_wavescan)
         assert table.orders.tolist() == [-1, 0, 1]
         assert table.polarization == "TE"
         assert table.reflected
 
     def test_wavelength_axis(self, synthetic_wavescan):
-        table = read_pcgrate(synthetic_wavescan)
+        table = read_table(synthetic_wavescan)
         assert table.is_wavelength_scan
         assert table.scan_units == ("nm",)
         assert table.wavelengths.tolist() == [1.0, 2.0, 3.0]
 
     def test_missing_marker_becomes_zero_not_nan(self, synthetic_wavescan):
         """'--' means evanescent: 0.0 with propagating=False, never NaN."""
-        table = read_pcgrate(synthetic_wavescan)
+        table = read_table(synthetic_wavescan)
         assert table.efficiency[2].tolist() == [0.0, 1.0, 0.0]
         assert table.propagating[2].tolist() == [False, True, False]
         assert not np.isnan(table.efficiency).any()
@@ -51,7 +51,7 @@ class TestSyntheticFixture:
 
     def test_provenance_is_populated(self, synthetic_wavescan):
         scan = read_scan(synthetic_wavescan)
-        assert scan.provenance.method == "pcgrate:file"
+        assert scan.provenance.method == "imported"
         assert scan.provenance.version == "PCGrate-SX 6.7.1"
         assert str(synthetic_wavescan) in scan.provenance.source
         # Imported data has not been convergence-checked by us.
@@ -65,15 +65,41 @@ class TestSyntheticFixture:
         assert scan.at(1.0)[99] == 0.0  # absent order, not an error
 
 
+class TestMethodLabelling:
+    """The caller names the physics; the reader records the program.
+
+    A table says what the efficiencies are, not which numerical method produced
+    them, so inferring "integral" from a vendor banner would be an inference
+    presented as a fact.
+    """
+
+    def test_caller_declares_the_method(self, synthetic_wavescan):
+        scan = read_scan(synthetic_wavescan, method="integral")
+        assert scan.provenance.method == "integral"
+
+    def test_default_is_neutral(self, synthetic_wavescan):
+        assert read_scan(synthetic_wavescan).provenance.method == "imported"
+
+    def test_the_producing_program_is_still_recorded(self, synthetic_wavescan):
+        """Neutral labelling must not cost attribution."""
+        scan = read_scan(synthetic_wavescan, method="integral")
+        assert scan.provenance.version == "PCGrate-SX 6.7.1"
+        assert scan.provenance.notes["vendor"] == "PCGrate-SX"
+
+    def test_label_flows_through_to_comparison_records(self, synthetic_wavescan):
+        rows = read_scan(synthetic_wavescan, method="integral").to_records()
+        assert {row["method"] for row in rows} == {"integral"}
+
+
 class TestRejection:
     """Bad input must fail loudly. Silently guessing corrupts reference data."""
 
-    def test_rejects_non_pcgrate_file(self, tmp_path):
+    def test_rejects_a_file_that_is_not_an_efficiency_table(self, tmp_path):
         path = tmp_path / "notpcgrate.txt"
         # Long enough to get past the length check, so the banner check is what fires.
         path.write_text("\n".join(f"{i}.0 {i}.5 {i}.9" for i in range(12)))
         with pytest.raises(ValueError, match="not a PCGrate banner"):
-            read_pcgrate(path)
+            read_table(path)
 
     def test_rejects_file_with_no_efficiency_columns(self, tmp_path):
         path = tmp_path / "empty.txt"
@@ -83,13 +109,13 @@ class TestRejection:
             "\tScan Step\t\n P. ang., deg\t20.0\t\n"
         )
         with pytest.raises(ValueError, match="no 'Eff"):
-            read_pcgrate(path)
+            read_table(path)
 
     def test_rejects_truncated_file(self, tmp_path):
         path = tmp_path / "short.txt"
         path.write_text('"PCGrate-SX 6.7.1 (c)1996-2020 I.I.G., Inc."\n\nP\n')
         with pytest.raises(ValueError, match="too short"):
-            read_pcgrate(path)
+            read_table(path)
 
     def test_angle_scan_refuses_to_become_a_wavelength_scan(self, tmp_path):
         path = tmp_path / "angle.txt"
@@ -99,7 +125,7 @@ class TestRejection:
             '\tScan Step\t"Eff.TE(0,R)"\n'
             " P. ang., deg Az. ang., deg\t20.0 89.0\t0.5\n"
         )
-        table = read_pcgrate(path)
+        table = read_table(path)
         assert not table.is_wavelength_scan
         assert table.scan_variables == ("P. ang.", "Az. ang.")
         with pytest.raises(ValueError, match="not a\n?\\s*single wavelength axis"):
@@ -128,10 +154,10 @@ class TestRealCorpus:
     def test_parses_or_is_a_known_non_export(self, path):
         if path.name in NOT_EXPORTS:
             with pytest.raises(ValueError):
-                read_pcgrate(path)
+                read_table(path)
             return
 
-        table = read_pcgrate(path)
+        table = read_table(path)
 
         assert table.version.startswith("PCGrate")
         assert len(table.orders) > 0
@@ -150,7 +176,7 @@ class TestRealCorpus:
     def test_wavelength_scans_convert_and_conserve(self, path):
         if path.name in NOT_EXPORTS:
             pytest.skip("not an efficiency export")
-        table = read_pcgrate(path)
+        table = read_table(path)
         if not table.is_wavelength_scan:
             pytest.skip("angle scan")
 

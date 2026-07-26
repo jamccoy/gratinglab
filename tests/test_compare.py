@@ -9,7 +9,7 @@ import pytest
 
 from gratinglab.compare import align, records, sweep
 from gratinglab.illumination import Illumination
-from gratinglab.io.pcgrate import read_scan
+from gratinglab.io.efficiency_table import read_scan
 from gratinglab.problem import Problem
 from gratinglab.profiles import Blazed
 from gratinglab.result import EfficiencyScan, Provenance
@@ -186,7 +186,7 @@ REF = reference_dir()
 
 
 @pytest.mark.skipif(REF is None, reason="reference corpus unavailable")
-class TestAgainstRealPCGrateData:
+class TestAgainstImportedReferenceData:
     """The end-to-end evidence that the spine works.
 
     Scalar and the integral method run on one Problem and land on one grid.
@@ -195,12 +195,12 @@ class TestAgainstRealPCGrateData:
     optical constants), so the comparison is apples to apples.
     """
 
-    def test_scalar_and_pcgrate_line_up_for_comparison(self, ref_dir):
+    def test_scalar_and_imported_reference_line_up(self, ref_dir):
         path = ref_dir / "OGRE" / "tastetest_perf_wavescan.txt"
         if not path.exists():
             pytest.skip("TASTE wavescan not in corpus")
 
-        reference = read_scan(path)
+        reference = read_scan(path, method="integral")
         wavelengths = reference.wavelengths[::20]
         comparison = align(
             sweep(
@@ -212,12 +212,12 @@ class TestAgainstRealPCGrateData:
             )
         )
 
-        assert comparison.methods == ("scalar", "pcgrate:file")
+        assert comparison.methods == ("scalar", "integral")
         assert comparison.efficiency.shape[0] == 2
         assert np.isfinite(comparison.efficiency).all()
         assert (comparison.efficiency >= 0).all()
 
-        summary = comparison.summary("scalar", "pcgrate:file")
+        summary = comparison.summary("scalar", "integral")
         assert np.isfinite(summary["max_abs_difference"])
         assert summary["at_wavelength"] in wavelengths
 

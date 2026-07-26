@@ -38,7 +38,7 @@ class Provenance:
     Attributes
     ----------
     method
-        Backend identifier, e.g. ``"rcwa"``, ``"scalar.harvey"``, ``"pcgrate:file"``.
+        Backend identifier, e.g. ``"rcwa"``, ``"scalar"``, ``"integral"``.
     version
         Version of the code that produced it. For imported data, the version
         string of the foreign code.

@@ -1,9 +1,21 @@
-"""Reader for PCGrate-SX exported efficiency tables.
+"""Reader for efficiency tables exported by external grating codes.
 
-PCGrate implements the integral method and is the de-facto standard for
-grazing-incidence X-ray gratings. Its exported tables are therefore the rigorous
-reference data this project validates against -- and because an exported table
-is just data, cross-validation needs no live licence.
+An exported efficiency table is just data, so reference results from a
+commercial solver can be compared against without needing a licence to run it.
+This module reads the tabular dialect written by PCGrate-SX, which implements
+the integral method and is the de-facto standard for grazing-incidence X-ray
+gratings.
+
+**The reader does not label the physics.** It cannot know from a file which
+numerical method produced it, so :func:`read_scan` takes a ``method`` argument
+that the caller supplies -- ``method="integral"`` for an integral-method code.
+That keeps comparison legends describing physics ("scalar vs integral") rather
+than products, while :attr:`Provenance.version` still records exactly which
+program and version generated the reference data.
+
+Dialects are distinguished by their banner line. Only one is implemented today;
+:func:`read_table` is where a GSolver or RETICOLO dialect would be added, rather
+than as a separate vendor module.
 
 Format, confirmed by inspection of PCGrate-SX 6.7.1 output::
 
@@ -35,7 +47,7 @@ import numpy as np
 
 from ..result import EfficiencyScan, Provenance
 
-__all__ = ["PCGrateTable", "read_pcgrate", "MISSING"]
+__all__ = ["EfficiencyTable", "read_table", "MISSING"]
 
 #: PCGrate writes this for an order that does not propagate at a given scan point.
 MISSING = "--"
@@ -54,7 +66,7 @@ _SCAN_LABEL_RE = re.compile(r"([^,]+),\s*(\S+)")
 
 
 @dataclass(frozen=True, slots=True)
-class PCGrateTable:
+class EfficiencyTable:
     """A parsed PCGrate export, before conversion to an :class:`EfficiencyScan`.
 
     ``scan_values`` is always 2-D, shape ``(n_points, n_scan_variables)``.
@@ -114,7 +126,7 @@ def _parse_scan_label(label: str) -> tuple[tuple[str, ...], tuple[str, ...]]:
     return names, units
 
 
-def read_pcgrate(path: str | Path, *, encoding: str = "cp1252") -> PCGrateTable:
+def read_table(path: str | Path, *, encoding: str = "cp1252") -> EfficiencyTable:
     """Parse a PCGrate-SX exported efficiency table.
 
     Parameters
@@ -175,7 +187,7 @@ def read_pcgrate(path: str | Path, *, encoding: str = "cp1252") -> PCGrateTable:
             f"{set(rt_flags)} in one table; this reader expects one of each"
         )
 
-    return PCGrateTable(
+    return EfficiencyTable(
         problem_name=problem_name,
         version=version,
         solved_at=solved_at,
@@ -301,11 +313,21 @@ def _parse_rows(
     )
 
 
-def to_scan(table: PCGrateTable) -> EfficiencyScan:
+def to_scan(table: EfficiencyTable, *, method: str = "imported") -> EfficiencyScan:
     """Convert a parsed table to the common :class:`EfficiencyScan` container.
 
     Only wavelength scans convert: an angle scan is a different object and
     silently relabelling its axis would corrupt a comparison.
+
+    Parameters
+    ----------
+    method
+        Label for this data in comparisons -- ``"integral"`` for output from an
+        integral-method code. **The caller supplies it because the file does
+        not say.** A table records efficiencies, not which numerical method
+        produced them, so guessing from the vendor banner would be an
+        inference dressed up as a fact. The exact program and version stay on
+        ``Provenance.version`` regardless.
     """
     if not table.is_wavelength_scan:
         raise ValueError(
@@ -322,14 +344,15 @@ def to_scan(table: PCGrateTable) -> EfficiencyScan:
         )
 
     provenance = Provenance(
-        method="pcgrate:file",
+        method=method,
         version=table.version,
         source=str(table.source),
-        # PCGrate's own truncation is not recorded in the export; it lives in
-        # the .grt project file. Left None rather than guessed.
+        # The exporting program's own truncation is not in the table; it lives
+        # in its project file. Left None rather than guessed.
         truncation=None,
         converged=None,
         notes={
+            "vendor": table.version.split()[0] if table.version else "unknown",
             "problem_name": table.problem_name,
             "solved_at": table.solved_at,
             "calculating_time": table.calculating_time,
@@ -347,6 +370,13 @@ def to_scan(table: PCGrateTable) -> EfficiencyScan:
     )
 
 
-def read_scan(path: str | Path, **kwargs) -> EfficiencyScan:
-    """Read a PCGrate export straight into an :class:`EfficiencyScan`."""
-    return to_scan(read_pcgrate(path, **kwargs))
+def read_scan(
+    path: str | Path, *, method: str = "imported", **kwargs
+) -> EfficiencyScan:
+    """Read an exported efficiency table straight into an :class:`EfficiencyScan`.
+
+    >>> read_scan("run.txt", method="integral")   # doctest: +SKIP
+
+    See :func:`to_scan` for why ``method`` is the caller's to declare.
+    """
+    return to_scan(read_table(path, **kwargs), method=method)

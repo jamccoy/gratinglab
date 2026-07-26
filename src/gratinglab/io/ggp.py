@@ -63,7 +63,7 @@ _CANONICAL_FIRST = "3 0 - Polygonal type"
 class GgpFile:
     """A parsed ``.ggp``, with the header provenance kept.
 
-    ``pcgrate_compatible`` records whether the file as written would actually
+    ``format_valid`` records whether the file as written would actually
     load in PCGrate -- worth surfacing, because a hashed header fails there
     while parsing perfectly well here.
     """
@@ -71,7 +71,7 @@ class GgpFile:
     t: np.ndarray
     y: np.ndarray
     header_variant: str
-    pcgrate_compatible: bool
+    format_valid: bool
     source: Path
 
     @property
@@ -134,7 +134,7 @@ def read_ggp(path: str | Path) -> GgpFile:
         t=array[:, 0],
         y=array[:, 1],
         header_variant=variant,
-        pcgrate_compatible=compatible,
+        format_valid=compatible,
         source=path,
     )
 

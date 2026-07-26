@@ -47,7 +47,7 @@ class Capabilities:
     Attributes
     ----------
     name
-        Registry key, e.g. ``"scalar"``, ``"rcwa"``, ``"pcgrate:file"``.
+        Registry key, e.g. ``"scalar"``, ``"rcwa"``, ``"integral"``.
     conical
         Handles off-plane mounts (``gamma != 90``). A backend that only does
         in-plane must say so; the off-plane X-ray case is the primary

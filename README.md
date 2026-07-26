@@ -21,7 +21,7 @@ Solver (plugin)  ->  Result (+ provenance)
 
 ## Status
 
-Pre-alpha. Phase 0: problem spec, conventions, PCGrate interop, materials layer.
+Pre-alpha. Scalar solver and the comparison harness work end to end; RCWA is next.
 
 ## Scope
 
@@ -40,8 +40,18 @@ Planned method backends, in order:
 | C-method (Chandezon) | planned |
 | Integral method | planned |
 
-An already-computed PCGrate table is a first-class "method" in the comparison harness,
-so scalar-vs-RCWA-vs-integral plots are possible without a live PCGrate license.
+An already-computed efficiency table from an external code is a first-class "method" in
+the comparison harness, so scalar-vs-RCWA-vs-integral plots are possible without a
+licence for the code that produced the reference data:
+
+```python
+reference = read_scan("run.txt", method="integral")
+align(sweep(problem, illumination, wavelengths, ["scalar", reference]))
+```
+
+The caller declares what physics produced an imported file, because the file itself does
+not say. Comparison legends then read `scalar vs integral` rather than naming a product,
+while `Provenance.version` still records exactly which program and version generated it.
 
 ## Conventions
 
