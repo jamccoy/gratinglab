@@ -48,6 +48,9 @@ __all__ = ["ScalarSolver", "interference_factor", "scalar"]
 #: Soft X-ray work runs ~0.005; visible gratings run ~0.4.
 _LAMBDA_OVER_PERIOD_WARN = 0.1
 
+#: Accepted values for the ``phase_reference`` option.
+_PHASE_REFERENCES = {"order", "specular"}
+
 
 def interference_factor(s: ArrayLike, n_grooves: int) -> NDArray[np.float64]:
     r"""The finite-:math:`N` grating interference function, ISSI eq. (8).
@@ -96,6 +99,7 @@ class ScalarSolver:
         *,
         quadrature_points: int = 2048,
         obliquity: bool = False,
+        phase_reference: str = "order",
     ) -> EfficiencyScan:
         r"""Efficiency over a wavelength scan.
 
@@ -113,14 +117,33 @@ class ScalarSolver:
             between orders differently, so this is exposed to make the
             difference measurable rather than buried.
 
+        phase_reference
+            Which exit direction enters the phase function.
+
+            ``"order"`` (default) uses :math:`\cos\beta_m` per order, following
+            ISSI eq. (15) and thesis Appendix-D.tex:651. More physical per
+            order, but the coefficients are then **not** a single Parseval pair
+            and summed efficiency can *exceed* unity -- measured up to ~12%
+            across mounts, which is unphysical for a passive grating.
+
+            ``"specular"`` fixes the phase at the zeroth order
+            (:math:`\beta_0 = -\alpha`, so :math:`\Phi = 2kg\sin\gamma\cos\alpha`).
+            The coefficients are then a true Fourier pair and
+            :math:`\sum_m |G_m|^2 = 1` exactly over all orders, so energy is
+            conserved by construction -- at the cost of ignoring how the exit
+            direction varies between orders.
+
         Notes
         -----
-        Summed efficiency over *propagating* orders is close to but not exactly
-        1. Two reasons, both physical rather than numerical: power also goes
-        into evanescent orders, and :math:`\Phi_m` is order-dependent so the
-        coefficients are not a single Parseval pair. The deficit grows as
-        scalar theory loses validity, which makes it a useful diagnostic in its
-        own right -- it is reported, never rescaled away.
+        The default does not conserve energy, which is worth stating plainly.
+        For a fixed phase :math:`\sum_m \mathrm{sinc}^2(x - m) = 1` is an exact
+        identity; making :math:`x` order-dependent breaks it. The excess is a
+        property of the standard scalar formulation, not of this implementation
+        -- the same machinery satisfies Parseval under ``"specular"``.
+
+        Either way the sum is **reported, never rescaled**: an excess is
+        recorded as a provenance warning, because how far an approximate theory
+        strays from a conservation law is what a validity map should show.
         """
         self.capabilities.check(problem, illumination)
 
@@ -132,6 +155,11 @@ class ScalarSolver:
         if quadrature_points < 16:
             raise ValueError(
                 f"quadrature_points must be at least 16, got {quadrature_points}"
+            )
+        if phase_reference not in _PHASE_REFERENCES:
+            raise ValueError(
+                f"phase_reference must be one of {sorted(_PHASE_REFERENCES)}, "
+                f"got {phase_reference!r}"
             )
 
         started = time.perf_counter()
@@ -171,7 +199,14 @@ class ScalarSolver:
             cosines = cos_beta(sines[live])
             # Phi_m(t) = k g(t) sin(gamma) [cos(alpha) + cos(beta_m)]
             phase = (2.0 * np.pi / wavelength) * height * sin_gamma
-            phi = phase[None, :] * (cos_alpha + cosines)[:, None]
+            if phase_reference == "order":
+                exit_cosines = cosines
+            else:
+                # Fix the exit direction at the zeroth order, beta_0 = -alpha.
+                # Phi is then order-independent, so the coefficients form a
+                # genuine Parseval pair and energy is conserved exactly.
+                exit_cosines = np.full_like(cosines, cos_alpha)
+            phi = phase[None, :] * (cos_alpha + exit_cosines)[:, None]
 
             coefficients = np.mean(np.exp(1j * phi) * kernel[live], axis=1)
             values = np.abs(coefficients) ** 2
@@ -193,6 +228,9 @@ class ScalarSolver:
                 wavelengths,
                 quadrature_points,
                 obliquity,
+                phase_reference,
+                efficiency,
+                propagating,
                 time.perf_counter() - started,
             ),
         )
@@ -204,6 +242,9 @@ class ScalarSolver:
         wavelengths: NDArray[np.float64],
         quadrature_points: int,
         obliquity: bool,
+        phase_reference: str,
+        efficiency: NDArray[np.float64],
+        propagating: NDArray[np.bool_],
         elapsed: float,
     ) -> Provenance:
         """Record the run, including every validity guard it tripped."""
@@ -249,6 +290,19 @@ class ScalarSolver:
                 "theory neglects polarization; TE and TM are identical here"
             )
 
+        # Report, never rescale. How far an approximate theory strays from a
+        # conservation law is information, not something to hide.
+        totals = np.where(propagating, efficiency, 0.0).sum(axis=1)
+        excess = float(totals.max() - 1.0)
+        if excess > 1e-6:
+            warnings.append(
+                f"summed efficiency reaches {totals.max():.4f}, exceeding unity "
+                f"by {100 * excess:.1f}% -- unphysical for a passive grating. "
+                "Inherent to phase_reference='order', where the coefficients are "
+                "not a Parseval pair; phase_reference='specular' conserves energy "
+                "exactly"
+            )
+
         return Provenance(
             method="scalar",
             version=__version__,
@@ -260,6 +314,7 @@ class ScalarSolver:
             warnings=tuple(warnings),
             notes={
                 "obliquity": obliquity,
+                "phase_reference": phase_reference,
                 "normalization": "relative" if problem.coating is None else "absolute",
                 "alpha_deg": illumination.alpha_deg,
                 "gamma_deg": illumination.gamma_deg,

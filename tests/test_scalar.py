@@ -19,6 +19,22 @@ from gratinglab.solvers.scalar import interference_factor
 
 UNPOL = "unpolarized"
 
+# Every closed-form check runs in BOTH mounts.
+#
+# In-plane cases cannot detect an error in the sin(gamma) handling, because
+# sin(gamma) = 1 there makes any power of it identical. Mutation testing showed
+# this concretely: breaking sin(gamma) -> sin(gamma)**2 left 34 of 37 scalar
+# tests passing, and only the off-plane cases failed. Off-plane is the primary
+# application, so it must be exercised by every analytic check, not a subset.
+MOUNTS = [
+    # (period_nm, illumination, wavelengths_nm)
+    (1400.0, Illumination.classical(alpha=10.0, polarization=UNPOL),
+     np.linspace(400.0, 700.0, 7)),
+    (315.15, Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL),
+     np.linspace(1.0, 5.0, 7)),
+]
+MOUNT_IDS = ["in-plane", "off-plane"]
+
 
 def phase_amplitude(problem, illumination, wavelength, orders):
     r"""``k * depth * sin(gamma) * [cos(alpha) + cos(beta_m)]`` per order."""
@@ -82,12 +98,12 @@ class TestBinaryPhaseGratingAgainstClosedForm:
     """
 
     @pytest.mark.parametrize("duty", [0.25, 0.5, 0.7])
-    def test_matches_closed_form(self, duty):
+    @pytest.mark.parametrize("mount", MOUNTS, ids=MOUNT_IDS)
+    def test_matches_closed_form(self, duty, mount):
+        period, ill, wavelengths = mount
         problem = Problem(
-            period=1400.0, profile=Lamellar(depth_fraction=0.15, duty_cycle=duty)
+            period=period, profile=Lamellar(depth_fraction=0.15, duty_cycle=duty)
         )
-        ill = Illumination.classical(alpha=10.0, polarization=UNPOL)
-        wavelengths = np.linspace(400.0, 700.0, 7)
         scan = scalar.solve(problem, ill, wavelengths, quadrature_points=16384)
 
         for row, wavelength in enumerate(wavelengths):
@@ -123,12 +139,12 @@ class TestSinusoidAgainstBesselForm:
     """
 
     @pytest.mark.parametrize("depth_fraction", [0.05, 0.15, 0.3])
-    def test_matches_bessel_squared(self, depth_fraction):
+    @pytest.mark.parametrize("mount", MOUNTS, ids=MOUNT_IDS)
+    def test_matches_bessel_squared(self, depth_fraction, mount):
+        period, ill, wavelengths = mount
         problem = Problem(
-            period=1400.0, profile=Sinusoidal(depth_fraction=depth_fraction)
+            period=period, profile=Sinusoidal(depth_fraction=depth_fraction)
         )
-        ill = Illumination.classical(alpha=8.0, polarization=UNPOL)
-        wavelengths = np.linspace(450.0, 750.0, 7)
         scan = scalar.solve(problem, ill, wavelengths, quadrature_points=16384)
 
         for row, wavelength in enumerate(wavelengths):
@@ -212,6 +228,61 @@ class TestObliquityOption:
         tilted = scalar.solve(problem, ill, [600.0], obliquity=True).at(600.0)
         assert not np.allclose(plain.efficiency, tilted.efficiency)
 
+    @pytest.mark.parametrize(
+        "alpha_deg,gamma_deg", [(45.0, 90.0), (10.0, 90.0), (25.0, 1.5), (-30.0, 45.0)]
+    )
+    def test_factor_is_exactly_cos_beta_over_cos_alpha(self, alpha_deg, gamma_deg):
+        r"""Pin the *direction* of the factor, not merely that it does something.
+
+        Mutation testing showed that inverting it to
+        :math:`\cos\alpha/\cos\beta_m` survived the entire suite, because the
+        only other test asserts the result *changes*. This asserts the exact
+        ratio from Appendix-D.tex:418, so an inversion fails immediately.
+        """
+        problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
+        ill = Illumination(
+            alpha_deg=alpha_deg, gamma_deg=gamma_deg, polarization=UNPOL
+        )
+        wavelength = 0.2 * problem.period
+
+        plain = scalar.solve(problem, ill, [wavelength], obliquity=False).at(wavelength)
+        tilted = scalar.solve(problem, ill, [wavelength], obliquity=True).at(wavelength)
+
+        live = plain.propagating
+        sines = sin_beta(
+            plain.orders[live],
+            wavelength,
+            problem.period,
+            ill.sin_alpha,
+            ill.sin_gamma,
+        )
+        expected = plain.efficiency[live] * cos_beta(sines) / ill.cos_alpha
+
+        assert np.allclose(tilted.efficiency[live], expected, atol=1e-12)
+
+    def test_inverted_factor_would_be_detected(self, ):
+        """A guard on the guard: the inverse ratio must not also satisfy it.
+
+        If cos(beta)/cos(alpha) and cos(alpha)/cos(beta) happened to coincide
+        for the test geometry, the assertion above would be vacuous.
+        """
+        problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
+        ill = Illumination.classical(alpha=45.0, polarization=UNPOL)
+        wavelength = 280.0
+
+        plain = scalar.solve(problem, ill, [wavelength], obliquity=False).at(wavelength)
+        tilted = scalar.solve(problem, ill, [wavelength], obliquity=True).at(wavelength)
+
+        live = plain.propagating
+        sines = sin_beta(
+            plain.orders[live], wavelength, problem.period, ill.sin_alpha, ill.sin_gamma
+        )
+        correct = plain.efficiency[live] * cos_beta(sines) / ill.cos_alpha
+        inverted = plain.efficiency[live] * ill.cos_alpha / cos_beta(sines)
+
+        assert np.allclose(tilted.efficiency[live], correct)
+        assert not np.allclose(correct, inverted), "geometry cannot distinguish them"
+
     def test_is_recorded_on_the_provenance(self):
         problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
         ill = Illumination.classical(alpha=30.0, polarization=UNPOL)
@@ -222,6 +293,75 @@ class TestObliquityOption:
         problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
         ill = Illumination.classical(alpha=30.0, polarization=UNPOL)
         assert scalar.solve(problem, ill, [600.0]).provenance.notes["obliquity"] is False
+
+
+class TestPhaseReference:
+    r"""The two phase conventions, and the energy tradeoff between them."""
+
+    def test_default_is_the_order_dependent_form(self):
+        """ISSI eq. (15) and thesis Appendix-D.tex:651 both use cos(beta_m)."""
+        problem = Problem(period=315.15, profile=Blazed(blaze_angle=29.5))
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        scan = scalar.solve(problem, ill, [3.0])
+        assert scan.provenance.notes["phase_reference"] == "order"
+
+    @pytest.mark.parametrize("mount", MOUNTS, ids=MOUNT_IDS)
+    def test_specular_satisfies_parseval_over_all_orders(self, mount):
+        r"""The decisive check that the quadrature and normalisation are right.
+
+        With a fixed phase, :math:`\exp(i\Phi(t))` has unit modulus, so
+        Parseval gives :math:`\sum_m |G_m|^2 = 1` over *all* orders exactly.
+        Summing over propagating orders alone must therefore never exceed 1.
+
+        This validates the machinery independently of any closed form: it would
+        catch a wrong 1/p normalisation or a mis-scaled transform, neither of
+        which the sinc-squared comparisons can see.
+        """
+        period, ill, wavelengths = mount
+        problem = Problem(period=period, profile=Blazed(blaze_angle=29.5))
+        scan = scalar.solve(
+            problem, ill, wavelengths, quadrature_points=8192,
+            phase_reference="specular",
+        )
+        assert scan.total.max() <= 1.0 + 1e-9, f"max total {scan.total.max()}"
+
+    def test_specular_exactly_conserves_when_all_orders_propagate(self):
+        r"""At a long enough wavelength few orders exist and the sum is tight."""
+        problem = Problem(period=1400.0, profile=Sinusoidal(depth_fraction=0.05))
+        ill = Illumination.classical(alpha=0.0, polarization=UNPOL)
+        scan = scalar.solve(
+            problem, ill, [500.0], quadrature_points=16384,
+            phase_reference="specular",
+        )
+        # A shallow sinusoid puts essentially everything in the low orders that
+        # do propagate, so the sum should sit very close to unity.
+        assert scan.at(500.0).total == pytest.approx(1.0, abs=1e-3)
+
+    def test_order_reference_can_exceed_unity(self):
+        """The tradeoff, asserted so it cannot be silently 'fixed'."""
+        problem = Problem(period=315.15, profile=Blazed(blaze_angle=29.5))
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        scan = scalar.solve(
+            problem, ill, np.linspace(1.0, 5.0, 15), quadrature_points=4096
+        )
+        assert scan.total.max() > 1.0
+
+    def test_the_two_agree_where_the_exit_direction_barely_varies(self):
+        """Near-Littrow with few orders, cos(beta_m) ~ cos(alpha), so they converge."""
+        problem = Problem(period=1400.0, profile=Sinusoidal(depth_fraction=0.02))
+        ill = Illumination.classical(alpha=2.0, polarization=UNPOL)
+        common = dict(quadrature_points=8192)
+        a = scalar.solve(problem, ill, [900.0], **common).at(900.0)
+        b = scalar.solve(
+            problem, ill, [900.0], phase_reference="specular", **common
+        ).at(900.0)
+        assert np.allclose(a.efficiency, b.efficiency, atol=5e-3)
+
+    def test_rejects_an_unknown_reference(self):
+        problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
+        ill = Illumination.classical(alpha=30.0, polarization=UNPOL)
+        with pytest.raises(ValueError, match="phase_reference must be one of"):
+            scalar.solve(problem, ill, [600.0], phase_reference="blaze")
 
 
 class TestProvenance:

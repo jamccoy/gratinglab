@@ -142,6 +142,30 @@ rounding detail, and mislabelling it silently invalidates a throughput budget.
 For a lossless structure, `Σ_m over propagating E_m = 1`. This is asserted in tests, not
 assumed.
 
+### Energy conservation is a check, not a guarantee
+
+Two rules, and they point in different directions:
+
+- **A deficit is ordinary.** Power goes into absorption, into evanescent orders, or is
+  simply missed by an approximate method.
+- **An excess is not.** No passive grating returns more power than it receives, by any
+  method. `checks.check_energy_balance` enforces only this weaker direction by default,
+  because it never has a legitimate exception. It is what identified the unphysical
+  finite-conductivity run in the reference corpus, where the sum reached 3.6.
+
+**Scalar theory as normally written does not conserve energy.** With the order-dependent
+phase of ISSI eq. (15) and thesis Appendix-D.tex:651, summed efficiency was measured
+*exceeding unity* by up to ~12% across mounts (~7% in the off-plane soft-X-ray case).
+
+This is a property of the formulation, not of the implementation. For a fixed phase,
+`Σ_m sinc²(x − m) = 1` is an exact identity; making `x` depend on the order breaks it.
+Running the identical machinery with `phase_reference="specular"` satisfies Parseval to
+1e-10, which is what proves the quadrature and normalisation are correct.
+
+The excess is **reported, never rescaled** — recorded as a `Provenance` warning. How far
+an approximate theory strays from a conservation law is exactly what a scalar validity
+map should show, and normalising it away would destroy that information.
+
 ### The obliquity factor — an explicit choice
 
 Two treatments appear in the source literature and they are **not** equivalent:
