@@ -152,10 +152,11 @@ def check_reciprocity(
     """
     wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=np.float64))
 
-    worst = 0.0
-    worst_order: int | None = None
-    worst_wavelength: float | None = None
-    pairs = 0
+    # Collected rather than tracked with a running maximum. A running max
+    # seeded at 0.0 never updates when a solver is *exactly* reciprocal, which
+    # left the report with worst_order=None on platforms whose BLAS returns a
+    # bitwise-zero difference -- the better the solver, the worse the report.
+    violations: list[tuple[float, int, float]] = []
 
     for wavelength in wavelengths:
         forward = solver.solve(problem, illumination, [wavelength], **options).at(
@@ -191,18 +192,29 @@ def check_reciprocity(
                 problem, reversed_illumination, [wavelength], **options
             ).at(wavelength)
 
-            violation = abs(forward[int(order)] - backward[int(order)])
-            pairs += 1
-            if violation > worst:
-                worst = violation
-                worst_order = int(order)
-                worst_wavelength = float(wavelength)
+            violations.append(
+                (
+                    abs(forward[int(order)] - backward[int(order)]),
+                    int(order),
+                    float(wavelength),
+                )
+            )
 
+    if not violations:
+        return ReciprocityReport(
+            max_violation=0.0,
+            worst_order=None,
+            worst_wavelength=None,
+            pairs_tested=0,
+            tolerance=tolerance,
+        )
+
+    worst, worst_order, worst_wavelength = max(violations, key=lambda item: item[0])
     return ReciprocityReport(
         max_violation=worst,
         worst_order=worst_order,
         worst_wavelength=worst_wavelength,
-        pairs_tested=pairs,
+        pairs_tested=len(violations),
         tolerance=tolerance,
     )
 

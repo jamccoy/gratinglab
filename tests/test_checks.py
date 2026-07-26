@@ -95,6 +95,42 @@ class TestReciprocity:
         )
         assert not report.passed, "reciprocity accepted a non-reciprocal solver"
 
+    def test_report_is_usable_when_the_solver_is_exactly_reciprocal(self):
+        """A zero violation must still name where it was measured.
+
+        Regression: the running maximum was seeded at 0.0 and only updated on
+        a strictly greater violation, so a solver that was *bitwise* reciprocal
+        never set worst_order. It passed locally, where floating-point noise
+        gave ~1e-18, and failed on CI, where the BLAS returned exact zero --
+        the better the solver, the worse the report.
+        """
+
+        class PerfectlyReciprocal:
+            capabilities = scalar.capabilities
+
+            @staticmethod
+            def solve(problem, illumination, wavelengths, **options):
+                """Ignore the illumination azimuth, so reciprocity is exact."""
+                fixed = Illumination(
+                    alpha_deg=0.0,
+                    gamma_deg=illumination.gamma_deg,
+                    polarization=illumination.polarization,
+                )
+                return scalar.solve(problem, fixed, wavelengths, **options)
+
+        report = check_reciprocity(
+            PerfectlyReciprocal(),
+            Problem(period=315.15, profile=Blazed(blaze_angle=29.5)),
+            Illumination(alpha_deg=25.0, gamma_deg=1.5, polarization=UNPOL),
+            [3.0],
+            quadrature_points=2048,
+        )
+        assert report.max_violation == 0.0
+        assert report.passed
+        assert report.pairs_tested > 0
+        assert report.worst_order is not None, "zero violation left the report unusable"
+        assert report.worst_wavelength == 3.0
+
     def test_reports_where_the_worst_violation_is(self):
         report = check_reciprocity(
             scalar,
