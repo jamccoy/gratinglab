@@ -1,0 +1,73 @@
+name: tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.11", "3.12"]
+        include:
+          # One macOS run: it is the development platform, and it catches
+          # BLAS/LAPACK differences that would otherwise only show up locally.
+          - os: macos-latest
+            python-version: "3.12"
+
+    name: ${{ matrix.os }} / py${{ matrix.python-version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      # CI has no PCGrate reference corpus, so this run also exercises the
+      # skip path that every contributor without the research data will hit.
+      # If those tests ever error instead of skipping, that is a real bug.
+      - name: Run tests
+        run: python -m pytest -v --durations=10
+
+      - name: Confirm corpus tests skipped rather than failed
+        run: |
+          python -m pytest -q -rs 2>&1 | tee result.txt
+          if grep -qi "reference corpus" result.txt; then
+            echo "corpus tests skipped cleanly, as expected on CI"
+          else
+            echo "::warning::expected corpus-dependent tests to report as skipped"
+          fi
+
+      - name: Check the public API imports
+        run: |
+          python -c "
+          import gratinglab
+          from gratinglab import Illumination, EfficiencyScan, Provenance
+          from gratinglab.problem import Problem
+          from gratinglab.profiles import Blazed
+          from gratinglab.solvers import scalar, available_solvers
+          print('version', gratinglab.__version__)
+          print('solvers', available_solvers())
+          scan = scalar.solve(
+              Problem(period=160.0, profile=Blazed(blaze_angle=30.0)),
+              Illumination.offplane(graze=1.5, azimuth=25.0),
+              [2.4],
+          )
+          print('orders', scan.orders.min(), '..', scan.orders.max())
+          "

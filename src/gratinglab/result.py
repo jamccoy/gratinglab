@@ -18,6 +18,19 @@ from numpy.typing import NDArray
 __all__ = ["Provenance", "OrderEfficiency", "EfficiencyScan"]
 
 
+def _frozen_array(values: Any, dtype: Any) -> np.ndarray:
+    """Return an independent, read-only copy of ``values``.
+
+    Copying matters: freezing the caller's array in place would silently make
+    *their* object read-only, a nasty surprise if they meant to reuse the
+    buffer. Freezing matters because reference data that can be mutated after
+    construction is reference data that cannot be trusted.
+    """
+    array = np.array(values, dtype=dtype, copy=True)
+    array.setflags(write=False)
+    return array
+
+
 @dataclass(frozen=True, slots=True)
 class Provenance:
     """Where a number came from and whether it can be defended.
@@ -66,6 +79,26 @@ class Provenance:
     def with_warning(self, message: str) -> "Provenance":
         """Return a copy carrying an additional warning."""
         return dataclasses.replace(self, warnings=self.warnings + (message,))
+
+    def __hash__(self) -> int:
+        """Hash over the identifying fields only, skipping ``notes``.
+
+        ``notes`` is a free-form dict and therefore unhashable, but provenance
+        needs to work as a dict key -- the comparison harness groups results by
+        it. Two records differing only in ``notes`` collide on hash and are
+        still distinguished by ``__eq__``, which is exactly what the hash
+        contract permits.
+        """
+        return hash(
+            (
+                self.method,
+                self.version,
+                self.source,
+                self.truncation,
+                self.converged,
+                self.warnings,
+            )
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,6 +154,17 @@ class EfficiencyScan:
     provenance: Provenance
 
     def __post_init__(self) -> None:
+        # Replace every field with an independent read-only copy, so a scan can
+        # never be altered after construction. object.__setattr__ is how a
+        # frozen dataclass legitimately initialises itself.
+        for name, dtype in (
+            ("wavelengths", np.float64),
+            ("orders", np.int64),
+            ("efficiency", np.float64),
+            ("propagating", np.bool_),
+        ):
+            object.__setattr__(self, name, _frozen_array(getattr(self, name), dtype))
+
         n, m = len(self.wavelengths), len(self.orders)
         if self.efficiency.shape != (n, m):
             raise ValueError(
@@ -138,6 +182,20 @@ class EfficiencyScan:
             )
         if len(np.unique(self.orders)) != m:
             raise ValueError("orders contains duplicates")
+
+        # The invariant that keeps `total` trustworthy. Without it, a stray
+        # value on a non-propagating order silently inflates the energy
+        # balance -- the check the whole validation strategy rests on.
+        stray = self.efficiency[~self.propagating]
+        if stray.size and (stray != 0.0).any():
+            bad = int(np.count_nonzero(stray))
+            raise ValueError(
+                f"{bad} non-propagating order(s) carry non-zero efficiency "
+                f"(largest {np.abs(stray).max():.6g}). Evanescent orders must be "
+                "exactly 0.0 (docs/conventions.md 4)"
+            )
+        if (self.efficiency < 0.0).any():
+            raise ValueError("efficiency contains negative values")
 
     def __len__(self) -> int:
         return len(self.wavelengths)

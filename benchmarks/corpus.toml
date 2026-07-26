@@ -1,0 +1,76 @@
+# Geometry for the PCGrate reference corpus.
+#
+# The exported .txt tables record efficiencies but not the geometry that
+# produced them, and the .grt project files are binary. So the geometry is
+# recorded here instead.
+#
+# Most entries were *recovered from the data* rather than read from a file.
+# Where an order propagates is fixed by the grating equation
+#
+#     sin(alpha) + m*lambda/(period*sin(gamma)) in [-1, 1]
+#
+# so observing which orders are present at each wavelength determines two
+# combinations exactly:
+#
+#     A = (1 + sin(alpha)) * period * sin(gamma)
+#     B = (1 - sin(alpha)) * period * sin(gamma)
+#
+# because max order = floor(A/lambda) and min order = -floor(B/lambda), and the
+# two decouple. Intersecting the resulting intervals over a 500-point
+# wavelength scan pins A and B to about +/-0.01 nm.
+#
+# That yields `period_x_sin_gamma` and `alpha_deg` with no assumptions. What it
+# *cannot* separate is period from gamma individually -- only their product
+# with sin(gamma). One extra fact fixes the split.
+#
+# METHOD VALIDATION: for the TASTE run the period is independently known
+# (315.15 nm, hard-coded in OGRE/pcgratewavscan.py). Feeding that in gives
+# gamma = 1.2500 deg and alpha = +19.99 deg -- both clean round numbers, which
+# a mis-derived method would not produce.
+#
+# Entries marked `confirmed = false` need Jake to check before being used for
+# anything published.
+
+[taste]
+file = "OGRE/tastetest_perf_wavescan.txt"
+profile_file = "OGRE/AFM_TASTE_test.ggp"     # UNCONFIRMED: which .ggp this run used
+period_nm = 315.15                            # from OGRE/pcgratewavscan.py
+period_x_sin_gamma = 6.8750                   # recovered, +/-0.005 nm
+gamma_deg = 1.2500                            # = asin(6.8750 / 315.15)
+alpha_deg = 19.99                            # recovered, +/-0.1 deg
+coating = "Au"
+conductivity = "perfect"
+orders = [-7, 15]
+wavelength_nm = [0.6, 6.0]
+confirmed = false
+notes = "Period is independent (script constant); gamma and alpha recovered. The clean gamma=1.25 deg is what validates the recovery method."
+
+[panter1_perfect]
+file = "panter1_fix_efftable_perf.txt"
+profile_file = "PCGrateProjects/panter1.ggp"  # AFM-derived, 82 points, depth/period 0.3119
+period_x_sin_gamma = 9.8450                   # recovered, +/-0.005 nm
+alpha_deg = 32.92                            # recovered, +/-0.1 deg
+coating = "Au"
+conductivity = "perfect"
+orders = [-7, 25]
+wavelength_nm = [0.6, 6.2]
+confirmed = false
+# UNRESOLVED: period and gamma cannot be separated from the data alone.
+# Candidate splits, all consistent with period*sin(gamma) = 9.8450 nm:
+#   gamma = 1.5000 deg -> period = 376.1 nm
+#   gamma = 1.7902 deg -> period = 315.15 nm  (same grating as TASTE)
+#   gamma = 2.0000 deg -> period = 282.1 nm
+# The title string in panter1.py reads "eta = 1.5 deg & phi = 0.97 deg". The
+# 1.5 deg is consistent with gamma if the period is ~376 nm, but 0.97 deg is
+# NOT the azimuth -- the data says alpha = +33 deg, and 33 deg is a plausible
+# near-Littrow azimuth given the panter1.ggp facet angles (~39 deg / ~27 deg).
+# So "phi" in that title means something other than alpha.
+notes = "Needs Jake to confirm the period. Everything else is pinned."
+
+[panter1_finite]
+file = "panter1_fix_efftable_finite.txt"
+same_geometry_as = "panter1_perfect"
+conductivity = "finite"
+usable = false
+# See tests/test_pcgrate.py::test_known_defect_finite_conductivity_run_is_unphysical
+notes = "Energy conservation violated at 79 of 561 points, total efficiency up to 3.6. Violations cluster at order passing-off (Rayleigh anomalies). Do not use as reference data."
