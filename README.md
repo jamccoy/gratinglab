@@ -53,17 +53,40 @@ The caller declares what physics produced an imported file, because the file its
 not say. Comparison legends then read `scalar vs integral` rather than naming a product,
 while `Provenance.version` still records exactly which program and version generated it.
 
-## Conventions
+## Documentation
 
-`docs/conventions.md` is **normative**. Read it before writing a solver or filing a bug
-about a sign. The short version: time convention `exp(-iωt)`, lossy *n* = n′ + ik,
-grating equation `sin α + sin β_m = mλ/(p sin γ)`, efficiencies **absolute**.
+| Document | What it holds |
+|---|---|
+| [`docs/roadmap.md`](docs/roadmap.md) | **Where the project is, what is next, and the open questions.** Start here |
+| [`docs/conventions.md`](docs/conventions.md) | **Normative.** Signs, units, normalizations, and the reference errata |
+| [`docs/theory/scalar.md`](docs/theory/scalar.md) | Full derivation for the scalar solver, its closed forms and its limits |
+| [`docs/findings.md`](docs/findings.md) | Empirical results, each with the evidence that established it |
+| [`benchmarks/corpus.toml`](benchmarks/corpus.toml) | Geometry for the reference corpus, most of it recovered from the data |
+
+`conventions.md` is worth singling out: read it before writing a solver or filing a bug
+about a sign. The short version is time convention `exp(-iωt)`, lossy *n* = n′ + ik,
+grating equation `sin α + sin β_m = mλ/(p sin γ)`, efficiencies **absolute**, lengths in
+nm, angles in degrees at the API boundary.
+
+A theory page accompanies each solver as it lands, stating its assumptions, its
+derivation in the code's own notation, and the conditions under which it stops being
+trustworthy.
 
 ## Development
 
 ```bash
 .venv/bin/python -m pytest
 ```
+
+Two practices this project relies on:
+
+- **Physics self-checks over reference data.** `checks.check_reciprocity` and
+  `checks.check_energy_balance` constrain the *model* rather than comparing against a
+  formula derived the same way the solver computes it. They need no reference data and
+  apply to every backend.
+- **Mutation testing.** Deliberately corrupting the physics and confirming the suite
+  notices. It found a real gap the first time it was run — see
+  [findings](docs/findings.md#mutation-testing-found-a-real-gap).
 
 ## License
 
