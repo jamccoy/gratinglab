@@ -45,9 +45,14 @@ Beyond measuring the overall blaze angle of each groove, the software quantifies
 Ensures accurate measurements by:
 
 - Automatically detecting groove centers via prominence-based peak finding
+- Rejecting grooves clipped by the scan edge, whose facet is only partly present
 - Trimming facet edges to avoid measuring groove tops/bottoms
-- Quality metrics (R²) to filter poor fits
+- Recording a fit R² for every groove, in the console output and the per-groove CSV
 - Visual diagnostics to verify proper flattening and groove detection
+
+Note that R² is **reported, not enforced** — no measurement is currently dropped for
+a poor fit. In practice the edge-exclusion rule removes them anyway: after it, no fit
+in the sample dataset falls below R² 0.95.
 
 ### 4. Proper Statistical Analysis
 All comparisons include:
@@ -88,7 +93,7 @@ python3 -m venv .venv
 
    # Analysis parameters
    BLAZE_SIDE = 'negative_slope'  # 'negative_slope', 'positive_slope', or 'longer'
-   FACET_TRIM = 0.1               # Trim edges to avoid groove tops (0.1-0.3)
+   FACET_TRIM = 0.1               # Trim edges to avoid groove tops (0.05-0.28)
    ```
 
 2. **Run the analysis**:
@@ -178,7 +183,7 @@ BLAZE_SIDE = 'negative_slope'  # Which facet to measure. Selected by slope sign,
                                #   'longer'         - whichever facet is wider
                                # Any other value raises ValueError.
 
-FACET_TRIM = 0.1         # Fraction to trim from facet edges (0.0-0.5)
+FACET_TRIM = 0.1         # Fraction to trim from facet edges (0.0-0.28)
                          # CRITICAL: Prevents measuring groove tops!
                          # 0.15 = use middle 70% of facet
                          # Increase if getting very low angles (measuring tops)
@@ -187,8 +192,13 @@ FACET_TRIM = 0.1         # Fraction to trim from facet edges (0.0-0.5)
 
 **Understanding FACET_TRIM**: This is your main defense against measuring groove tops:
 - Too small (0.05): Risk measuring rounded groove tops → low angles
-- Just right (0.10-0.20): Measures clean facet regions → correct angles  
-- Too large (0.40): Limited data for fits → poor quality
+- Just right (0.10-0.20): Measures clean facet regions → correct angles
+- Too large (0.25+): Few points left to fit → noisy angles
+
+**Hard limit ~0.286.** The blaze facet is trimmed 2.5× harder on the trough side
+to avoid the flattened groove bottom, so `FACET_TRIM × 3.5` is removed in total.
+Above ~0.286 nothing is left, every groove fit fails, and the analysis returns no
+measurements at all rather than degrading gracefully.
 
 ### Visualization Options
 
