@@ -97,6 +97,7 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
     all_groove_periods = []
     group_results = []  # Store results per group for diagnostics
     n_edge_rejected = 0  # Grooves dropped for sitting on a scan edge
+    all_groove_positions = []  # x position (um) of each accepted measurement
 
     for group_idx, raw_y in enumerate(profiles_list):
         print(f"\n  Processing row group {group_idx + 1}/{N_ROW_GROUPS}...")
@@ -162,7 +163,12 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
                 all_blaze_angles.append(angle)
                 all_quality.append(qual)
                 all_angle_uncertainties.append(qual.get('blaze_angle_stderr', 0))
-                
+                # Position of this specific measurement, so plots can pair angles
+                # with positions 1:1 even though each groove is measured once per
+                # row group. Recorded here rather than reconstructed later,
+                # because grooves whose fit failed never reach this branch.
+                all_groove_positions.append(raw_x[center])
+
                 if 'local_angles' in qual:
                     all_local_angles.extend(qual['local_angles'])
         
@@ -224,12 +230,11 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
     
     # Summary plots
     if show_plots:
-        # Use data from first group for visualization
         first_group = group_results[0] if len(group_results) > 0 else None
-        
+
         if first_group is not None:
             plot_summary_statistics(
-                all_blaze_angles, raw_x, first_group['groove_centers'],
+                all_blaze_angles, all_groove_positions,
                 all_local_angles, stats['mean_angle'], stats['std_angle'],
                 SHOW_LOCAL_ANGLE_DISTRIBUTION
             )
@@ -317,7 +322,9 @@ def _analyze_single_file_traditional(filename, show_plots=True):
     
     # Summary plots
     if show_plots:
-        plot_summary_statistics(blaze_angles, raw_x, groove_centers, all_local_angles,
+        plot_summary_statistics(blaze_angles,
+                              raw_x[groove_centers[:len(blaze_angles)]],
+                              all_local_angles,
                               stats['mean_angle'], stats['std_angle'], 
                               SHOW_LOCAL_ANGLE_DISTRIBUTION)
     

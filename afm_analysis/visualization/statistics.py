@@ -9,20 +9,30 @@ import matplotlib.pyplot as plt
 import os
 
 
-def plot_summary_statistics(blaze_angles, raw_x, groove_centers, all_local_angles, 
+def plot_summary_statistics(blaze_angles, positions, all_local_angles,
                            mean_angle, std_angle, show_local_distribution):
     """
     Plot histogram, position, and local angle distribution for a single sample
-    
+
     Parameters:
         blaze_angles: list of blaze angles (degrees)
-        raw_x: x-axis positions (µm)
-        groove_centers: indices of groove centers
+        positions: x position (µm) of each measurement in blaze_angles, same
+            length. Under row-group analysis many measurements share a position,
+            because each row group re-measures the same grooves - this used to
+            take raw_x and groove_centers and slice them to match, which cannot
+            work when there are n_groups x n_grooves angles but only n_grooves
+            centers.
         all_local_angles: list of all local angle measurements
         mean_angle: mean blaze angle (degrees)
         std_angle: standard deviation of blaze angles (degrees)
         show_local_distribution: whether to show within-facet distribution
     """
+    blaze_angles = np.asarray(blaze_angles)
+    positions = np.asarray(positions)
+    if len(positions) != len(blaze_angles):
+        raise ValueError(f"positions and blaze_angles must be the same length, "
+                         f"got {len(positions)} and {len(blaze_angles)}")
+
     n_plots = 3 if show_local_distribution and len(all_local_angles) > 0 else 2
     fig, axes = plt.subplots(1, n_plots, figsize=(6*n_plots, 4))
     
@@ -42,11 +52,18 @@ def plot_summary_statistics(blaze_angles, raw_x, groove_centers, all_local_angle
     ax1.legend(fontsize=11)
     ax1.grid(True, alpha=0.3)
     
-    # Angle vs position
-    positions = raw_x[groove_centers[:len(blaze_angles)]]
-    ax2.plot(positions, blaze_angles, 'o-', markersize=8, linewidth=1.5, color='steelblue')
+    # Angle vs position. With row groups the same groove is measured once per
+    # group, so positions repeat - connecting them with a line would draw
+    # meaningless zig-zags between groups. Scatter in that case.
+    repeated = len(np.unique(positions)) < len(positions)
+    if repeated:
+        ax2.plot(positions, blaze_angles, 'o', markersize=5, alpha=0.4,
+                 color='steelblue')
+    else:
+        ax2.plot(positions, blaze_angles, 'o-', markersize=8, linewidth=1.5,
+                 color='steelblue')
     ax2.axhline(mean_angle, color='r', linestyle='--', linewidth=2, label='Mean')
-    ax2.fill_between([positions[0], positions[-1]], 
+    ax2.fill_between([np.min(positions), np.max(positions)],
                     mean_angle - std_angle, mean_angle + std_angle,
                     alpha=0.2, color='red', label=f'±1σ ({std_angle:.2f}°)')
     ax2.set_xlabel('Position (µm)', fontsize=12)
