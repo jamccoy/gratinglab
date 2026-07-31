@@ -12,6 +12,9 @@ results/
 *.png
 *.pdf
 !docs/**/*.pdf
+# The icon artwork is generated, but it *is* the design and is small and
+# stable, so it ships. Regenerate with tools/make_icon.py.
+!resources/*.png
 
 # AI coding-agent instruction files and local agent state.
 # These are personal workflow config, not project source.
@@ -25,3 +28,7 @@ GEMINI.md
 .aider*
 .continue/
 .github/copilot-instructions.md
+
+# Generated artifacts
+build/
+*.app/
