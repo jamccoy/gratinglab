@@ -1,4 +1,4 @@
-# AFM Blaze Angle Analysis
+# AFM Blaze Angle Analysis (in progress)
 
 A Python toolkit for analyzing Atomic Force Microscopy (AFM) data of diffraction
 gratings. One pipeline, two outputs:
