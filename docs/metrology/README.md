@@ -751,10 +751,4 @@ For questions or issues:
 
 ---
 
-## Acknowledgments
-
-[Your acknowledgments here]
-
----
-
 **Remember**: Always verify that `PERIOD_EST` (groove spacing) matches your actual grating before running analysis! The defaults are examples only.
