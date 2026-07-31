@@ -35,7 +35,7 @@ gui = ["matplotlib>=3.8"]
 gratinglab-gui = "gratinglab.gui.app:main"
 
 [project.urls]
-Homepage = "https://github.com/jakemccoy/gratinglab"
+Homepage = "https://github.com/jamccoy/gratinglab"
 
 # Solver backends register here. A backend may live in its own distribution.
 [project.entry-points."gratinglab.solvers"]

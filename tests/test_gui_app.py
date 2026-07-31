@@ -167,3 +167,88 @@ class TestBehaviour:
         form = gui._read_form()
         assert isinstance(form, FormState)
         assert form.period == "315.15"
+
+
+@requires_display
+class TestHelpMenu:
+    def test_a_menu_bar_is_attached(self, gui):
+        assert gui.root.cget("menu") != ""
+
+    def test_theory_viewer_shows_a_known_heading(self, gui):
+        from gratinglab.gui.docs import theory_pages
+
+        scalar_page = next(p for p in theory_pages() if p.name == "scalar")
+        before = set(gui.root.winfo_children())
+        gui.show_theory(scalar_page)
+        opened = [w for w in gui.root.winfo_children() if w not in before]
+        assert len(opened) == 1
+
+        text_widget = next(
+            w for w in opened[0].winfo_children() if isinstance(w, tk.Text)
+        )
+        content = text_widget.get("1.0", "end")
+        assert "## 5. Energy is not conserved" in content
+
+    def test_theory_viewer_banners_a_non_rigorous_solver(self, gui):
+        from gratinglab.gui.docs import theory_pages
+
+        scalar_page = next(p for p in theory_pages() if p.name == "scalar")
+        assert not scalar_page.rigorous  # the case this test actually needs
+
+        gui.show_theory(scalar_page)
+        window = [w for w in gui.root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+        text_widget = next(w for w in window.winfo_children() if isinstance(w, tk.Text))
+        assert "Approximate method" in text_widget.get("1.0", "end")
+
+    def test_missing_page_viewer_shows_the_explanation_not_a_crash(self, gui):
+        from gratinglab.gui.docs import TheoryPage
+
+        stub = TheoryPage(
+            name="future", title="Future Method", available=False, path=None,
+            text="No theory page has been written yet for 'future'.",
+            rigorous=True,
+        )
+        gui.show_theory(stub)  # must not raise
+        window = [w for w in gui.root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+        text_widget = next(w for w in window.winfo_children() if isinstance(w, tk.Text))
+        assert "No theory page has been written yet" in text_widget.get("1.0", "end")
+        # A solver marked rigorous gets no approximate-method banner.
+        assert "Approximate method" not in text_widget.get("1.0", "end")
+
+    def test_about_reports_the_real_version(self, gui, monkeypatch):
+        seen = {}
+        monkeypatch.setattr(
+            gui._messagebox, "showinfo", lambda title, message: seen.update(
+                title=title, message=message
+            )
+        )
+        gui.show_about()
+
+        from gratinglab import __version__
+
+        assert seen["title"] == "About GratingLab"
+        assert __version__ in seen["message"]
+        assert "BSD-3-Clause" in seen["message"]
+
+    def test_help_menu_lists_every_registered_solver(self, gui):
+        from gratinglab.gui.docs import theory_pages
+
+        help_menu_index = gui.root.nametowidget(gui.root.cget("menu"))
+        # Walk the Help cascade's item labels via the menu's own introspection.
+        help_cascade = None
+        for i in range(help_menu_index.index("end") + 1):
+            if help_menu_index.type(i) == "cascade" and help_menu_index.entrycget(
+                i, "label"
+            ) == "Help":
+                help_cascade = help_menu_index.nametowidget(
+                    help_menu_index.entrycget(i, "menu")
+                )
+        assert help_cascade is not None
+
+        labels = [
+            help_cascade.entrycget(i, "label")
+            for i in range(help_cascade.index("end") + 1)
+            if help_cascade.type(i) == "command"
+        ]
+        for page in theory_pages():
+            assert any(page.title in label for label in labels), page.title

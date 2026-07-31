@@ -14,6 +14,7 @@ import csv
 import sys
 from pathlib import Path
 
+from .docs import theory_pages
 from .state import (
     ANGLE_LABELS,
     MOUNTS,
@@ -59,6 +60,8 @@ class GratingLabApp:
 
         self._vars: dict[str, object] = {}
         self._scan = None
+
+        self._build_menu()
 
         body = ttk.Frame(root, padding=8)
         body.pack(fill="both", expand=True)
@@ -212,6 +215,29 @@ class GratingLabApp:
         self._provenance.tag_configure("dim", foreground="#666")
         self._provenance.configure(state="disabled")
 
+    def _build_menu(self) -> None:
+        """Help menu: what each solver actually computes, and About.
+
+        Deliberately the only menu. This is not a general-purpose application
+        with File/Edit/View concerns -- it is one window with one job, and the
+        single thing worth a menu for is explaining the math, which the window
+        itself never does.
+        """
+        tk = self._tk
+        menubar = tk.Menu(self.root)
+
+        help_menu = tk.Menu(menubar, tearoff=False)
+        help_menu.add_command(label="About GratingLab", command=self.show_about)
+        help_menu.add_separator()
+        for page in theory_pages():
+            label = f"{page.title} Theory" + ("" if page.available else " (not written yet)")
+            help_menu.add_command(
+                label=label, command=lambda p=page: self.show_theory(p)
+            )
+        menubar.add_cascade(label="Help", menu=help_menu)
+
+        self.root.config(menu=menubar)
+
     # -- reactions -------------------------------------------------------
 
     def _on_profile_change(self) -> None:
@@ -301,6 +327,49 @@ class GratingLabApp:
             writer.writeheader()
             writer.writerows(rows)
         self._messagebox.showinfo("Exported", f"{len(rows)} rows to {Path(path).name}")
+
+    def show_about(self) -> None:
+        from .. import __version__
+
+        self._messagebox.showinfo(
+            "About GratingLab",
+            "GratingLab\n"
+            f"Version {__version__}\n\n"
+            "An open comparison platform for grating efficiency analysis: "
+            "scalar, RCWA, C-method and integral-method solvers driven from "
+            "one problem spec.\n\n"
+            "BSD-3-Clause.",
+        )
+
+    def show_theory(self, page) -> None:
+        """Open the read-only viewer for one solver's theory page.
+
+        Plain text, no markdown rendering -- one more dependency this project
+        does not need. A non-rigorous solver gets a banner up top, matching
+        the practice of surfacing an approximation rather than hiding it.
+        """
+        tk = self._tk
+        window = tk.Toplevel(self.root)
+        window.title(f"{page.title} Theory")
+        window.geometry("760x640")
+
+        text = tk.Text(window, wrap="word", font=("Menlo", 12), padx=12, pady=10)
+        scrollbar = tk.Scrollbar(window, command=text.yview)
+        text.configure(yscrollcommand=scrollbar.set)
+        # Scrollbar packed first: it claims its strip before Text expands to
+        # fill whatever remains, rather than being squeezed out afterwards.
+        scrollbar.pack(side="right", fill="y")
+        text.pack(side="left", fill="both", expand=True)
+
+        text.tag_configure("banner", foreground="#a5370d", font=("Menlo", 12, "bold"))
+        if not page.rigorous:
+            text.insert(
+                "end",
+                "⚠ Approximate method — see Limits below.\n\n",
+                "banner",
+            )
+        text.insert("end", page.text)
+        text.configure(state="disabled")
 
     # -- drawing ---------------------------------------------------------
 
