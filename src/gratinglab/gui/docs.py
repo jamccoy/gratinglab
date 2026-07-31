@@ -14,6 +14,14 @@ Every *registered* solver gets an entry, available or not, so the Help menu
 always reflects what solvers exist. A solver with no page yet still shows up
 and says so, rather than silently vanishing from the menu until someone
 remembers to write it.
+
+Alongside the per-solver pages, :func:`general_pages` returns entries that are
+not tied to any solver -- currently just the normative ``conventions.md``,
+which every solver's page cross-references for shared geometry (the
+generalized grating equation, the angle conventions) rather than duplicating
+it. Kept as a separate function rather than folded into :func:`theory_pages`
+so that function's existing contract -- one entry per registered solver, no
+more, no less -- stays exactly true; a test asserts it.
 """
 
 from __future__ import annotations
@@ -23,7 +31,7 @@ from pathlib import Path
 
 from ..solvers.base import available_solvers, get_solver
 
-__all__ = ["TheoryPage", "find_theory_root", "theory_pages"]
+__all__ = ["TheoryPage", "find_theory_root", "theory_pages", "general_pages"]
 
 #: Human-readable titles for known solvers. Falls back to the bare registry
 #: name for anything not listed here, so a new solver still gets a menu entry
@@ -31,6 +39,11 @@ __all__ = ["TheoryPage", "find_theory_root", "theory_pages"]
 _TITLES = {
     "scalar": "Scalar (Kirchhoff)",
 }
+
+#: Non-solver reference pages: (key, title, filename relative to docs/).
+_GENERAL_PAGES = (
+    ("conventions", "Grating Geometry & Conventions", "conventions.md"),
+)
 
 #: How many parent directories to search before giving up. gui/docs.py sits at
 #: src/gratinglab/gui/, four levels below a repo root that holds docs/theory/,
@@ -83,54 +96,71 @@ def find_theory_root(start: Path | None = None) -> Path | None:
     return None
 
 
+def _load_page(
+    name: str, title: str, path: Path | None, *, rigorous: bool, not_written: str
+) -> TheoryPage:
+    """Build one entry, handling the three cases every page can be in.
+
+    Shared by :func:`theory_pages` and :func:`general_pages` so the "docs/ not
+    bundled" and "file missing" fallback text stays consistent between them.
+    """
+    if path is None:
+        return TheoryPage(
+            name=name, title=title, available=False, path=None,
+            text=(
+                "Documentation is not bundled with this installation "
+                "(docs/ ships in a development checkout, not in a built "
+                f"package). See the project repository for {not_written}."
+            ),
+            rigorous=rigorous,
+        )
+    if path.is_file():
+        return TheoryPage(
+            name=name, title=title, available=True, path=path,
+            text=path.read_text(), rigorous=rigorous,
+        )
+    return TheoryPage(
+        name=name, title=title, available=False, path=path,
+        text=f"No page has been written yet for '{name}' ({not_written}).",
+        rigorous=rigorous,
+    )
+
+
 def theory_pages() -> tuple[TheoryPage, ...]:
-    """One entry per registered solver, in registration order."""
+    """One entry per registered solver, in registration order.
+
+    Exactly one entry per name in ``available_solvers()`` -- a solver with no
+    page yet still appears, marked unavailable, rather than being silently
+    omitted until someone remembers to write it.
+    """
     root = find_theory_root()
-    pages = []
+    return tuple(
+        _load_page(
+            name,
+            _TITLES.get(name, name),
+            None if root is None else root / f"{name}.md",
+            rigorous=get_solver(name).capabilities.rigorous,
+            not_written=f"docs/theory/{name}.md",
+        )
+        for name in available_solvers()
+    )
 
-    for name in available_solvers():
-        title = _TITLES.get(name, name)
-        rigorous = get_solver(name).capabilities.rigorous
 
-        if root is None:
-            pages.append(
-                TheoryPage(
-                    name=name,
-                    title=title,
-                    available=False,
-                    path=None,
-                    text=(
-                        "Documentation is not bundled with this installation "
-                        "(docs/ ships in a development checkout, not in a "
-                        "built package). See the project repository for "
-                        f"docs/theory/{name}.md."
-                    ),
-                    rigorous=rigorous,
-                )
-            )
-            continue
+def general_pages() -> tuple[TheoryPage, ...]:
+    """Reference pages not tied to any one solver.
 
-        path = root / f"{name}.md"
-        if path.is_file():
-            pages.append(
-                TheoryPage(
-                    name=name, title=title, available=True, path=path,
-                    text=path.read_text(), rigorous=rigorous,
-                )
-            )
-        else:
-            pages.append(
-                TheoryPage(
-                    name=name,
-                    title=title,
-                    available=False,
-                    path=path,
-                    text=(
-                        f"No theory page has been written yet for '{name}'. "
-                        "See docs/roadmap.md for what is planned."
-                    ),
-                    rigorous=rigorous,
-                )
-            )
-
-    return tuple(pages)
+    ``rigorous=True`` throughout: these are geometry/convention references,
+    not a solver's approximation, so the viewer's approximate-method banner
+    never applies to them.
+    """
+    root = find_theory_root()
+    return tuple(
+        _load_page(
+            name,
+            title,
+            None if root is None else root.parent / filename,
+            rigorous=True,
+            not_written=f"docs/{filename}",
+        )
+        for name, title, filename in _GENERAL_PAGES
+    )

@@ -82,17 +82,48 @@ travel away from it (**positive** ŷ component). `k_z` is conserved for all orde
 ### Angles
 
 - **α** — azimuthal angle of incidence, measured from the grating normal `n̂` in the
-  plane containing `n̂` and `d̂`.
+  plane containing `n̂` and `d̂`. Range **α ∈ (−90°, 90°)**, enforced by
+  `Illumination`: an incidence angle at or past grazing carries no power onto the
+  grating.
 - **β_m** — azimuthal angle of diffracted order *m*, same reference.
-- **γ** — half-angle of the diffraction cone about the groove axis. Operationally:
-  `k_z = k cos γ` is conserved, and **`sin γ = 1` (γ = 90°) is the in-plane case**.
-  Extreme off-plane mounts have small γ; the soft-X-ray work runs γ ≈ 1.5°.
+- **γ** — half-angle of the diffraction cone about the groove axis: the *polar* angle
+  measured from the groove axis, in the spherical-coordinate sense — γ is what sweeps
+  out the cone, α is the azimuthal position around it. Operationally: `k_z = k cos γ`
+  is conserved, and **`sin γ = 1` (γ = 90°) is the in-plane case**. Extreme off-plane
+  mounts have small γ; the soft-X-ray work runs γ ≈ 1.5°. Range **γ ∈ (0°, 90°]**,
+  enforced by `Illumination`: γ = 90° is in-plane; γ = 0° would send the wave along
+  the grooves, which diffracts nothing.
 - **δ** — groove-facet (blaze) angle of a sawtooth profile.
 - **ζ** — graze angle onto the groove facet, `sin ζ = sin γ · cos(δ - α)`.
 
 Storage is by **direction cosines**, not angles — see `Illumination`. The three
 constructors (`classical`, `conical`, `offplane`) exist so that each community can pass
 the angles it actually uses, and they all resolve to the same internal representation.
+
+#### Alternate names in the literature
+
+Two clashes worth flagging rather than silently picking a side on.
+
+**Precisely, γ is the polar angle and α is azimuthal** — spherical coordinates with the
+groove axis as the pole. Informally, though, off-plane-grating literature often calls α
+"the polar" or "the incidence" angle instead, because in the classical (in-plane, γ = 90°)
+special case α *is* the ordinary incidence angle read off the grating normal, and people
+carry that name into the conical case out of habit. Both usages exist; this document uses
+the strict spherical reading.
+
+**Some sources parametrize the cone by its complement.** Where this document uses γ
+directly (small γ = grazing, γ = 90° = in-plane), others use `φ ≡ 90° − γ` (small φ =
+in-plane, φ = 0° = grazing) — and correspondingly may write `θ` where this document writes
+`α`. The translation:
+
+| Here | Elsewhere | Relation |
+|---|---|---|
+| α | θ | same angle |
+| γ | φ | `φ ≡ 90° − γ`, so `sin γ = cos φ` |
+
+Note `θ` here is unrelated to `θ_c`, the total-external-reflection critical angle used
+elsewhere in this project (`docs/theory/scalar.md` §7) — the two never appear in the same
+equation, but a reader skimming both documents should not conflate them.
 
 ---
 

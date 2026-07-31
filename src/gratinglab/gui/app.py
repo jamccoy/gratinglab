@@ -10,11 +10,14 @@ Run with ``gratinglab-gui``.
 
 from __future__ import annotations
 
+import base64
 import csv
+import re
 import sys
 from pathlib import Path
 
-from .docs import theory_pages
+from . import mathtext
+from .docs import general_pages, theory_pages
 from .state import (
     ANGLE_LABELS,
     MOUNTS,
@@ -24,6 +27,18 @@ from .state import (
     FormState,
     build,
 )
+
+#: `## Heading` / `### Sub-heading` -- the only markdown structure the theory
+#: viewer styles beyond math. Tables and bullet lists stay literal; see
+#: mathtext.py's module docstring for why that scope is deliberate.
+_HEADING_RE = re.compile(r"^(#{2,6})\s+(.*)$")
+_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
+
+#: Display equations render a little larger than inline ones, roughly matching
+#: how a printed page distinguishes a headline equation from a symbol in running
+#: text.
+_DISPLAY_DPI = 170
+_INLINE_DPI = 130
 
 _TK_HELP = """\
 gratinglab-gui needs Tk, which this Python was built without.
@@ -229,6 +244,15 @@ class GratingLabApp:
         help_menu = tk.Menu(menubar, tearoff=False)
         help_menu.add_command(label="About GratingLab", command=self.show_about)
         help_menu.add_separator()
+
+        # Foundational, solver-independent reference first (the generalized
+        # grating equation, angle conventions), then one page per method.
+        for page in general_pages():
+            label = page.title + ("" if page.available else " (not written yet)")
+            help_menu.add_command(
+                label=label, command=lambda p=page: self.show_theory(p)
+            )
+        help_menu.add_separator()
         for page in theory_pages():
             label = f"{page.title} Theory" + ("" if page.available else " (not written yet)")
             help_menu.add_command(
@@ -342,18 +366,27 @@ class GratingLabApp:
         )
 
     def show_theory(self, page) -> None:
-        """Open the read-only viewer for one solver's theory page.
+        """Open the read-only viewer for one theory or reference page.
 
-        Plain text, no markdown rendering -- one more dependency this project
-        does not need. A non-rigorous solver gets a banner up top, matching
-        the practice of surfacing an approximation rather than hiding it.
+        Math is typeset -- rasterised by matplotlib's mathtext and embedded as
+        images -- rather than shown as literal `$...$` source. Headings and
+        `**bold**` get light styling; tables and bullet lists stay literal
+        text, since real column/list layout in a `Text` widget would be a lot
+        of engineering for content that is already readable as-is (see
+        mathtext.py's module docstring). A non-rigorous solver gets a banner
+        up top, matching the practice of surfacing an approximation rather
+        than hiding it.
         """
         tk = self._tk
         window = tk.Toplevel(self.root)
-        window.title(f"{page.title} Theory")
-        window.geometry("760x640")
+        window.title(page.title)
+        window.geometry("820x680")
+        # PhotoImage instances are garbage-collected as soon as nothing in
+        # Python holds a reference, even though Tk is still displaying them --
+        # this list is that reference, and lives exactly as long as the window.
+        window._photo_refs = []  # type: ignore[attr-defined]
 
-        text = tk.Text(window, wrap="word", font=("Menlo", 12), padx=12, pady=10)
+        text = tk.Text(window, wrap="word", font=("Menlo", 12), padx=14, pady=12)
         scrollbar = tk.Scrollbar(window, command=text.yview)
         text.configure(yscrollcommand=scrollbar.set)
         # Scrollbar packed first: it claims its strip before Text expands to
@@ -362,14 +395,85 @@ class GratingLabApp:
         text.pack(side="left", fill="both", expand=True)
 
         text.tag_configure("banner", foreground="#a5370d", font=("Menlo", 12, "bold"))
+        text.tag_configure("h2", font=("Menlo", 15, "bold"), spacing1=8, spacing3=6)
+        text.tag_configure("h3", font=("Menlo", 13, "bold"), spacing1=6, spacing3=4)
+        text.tag_configure("bold", font=("Menlo", 12, "bold"))
+        text.tag_configure("center", justify="center")
+        text.tag_configure("unrendered", foreground="#a5370d", font=("Menlo", 11))
+
         if not page.rigorous:
             text.insert(
                 "end",
                 "⚠ Approximate method — see Limits below.\n\n",
                 "banner",
             )
-        text.insert("end", page.text)
+
+        for segment in mathtext.split_segments(page.text):
+            if segment.kind == "text":
+                self._insert_text_segment(text, segment.content)
+            else:
+                self._insert_math_segment(text, window, segment)
+
         text.configure(state="disabled")
+
+    def _insert_text_segment(self, text, content: str) -> None:
+        """Insert a text segment, styling `## headings` and `**bold**`.
+
+        Split on the segment's own newlines and rejoined by re-inserting `\n`
+        only *between* lines -- never before the first or after the last --
+        so a segment that starts or ends mid-line (because a math span sits
+        right next to it) does not gain a newline that was not in the source.
+        Headings are safe to detect per-line this way because, in every page
+        this viewer shows today, a heading is always a complete line with no
+        adjacent math span on it.
+        """
+        lines = content.split("\n")
+        for index, line in enumerate(lines):
+            heading = _HEADING_RE.match(line)
+            if heading:
+                level = len(heading.group(1))
+                text.insert("end", heading.group(2), "h2" if level <= 2 else "h3")
+            else:
+                self._insert_bold_spans(text, line)
+            if index != len(lines) - 1:
+                text.insert("end", "\n")
+
+    def _insert_bold_spans(self, text, line: str) -> None:
+        position = 0
+        for match in _BOLD_RE.finditer(line):
+            text.insert("end", line[position : match.start()])
+            text.insert("end", match.group(1), "bold")
+            position = match.end()
+        text.insert("end", line[position:])
+
+    def _insert_math_segment(self, text, window, segment) -> None:
+        """Render one math span to an image and embed it, or fall back to
+        visibly-tagged raw source if mathtext could not parse it."""
+        dpi = _DISPLAY_DPI if segment.display else _INLINE_DPI
+        png = mathtext.render_math_png(segment.content, dpi=dpi)
+
+        if png is None:
+            delimiter = "$$" if segment.display else "$"
+            text.insert(
+                "end",
+                f"{delimiter}{segment.content}{delimiter}",
+                "unrendered",
+            )
+            return
+
+        photo = self._tk.PhotoImage(
+            data=base64.b64encode(png).decode("ascii"), format="png"
+        )
+        window._photo_refs.append(photo)  # type: ignore[attr-defined]
+
+        if segment.display:
+            text.insert("end", "\n")
+            start = text.index("end-1c")
+            text.image_create("end", image=photo)
+            text.insert("end", "\n")
+            text.tag_add("center", start, text.index("end-1c"))
+        else:
+            text.image_create("end", image=photo)
 
     # -- drawing ---------------------------------------------------------
 

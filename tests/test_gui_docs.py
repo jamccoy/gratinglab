@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from gratinglab.gui.docs import find_theory_root, theory_pages
+from gratinglab.gui.docs import find_theory_root, general_pages, theory_pages
 from gratinglab.solvers.base import Capabilities, available_solvers, register
 
 
@@ -69,7 +69,7 @@ class TestTheoryPages:
         try:
             page = next(p for p in theory_pages() if p.name == "stub_no_docs")
             assert not page.available
-            assert "No theory page has been written yet" in page.text
+            assert "No page has been written yet" in page.text
             assert "stub_no_docs" in page.text
             assert page.rigorous is True
         finally:
@@ -92,3 +92,41 @@ class TestTheoryPages:
         """The viewer always has something to show."""
         for page in theory_pages():
             assert page.text.strip()
+
+
+class TestGeneralPages:
+    def test_conventions_page_is_available_with_real_content(self):
+        pages = general_pages()
+        assert len(pages) == 1
+        page = pages[0]
+        assert page.name == "conventions"
+        assert page.title == "Grating Geometry & Conventions"
+        assert page.available
+        assert page.path is not None and page.path.name == "conventions.md"
+
+    def test_conventions_page_contains_the_grating_equation(self):
+        """The whole point of adding this page."""
+        page = general_pages()[0]
+        assert "generalized (conical) grating equation" in page.text
+        assert "sin\\gamma" in page.text or "sin\\,\\gamma" in page.text
+
+    def test_general_pages_are_never_banner_flagged(self):
+        """These are geometry references, not a solver's approximation --
+        the approximate-method banner must never apply to them."""
+        for page in general_pages():
+            assert page.rigorous is True
+
+    def test_does_not_collide_with_solver_names(self):
+        """general_pages() and theory_pages() must be safely concatenable in
+        the Help menu without a name clash."""
+        general_names = {p.name for p in general_pages()}
+        solver_names = {p.name for p in theory_pages()}
+        assert general_names.isdisjoint(solver_names)
+
+    def test_missing_theory_root_gives_a_usable_explanation(self, monkeypatch):
+        monkeypatch.setattr(
+            "gratinglab.gui.docs.find_theory_root", lambda *a, **k: None
+        )
+        page = general_pages()[0]
+        assert not page.available
+        assert "not bundled" in page.text

@@ -175,6 +175,8 @@ class TestHelpMenu:
         assert gui.root.cget("menu") != ""
 
     def test_theory_viewer_shows_a_known_heading(self, gui):
+        """The '##' markdown prefix is stripped -- that is the fix -- so the
+        heading's *text* must survive while its raw markdown syntax does not."""
         from gratinglab.gui.docs import theory_pages
 
         scalar_page = next(p for p in theory_pages() if p.name == "scalar")
@@ -187,7 +189,39 @@ class TestHelpMenu:
             w for w in opened[0].winfo_children() if isinstance(w, tk.Text)
         )
         content = text_widget.get("1.0", "end")
-        assert "## 5. Energy is not conserved" in content
+        assert "5. Energy is not conserved" in content
+        assert "## 5. Energy is not conserved" not in content
+
+    def test_theory_viewer_actually_typesets_math_not_raw_latex(self, gui):
+        """The whole point of this milestone: no literal '$$' or backslash
+        LaTeX source should reach the widget for a page that renders cleanly."""
+        from gratinglab.gui.docs import theory_pages
+
+        scalar_page = next(p for p in theory_pages() if p.name == "scalar")
+        gui.show_theory(scalar_page)
+        window = [w for w in gui.root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+        text_widget = next(w for w in window.winfo_children() if isinstance(w, tk.Text))
+
+        dump = text_widget.dump("1.0", "end")
+        image_count = sum(1 for kind, _, _ in dump if kind == "image")
+        assert image_count > 10, "expected many rendered equations, found none"
+
+        content = text_widget.get("1.0", "end")
+        assert "$$" not in content
+        assert "\\Phi_m" not in content
+
+    def test_general_page_math_also_renders(self, gui):
+        """The generalized grating equation, opened from the new Help entry."""
+        from gratinglab.gui.docs import general_pages
+
+        page = next(p for p in general_pages() if p.name == "conventions")
+        gui.show_theory(page)
+        window = [w for w in gui.root.winfo_children() if isinstance(w, tk.Toplevel)][-1]
+        text_widget = next(w for w in window.winfo_children() if isinstance(w, tk.Text))
+
+        dump = text_widget.dump("1.0", "end")
+        assert sum(1 for kind, _, _ in dump if kind == "image") > 0
+        assert "$$" not in text_widget.get("1.0", "end")
 
     def test_theory_viewer_banners_a_non_rigorous_solver(self, gui):
         from gratinglab.gui.docs import theory_pages
@@ -230,8 +264,8 @@ class TestHelpMenu:
         assert __version__ in seen["message"]
         assert "BSD-3-Clause" in seen["message"]
 
-    def test_help_menu_lists_every_registered_solver(self, gui):
-        from gratinglab.gui.docs import theory_pages
+    def test_help_menu_lists_every_registered_solver_and_general_page(self, gui):
+        from gratinglab.gui.docs import general_pages, theory_pages
 
         help_menu_index = gui.root.nametowidget(gui.root.cget("menu"))
         # Walk the Help cascade's item labels via the menu's own introspection.
@@ -251,4 +285,6 @@ class TestHelpMenu:
             if help_cascade.type(i) == "command"
         ]
         for page in theory_pages():
+            assert any(page.title in label for label in labels), page.title
+        for page in general_pages():
             assert any(page.title in label for label in labels), page.title

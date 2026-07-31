@@ -45,6 +45,18 @@ $$k_{y,i} = -k\cos\alpha\sin\gamma \qquad k_{y,m} = +k\cos\beta_m\sin\gamma$$
 The incident one is negative — the wave travels *toward* the grating
 (`conventions.md` §6).
 
+α, β_m and γ are not independent — periodicity along $\hat{x}$ ties them together as
+the **generalized (conical) grating equation**:
+
+$$\boxed{\;\sin\alpha + \sin\beta_m = \frac{m\lambda}{p\,\sin\gamma}\;}
+\qquad m = 0, \pm1, \pm2, \dots$$
+
+with **α ∈ (−90°, 90°)** and **γ ∈ (0°, 90°]** — γ the polar angle from the groove axis
+(it sweeps out the cone), α the azimuthal position around it. `sin γ = 1` (γ = 90°) is the
+classical in-plane case; this is where the derivation below reduces to the familiar
+in-plane phase. See `conventions.md` §3–§4 for the full derivation, the range
+justification, and how these names translate to other papers' θ/φ.
+
 Now consider a ray striking the surface at height $g(x)$ rather than at a flat
 reference $y = 0$. Relative to that reference it accumulates $k_{y,i}\,g$ on the
 way in and $k_{y,m}\,g$ on the way out, so the round trip contributes
@@ -151,9 +163,9 @@ there (errata item 4, `conventions.md` §10).
 
 ### Sinusoid (holographic)
 
-$g(t) = \tfrac{h}{2}\left[1 - \cos 2\pi t\right]$, so
-$\Phi_m(t) = \tfrac{\varphi_m}{2}\left[1 - \cos 2\pi t\right]$. Applying the
-Jacobi–Anger expansion to $\exp\!\left[-i\tfrac{\varphi_m}{2}\cos 2\pi t\right]$,
+$g(t) = \frac{h}{2}\left[1 - \cos 2\pi t\right]$, so
+$\Phi_m(t) = \frac{\varphi_m}{2}\left[1 - \cos 2\pi t\right]$. Applying the
+Jacobi–Anger expansion to $\exp\!\left[-i\frac{\varphi_m}{2}\cos 2\pi t\right]$,
 
 $$G_m = e^{i\varphi_m/2}\,(-i)^m\,J_m\!\left(\frac{\varphi_m}{2}\right)
 \qquad
@@ -247,7 +259,7 @@ the model breaks down is a deliverable in its own right.
 | $\lambda / p \lesssim 0.1$ | Kirchhoff theory assumes structure ≫ wavelength. Soft X-ray work runs ~0.005; visible gratings ~0.4. |
 | $\zeta < \theta_c \approx \sqrt{2\delta_n}$ | Facet graze must stay below the critical angle for total external reflection, or the reflectivity assumption collapses. Needs a materials layer to evaluate. |
 | $\lambda > 32 \sin(\zeta)\,\sigma$ | Fraunhofer smoothness: below this the facet is not optically smooth and scatter dominates. |
-| $\sum_m \mathscr{E}_m \le 1$ | Not a validity condition so much as a sanity bound; see §5. |
+| $\sum_m \mathscr{E}_m \leq 1$ | Not a validity condition so much as a sanity bound; see §5. |
 
 ---
 
