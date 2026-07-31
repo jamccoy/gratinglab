@@ -98,6 +98,7 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
     group_results = []  # Store results per group for diagnostics
     n_edge_rejected = 0  # Grooves dropped for sitting on a scan edge
     all_groove_positions = []  # x position (um) of each accepted measurement
+    all_groove_groups = []     # row group index of each accepted measurement
 
     for group_idx, raw_y in enumerate(profiles_list):
         print(f"\n  Processing row group {group_idx + 1}/{N_ROW_GROUPS}...")
@@ -168,6 +169,13 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
                 # row group. Recorded here rather than reconstructed later,
                 # because grooves whose fit failed never reach this branch.
                 all_groove_positions.append(raw_x[center])
+                # Which row group this measurement came from. Required to compute
+                # the intraclass correlation - measurements from one group are not
+                # independent of each other - and recorded here for the same
+                # reason as the position above: a groove whose fit failed never
+                # reaches this branch, so counting detected centres afterwards
+                # would misattribute every later measurement.
+                all_groove_groups.append(group_idx)
 
                 if 'local_angles' in qual:
                     all_local_angles.extend(qual['local_angles'])
@@ -224,8 +232,8 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
     
     # Calculate statistics with row-group data
     stats = _calculate_statistics_row_groups(
-        all_blaze_angles, all_quality, all_local_angles, 
-        all_angle_uncertainties, group_results
+        all_blaze_angles, all_quality, all_local_angles,
+        all_angle_uncertainties, all_groove_groups
     )
     
     # Summary plots
@@ -251,7 +259,7 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
     result = _package_results_row_groups(
         filename, all_blaze_angles, stats, period_nm, period_std,
         all_groove_periods, all_quality, all_local_angles,
-        raw_x, group_results
+        raw_x, group_results, all_groove_groups
     )
     
     return result
@@ -552,46 +560,43 @@ def _calculate_statistics(blaze_angles, quality, all_local_angles, angle_uncerta
     }
 
 
-def _calculate_statistics_row_groups(blaze_angles, quality, all_local_angles, 
-                                     angle_uncertainties, group_results):
+def _calculate_statistics_row_groups(blaze_angles, quality, all_local_angles,
+                                     angle_uncertainties, groove_row_groups):
     """
     Calculate statistics for row-group analysis
-    
-    Now we can decompose variance into THREE components:
+
+    Decomposes variance into three components:
     1. Measurement uncertainty (how well we fit each groove)
     2. Within-image variation (variation between row groups)
     3. Groove-to-groove variation (real physical differences)
+
+    Parameters:
+        groove_row_groups: row group index of each measurement, same length as
+            blaze_angles. This used to be reconstructed by walking the angle list
+            in slices the size of each group's detected-centre count, but angles
+            are only recorded for grooves whose fit succeeded - so one failed fit
+            shifted every later group, and a guard then silently dropped the
+            tail. Selecting by label cannot drift.
     """
-    # Start with basic statistics
-    stats = _calculate_statistics(blaze_angles, quality, all_local_angles, angle_uncertainties)
-    
-    # Additional row-group specific statistics
-    n_groups = len(group_results)
-    if n_groups > 1:
-        # Calculate mean angle for each group
-        group_means = []
-        start_idx = 0
-        
-        for group in group_results:
-            n_measurements = group['n_grooves']
-            if start_idx + n_measurements <= len(blaze_angles):
-                group_angles = blaze_angles[start_idx:start_idx + n_measurements]
-                if len(group_angles) > 0:
-                    group_means.append(np.mean(group_angles))
-                start_idx += n_measurements
-        
-        if len(group_means) > 1:
-            # Between-group variation (spatial variation within the image)
-            within_image_std = np.std(group_means, ddof=1)
-            stats['within_image_std'] = within_image_std
-            stats['n_groups'] = n_groups
-        else:
-            stats['within_image_std'] = 0
-            stats['n_groups'] = n_groups
-    else:
-        stats['within_image_std'] = 0
-        stats['n_groups'] = 1
-    
+    stats = _calculate_statistics(blaze_angles, quality, all_local_angles,
+                                  angle_uncertainties)
+
+    angles = np.asarray(blaze_angles)
+    labels = np.asarray(groove_row_groups)
+
+    if len(labels) != len(angles):
+        raise ValueError(f"groove_row_groups and blaze_angles must be the same "
+                         f"length, got {len(labels)} and {len(angles)}")
+
+    unique_groups = np.unique(labels)
+    stats['n_groups'] = len(unique_groups)
+
+    group_means = [np.mean(angles[labels == g]) for g in unique_groups]
+
+    # Between-group spread, i.e. spatial variation across the image
+    stats['within_image_std'] = (float(np.std(group_means, ddof=1))
+                                 if len(group_means) > 1 else 0.0)
+
     return stats
 
 
@@ -764,7 +769,7 @@ def _package_results(filename, blaze_angles, stats, period_nm, period_std,
 
 def _package_results_row_groups(filename, blaze_angles, stats, period_nm, period_std,
                                 groove_periods, quality, all_local_angles,
-                                raw_x, group_results):
+                                raw_x, group_results, groove_row_groups):
     """Package row-group analysis results"""
     # Use first group's data for visualization compatibility
     first_group = group_results[0] if len(group_results) > 0 else None
@@ -772,7 +777,7 @@ def _package_results_row_groups(filename, blaze_angles, stats, period_nm, period
     result = {
         'filename': filename,
         'n_grooves': len(blaze_angles),  # Total measurements
-        'n_groups': stats.get('n_groups', len(group_results)),  # NEW
+        'n_groups': stats.get('n_groups', len(group_results)),
         'mean_angle': stats['mean_angle'],
         'std_angle': stats['std_angle'],
         'min_angle': np.min(blaze_angles),
@@ -783,6 +788,9 @@ def _package_results_row_groups(filename, blaze_angles, stats, period_nm, period
         'period_std': period_std,
         'groove_periods': groove_periods,
         'all_angles': blaze_angles,
+        # Row group each measurement came from, aligned 1:1 with all_angles.
+        # Measurements sharing a label are not independent of each other.
+        'groove_row_groups': groove_row_groups,
         'quality': quality,
         'local_angle_std': stats['local_angle_std'],
         'local_angle_range': stats['local_angle_range'],

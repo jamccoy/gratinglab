@@ -189,29 +189,36 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
     # ===== PER-GROOVE CSV (detailed data) =====
     detailed_csv = os.path.join(output_dir, f'per_groove_data_{timestamp}.csv')
     
+    def _row_group_labels(scan):
+        """
+        Row group of each measurement, or blanks when not applicable.
+
+        Traditional (non row-group) analysis has no such label, and older result
+        dicts predate the field, so fall back to empty strings rather than
+        guessing - a wrong group label would silently corrupt any ICC computed
+        from this file.
+        """
+        groups = scan.get('groove_row_groups')
+        if groups is None or len(groups) != len(scan['all_angles']):
+            return [''] * len(scan['all_angles'])
+        return list(groups)
+
     with open(detailed_csv, 'w') as f:
-        f.write("Sample,Scan_file,Groove_number,Blaze_angle_deg,Groove_depth_nm,Blaze_width_nm,")
-        f.write("Steep_width_nm,R2,Local_period_nm\n")
-        
+        f.write("Sample,Scan_file,Row_group,Groove_number,Blaze_angle_deg,Groove_depth_nm,")
+        f.write("Blaze_width_nm,Steep_width_nm,R2,Local_period_nm\n")
+
         for r, label in zip(results, labels):
             # Handle both single and combined results
-            if 'individual_scans' in r:
-                # Combined result - iterate through individual scans
-                for scan in r['individual_scans']:
-                    scan_file = os.path.basename(scan['filename'])
-                    for i, (angle, qual) in enumerate(zip(scan['all_angles'], scan['quality'])):
-                        f.write(f"{label},{scan_file},{i+1},{angle:.4f},")
-                        f.write(f"{qual['groove_depth_nm']:.4f},{qual['blaze_width_nm']:.4f},")
-                        f.write(f"{qual['steep_width_nm']:.4f},{qual['blaze_r2']:.4f},")
-                        f.write(f"{qual.get('local_period_used_nm', scan['period_nm']):.4f}\n")
-            else:
-                # Single result
-                scan_file = os.path.basename(r['filename'])
-                for i, (angle, qual) in enumerate(zip(r['all_angles'], r['quality'])):
-                    f.write(f"{label},{scan_file},{i+1},{angle:.4f},")
+            scans = r['individual_scans'] if 'individual_scans' in r else [r]
+            for scan in scans:
+                scan_file = os.path.basename(scan['filename'])
+                groups = _row_group_labels(scan)
+                for i, (angle, qual, grp) in enumerate(
+                        zip(scan['all_angles'], scan['quality'], groups)):
+                    f.write(f"{label},{scan_file},{grp},{i+1},{angle:.4f},")
                     f.write(f"{qual['groove_depth_nm']:.4f},{qual['blaze_width_nm']:.4f},")
                     f.write(f"{qual['steep_width_nm']:.4f},{qual['blaze_r2']:.4f},")
-                    f.write(f"{qual.get('local_period_used_nm', r['period_nm']):.4f}\n")
+                    f.write(f"{qual.get('local_period_used_nm', scan['period_nm']):.4f}\n")
     
     print(f"✓ Per-groove data saved to: {detailed_csv}")
     

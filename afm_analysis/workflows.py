@@ -4,6 +4,7 @@ Handles the three main analysis modes: single, multiple, compare
 """
 import glob
 import os
+from datetime import datetime
 
 import numpy as np
 
@@ -178,6 +179,116 @@ def run_boundary_profile_export():
     print(f"✓ Profile metrics saved to: {met_path}")
 
     return {'x': x_norm, 'y': y_norm, 'metrics': metrics, 'ggp_path': ggp_path}
+
+
+def run_icc_report():
+    """
+    Measure how correlated the row-group measurements actually are.
+
+    Diagnostic only - reports numbers, changes nothing. Row-group analysis
+    re-measures the same grooves in each band of a scan, so the measurements are
+    not independent, but the reported SEMs and p-values assume they are. The ICC
+    quantifies that, per scan, and the design effect turns it into the factor by
+    which the current SEMs are understated.
+    """
+    from .stats.icc import (compute_icc, effective_sample_size,
+                            sem_inflation_factor, interpret_icc)
+
+    print(f"Mode: ICC diagnostic (row-group correlation)")
+    print(f"Scans to check: {len(SAMPLES_TO_COMPARE)}\n")
+
+    rows = []
+    for sample_info in SAMPLES_TO_COMPARE:
+        filename, label = sample_info[0], sample_info[1]
+        result = analyze_single_file(resolve_path(filename), show_plots=False)
+        if result is None:
+            print(f"  {label}: analysis produced no measurements, skipping")
+            continue
+
+        groups = result.get('groove_row_groups')
+        if not groups:
+            print(f"  {label}: no row-group labels "
+                  f"(USE_ROW_GROUPS is off?), skipping")
+            continue
+
+        stats = compute_icc(result['all_angles'], groups)
+        stats['n_eff'] = effective_sample_size(
+            stats['n_measurements'], stats['mean_group_size'], stats['icc'])
+        stats['sem_factor'] = sem_inflation_factor(
+            stats['mean_group_size'], stats['icc'])
+        stats['label'] = label
+        stats['file'] = os.path.basename(filename)
+        stats['sem_reported'] = result.get('sem', float('nan'))
+        rows.append(stats)
+
+    if not rows:
+        print("No scans could be assessed.")
+        return []
+
+    report = _format_icc_report(rows)
+    print(report)
+
+    os.makedirs(RESULTS_DIR, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = os.path.join(RESULTS_DIR, f'icc_report_{timestamp}.txt')
+    with open(path, 'w') as f:
+        f.write(report)
+    print(f"\n✓ ICC report saved to: {path}")
+
+    return rows
+
+
+def _format_icc_report(rows):
+    """Render the ICC table and its interpretation"""
+    from .stats.icc import interpret_icc
+
+    lines = []
+    lines.append("=" * 100)
+    lines.append("ROW-GROUP CORRELATION (ICC) DIAGNOSTIC")
+    lines.append("=" * 100)
+    lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("")
+    lines.append("Row-group analysis measures the same physical grooves once per")
+    lines.append("horizontal band, so those measurements are not independent. The")
+    lines.append("reported SEM divides by sqrt(N) over all of them, which is only")
+    lines.append("valid at ICC = 0.")
+    lines.append("")
+    lines.append(f"{'Sample':<9}{'Scan file':<34}{'N':>5}{'grp':>5}{'ICC':>8}"
+                 f"{'N_eff':>8}{'SEM x':>7}  interpretation")
+    lines.append("-" * 100)
+
+    for r in rows:
+        lines.append(
+            f"{r['label']:<9}{r['file']:<34}{r['n_measurements']:>5}"
+            f"{r['n_groups']:>5}{r['icc']:>8.3f}{r['n_eff']:>8.1f}"
+            f"{r['sem_factor']:>7.2f}  {r['interpretation']}")
+
+    lines.append("-" * 100)
+
+    iccs = [r['icc'] for r in rows]
+    factors = [r['sem_factor'] for r in rows]
+    lines.append("")
+    lines.append(f"ICC range      : {min(iccs):.3f} to {max(iccs):.3f}   "
+                 f"(median {sorted(iccs)[len(iccs)//2]:.3f})")
+    lines.append(f"SEM inflation  : {min(factors):.2f}x to {max(factors):.2f}x")
+    lines.append("")
+    lines.append("Reading:")
+    lines.append("  ICC    fraction of variance sitting between row groups rather")
+    lines.append("         than within them. 0 = independent, 1 = each group adds")
+    lines.append("         only one measurement's worth of information.")
+    lines.append("  N_eff  measurements the data is actually worth, n / design effect.")
+    lines.append("  SEM x  factor the reported standard error should be multiplied")
+    lines.append("         by. Confidence intervals scale the same way.")
+    lines.append("")
+
+    worst = max(rows, key=lambda r: r['icc'])
+    lines.append(f"Overall: {interpret_icc(max(iccs))} "
+                 f"(driven by {worst['label']} / {worst['file']}).")
+    lines.append("")
+    lines.append("This report changes nothing. It sizes the correction that")
+    lines.append("experimental/hierarchical_stats/ would apply.")
+    lines.append("=" * 100)
+    return "\n".join(lines)
 
 
 def _analyze_comparison_samples():

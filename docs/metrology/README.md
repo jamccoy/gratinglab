@@ -25,13 +25,19 @@ apart until a bug fixed in one silently persisted in the other.
 
 ## Key Capabilities
 
-### 1. Row-Group Analysis for Maximum Precision
-Traditional AFM analysis averages all rows into a single profile, extracting only 4-10 measurements per image. This package uses **row-group analysis** to divide the image into multiple independent regions, giving you:
+### 1. Row-Group Analysis for More Measurements
+Traditional AFM analysis averages all rows into a single profile, extracting only 4-10 measurements per image. This package uses **row-group analysis** to divide the image into multiple horizontal bands, giving you:
 
 - **50-100+ measurements** per image instead of 4-10
-- **10× smaller error bars** on mean values (SEM scales as 1/√N)
 - **Spatial variation mapping** across the sample
-- **Better statistical power** to detect small differences (<0.5°)
+- **Smaller error bars** — but not by √N, see below
+
+⚠️ **The bands are not independent.** Each one re-measures the same physical grooves,
+so SEM does *not* scale as 1/√N. Measured intraclass correlation is 0.097–0.429
+(median 0.244), which puts the effective sample size at 37–70 rather than 78–102 and
+means reported standard errors are 1.17–1.65× too small. Run `ANALYSIS_MODE = 'icc'`
+to reproduce. Treat sub-0.5° differences with suspicion until the hierarchical
+correction lands.
 
 ### 2. Facet Curvature (Camber) Quantification
 Beyond measuring the overall blaze angle of each groove, the software quantifies **within-facet angle variation** by analyzing local slopes along each facet. This reveals:
@@ -264,6 +270,23 @@ SAMPLES_TO_COMPARE = [
 - Temperature-dependent rate calculations with significance tests
 - Master vs. treated comparisons
 - Publication-ready comparison plots
+
+### ICC Diagnostic (row-group correlation)
+
+Measures how correlated the row-group measurements actually are, and reports how far
+that puts the current standard errors off. Diagnostic only — it changes no reported
+number.
+
+```python
+ANALYSIS_MODE = 'icc'
+```
+
+It runs every entry in `SAMPLES_TO_COMPARE` and prints a per-scan table of ICC,
+effective sample size and the SEM inflation factor, saving it to
+`results/icc_report_<timestamp>.txt`.
+
+**Output on the bundled sample data**: ICC 0.097–0.429, median 0.244; SEM understated
+by 1.17–1.65×. See `experimental/hierarchical_stats/README.md`.
 
 ### PCGrate Boundary Profile Export
 
@@ -574,8 +597,17 @@ For the blaze path there is no test suite; the regression check is a diff of
 ### Known limitation
 
 Row-group analysis produces many measurements of the *same* physical grooves, but the
-statistics treat them as independent samples. Reported SEMs and p-values are therefore
-optimistic. See `experimental/hierarchical_stats/README.md` — mean angles are unaffected.
+statistics treat them as independent samples, so reported SEMs and p-values are
+optimistic. Mean angles are unaffected.
+
+This has now been **measured** rather than merely suspected. Run
+`ANALYSIS_MODE = 'icc'` to reproduce: across the eight sample scans the intraclass
+correlation is 0.097–0.429 (median 0.244), meaning reported standard errors are
+understated by **1.17× to 1.65×** and effective sample sizes are 37–70 rather than
+78–102. Large effects survive this comfortably; differences below a few tenths of a
+degree do not. See `experimental/hierarchical_stats/README.md` for the full table.
+
+The correction itself is not yet applied.
 
 ---
 
