@@ -65,9 +65,10 @@ GGP_MIN_HALF_WIDTH = 10      # Skip grooves whose symmetric half-extent is <= th
                              # many samples (i.e. clipped by the scan edge)
 
 # ============ FILE SELECTION ============
-# Choose analysis mode: 'single', 'multiple', 'compare', or 'ggp'
+# Choose analysis mode: 'single', 'multiple', 'compare', 'ggp', or 'icc'
 ANALYSIS_MODE = 'compare'  # 'single' for one file, 'multiple' for pattern matching,
-                           # 'compare' for specific samples, 'ggp' for a PCGrate profile
+                           # 'compare' for specific samples, 'ggp' for a PCGrate
+                           # profile, 'icc' for the row-group correlation diagnostic
 
 # Single file mode
 SINGLE_FILE = 'data/150C_2um_flatten.txt'
