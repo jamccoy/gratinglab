@@ -397,11 +397,17 @@ class TestProvenance:
         )
         assert any("neglects polarization" in w for w in scan.provenance.warnings)
 
-    def test_warns_that_results_are_relative_without_a_coating(self):
+    def test_no_coating_is_the_default_mode_not_a_warning(self):
+        """No coating is the normal, expected default -- relative efficiency
+        is a correct result, not a deficiency. It must not appear in
+        `warnings`, which is reserved for real validity concerns (regression
+        guard: this used to say 'could not be evaluated', which read as an
+        error and made a fully successful run look broken)."""
         problem = Problem(period=160.0, profile=Blazed(blaze_angle=30.0))
         ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
         scan = scalar.solve(problem, ill, [2.4])
         assert scan.provenance.notes["normalization"] == "relative"
+        assert not any("coating" in w for w in scan.provenance.warnings)
 
     def test_warns_on_a_rough_surface_past_the_fraunhofer_criterion(self):
         problem = Problem(

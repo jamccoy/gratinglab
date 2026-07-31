@@ -148,7 +148,31 @@ class TestBehaviour:
 
     def test_convergence_is_reported_honestly(self, gui):
         """Nothing has been shown converged, and the panel must say so."""
-        assert "not demonstrated" in gui._provenance.get("1.0", "end")
+        assert "not yet checked" in gui._provenance.get("1.0", "end")
+
+    def test_convergence_none_is_not_tagged_as_a_warning(self, gui):
+        """The concrete regression this milestone fixes."""
+        ranges = gui._provenance.tag_ranges("warn")
+        warned_text = "".join(
+            gui._provenance.get(ranges[i], ranges[i + 1])
+            for i in range(0, len(ranges), 2)
+        )
+        assert "not yet checked" not in warned_text
+        assert "coating" not in warned_text
+
+    def test_normalization_is_shown_neutrally_not_as_a_warning(self, gui):
+        """No coating is the default, correct mode -- it must read as a plain
+        status line, not an alarm."""
+        text = gui._provenance.get("1.0", "end")
+        assert "normalization: relative" in text
+
+        ranges = gui._provenance.tag_ranges("warn")
+        warned_text = "".join(
+            gui._provenance.get(ranges[i], ranges[i + 1])
+            for i in range(0, len(ranges), 2)
+        )
+        assert "normalization" not in warned_text
+        assert "coating" not in warned_text
 
     def test_mount_change_relabels_the_angle_fields(self, gui):
         gui._vars["mount"].set("Classical")

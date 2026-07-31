@@ -531,25 +531,40 @@ class GratingLabApp:
         self._provenance.configure(state="disabled")
 
     def _show_provenance(self, scan, energy, parsed) -> None:
-        """Warnings are the point of this panel, so they are not tucked away."""
+        """Warnings are the point of this panel, so they are not tucked away.
+
+        Just as important: things that are *not* wrong must not look wrong.
+        `converged is None` means "not yet checked" -- true for every solver
+        until the convergence harness exists -- not "checked and failed," and
+        a coating-free run giving relative efficiency is the correct default,
+        not a deficiency. Both used to render identically to a real problem,
+        which is why a fully successful run could read as broken.
+        """
         provenance = scan.provenance
         self._provenance.configure(state="normal")
         self._provenance.delete("1.0", "end")
 
-        converged = (
-            "not demonstrated" if provenance.converged is None
-            else ("yes" if provenance.converged else "NO")
-        )
         self._write(
             f"{provenance.method} {provenance.version}  ·  "
             f"{provenance.truncation} quadrature pts  ·  "
             f"{provenance.wall_time_s * 1e3:.0f} ms  ·  "
             f"λ/period = {parsed.lambda_over_period:.4g}\n"
         )
+
         self._write("convergence: ", "dim")
-        self._write(
-            f"{converged}\n", "ok" if provenance.converged else "warn"
-        )
+        if provenance.converged is None:
+            self._write("not yet checked\n", "dim")
+        elif provenance.converged:
+            self._write("yes\n", "ok")
+        else:
+            self._write("NO\n", "bad")
+
+        normalization = provenance.notes.get("normalization")
+        if normalization:
+            detail = "no coating" if normalization == "relative" else "coating set"
+            self._write("normalization: ", "dim")
+            self._write(f"{normalization} ({detail})\n", "dim")
+
         self._write("energy balance: ", "dim")
         self._write(
             f"Σ ∈ [{energy.total.min():.4f}, {energy.total.max():.4f}]"

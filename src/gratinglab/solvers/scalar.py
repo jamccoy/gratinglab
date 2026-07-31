@@ -277,12 +277,11 @@ class ScalarSolver:
                     "not optically smooth there"
                 )
 
-        if problem.coating is None:
-            warnings.append(
-                "no coating specified, so the total-external-reflection guard "
-                "(zeta < sqrt(2 delta_n)) could not be evaluated; efficiencies "
-                "are relative, not absolute"
-            )
+        # No coating is the normal default mode, not a validity concern -- it
+        # is reported via notes["normalization"] below, not as a warning.
+        # There is nothing wrong with a run that has not been given a coating;
+        # warnings are reserved for cases where the model is being pushed
+        # outside conditions it can actually answer for.
 
         if illumination.polarization != "unpolarized":
             warnings.append(
