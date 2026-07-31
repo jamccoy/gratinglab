@@ -19,6 +19,26 @@ from gratinglab.solvers import scalar
 tk = pytest.importorskip("tkinter", reason="Tk not available in this Python")
 
 
+def _display_available() -> bool:
+    """Whether a Tk window can actually be created.
+
+    Importing tkinter is not enough. On a headless Linux CI runner the module
+    imports cleanly and ``Tk()`` then raises ``TclError: no display name``, so
+    the guard has to attempt the thing itself.
+    """
+    try:
+        root = tk.Tk()
+    except tk.TclError:
+        return False
+    root.destroy()
+    return True
+
+
+requires_display = pytest.mark.skipif(
+    not _display_available(), reason="no display; Tk cannot open a window"
+)
+
+
 class TestMissingToolkit:
     def test_gives_an_explanation_not_a_traceback(self, monkeypatch):
         """A user without Tk should be told how to fix it."""
@@ -65,6 +85,7 @@ def gui():
     root.destroy()
 
 
+@requires_display
 class TestNotASecondSourceOfTruth:
     def test_plotted_values_equal_a_direct_solve(self, gui):
         """The single most important property of this layer.
@@ -90,6 +111,7 @@ class TestNotASecondSourceOfTruth:
         assert np.array_equal(gui._scan.efficiency, expected.efficiency)
 
 
+@requires_display
 class TestBehaviour:
     def test_solves_on_construction(self, gui):
         """Opening the app should show something, not an empty window."""
