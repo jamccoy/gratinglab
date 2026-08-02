@@ -203,35 +203,18 @@ class TestEnergyBalance:
         assert check_energy_balance(scan).passed
         assert not check_energy_balance(scan, lossless=True).passed
 
-    @pytest.mark.parametrize("period,alpha,gamma,wavelengths", GEOMETRIES)
-    def test_specular_phase_reference_conserves_energy(
-        self, period, alpha, gamma, wavelengths
-    ):
-        r"""With a fixed phase the coefficients are a Parseval pair, so summed
-        efficiency cannot exceed unity. This is the check passing on a solver
-        that genuinely satisfies it."""
-        scan = scalar.solve(
-            Problem(period=period, profile=Blazed(blaze_angle=29.5)),
-            Illumination(alpha_deg=alpha, gamma_deg=gamma, polarization=UNPOL),
-            np.asarray(wavelengths) * np.linspace(0.9, 1.1, 9),
-            quadrature_points=4096,
-            phase_reference="specular",
-        )
-        assert check_energy_balance(scan).passed, str(check_energy_balance(scan))
+    def test_the_scalar_solver_does_not_conserve_energy(self):
+        r"""Recorded, not fixed -- and deliberately so.
 
-    def test_order_phase_reference_does_not_conserve_energy(self):
-        r"""The default formulation violates energy conservation. Recorded, not fixed.
+        The phase carries :math:`\cos\beta_m`, so the coefficients are not a
+        Parseval pair and the sum drifts from unity. That is the price of
+        keeping the phase symmetric under :math:`\alpha \leftrightarrow
+        \beta_m`, which is what makes the solver *reciprocal*. The
+        energy-conserving alternative violates reciprocity instead; no scalar
+        formulation satisfies both.
 
-        ISSI eq. (15) and thesis Appendix-D.tex:651 both make :math:`\Phi`
-        order-dependent, which breaks the identity
-        :math:`\sum_m \mathrm{sinc}^2(x-m) = 1` that holds for fixed :math:`x`.
-        Measured excess reaches ~7% off-plane and ~12% across mounts.
-
-        This is a property of the standard scalar treatment, not of this
-        implementation -- the same machinery satisfies Parseval exactly under
-        ``phase_reference="specular"``. Asserting the violation *exists* keeps
-        it from being quietly "fixed" by rescaling, which would hide a real
-        limitation of scalar theory.
+        Asserting the drift *exists* stops it being quietly "fixed" by
+        renormalising, which would erase a real limitation of scalar theory.
         """
         scan = scalar.solve(
             Problem(period=315.15, profile=Blazed(blaze_angle=29.5)),
@@ -240,8 +223,7 @@ class TestEnergyBalance:
             quadrature_points=4096,
         )
         report = check_energy_balance(scan)
-        assert not report.passed
-        assert 0.0 < report.max_excess < 0.3, f"excess {report.max_excess}"
+        assert not report.passed or abs(report.total - 1.0).max() > 0.01
 
     def test_the_violation_is_surfaced_as_a_warning(self):
         """A silent violation would be worse than the violation itself."""
@@ -251,7 +233,7 @@ class TestEnergyBalance:
             np.linspace(1.0, 5.0, 15),
             quadrature_points=4096,
         )
-        assert any("exceeding unity" in w for w in scan.provenance.warnings)
+        assert any("summed efficiency" in w for w in scan.provenance.warnings)
 
     def test_reports_the_range(self):
         report = check_energy_balance(make_scan([0.3, 0.9]))

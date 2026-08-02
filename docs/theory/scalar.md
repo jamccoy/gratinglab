@@ -109,18 +109,22 @@ Two implementation notes follow directly:
   is why `quadrature_points` reaches machine precision at modest values, and why
   it must still exceed $2|m|_{\max}$ to satisfy Nyquist.
 
-### The obliquity variant
+### Two factors that are *not* here, and why
 
-The thesis (`Appendix-D.tex:418`) carries an additional factor,
+Thesis Appendix D carries an obliquity factor,
 
 $$\mathscr{E}_m \propto \frac{\cos\beta_m}{\cos\alpha}\left|G_m\right|^2$$
 
-arising from projecting the Poynting flux onto a plane parallel to the surface.
-ISSI eq. (15) has no such factor. The two are **not equivalent** — they
-redistribute efficiency between orders — and ISSI's is self-normalising by
-Parseval whereas the thesis form needs explicit renormalisation. The code
-defaults to ISSI and exposes the alternative as `obliquity=True`, so the
-difference is measurable rather than buried (`conventions.md` §5).
+from projecting the Poynting flux onto a plane parallel to the surface, and then
+renormalises so that $\sum_m \mathscr{E}_m = 1$. **Both are removed.** For a
+grating with $N \to \infty$ grooves the efficiency is the norm-squared Fourier
+coefficient and nothing else — ISSI §2.1 is explicit about this, and its groove
+function `f(x) = exp{ik[n(k)−1]y(x/p)}` carries no extra factor.
+
+The renormalisation is the more damaging of the two: forcing the sum to unity
+would erase the model's own signal about how far it has strayed from its regime
+(§5). Neither is offered as an option, because neither is an alternative
+convention — they are errors.
 
 ---
 
@@ -177,9 +181,10 @@ checks the machinery from a different direction.
 
 ---
 
-## 5. Energy is not conserved, and that is the formulation's fault
+## 5. Energy is not conserved, and that is a deliberate trade
 
-This is the most important caveat on the page.
+This is the most important caveat on the page, and the reasoning behind it is
+not obvious.
 
 For a **fixed** phase there is an exact identity
 
@@ -190,35 +195,59 @@ $m$ (§2), which makes $x = \varphi_m/2\pi$ depend on the summation index and
 **breaks the identity**. Equivalently: the $G_m$ are not the Fourier
 coefficients of any single function, so Parseval does not apply.
 
-Measured consequence, with `phase_reference="order"` (the default, following
-both references):
+The obvious repair is to drop $\cos\beta_m$ from the phase, leaving
+$\Phi = 2kg\sin\gamma\cos\alpha$ — the round-trip path of the incident wave,
+with no diffracted direction in it. That does restore a genuine Fourier pair and
+conserves energy to $10^{-10}$. **It is not what this solver does**, and the
+reason is a three-way tension no scalar formulation escapes.
 
-| Mount | Peak $\sum_m \mathscr{E}_m$ |
+### The tension, measured
+
+| Property | order-dependent $\cos\alpha + \cos\beta_m$ (this solver) | β-free $2\cos\alpha$ |
+|---|---|---|
+| Energy, $\sum_m \mathscr{E}_m \leq 1$ | ✗ violated, up to 1.71 | ✓ exact (Parseval) |
+| Reciprocity, $\mathscr{E}_m(\alpha) = \mathscr{E}_m(\beta_m)$ | ✓ exact, $10^{-17}$ | ✗ violated, 0.44 |
+| Blaze direction $\beta_b = 2\delta - \alpha$ | ✓ exact at every $\alpha$ | ✓ at Littrow only; 7.6° off at 10° from Littrow, and past ~15° the envelope peak goes evanescent |
+
+The conflict is structural. Reciprocity **requires** the phase to be symmetric
+under $\alpha \leftrightarrow \beta_m$, which forces both directions into it.
+Parseval **requires** a single fixed function, which forbids $\beta_m$. They
+cannot both hold. Physical optics is reciprocal but not energy-conserving; the
+pure transmittance-function picture is the reverse.
+
+**Reciprocity is the invariant this solver keeps**, so the energy deviation is
+expected rather than repairable.
+
+> A tempting third option is to reference the phase to the blaze direction
+> $\beta_b = 2\delta - \alpha$, which is β-free *and* reproduces the blaze
+> wavelength exactly. It is circular: $\beta_b$ is an **output** of the model —
+> it is where the sinc² envelope peaks — so feeding it back in as an input
+> assumes the answer. The apparent perfect agreement is a tautology, not a
+> prediction.
+
+### The implementation is not at fault
+
+In the shallow-groove limit the transmittance tends to 1, all power lands in
+order 0, and the sum must tend to 1 for any formulation. It does, exactly:
+
+| depth / period | $\sum_m \mathscr{E}_m$ |
 |---|---|
-| in-plane, λ/p = 0.003 | 1.119 |
-| off-plane γ = 1.5°, λ/p = 0.003 | 1.114 |
-| off-plane γ = 1.5°, λ/p = 0.03 | 1.002 |
+| 0.0001 | 1.00000 |
+| 0.0010 | 0.99999 |
+| 0.0200 | 0.99592 |
+| 0.0500 | 0.97483 |
+| 0.1000 | 0.90472 |
 
-Excesses reach ~12 %. **A passive grating cannot return more power than it
-receives**, so these values are unphysical.
+That is the check which would catch a genuine coding error, as distinct from the
+formulation's known defect. The deviation scales with **phase excursion across
+the groove** — depth relative to wavelength, hence working diffraction order —
+*not* with λ/p and *not* with the number of propagating orders. This is why the
+sum looks stubbornly constant across wildly different mounts at fixed profile,
+and it is what the provenance warning reports.
 
-This is a property of the standard scalar formulation, not of the
-implementation. Running the identical machinery with `phase_reference="specular"`
-— which fixes the exit direction at $\beta_0 = -\alpha$, making
-$\Phi = 2kg\sin\gamma\cos\alpha$ order-independent — restores a genuine Parseval
-pair and satisfies $\sum_m |G_m|^2 = 1$ to $10^{-10}$. That agreement is what
-proves the quadrature and the $1/p$ normalisation are correct.
-
-The two options trade against each other:
-
-- `"order"` — per-order phase is more physical; energy is not conserved.
-- `"specular"` — energy conserved by construction; ignores how the exit
-  direction varies between orders.
-
-The excess is **reported as a provenance warning and never rescaled**. How far
-an approximate theory strays from a conservation law is precisely what a
-validity map should show, and normalising it away would destroy that
-information.
+The deviation is **reported and never rescaled**. Renormalising by the sum
+(as thesis Appendix D does) would erase precisely the signal that says how far
+the model has strayed from its regime.
 
 ---
 

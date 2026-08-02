@@ -184,37 +184,46 @@ Two rules, and they point in different directions:
   because it never has a legitimate exception. It is what identified the unphysical
   finite-conductivity run in the reference corpus, where the sum reached 3.6.
 
-**Scalar theory as normally written does not conserve energy.** With the order-dependent
-phase of ISSI eq. (15) and thesis Appendix-D.tex:651, summed efficiency was measured
-*exceeding unity* by up to ~12% across mounts (~7% in the off-plane soft-X-ray case).
+**Scalar theory as normally written does not conserve energy**, and that is a deliberate
+trade rather than a defect to fix. With the order-dependent phase of ISSI eq. (15) and
+thesis Appendix-D.tex:651, summed efficiency deviates from unity in both directions —
+measured up to 1.71 across a broad parameter sweep.
 
-This is a property of the formulation, not of the implementation. For a fixed phase,
-`Σ_m sinc²(x − m) = 1` is an exact identity; making `x` depend on the order breaks it.
-Running the identical machinery with `phase_reference="specular"` satisfies Parseval to
-1e-10, which is what proves the quadrature and normalisation are correct.
+The alternative is available and rejected: dropping `cos β_m` from the phase restores a
+genuine Fourier pair and conserves energy to 1e-10, but **violates Lorentz reciprocity**
+(measured 0.44) and reproduces the blaze direction only at Littrow. Reciprocity requires
+the phase to be symmetric under `α ↔ β_m`; Parseval requires a single fixed function that
+forbids `β_m`. They cannot both hold. **Reciprocity is the invariant kept.**
 
-The excess is **reported, never rescaled** — recorded as a `Provenance` warning. How far
-an approximate theory strays from a conservation law is exactly what a scalar validity
-map should show, and normalising it away would destroy that information.
+The implementation is not at fault: in the shallow-groove limit the sum is 1.00000
+exactly, degrading smoothly with depth (0.0001 → 1.00000; 0.10 → 0.90472). The deviation
+scales with phase excursion across the groove — depth relative to wavelength, hence
+working order — not with λ/p or propagating-order count.
 
-### The obliquity factor — an explicit choice
+Full derivation and evidence: [`theory/scalar.md`](theory/scalar.md) §5.
 
-Two treatments appear in the source literature and they are **not** equivalent:
+The deviation is **reported, never rescaled** — recorded as a `Provenance` warning. How
+far an approximate theory strays from a conservation law is exactly what a scalar
+validity map should show, and normalising it away would destroy that information.
 
-| Form | Source |
-|---|---|
-| `E_m ∝ ‖G_m‖²` | ISSI eq. (15) |
-| `E_m ∝ [cos β_m / cos α] ‖G_m‖²` | McCoy thesis, Appendix D eq. at line 418 |
+### The obliquity factor and the renormalization — both removed
 
-They redistribute efficiency between orders differently, not merely by an overall scale.
+Thesis Appendix D carries two extra factors that ISSI §2.1 does not, and **both are
+errors, not alternative conventions**:
 
-**Default: the ISSI form, without the obliquity factor.** It is self-normalizing by
-Parseval (`Σ|G_m|² = 1`), it is the published and co-authored treatment, and it needs no
-after-the-fact renormalization. The thesis form requires the explicit renormalization
-noted at Appendix-D.tex:420.
+| Form | Source | Status |
+|---|---|---|
+| `E_m = ‖G_m‖²` | ISSI §2.1, eq. groove_func | **correct — what the code does** |
+| `E_m ∝ [cos β_m / cos α] ‖G_m‖²` | thesis Appendix-D.tex:418 | removed |
+| renormalise so `Σ_m E_m = 1` | thesis Appendix-D.tex:420 | removed |
 
-The obliquity variant is exposed as `ScalarOptions(obliquity=True)` so the difference is
-**measurable rather than buried**. Quantifying it is a phase-1 deliverable.
+For a grating with `N → ∞` grooves the efficiency is the norm-squared Fourier coefficient
+and nothing else. ISSI §2.1's groove function `f(x) = exp{ik[n(k)−1]y(x/p)}` carries no
+such factor.
+
+The renormalization is the more damaging: forcing the sum to unity would erase exactly
+the signal described above. Neither is offered as an option, because offering an error as
+a choice is a footgun, not a service.
 
 ---
 
@@ -321,7 +330,7 @@ Recorded so nobody "fixes" a deliberate choice back to a source that is wrong.
 | # | Source | Issue | Our choice |
 |---|---|---|---|
 | 1 | thesis Appendix-D.tex:651 | `Φ_g` missing `sin γ` | ISSI eq. (15) form |
-| 2 | thesis Appendix-D.tex:418 | obliquity factor `cos β/cos α` | ISSI form default; opt-in variant |
+| 2 | thesis Appendix-D.tex:418, 420 | obliquity factor `cos β/cos α`, plus renormalization so `Σ E = 1` | both **removed**, not optional — see §5 |
 | 3 | thesis Appendix-D.tex:699 | `∂Φ_b/∂α` missing factor `period` (dimensionally required) | corrected |
 | 4 | thesis Appendix-D.tex:462, 622 | `for n = 0, ±1, …` on expressions singular at `n = 0` | `G₀` stated separately: `A₀·𝒲/period` (square), `A₀/2` (sawtooth) |
 | 5 | thesis Chapter-2.tex:1016, 1045 | claims PCGrate *internally multiplies* by Fresnel reflectivity in perfect-conductivity mode — contradicts the `ΣE = 1` result proved just above | Treat `ΣE ≈ R_F(ζ)` as an emergent result of an impedance-type (Leontovich) boundary condition. Follow Goray & Schmidt (2010) for the rigorous finite-conductivity case |

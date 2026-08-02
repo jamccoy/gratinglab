@@ -35,7 +35,6 @@ __all__ = [
     "Parsed",
     "PROFILE_KINDS",
     "MOUNTS",
-    "PHASE_REFERENCES",
     "ANGLE_LABELS",
     "build",
     "validate",
@@ -46,9 +45,6 @@ PROFILE_KINDS = ("Blazed", "Lamellar", "Sinusoidal", "From file")
 
 #: Selectable mounts.
 MOUNTS = ("Classical", "Conical", "Off-plane")
-
-#: Scalar-solver phase conventions (see docs/theory/scalar.md section 5).
-PHASE_REFERENCES = ("order", "specular")
 
 #: What the two angle fields *mean* in each mount. The form always carries two
 #: angles; only their interpretation changes, so the UI relabels rather than
@@ -105,8 +101,6 @@ class FormState:
     wavelength_count: str = "200"
 
     quadrature_points: str = "2048"
-    obliquity: bool = False
-    phase_reference: str = "order"
 
     def with_field(self, name: str, value: Any) -> "FormState":
         """Return a copy with one field changed."""
@@ -309,14 +303,6 @@ def build(form: FormState) -> Parsed:
         form.quadrature_points, "quadrature_points", errors, minimum=16, integer=True
     )
 
-    if form.phase_reference not in PHASE_REFERENCES:
-        errors.append(
-            FieldError(
-                "phase_reference",
-                f"unknown; choose one of {', '.join(PHASE_REFERENCES)}",
-            )
-        )
-
     if errors:
         raise FormErrors(tuple(errors))
 
@@ -352,8 +338,6 @@ def build(form: FormState) -> Parsed:
         wavelengths=wavelengths,
         options={
             "quadrature_points": int(quadrature),
-            "obliquity": bool(form.obliquity),
-            "phase_reference": form.phase_reference,
         },
     )
 

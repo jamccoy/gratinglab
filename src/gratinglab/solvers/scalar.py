@@ -20,12 +20,34 @@ from the identical geometry.
 sawtooth ``sinc²(φ/2 − mπ)``, square wave, sinusoid -- are exact answers we
 already trust, so they check the numerics rather than duplicating them.
 
-Note that :math:`\Phi_m` depends on the order through :math:`\cos\beta_m`
-(ISSI eq. 15; thesis Appendix-D.tex:651). This is one integral per order rather
-than a single FFT, and it means the ``G_m`` are *not* Fourier coefficients of one
-fixed function -- so Parseval does not give an exact sum rule. See
-:func:`solve` for what that implies for energy balance.
+**The phase depends on the order** through :math:`\cos\beta_m` (ISSI eq. 15;
+thesis Appendix-D.tex:651), so this is one integral per order rather than a
+single FFT. That choice is deliberate and carries a known cost, because no
+scalar formulation can satisfy all three of the following at once:
 
+==================  ==================================  =========================
+Property            order-dependent (this)              beta-free alternative
+==================  ==================================  =========================
+Energy, sum <= 1    violated, up to 1.71 measured       exact (Parseval)
+Reciprocity         exact, 1e-17                        violated, 0.44 measured
+Blaze direction     exact at every alpha                exact at Littrow only
+==================  ==================================  =========================
+
+The conflict is structural: reciprocity *requires* the phase to be symmetric
+under :math:`\alpha \leftrightarrow \beta_m`, which forces both angles in;
+Parseval *requires* a single fixed function, which forbids :math:`\beta_m`.
+Physical optics is reciprocal but not energy-conserving; the pure
+transmittance-function picture is the reverse.
+
+**Reciprocity is the invariant this solver keeps.** The energy deviation is
+therefore expected, is reported rather than hidden, and is never renormalised
+away. It is not an implementation defect: in the shallow-groove limit the sum
+is 1.00000 exactly, degrading smoothly as groove depth grows (0.0001 -> 1.00000,
+0.10 -> 0.90472). The deviation scales with **phase excursion across the
+groove** -- depth relative to wavelength, hence working diffraction order --
+not with lambda/period or the number of propagating orders.
+
+``docs/theory/scalar.md`` §5 carries the full derivation and evidence;
 ``docs/conventions.md`` §9 is the reference for every formula here.
 """
 
@@ -47,9 +69,6 @@ __all__ = ["ScalarSolver", "interference_factor", "scalar"]
 #: Above this ratio of wavelength to period, scalar theory is losing validity.
 #: Soft X-ray work runs ~0.005; visible gratings run ~0.4.
 _LAMBDA_OVER_PERIOD_WARN = 0.1
-
-#: Accepted values for the ``phase_reference`` option.
-_PHASE_REFERENCES = {"order", "specular"}
 
 
 def interference_factor(s: ArrayLike, n_grooves: int) -> NDArray[np.float64]:
@@ -98,10 +117,14 @@ class ScalarSolver:
         wavelengths: ArrayLike,
         *,
         quadrature_points: int = 2048,
-        obliquity: bool = False,
-        phase_reference: str = "order",
     ) -> EfficiencyScan:
         r"""Efficiency over a wavelength scan.
+
+        Efficiency is :math:`\mathscr{E}_m = |G_m|^2` -- the norm-squared
+        Fourier coefficient, with **no obliquity factor and no
+        renormalisation**. Both appear in thesis Appendix D and both are
+        incorrect: for an effectively infinite number of grooves the efficiency
+        is the coefficient's norm squared and nothing else.
 
         Parameters
         ----------
@@ -110,40 +133,15 @@ class ScalarSolver:
             periodic, so the rectangle rule converges spectrally and the
             default is generous. Must exceed twice the highest order to satisfy
             Nyquist; this is checked.
-        obliquity
-            Include the :math:`\cos\beta_m/\cos\alpha` factor from the thesis
-            (Appendix-D.tex:418). Default off, matching ISSI eq. (15) --
-            see ``docs/conventions.md`` §5. The two redistribute efficiency
-            between orders differently, so this is exposed to make the
-            difference measurable rather than buried.
-
-        phase_reference
-            Which exit direction enters the phase function.
-
-            ``"order"`` (default) uses :math:`\cos\beta_m` per order, following
-            ISSI eq. (15) and thesis Appendix-D.tex:651. More physical per
-            order, but the coefficients are then **not** a single Parseval pair
-            and summed efficiency can *exceed* unity -- measured up to ~12%
-            across mounts, which is unphysical for a passive grating.
-
-            ``"specular"`` fixes the phase at the zeroth order
-            (:math:`\beta_0 = -\alpha`, so :math:`\Phi = 2kg\sin\gamma\cos\alpha`).
-            The coefficients are then a true Fourier pair and
-            :math:`\sum_m |G_m|^2 = 1` exactly over all orders, so energy is
-            conserved by construction -- at the cost of ignoring how the exit
-            direction varies between orders.
 
         Notes
         -----
-        The default does not conserve energy, which is worth stating plainly.
-        For a fixed phase :math:`\sum_m \mathrm{sinc}^2(x - m) = 1` is an exact
-        identity; making :math:`x` order-dependent breaks it. The excess is a
-        property of the standard scalar formulation, not of this implementation
-        -- the same machinery satisfies Parseval under ``"specular"``.
-
-        Either way the sum is **reported, never rescaled**: an excess is
-        recorded as a provenance warning, because how far an approximate theory
-        strays from a conservation law is what a validity map should show.
+        Summed efficiency will not equal 1, and can exceed it. That is expected
+        -- see the module docstring for the three-way tension that makes it
+        unavoidable, and why reciprocity is the invariant kept instead. The sum
+        is **reported, never rescaled**: renormalising by it (as Appendix D
+        does) would erase the model's own signal about how far it has strayed
+        from its regime.
         """
         self.capabilities.check(problem, illumination)
 
@@ -155,11 +153,6 @@ class ScalarSolver:
         if quadrature_points < 16:
             raise ValueError(
                 f"quadrature_points must be at least 16, got {quadrature_points}"
-            )
-        if phase_reference not in _PHASE_REFERENCES:
-            raise ValueError(
-                f"phase_reference must be one of {sorted(_PHASE_REFERENCES)}, "
-                f"got {phase_reference!r}"
             )
 
         started = time.perf_counter()
@@ -198,21 +191,18 @@ class ScalarSolver:
 
             cosines = cos_beta(sines[live])
             # Phi_m(t) = k g(t) sin(gamma) [cos(alpha) + cos(beta_m)]
+            #
+            # Symmetric under alpha <-> beta_m, which is exactly what makes the
+            # result reciprocal -- and exactly what stops the G_m from being
+            # Fourier coefficients of any single function. See the module
+            # docstring; that trade is deliberate.
             phase = (2.0 * np.pi / wavelength) * height * sin_gamma
-            if phase_reference == "order":
-                exit_cosines = cosines
-            else:
-                # Fix the exit direction at the zeroth order, beta_0 = -alpha.
-                # Phi is then order-independent, so the coefficients form a
-                # genuine Parseval pair and energy is conserved exactly.
-                exit_cosines = np.full_like(cosines, cos_alpha)
-            phi = phase[None, :] * (cos_alpha + exit_cosines)[:, None]
+            phi = phase[None, :] * (cos_alpha + cosines)[:, None]
 
             coefficients = np.mean(np.exp(1j * phi) * kernel[live], axis=1)
+            # Efficiency is the norm squared of the coefficient. Nothing else:
+            # no obliquity factor, no renormalisation by the sum.
             values = np.abs(coefficients) ** 2
-
-            if obliquity:
-                values = values * cosines / cos_alpha
 
             efficiency[row, live] = values
             propagating[row, live] = True
@@ -227,8 +217,6 @@ class ScalarSolver:
                 illumination,
                 wavelengths,
                 quadrature_points,
-                obliquity,
-                phase_reference,
                 efficiency,
                 propagating,
                 time.perf_counter() - started,
@@ -241,8 +229,6 @@ class ScalarSolver:
         illumination: Illumination,
         wavelengths: NDArray[np.float64],
         quadrature_points: int,
-        obliquity: bool,
-        phase_reference: str,
         efficiency: NDArray[np.float64],
         propagating: NDArray[np.bool_],
         elapsed: float,
@@ -290,16 +276,24 @@ class ScalarSolver:
             )
 
         # Report, never rescale. How far an approximate theory strays from a
-        # conservation law is information, not something to hide.
+        # conservation law is information, not something to hide -- and
+        # renormalising by the sum (thesis Appendix D) would destroy exactly
+        # that information.
         totals = np.where(propagating, efficiency, 0.0).sum(axis=1)
-        excess = float(totals.max() - 1.0)
-        if excess > 1e-6:
+        deviation = float(np.abs(totals - 1.0).max())
+        if deviation > 0.01:
+            worst = float(totals[np.argmax(np.abs(totals - 1.0))])
+            direction = "above" if worst > 1.0 else "below"
             warnings.append(
-                f"summed efficiency reaches {totals.max():.4f}, exceeding unity "
-                f"by {100 * excess:.1f}% -- unphysical for a passive grating. "
-                "Inherent to phase_reference='order', where the coefficients are "
-                "not a Parseval pair; phase_reference='specular' conserves energy "
-                "exactly"
+                f"summed efficiency reaches {worst:.4f}, {100 * deviation:.1f}% "
+                f"{direction} unity. Expected: the thin-element approximation "
+                "for a reflection grating does not conserve energy, because the "
+                "phase depends on the exit direction and the coefficients are "
+                "therefore not a Parseval pair. Kept that way because the "
+                "energy-conserving alternative violates Lorentz reciprocity. "
+                "The deviation grows with phase excursion across the groove "
+                "(depth/wavelength, hence working order), and vanishes in the "
+                "shallow-groove limit -- see docs/theory/scalar.md section 5"
             )
 
         return Provenance(
@@ -312,8 +306,6 @@ class ScalarSolver:
             wall_time_s=elapsed,
             warnings=tuple(warnings),
             notes={
-                "obliquity": obliquity,
-                "phase_reference": phase_reference,
                 "normalization": "relative" if problem.coating is None else "absolute",
                 "alpha_deg": illumination.alpha_deg,
                 "gamma_deg": illumination.gamma_deg,

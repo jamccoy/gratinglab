@@ -21,7 +21,6 @@ from .docs import general_pages, theory_pages
 from .state import (
     ANGLE_LABELS,
     MOUNTS,
-    PHASE_REFERENCES,
     PROFILE_KINDS,
     FormErrors,
     FormState,
@@ -180,14 +179,6 @@ class GratingLabApp:
 
         heading("Scalar solver")
         entry("Quadrature pts", "quadrature_points", defaults.quadrature_points)
-        combo("Phase ref.", "phase_reference", PHASE_REFERENCES,
-              defaults.phase_reference)
-        obliquity = tk.BooleanVar(value=defaults.obliquity)
-        self._vars["obliquity"] = obliquity
-        ttk.Checkbutton(frame, text="Obliquity factor", variable=obliquity).grid(
-            row=row, column=0, columnspan=2, sticky="w", pady=1
-        )
-        row += 1
 
         ttk.Separator(frame).grid(row=row, column=0, columnspan=2, sticky="ew", pady=8)
         row += 1

@@ -11,7 +11,6 @@ import pytest
 from gratinglab.gui.state import (
     ANGLE_LABELS,
     MOUNTS,
-    PHASE_REFERENCES,
     PROFILE_KINDS,
     FormErrors,
     FormState,
@@ -208,16 +207,8 @@ class TestNyquistGuard:
 
 class TestOptions:
     def test_passes_solver_options_through(self):
-        parsed = build(
-            FormState(
-                quadrature_points="4096", obliquity=True, phase_reference="specular"
-            )
-        )
-        assert parsed.options == {
-            "quadrature_points": 4096,
-            "obliquity": True,
-            "phase_reference": "specular",
-        }
+        parsed = build(FormState(quadrature_points="4096"))
+        assert parsed.options == {"quadrature_points": 4096}
 
     def test_options_are_exactly_what_the_solver_accepts(self):
         """A renamed solver keyword would break the GUI silently otherwise."""
@@ -225,18 +216,6 @@ class TestOptions:
         scalar.solve(
             parsed.problem, parsed.illumination, [2.4], **parsed.options
         )
-
-    def test_rejects_an_unknown_phase_reference(self):
-        errors = validate(FormState(phase_reference="blaze"))
-        assert any(e.field == "phase_reference" for e in errors)
-
-    def test_all_offered_phase_references_are_accepted_by_the_solver(self):
-        for reference in PHASE_REFERENCES:
-            parsed = build(FormState(phase_reference=reference))
-            scalar.solve(
-                parsed.problem, parsed.illumination, [2.4], **parsed.options
-            )
-
 
 class TestFormState:
     def test_with_field_does_not_mutate(self):

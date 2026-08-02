@@ -162,7 +162,7 @@ class TestComparisonQueries:
                 ILL,
                 np.linspace(1.0, 5.0, 11),
                 ["scalar", "scalar"],
-                options={"scalar": {"obliquity": False}},
+                options={"scalar": {"quadrature_points": 2048}},
             )
         )
         summary = pair.summary("scalar", "scalar#2")

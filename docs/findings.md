@@ -79,22 +79,56 @@ regenerated correctly that test fails and should be deleted.
 
 ---
 
-## Scalar theory does not conserve energy
+## Scalar theory cannot be reciprocal *and* conserve energy
 
-With the order-dependent phase that both primary references specify, summed
-efficiency **exceeds unity** by up to ~12 % across mounts (~7 % off-plane).
-A passive grating cannot return more power than it receives, so these values are
-unphysical.
+No scalar formulation satisfies all three of the properties below. This is
+structural, not incidental: reciprocity requires the phase to be symmetric under
+$\alpha \leftrightarrow \beta_m$, and Parseval requires a single fixed function
+that cannot contain $\beta_m$.
 
-This is a property of the formulation, not of the implementation. For a fixed
-phase, $\sum_m \operatorname{sinc}^2(x - m) = 1$ is an exact identity; making
-$x$ depend on the order breaks it. Running the identical machinery with
-`phase_reference="specular"` restores a genuine Parseval pair and satisfies
-$\sum_m|G_m|^2 = 1$ to $10^{-10}$ — which is what proves the quadrature and
-normalisation are correct.
+| Property | order-dependent $\varphi = kg\sin\gamma(\cos\alpha + \cos\beta_m)$ | $\beta$-free $\varphi = 2kg\sin\gamma\cos\alpha$ |
+|---|---|---|
+| Energy, $\Sigma \leq 1$ | ✗ up to 1.71 | ✓ 1.0000 exactly (Parseval) |
+| Reciprocity $E_m(\alpha) = E_m(\beta_m)$ | ✓ $1\times10^{-17}$ | ✗ 0.44 violation |
+| Blaze direction | ✓ exact at all $\alpha$ | ✓ at Littrow only; 7.6° off at 10°, evanescent past ~15° |
 
-Full derivation: [theory/scalar.md §5](theory/scalar.md#5-energy-is-not-conserved-and-that-is-the-formulations-fault).
-The excess is reported as a provenance warning and never rescaled.
+Physical optics is reciprocal but not energy-conserving; the pure transmittance
+picture is the reverse. **Reciprocity is what the solver keeps.** The
+energy-conserving variant is not offered as an option, because silently trading a
+well-understood energy defect for a reciprocity violation is a footgun.
+
+Referencing the phase to the blaze direction $\beta_b = 2\delta - \alpha$ looks
+like a third way out and is not one: $\beta_b$ is an *output* of the model — it
+is where the $\operatorname{sinc}^2$ envelope peaks — so feeding it back in is
+circular, and the "zero error at every $\alpha$" it produces is a tautology.
+
+### The implementation is not at fault
+
+In the shallow-groove limit the sum is exactly unity, degrading smoothly with
+depth:
+
+| depth / period | $\Sigma_m E_m$ |
+|---|---|
+| 0.0001 | 1.00000 |
+| 0.10 | 0.90472 |
+
+The deviation scales with **phase excursion across the groove** — depth relative
+to wavelength, hence working order — not with $\lambda/p$ or the number of
+propagating orders. That is why $\Sigma$ looked stubbornly constant (~0.9065)
+across wildly different geometries at fixed profile.
+
+### Appendix D's two extra factors are both superseded
+
+The thesis carries $\mathcal{E}_n \propto [\cos\beta_n/\cos\alpha]\|G_n\|^2$ and
+then renormalises so $\sum_n \mathcal{E}_n = 1$. Both are **removed**, not made
+optional. For $N \to \infty$ grooves the efficiency is the norm-squared Fourier
+coefficient and nothing else; ISSI §2.1's groove function
+$f(x) = \exp\{ik[n(k)-1]y(x/p)\}$ carries neither factor. The renormalisation is
+the more damaging of the two — forcing $\Sigma$ to unity would erase exactly the
+validity signal described above.
+
+Full derivation: [theory/scalar.md §5](theory/scalar.md).
+The deviation is reported as a provenance warning and never rescaled.
 
 ---
 
@@ -111,9 +145,15 @@ never that it changed **correctly**.
 
 That is exactly the thesis-versus-ISSI discrepancy recorded in
 `conventions.md` §5 — a place where being wrong was plausible rather than
-hypothetical. Now pinned to the exact ratio, with a second test proving the two
-ratios are actually distinguishable for the geometry used, so the assertion
-cannot go vacuous.
+hypothetical. It was pinned to the exact ratio, with a second test proving the
+two ratios are distinguishable for the geometry used, so the assertion could not
+go vacuous.
+
+> **Since superseded.** The obliquity option was removed entirely once the
+> factor was established to be an error rather than a convention — see *Scalar
+> theory cannot be reciprocal and conserve energy* above. The lesson stands and
+> is the reason that section could be written with confidence: a test that only
+> asserts *something changed* verifies nothing.
 
 ### In-plane tests are blind to γ errors
 
@@ -202,5 +242,6 @@ The two that matter most:
 
 - The thesis sawtooth phase omits `sin γ` and is inconsistent with its own
   Φ_b twelve lines later. The ISSI form is general and is what we implement.
-- The obliquity factor differs between them and is not a matter of notation —
-  the two redistribute efficiency between orders differently.
+- The thesis carries an obliquity factor and a Σ-renormalization that ISSI does
+  not. Neither is a matter of notation, and neither survived: both are errors,
+  and both are gone.

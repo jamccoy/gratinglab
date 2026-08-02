@@ -219,149 +219,71 @@ class TestNumerics:
         assert len(scalar.solve(problem, ill, 700.0)) == 1
 
 
-class TestObliquityOption:
-    def test_changes_the_distribution_between_orders(self):
-        """conventions.md 5: the thesis and ISSI forms are not equivalent."""
-        problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
-        ill = Illumination.classical(alpha=45.0, polarization=UNPOL)
-        plain = scalar.solve(problem, ill, [600.0], obliquity=False).at(600.0)
-        tilted = scalar.solve(problem, ill, [600.0], obliquity=True).at(600.0)
-        assert not np.allclose(plain.efficiency, tilted.efficiency)
+class TestEnergyBehaviour:
+    r"""The formulation does not conserve energy, and that is a *choice*.
 
-    @pytest.mark.parametrize(
-        "alpha_deg,gamma_deg", [(45.0, 90.0), (10.0, 90.0), (25.0, 1.5), (-30.0, 45.0)]
-    )
-    def test_factor_is_exactly_cos_beta_over_cos_alpha(self, alpha_deg, gamma_deg):
-        r"""Pin the *direction* of the factor, not merely that it does something.
+    Efficiency is :math:`|G_m|^2` and nothing else -- no obliquity factor, no
+    renormalisation. Because the phase carries :math:`\cos\beta_m`, the
+    :math:`G_m` are not Fourier coefficients of any single function, so
+    Parseval does not apply and the sum drifts from unity.
 
-        Mutation testing showed that inverting it to
-        :math:`\cos\alpha/\cos\beta_m` survived the entire suite, because the
-        only other test asserts the result *changes*. This asserts the exact
-        ratio from Appendix-D.tex:418, so an inversion fails immediately.
+    That is kept deliberately: the symmetric :math:`\cos\alpha + \cos\beta_m`
+    is exactly what makes the result *reciprocal*, and the alternative that
+    conserves energy violates reciprocity instead. These tests pin the
+    behaviour so the drift can never be mistaken for an implementation bug --
+    and so a future "fix" that renormalises it away fails loudly.
+    """
+
+    def test_shallow_limit_conserves_energy_exactly(self):
+        """The check that would catch a genuine implementation bug.
+
+        As depth goes to zero the transmittance tends to 1, all power lands in
+        order 0, and the sum must tend to 1 regardless of formulation. If this
+        ever fails, the problem is the code, not the physics.
         """
-        problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
-        ill = Illumination(
-            alpha_deg=alpha_deg, gamma_deg=gamma_deg, polarization=UNPOL
-        )
-        wavelength = 0.2 * problem.period
+        ill = Illumination.classical(alpha=10.0, polarization=UNPOL)
+        for depth, tolerance in ((1e-4, 1e-5), (1e-3, 1e-4)):
+            problem = Problem(
+                period=1400.0, profile=Sinusoidal(depth_fraction=depth)
+            )
+            row = scalar.solve(
+                problem, ill, [500.0], quadrature_points=16384
+            ).at(500.0)
+            assert row.total == pytest.approx(1.0, abs=tolerance), f"depth={depth}"
 
-        plain = scalar.solve(problem, ill, [wavelength], obliquity=False).at(wavelength)
-        tilted = scalar.solve(problem, ill, [wavelength], obliquity=True).at(wavelength)
+    def test_deviation_grows_with_groove_depth(self):
+        """Pins the mechanism: the drift tracks phase excursion across the
+        groove, not lambda/period and not the propagating-order count."""
+        ill = Illumination.classical(alpha=10.0, polarization=UNPOL)
+        deviations = []
+        for depth in (0.001, 0.005, 0.02, 0.05, 0.10):
+            problem = Problem(
+                period=1400.0, profile=Sinusoidal(depth_fraction=depth)
+            )
+            row = scalar.solve(
+                problem, ill, [500.0], quadrature_points=16384
+            ).at(500.0)
+            deviations.append(abs(row.total - 1.0))
 
-        live = plain.propagating
-        sines = sin_beta(
-            plain.orders[live],
-            wavelength,
-            problem.period,
-            ill.sin_alpha,
-            ill.sin_gamma,
-        )
-        expected = plain.efficiency[live] * cos_beta(sines) / ill.cos_alpha
+        assert deviations == sorted(deviations), deviations
+        assert deviations[0] < 1e-4
+        assert deviations[-1] > 0.05
 
-        assert np.allclose(tilted.efficiency[live], expected, atol=1e-12)
-
-    def test_inverted_factor_would_be_detected(self, ):
-        """A guard on the guard: the inverse ratio must not also satisfy it.
-
-        If cos(beta)/cos(alpha) and cos(alpha)/cos(beta) happened to coincide
-        for the test geometry, the assertion above would be vacuous.
-        """
-        problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
-        ill = Illumination.classical(alpha=45.0, polarization=UNPOL)
-        wavelength = 280.0
-
-        plain = scalar.solve(problem, ill, [wavelength], obliquity=False).at(wavelength)
-        tilted = scalar.solve(problem, ill, [wavelength], obliquity=True).at(wavelength)
-
-        live = plain.propagating
-        sines = sin_beta(
-            plain.orders[live], wavelength, problem.period, ill.sin_alpha, ill.sin_gamma
-        )
-        correct = plain.efficiency[live] * cos_beta(sines) / ill.cos_alpha
-        inverted = plain.efficiency[live] * ill.cos_alpha / cos_beta(sines)
-
-        assert np.allclose(tilted.efficiency[live], correct)
-        assert not np.allclose(correct, inverted), "geometry cannot distinguish them"
-
-    def test_is_recorded_on_the_provenance(self):
-        problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
-        ill = Illumination.classical(alpha=30.0, polarization=UNPOL)
-        scan = scalar.solve(problem, ill, [600.0], obliquity=True)
-        assert scan.provenance.notes["obliquity"] is True
-
-    def test_default_is_the_issi_form(self):
-        problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
-        ill = Illumination.classical(alpha=30.0, polarization=UNPOL)
-        assert scalar.solve(problem, ill, [600.0]).provenance.notes["obliquity"] is False
-
-
-class TestPhaseReference:
-    r"""The two phase conventions, and the energy tradeoff between them."""
-
-    def test_default_is_the_order_dependent_form(self):
-        """ISSI eq. (15) and thesis Appendix-D.tex:651 both use cos(beta_m)."""
+    def test_the_deviation_is_reported_not_hidden(self):
         problem = Problem(period=315.15, profile=Blazed(blaze_angle=29.5))
         ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
-        scan = scalar.solve(problem, ill, [3.0])
-        assert scan.provenance.notes["phase_reference"] == "order"
+        scan = scalar.solve(problem, ill, np.linspace(1.0, 5.0, 15))
 
-    @pytest.mark.parametrize("mount", MOUNTS, ids=MOUNT_IDS)
-    def test_specular_satisfies_parseval_over_all_orders(self, mount):
-        r"""The decisive check that the quadrature and normalisation are right.
+        assert abs(scan.total - 1.0).max() > 0.01
+        assert any("summed efficiency" in w for w in scan.provenance.warnings)
 
-        With a fixed phase, :math:`\exp(i\Phi(t))` has unit modulus, so
-        Parseval gives :math:`\sum_m |G_m|^2 = 1` over *all* orders exactly.
-        Summing over propagating orders alone must therefore never exceed 1.
-
-        This validates the machinery independently of any closed form: it would
-        catch a wrong 1/p normalisation or a mis-scaled transform, neither of
-        which the sinc-squared comparisons can see.
-        """
-        period, ill, wavelengths = mount
-        problem = Problem(period=period, profile=Blazed(blaze_angle=29.5))
-        scan = scalar.solve(
-            problem, ill, wavelengths, quadrature_points=8192,
-            phase_reference="specular",
-        )
-        assert scan.total.max() <= 1.0 + 1e-9, f"max total {scan.total.max()}"
-
-    def test_specular_exactly_conserves_when_all_orders_propagate(self):
-        r"""At a long enough wavelength few orders exist and the sum is tight."""
-        problem = Problem(period=1400.0, profile=Sinusoidal(depth_fraction=0.05))
-        ill = Illumination.classical(alpha=0.0, polarization=UNPOL)
-        scan = scalar.solve(
-            problem, ill, [500.0], quadrature_points=16384,
-            phase_reference="specular",
-        )
-        # A shallow sinusoid puts essentially everything in the low orders that
-        # do propagate, so the sum should sit very close to unity.
-        assert scan.at(500.0).total == pytest.approx(1.0, abs=1e-3)
-
-    def test_order_reference_can_exceed_unity(self):
-        """The tradeoff, asserted so it cannot be silently 'fixed'."""
+    def test_efficiency_is_never_renormalised(self):
+        r"""Appendix D normalises by :math:`\sum_m E_m`; that is wrong and must
+        not creep back. If it had, the sum would be exactly 1 by construction."""
         problem = Problem(period=315.15, profile=Blazed(blaze_angle=29.5))
         ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
-        scan = scalar.solve(
-            problem, ill, np.linspace(1.0, 5.0, 15), quadrature_points=4096
-        )
-        assert scan.total.max() > 1.0
-
-    def test_the_two_agree_where_the_exit_direction_barely_varies(self):
-        """Near-Littrow with few orders, cos(beta_m) ~ cos(alpha), so they converge."""
-        problem = Problem(period=1400.0, profile=Sinusoidal(depth_fraction=0.02))
-        ill = Illumination.classical(alpha=2.0, polarization=UNPOL)
-        common = dict(quadrature_points=8192)
-        a = scalar.solve(problem, ill, [900.0], **common).at(900.0)
-        b = scalar.solve(
-            problem, ill, [900.0], phase_reference="specular", **common
-        ).at(900.0)
-        assert np.allclose(a.efficiency, b.efficiency, atol=5e-3)
-
-    def test_rejects_an_unknown_reference(self):
-        problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
-        ill = Illumination.classical(alpha=30.0, polarization=UNPOL)
-        with pytest.raises(ValueError, match="phase_reference must be one of"):
-            scalar.solve(problem, ill, [600.0], phase_reference="blaze")
+        totals = scalar.solve(problem, ill, np.linspace(1.0, 5.0, 15)).total
+        assert not np.allclose(totals, 1.0)
 
 
 class TestProvenance:

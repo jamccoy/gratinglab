@@ -137,14 +137,7 @@ class TestBehaviour:
         gui.solve()
         text = gui._provenance.get("1.0", "end")
         assert "EXCEEDS UNITY" in text
-        assert "exceeding unity" in text
-
-    def test_specular_phase_reference_clears_the_violation(self, gui):
-        gui._vars["antiblaze_angle"].set("90")
-        gui._vars["phase_reference"].set("specular")
-        gui.solve()
-        text = gui._provenance.get("1.0", "end")
-        assert "EXCEEDS UNITY" not in text
+        assert "summed efficiency" in text
 
     def test_convergence_is_reported_honestly(self, gui):
         """Nothing has been shown converged, and the panel must say so."""
