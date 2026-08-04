@@ -131,41 +131,24 @@ class TestBehaviour:
         gui.solve()
         assert gui._scan is good
 
-    def test_energy_violation_is_surfaced(self, gui):
-        """The panel's reason for existing."""
-        gui._vars["antiblaze_angle"].set("90")
-        gui.solve()
-        text = gui._provenance.get("1.0", "end")
-        assert "EXCEEDS UNITY" in text
-        assert "summed efficiency" in text
+    def test_the_panel_shows_what_provenance_decided(self, gui):
+        """All this layer still owes: paint the lines it was given.
 
-    def test_convergence_is_reported_honestly(self, gui):
-        """Nothing has been shown converged, and the panel must say so."""
-        assert "not yet checked" in gui._provenance.get("1.0", "end")
+        What each line *says*, and which of them may look alarming, moved to
+        `tests/test_gui_provenance.py` when that logic was extracted -- it is
+        a correctness question and no longer needs a window to check.
+        """
+        from gratinglab.gui.provenance import provenance_lines
+        from gratinglab.checks import check_energy_balance
+        from gratinglab.gui.state import FormState, build
 
-    def test_convergence_none_is_not_tagged_as_a_warning(self, gui):
-        """The concrete regression this milestone fixes."""
-        ranges = gui._provenance.tag_ranges("warn")
-        warned_text = "".join(
-            gui._provenance.get(ranges[i], ranges[i + 1])
-            for i in range(0, len(ranges), 2)
+        parsed = build(FormState())
+        expected = provenance_lines(
+            gui._scan, check_energy_balance(gui._scan), parsed.lambda_over_period
         )
-        assert "not yet checked" not in warned_text
-        assert "coating" not in warned_text
-
-    def test_normalization_is_shown_neutrally_not_as_a_warning(self, gui):
-        """No coating is the default, correct mode -- it must read as a plain
-        status line, not an alarm."""
-        text = gui._provenance.get("1.0", "end")
-        assert "normalization: relative" in text
-
-        ranges = gui._provenance.tag_ranges("warn")
-        warned_text = "".join(
-            gui._provenance.get(ranges[i], ranges[i + 1])
-            for i in range(0, len(ranges), 2)
-        )
-        assert "normalization" not in warned_text
-        assert "coating" not in warned_text
+        shown = gui._provenance.get("1.0", "end")
+        for line in expected:
+            assert line.text.strip() in shown
 
     def test_mount_change_relabels_the_angle_fields(self, gui):
         gui._vars["mount"].set("Classical")

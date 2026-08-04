@@ -16,7 +16,7 @@ import re
 import sys
 from pathlib import Path
 
-from . import mathtext
+from . import mathtext, provenance
 from .docs import general_pages, theory_pages
 from .state import (
     ANGLE_LABELS,
@@ -215,10 +215,8 @@ class GratingLabApp:
         self._provenance = tk.Text(frame, height=7, wrap="word", relief="solid",
                                    borderwidth=1)
         self._provenance.pack(fill="x")
-        self._provenance.tag_configure("warn", foreground="#a5370d")
-        self._provenance.tag_configure("bad", foreground="#b00020")
-        self._provenance.tag_configure("ok", foreground="#0a7d28")
-        self._provenance.tag_configure("dim", foreground="#666")
+        for tag, color in provenance.TAG_COLORS.items():
+            self._provenance.tag_configure(tag, foreground=color)
         self._provenance.configure(state="disabled")
 
     def _build_menu(self) -> None:
@@ -347,13 +345,7 @@ class GratingLabApp:
         from .. import __version__
 
         self._messagebox.showinfo(
-            "About GratingLab",
-            "GratingLab\n"
-            f"Version {__version__}\n\n"
-            "An open comparison platform for grating efficiency analysis: "
-            "scalar, RCWA, C-method and integral-method solvers driven from "
-            "one problem spec.\n\n"
-            "BSD-3-Clause.",
+            "About GratingLab", provenance.about_text(__version__)
         )
 
     def show_theory(self, page) -> None:
@@ -510,61 +502,27 @@ class GratingLabApp:
 
     # -- provenance ------------------------------------------------------
 
-    def _write(self, text: str, tag: str | None = None) -> None:
-        self._provenance.insert("end", text, tag or "")
+    def _paint(self, lines) -> None:
+        """Paint `provenance.Line` tuples into the panel.
+
+        The whole of this layer's involvement. Which line carries which tag is
+        decided in `gui/provenance.py`, where it can be tested without a
+        window -- and where the rule that a correct default must not be styled
+        as a problem is written down.
+        """
+        self._provenance.configure(state="normal")
+        self._provenance.delete("1.0", "end")
+        for line in lines:
+            self._provenance.insert("end", line.text, line.tag or "")
+        self._provenance.configure(state="disabled")
 
     def _show_errors(self, exc: FormErrors) -> None:
-        self._provenance.configure(state="normal")
-        self._provenance.delete("1.0", "end")
-        self._write(f"{len(exc.errors)} field(s) need attention\n", "bad")
-        for error in exc.errors:
-            self._write(f"  • {error.field}: {error.message}\n", "bad")
-        self._provenance.configure(state="disabled")
+        self._paint(provenance.error_lines(exc.errors))
 
     def _show_provenance(self, scan, energy, parsed) -> None:
-        """Warnings are the point of this panel, so they are not tucked away.
-
-        Just as important: things that are *not* wrong must not look wrong.
-        `converged is None` means "not yet checked" -- true for every solver
-        until the convergence harness exists -- not "checked and failed," and
-        a coating-free run giving relative efficiency is the correct default,
-        not a deficiency. Both used to render identically to a real problem,
-        which is why a fully successful run could read as broken.
-        """
-        provenance = scan.provenance
-        self._provenance.configure(state="normal")
-        self._provenance.delete("1.0", "end")
-
-        self._write(
-            f"{provenance.method} {provenance.version}  ·  "
-            f"{provenance.truncation} quadrature pts  ·  "
-            f"{provenance.wall_time_s * 1e3:.0f} ms  ·  "
-            f"λ/period = {parsed.lambda_over_period:.4g}\n"
+        self._paint(
+            provenance.provenance_lines(scan, energy, parsed.lambda_over_period)
         )
-
-        self._write("convergence: ", "dim")
-        if provenance.converged is None:
-            self._write("not yet checked\n", "dim")
-        elif provenance.converged:
-            self._write("yes\n", "ok")
-        else:
-            self._write("NO\n", "bad")
-
-        normalization = provenance.notes.get("normalization")
-        if normalization:
-            detail = "no coating" if normalization == "relative" else "coating set"
-            self._write("normalization: ", "dim")
-            self._write(f"{normalization} ({detail})\n", "dim")
-
-        self._write("energy balance: ", "dim")
-        self._write(
-            f"Σ ∈ [{energy.total.min():.4f}, {energy.total.max():.4f}]"
-            f"{'' if energy.passed else '  — EXCEEDS UNITY'}\n",
-            "ok" if energy.passed else "bad",
-        )
-        for warning in provenance.warnings:
-            self._write(f"  ⚠ {warning}\n", "warn")
-        self._provenance.configure(state="disabled")
 
 
 def _bring_to_front(root) -> None:
