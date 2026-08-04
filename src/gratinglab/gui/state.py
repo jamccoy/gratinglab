@@ -34,6 +34,7 @@ __all__ = [
     "FormState",
     "Parsed",
     "PROFILE_KINDS",
+    "PROFILE_FIELDS",
     "MOUNTS",
     "ANGLE_LABELS",
     "build",
@@ -42,6 +43,20 @@ __all__ = [
 
 #: Selectable profile kinds, in the order they should appear in the UI.
 PROFILE_KINDS = ("Blazed", "Lamellar", "Sinusoidal", "From file")
+
+#: Which form fields each profile kind actually uses. The UI hides the rest,
+#: because a duty cycle means nothing for a sinusoid and offering it invites
+#: the reasonable assumption that it does something.
+#:
+#: Here rather than in the window for the same reason as ANGLE_LABELS: what a
+#: control *means* is form logic, and "the dropdown offers a kind nothing maps"
+#: should be a test rather than an empty panel.
+PROFILE_FIELDS: dict[str, frozenset[str]] = {
+    "Blazed": frozenset({"blaze_angle", "antiblaze_angle"}),
+    "Lamellar": frozenset({"depth_fraction", "duty_cycle"}),
+    "Sinusoidal": frozenset({"depth_fraction"}),
+    "From file": frozenset({"profile_path"}),
+}
 
 #: Selectable mounts.
 MOUNTS = ("Classical", "Conical", "Off-plane")

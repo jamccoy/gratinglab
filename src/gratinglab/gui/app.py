@@ -21,6 +21,7 @@ from .docs import general_pages, theory_pages
 from .state import (
     ANGLE_LABELS,
     MOUNTS,
+    PROFILE_FIELDS,
     PROFILE_KINDS,
     FormErrors,
     FormState,
@@ -256,12 +257,7 @@ class GratingLabApp:
     def _on_profile_change(self) -> None:
         """Show only the parameters the selected profile actually uses."""
         kind = self._vars["profile_kind"].get()
-        needed = {
-            "Blazed": {"blaze_angle", "antiblaze_angle"},
-            "Lamellar": {"depth_fraction", "duty_cycle"},
-            "Sinusoidal": {"depth_fraction"},
-            "From file": set(),
-        }.get(kind, set())
+        needed = PROFILE_FIELDS.get(kind, frozenset())
         for key, widgets in self._profile_rows.items():
             for widget in widgets:
                 widget.grid() if key in needed else widget.grid_remove()
