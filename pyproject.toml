@@ -26,10 +26,18 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "matplotlib>=3.8", "pandas>=2.1"]
+dev = ["pytest>=7", "pytest-qt>=4.5", "matplotlib>=3.8", "pandas>=2.1"]
 # The GUI is an optional extra: `pip install gratinglab` must never require
-# a toolkit. Tk itself is not pip-installable -- see docs/roadmap.md.
-gui = ["matplotlib>=3.8"]
+# a toolkit.
+#
+# PySide6-Essentials rather than the PySide6 meta-package: the Addons
+# (WebEngine, Multimedia, 3D) are hundreds of megabytes this window never
+# touches. Essentials still carries QtSvg, which matplotlib's Qt shim imports
+# unconditionally.
+#
+# PySide6 (LGPLv3) rather than PyQt6 (GPL): this package is BSD-3, and an
+# optional dynamically-linked dependency keeps it that way.
+gui = ["matplotlib>=3.8", "PySide6-Essentials>=6.7"]
 
 [project.scripts]
 gratinglab-gui = "gratinglab.gui.app:main"
@@ -46,3 +54,8 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["error"]
+# pytest-qt would otherwise probe every binding it knows. Verified clean under
+# `python -W error -c "import PySide6.QtWidgets"`, so `filterwarnings = error`
+# above needs no exemption; if a future PySide6 starts warning at import, add a
+# narrow ignore naming the exact message -- never a bare DeprecationWarning.
+qt_api = "pyside6"
