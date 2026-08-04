@@ -34,10 +34,46 @@ jobs:
           python-version: ${{ matrix.python-version }}
           cache: pip
 
+      # Qt's *offscreen* platform plugin needs no X server, so no Xvfb and none
+      # of the libxcb-* family -- but libQt6Gui still links EGL, and fontconfig
+      # and GLib have to be present for the plugin to load at all.
+      #
+      # libglib2.0-0 was renamed libglib2.0-0t64 in Ubuntu 24.04; the old name
+      # fails this step. If the plugin still refuses to load, QT_DEBUG_PLUGINS=1
+      # names the missing .so directly.
+      - name: Qt runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libegl1 libglib2.0-0t64 libdbus-1-3 libfontconfig1 \
+            libfreetype6 libxkbcommon0
+
+      # The `gui` extra, not a second copy of its contents in `dev`, so the
+      # toolkit dependency is declared in exactly one place.
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev]"
+          python -m pip install -e ".[dev,gui]"
+
+      # The Qt tests guard themselves with importorskip, which would hide a
+      # broken toolkit install as a quietly shrinking suite. This makes it loud,
+      # and it fails here -- next to the apt step that would be at fault --
+      # rather than as a mystery in the test job.
+      #
+      # Constructing a QApplication, not merely importing: the import succeeds
+      # long before the platform plugin is asked to load, which is where a
+      # missing system library actually bites.
+      - name: Confirm the GUI toolkit installed
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          python -W error -c "
+          import matplotlib, PySide6
+          from PySide6.QtWidgets import QApplication
+          QApplication([])
+          print('PySide6', PySide6.__version__, '| matplotlib', matplotlib.__version__)
+          "
 
       # CI has no PCGrate reference corpus, so this run also exercises the
       # skip path that every contributor without the research data will hit.
