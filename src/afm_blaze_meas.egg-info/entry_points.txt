@@ -1,3 +1,0 @@
-[console_scripts]
-afm-analysis = afm_analysis.cli:main
-afm-gui = afm_analysis.gui:main

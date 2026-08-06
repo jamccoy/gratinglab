@@ -131,7 +131,9 @@ Verified against numpy 2.5.1 / scipy 1.18.0 / matplotlib 3.11.1 — see
    .venv/bin/python main.py     # or: afm-analysis
    ```
 
-   The Qt window is `afm-gui`.
+   The Qt window is `afm-gui`. It has two tabs: **Analysis**, and a **Wiki**
+   explaining how the statistics work — the correlation correction, why edge
+   grooves are rejected, what each output column means.
 
    Paths in `config.py` resolve against the project root, so this works from any
    working directory.
@@ -573,11 +575,11 @@ afm_blaze_meas/
 ├── docs/
 │   ├── BASELINES.md               # How to prove a change altered nothing
 │   ├── PROGRESS_SUMMARY.md        # Status and open work
-│   ├── stat_analysis.md           # Statistical methodology
-│   └── history/                   # Superseded migration guides (reference only)
+│   └── history/                   # Superseded guides (reference only)
 ├── tests/                         # pytest; GUI tests skip without PySide6
 ├── examples/  experimental/  legacy/
 └── src/afm_analysis/
+    ├── wiki/                      # In-app documentation (Wiki tab, package data)
     ├── config.py                  # ⚙️ CONFIGURE HERE
     ├── settings.py                # AnalysisSettings - config as a passed value
     ├── cli.py                     # Mode dispatch

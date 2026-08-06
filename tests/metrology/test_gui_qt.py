@@ -119,6 +119,39 @@ class TestViews:
         assert all(b.isEnabled() for b in window._result_buttons)
 
 
+class TestWikiTab:
+    """The Wiki tab, and that adding it disturbed nothing."""
+
+    def test_both_tabs_exist(self, qtbot, window):
+        assert [window.tabs.tabText(i) for i in range(window.tabs.count())] == \
+            ["Analysis", "Wiki"]
+
+    def test_every_page_renders(self, qtbot, window):
+        for slug in window.wiki.slugs:
+            assert window.wiki.show_page(slug), f"{slug} not selectable"
+            assert window.wiki.current_slug == slug
+            html = window.wiki.rendered_html()
+            assert len(html) > 500, f"{slug} rendered almost nothing"
+
+    def test_tables_survive_markdown_rendering(self, qtbot, window):
+        """The ICC page's measured-values table is the reason tables matter"""
+        window.wiki.show_page('icc-correction')
+        assert '<table' in window.wiki.rendered_html()
+
+    def test_switching_tabs_leaves_a_result_intact(self, qtbot, window):
+        """The tab move must not disturb analysis state"""
+        window.load(SAMPLE)
+        _run_and_wait(qtbot, window)
+        before = window._result['mean_angle']
+
+        window.tabs.setCurrentIndex(1)
+        window.wiki.show_page('facet-fitting')
+        window.tabs.setCurrentIndex(0)
+
+        assert window._result['mean_angle'] == before
+        assert all(b.isEnabled() for b in window._result_buttons)
+
+
 class TestInvalidInput:
     def test_invalid_settings_report_without_running(self, qtbot, window):
         window.load(SAMPLE)
