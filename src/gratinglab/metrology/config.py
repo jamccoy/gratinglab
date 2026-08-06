@@ -6,7 +6,32 @@ import os
 # ============ PROJECT PATHS ============
 # All paths below are resolved relative to the project root, not the current
 # working directory, so the analysis runs the same from anywhere.
-PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+#
+# The package lives at <root>/src/afm_analysis, so the root is three levels up
+# from this file. Found by looking for the marker rather than counting parents,
+# because counting broke silently when the package moved under src/ - data/ and
+# results/ resolved to src/data and src/results, and the failure looked like a
+# stale output file rather than a path bug.
+#
+# An installed (non-editable) copy has no project root above it; fall back to the
+# working directory so `pip install afm-blaze-meas` still runs against a user's
+# own data and results folders.
+def _find_project_root(start):
+    # pyproject.toml only. Searching for a "data" directory looked reasonable and
+    # was wrong: this package contains its own data subpackage
+    # (afm_analysis/data/aggregation.py), so the walk stopped immediately and
+    # DATA_DIR pointed inside the source tree.
+    path = os.path.dirname(os.path.abspath(start))
+    while True:
+        if os.path.isfile(os.path.join(path, 'pyproject.toml')):
+            return path
+        parent = os.path.dirname(path)
+        if parent == path:
+            return os.getcwd()
+        path = parent
+
+
+PROJECT_ROOT = _find_project_root(__file__)
 DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
 RESULTS_DIR = os.path.join(PROJECT_ROOT, 'results')
 

@@ -64,3 +64,16 @@ measurements per image which re-measure the same physical grooves, while the cod
 divides by `sqrt(N)` as if they were independent — so SEMs and p-values are
 optimistic. Mean angles are unaffected. See
 `experimental/hierarchical_stats/README.md`.
+
+## Verified dependency versions
+
+`pyproject.toml` gives lower bounds so the package installs broadly. The stored
+baselines were produced with these exact versions, on Python 3.12.9:
+
+```
+numpy==2.5.1  scipy==1.18.0  matplotlib==3.11.1  PySide6-Essentials==6.11.1
+```
+
+They replaced a pinned `requirements.txt`, which was retired when the project
+became pip-installable. If a baseline diff fails and nothing in the code changed,
+check these first.
