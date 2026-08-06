@@ -6,6 +6,8 @@ import numpy as np
 import os
 from datetime import datetime
 
+from ..stats.analysis import _effective_n
+
 
 def save_results_to_file(results, labels=None, temperatures=None, output_dir=None):
     """
@@ -70,6 +72,21 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
             
             f.write(f"  Mean blaze angle: {r['mean_angle']:.3f}° ± {r['std_angle']:.3f}°\n")
             f.write(f"  Angle range: {r['min_angle']:.3f}° to {r['max_angle']:.3f}°\n")
+
+            icc = r.get('icc')
+            if icc is not None and np.isfinite(icc):
+                n_eff = r.get('n_effective', float('nan'))
+                sem = r.get('sem', float('nan'))
+                sem_corr = r.get('sem_corrected', float('nan'))
+                f.write(f"\n  Correlation-corrected uncertainty:\n")
+                f.write(f"    Intraclass correlation: {icc:.3f}\n")
+                f.write(f"    Effective sample size: {n_eff:.1f} of {r['n_grooves']} "
+                        f"measurements\n")
+                f.write(f"    SEM: {sem_corr:.3f}° (uncorrected {sem:.3f}°, "
+                        f"x{sem_corr / sem:.2f})\n")
+                f.write(f"    95% CI on the mean: ±{1.96 * sem_corr:.3f}°\n")
+                f.write(f"    Row groups re-measure the same grooves, so the raw\n")
+                f.write(f"    count overstates the independent information.\n")
             f.write(f"  Mean slope (dy/dx): {r['mean_slope']:.6f}\n")
             if r['mean_steep'] is not None:
                 f.write(f"  Mean steep facet angle: {r['mean_steep']:.3f}°\n")
@@ -102,8 +119,8 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
                 for j, r2 in enumerate(results):
                     if i < j:
                         diff = r2['mean_angle'] - r1['mean_angle']
-                        se_combined = np.sqrt(r1['std_angle']**2 / r1['n_grooves'] + 
-                                             r2['std_angle']**2 / r2['n_grooves'])
+                        se_combined = np.sqrt(r1['std_angle']**2 / _effective_n(r1) + 
+                                             r2['std_angle']**2 / _effective_n(r2))
                         
                         f.write(f"\n{labels[i]} vs {labels[j]}:\n")
                         f.write(f"  {labels[i]}: {r1['mean_angle']:.3f}° ± {r1['std_angle']:.3f}°\n")
@@ -128,8 +145,8 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
                         
                         if temp_diff != 0:
                             rate = angle_diff / temp_diff
-                            se_combined = np.sqrt(result_i['std_angle']**2 / result_i['n_grooves'] + 
-                                                 result_j['std_angle']**2 / result_j['n_grooves'])
+                            se_combined = np.sqrt(result_i['std_angle']**2 / _effective_n(result_i) + 
+                                                 result_j['std_angle']**2 / _effective_n(result_j))
                             se_rate = se_combined / abs(temp_diff)
                             
                             f.write(f"\n{label_i} ({temp_i}°C) → {label_j} ({temp_j}°C):\n")
@@ -147,8 +164,8 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
                     for i, label_i, result_i in no_temp_samples:
                         for j, temp_j, label_j, result_j in temp_samples:
                             diff = result_j['mean_angle'] - result_i['mean_angle']
-                            se_combined = np.sqrt(result_i['std_angle']**2 / result_i['n_grooves'] + 
-                                                 result_j['std_angle']**2 / result_j['n_grooves'])
+                            se_combined = np.sqrt(result_i['std_angle']**2 / _effective_n(result_i) + 
+                                                 result_j['std_angle']**2 / _effective_n(result_j))
                             f.write(f"\n{label_i} → {label_j} ({temp_j}°C):\n")
                             f.write(f"  Difference: {diff:+.3f}° ± {se_combined:.3f}°\n")
     
@@ -161,7 +178,10 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
         # Header
         f.write("Sample,File,N_scans,N_grooves,Mean_angle_deg,Std_angle_deg,Min_angle_deg,Max_angle_deg,")
         f.write("Mean_slope,Period_nm,Period_std_nm,Mean_depth_nm,Mean_facet_width_nm,")
-        f.write("Local_angle_std_deg,Local_angle_range_deg,Temperature_C\n")
+        f.write("Local_angle_std_deg,Local_angle_range_deg,Temperature_C,")
+        # Appended, not inserted: existing columns keep their positions and
+        # meanings so baselines recorded before the correction still diff.
+        f.write("ICC,N_eff,SEM_deg,SEM_corrected_deg\n")
         
         # Data rows
         for i, (r, label) in enumerate(zip(results, labels)):
@@ -182,7 +202,15 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
             f.write(f"{np.mean([q['groove_depth_nm'] for q in r['quality']]):.4f},")
             f.write(f"{np.mean([q['blaze_width_nm'] for q in r['quality']]):.4f},")
             f.write(f"{r.get('local_angle_std', 0):.4f},{r.get('local_angle_range', 0):.4f},")
-            f.write(f"{temp}\n")
+            icc = r.get('icc')
+            n_eff = r.get('n_effective')
+            sem = r.get('sem')
+            sem_corr = r.get('sem_corrected')
+            f.write(f"{temp},")
+            f.write(f"{icc:.4f}," if icc is not None and np.isfinite(icc) else ",")
+            f.write(f"{n_eff:.1f}," if n_eff is not None and np.isfinite(n_eff) else ",")
+            f.write(f"{sem:.4f}," if sem is not None and np.isfinite(sem) else ",")
+            f.write(f"{sem_corr:.4f}\n" if sem_corr is not None and np.isfinite(sem_corr) else "\n")
     
     print(f"✓ CSV data saved to: {csv_filename}")
     

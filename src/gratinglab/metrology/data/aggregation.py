@@ -59,7 +59,30 @@ def combine_scans(scan_results):
     # Local angle statistics
     local_angle_std = np.std(all_local_angles) if len(all_local_angles) > 0 else 0
     local_angle_range = (np.max(all_local_angles) - np.min(all_local_angles)) if len(all_local_angles) > 1 else 0
-    
+
+    # Effective sample size across scans.
+    #
+    # Separate scans of the same sample ARE independent of one another - they are
+    # different images - so their effective sizes add. The correlation being
+    # corrected for is between row groups *within* one scan, which each scan's
+    # own n_effective already accounts for.
+    #
+    # The combined ICC is reported as a measurement-weighted mean purely as a
+    # descriptor. It is not used to derive anything: n_effective comes from the
+    # sum, not from re-deriving a design effect over the pooled measurements,
+    # which would wrongly treat the scans as one correlated cluster.
+    per_scan_n_eff = [s.get('n_effective') for s in scan_results]
+    if all(v is not None and np.isfinite(v) for v in per_scan_n_eff):
+        n_effective = float(np.sum(per_scan_n_eff))
+    else:
+        n_effective = float(len(all_angles))
+
+    iccs = [(s.get('icc'), len(s['all_angles'])) for s in scan_results]
+    usable = [(v, w) for v, w in iccs if v is not None and np.isfinite(v)]
+    icc_combined = (float(np.average([v for v, _ in usable],
+                                     weights=[w for _, w in usable]))
+                    if usable else float('nan'))
+
     # Create combined result
     combined_result = {
         'filename': scan_results[0]['filename'],  # Keep first filename as reference
@@ -79,6 +102,13 @@ def combine_scans(scan_results):
         'local_angle_std': local_angle_std,
         'local_angle_range': local_angle_range,
         'all_local_angles': all_local_angles,
+        # Uncertainty. Stated explicitly rather than left to a caller's fallback,
+        # so the corrected and uncorrected values sit side by side.
+        'sem': float(std_angle / np.sqrt(len(all_angles))) if all_angles else float('nan'),
+        'sem_corrected': (float(std_angle / np.sqrt(n_effective))
+                          if n_effective > 0 else float('nan')),
+        'icc': icc_combined,
+        'n_effective': n_effective,
         'individual_scans': scan_results  # Store individual scans for detailed analysis
     }
     

@@ -30,8 +30,18 @@ This was previously the `_new/` folder.
 > ones — the 215°C → 280°C step of +0.08° was already inside the noise and is more
 > clearly so now.
 >
-> So integrating this directory is warranted. The decision it was waiting on has
-> been made.
+> **The correction is now applied** (2026-08-06), built on `afm_analysis/stats/icc.py`
+> rather than by importing this directory. Nothing here is wired in; it remains the
+> reference for the variance decomposition and the source of the
+> conservative/liberal/best framing.
+>
+> Why not import it: `improved_statistics.py` carries its own ICC, computing the
+> within-group variance size-weighted where `stats/icc.py` uses the unweighted mean
+> of per-group variances. Two implementations of the same quantity is the exact
+> duplication that let the scan-edge bug survive in one code path and not another.
+>
+> Still unused here and worth revisiting: `compare_samples_hierarchical`,
+> `test_normality`, and the diagnostic plots.
 
 ## The problem it addresses
 

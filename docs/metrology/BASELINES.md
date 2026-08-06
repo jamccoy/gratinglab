@@ -56,14 +56,20 @@ below R² 0.95, and the 280°C standard deviation falling from 3.04 to 1.65. The
 Master sample is unchanged to four decimal places, because it had no edge grooves
 to reject.
 
-## Known limitation these baselines cannot catch
+## What these baselines do and don't prove
 
 A diff proves output *changed* or *didn't*. It says nothing about whether the
-statistics are right. The open issue is that row-group analysis produces ~100
-measurements per image which re-measure the same physical grooves, while the code
-divides by `sqrt(N)` as if they were independent — so SEMs and p-values are
-optimistic. Mean angles are unaffected. See
-`experimental/hierarchical_stats/README.md`.
+statistics are right.
+
+The row-group independence problem that this warning used to describe is now
+**fixed**: measurements are clustered by row group, the ICC is measured, and every
+standard error and p-value uses the effective sample size. The correction was
+applied on 2026-08-06.
+
+Note this when diffing across that date: `analysis_data_*.csv` gained four
+columns (`ICC`, `N_eff`, `SEM_deg`, `SEM_corrected_deg`) appended after
+`Temperature_C`. Columns 1–16 are unchanged and still diff clean against every
+earlier baseline — cut to those columns when comparing across the change.
 
 ## Verified dependency versions
 

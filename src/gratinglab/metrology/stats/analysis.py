@@ -8,6 +8,21 @@ import numpy as np
 from scipy import stats as scipy_stats
 
 
+def _effective_n(result):
+    """
+    Sample size to use for inference.
+
+    Row-group analysis re-measures the same physical grooves in every band, so
+    the raw count overstates how much independent information there is. Falls
+    back to the raw count for results produced before n_effective existed, and
+    for traditional (non row-group) analysis where the two are the same thing.
+    """
+    n_eff = result.get('n_effective')
+    if n_eff is None or not np.isfinite(n_eff) or n_eff <= 0:
+        return float(result['n_grooves'])
+    return float(n_eff)
+
+
 def print_comparison_summary(results, labels):
     """
     Print a summary table comparing all samples
@@ -34,7 +49,7 @@ def print_comparison_summary(results, labels):
                 file_str = r['filename'].split('/')[-1][:30]
             
             # Get SEM
-            sem = r.get('sem', r['std_angle'] / np.sqrt(r['n_grooves']))
+            sem = r.get('sem_corrected', r.get('sem', r['std_angle'] / np.sqrt(r['n_grooves'])))
             total_std = r.get('total_std', r['std_angle'])
             
             print(f"{r.get('label', 'N/A'):<20} "
@@ -51,7 +66,7 @@ def print_comparison_summary(results, labels):
             file_str = r['filename'].split('/')[-1][:30]
             
             # Get SEM
-            sem = r.get('sem', r['std_angle'] / np.sqrt(r['n_grooves']))
+            sem = r.get('sem_corrected', r.get('sem', r['std_angle'] / np.sqrt(r['n_grooves'])))
             total_std = r.get('total_std', r['std_angle'])
             
             print(f"{r.get('label', 'N/A'):<20} "
@@ -92,15 +107,16 @@ def print_pairwise_comparisons(results):
                 std1 = r1.get('total_std', r1['std_angle'])
                 std2 = r2.get('total_std', r2['std_angle'])
                 
-                # Combined standard error of the difference
-                se_combined = np.sqrt(std1**2 / r1['n_grooves'] + 
-                                     std2**2 / r2['n_grooves'])
-                
+                # Combined standard error of the difference, on the effective
+                # sample sizes rather than the raw measurement counts.
+                n1, n2 = _effective_n(r1), _effective_n(r2)
+                se_combined = np.sqrt(std1**2 / n1 + std2**2 / n2)
+
                 # Calculate t-statistic for significance test
                 t_stat = diff / se_combined if se_combined > 0 else 0
-                
+
                 # Degrees of freedom (Welch-Satterthwaite approximation)
-                df = _calculate_welch_df(std1, r1['n_grooves'], std2, r2['n_grooves'])
+                df = _calculate_welch_df(std1, n1, std2, n2)
                 
                 # Two-tailed p-value
                 p_value = 2 * (1 - scipy_stats.t.cdf(abs(t_stat), df))
@@ -113,8 +129,10 @@ def print_pairwise_comparisons(results):
                 print(f"{label1} vs {label2}:")
                 print(f"  Difference: {diff:+.3f}° ± {se_combined:.3f}° (SE)")
                 print(f"  95% CI: [{ci_lower:+.3f}°, {ci_upper:+.3f}°]")
-                print(f"  {label1}: {r1['mean_angle']:.2f}° ± {std1:.2f}° (σ_total, N={r1['n_grooves']})")
-                print(f"  {label2}: {r2['mean_angle']:.2f}° ± {std2:.2f}° (σ_total, N={r2['n_grooves']})")
+                print(f"  {label1}: {r1['mean_angle']:.2f}° ± {std1:.2f}° "
+                      f"(σ_total, N={r1['n_grooves']}, N_eff={n1:.1f})")
+                print(f"  {label2}: {r2['mean_angle']:.2f}° ± {std2:.2f}° "
+                      f"(σ_total, N={r2['n_grooves']}, N_eff={n2:.1f})")
                 print(f"  t-statistic: {t_stat:.2f} (df={df:.1f})")
                 print(f"  p-value: {p_value:.4f}", end="")
                 
@@ -128,8 +146,12 @@ def print_pairwise_comparisons(results):
                 else:
                     print("      (not significant)")
                 
-                # Effect size (Cohen's d)
-                pooled_std = np.sqrt(((r1['n_grooves']-1)*std1**2 + (r2['n_grooves']-1)*std2**2) / 
+                # Effect size (Cohen's d). Deliberately on the raw counts, not
+                # the effective ones: this is a standardised mean difference - a
+                # description of how far apart the samples are in units of their
+                # own spread - not an inference statistic. Correlation belongs in
+                # the standard error above, not in the pooled variance.
+                pooled_std = np.sqrt(((r1['n_grooves']-1)*std1**2 + (r2['n_grooves']-1)*std2**2) /
                                     (r1['n_grooves'] + r2['n_grooves'] - 2))
                 cohens_d = diff / pooled_std if pooled_std > 0 else 0
                 print(f"  Effect size (Cohen's d): {cohens_d:.2f}")
@@ -175,14 +197,13 @@ def print_temperature_analysis(results, labels, temperatures):
                 std_i = result_i.get('total_std', result_i['std_angle'])
                 std_j = result_j.get('total_std', result_j['std_angle'])
                 
-                se_combined = np.sqrt(std_i**2 / result_i['n_grooves'] + 
-                                     std_j**2 / result_j['n_grooves'])
+                n_i, n_j = _effective_n(result_i), _effective_n(result_j)
+                se_combined = np.sqrt(std_i**2 / n_i + std_j**2 / n_j)
                 se_rate = se_combined / abs(temp_diff)
-                
+
                 # Significance test
                 t_stat = angle_diff / se_combined if se_combined > 0 else 0
-                df = _calculate_welch_df(std_i, result_i['n_grooves'], 
-                                        std_j, result_j['n_grooves'])
+                df = _calculate_welch_df(std_i, n_i, std_j, n_j)
                 p_value = 2 * (1 - scipy_stats.t.cdf(abs(t_stat), df))
                 
                 print(f"\n{label_i} ({temp_i}°C) → {label_j} ({temp_j}°C):")
@@ -209,13 +230,12 @@ def print_temperature_analysis(results, labels, temperatures):
                 std_i = result_i.get('total_std', result_i['std_angle'])
                 std_j = result_j.get('total_std', result_j['std_angle'])
                 
-                se_combined = np.sqrt(std_i**2 / result_i['n_grooves'] + 
-                                     std_j**2 / result_j['n_grooves'])
-                
+                n_i, n_j = _effective_n(result_i), _effective_n(result_j)
+                se_combined = np.sqrt(std_i**2 / n_i + std_j**2 / n_j)
+
                 # Significance test
                 t_stat = diff / se_combined if se_combined > 0 else 0
-                df = _calculate_welch_df(std_i, result_i['n_grooves'], 
-                                        std_j, result_j['n_grooves'])
+                df = _calculate_welch_df(std_i, n_i, std_j, n_j)
                 p_value = 2 * (1 - scipy_stats.t.cdf(abs(t_stat), df))
                 
                 print(f"{label_i} → {label_j} ({temp_j}°C):")

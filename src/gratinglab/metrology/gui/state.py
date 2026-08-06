@@ -127,9 +127,14 @@ def summarize_result(result) -> str:
     n_groups = result.get('n_groups')
     mode = f"row groups x{n_groups}" if n_groups else "averaged profile"
 
+    icc = result.get('icc')
+    sem = result.get('sem_corrected', result.get('sem', float('nan')))
+    icc_note = (f"   ICC {icc:.2f}, N_eff {result.get('n_effective', float('nan')):.0f}"
+                if icc is not None and icc == icc else "")
+
     return (
         f"Mean blaze angle : {result['mean_angle']:.3f}deg  "
-        f"+/- {result.get('sem', float('nan')):.3f}deg (SEM)\n"
+        f"+/- {sem:.3f}deg (SEM){icc_note}\n"
         f"Spread           : sigma = {result['std_angle']:.3f}deg   "
         f"range {result['min_angle']:.2f}-{result['max_angle']:.2f}deg\n"
         f"Measurements     : N = {result['n_grooves']}   ({mode})\n"
