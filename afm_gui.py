@@ -44,6 +44,10 @@ from afm_analysis.core.processing import (
     load_afm_data, raw_data, raw_data_multi_group
 )
 import afm_analysis.analyzer as analyzer
+from afm_analysis.settings import AnalysisSettings, MAX_FACET_TRIM
+
+# Control defaults come from config.py, read once at import.
+_DEFAULTS = AnalysisSettings.from_config()
 
 
 # ── Matplotlib canvas ─────────────────────────────────────────────────────────
@@ -116,7 +120,7 @@ class PlotCanvas(FigureCanvas):
         ax.set_title(f"2D AFM Topography — {os.path.basename(filename)}", fontsize=11)
         self.draw()
 
-    def plot_groove_detection(self, result, filename):
+    def plot_groove_detection(self, result, filename, settings):
         """Flattened profile with the grooves the analysis actually used"""
         self.fig.clear()
         ax = self.fig.add_subplot(111)
@@ -129,7 +133,7 @@ class PlotCanvas(FigureCanvas):
 
         # Shade the zone excluded near each scan edge, so it is obvious why a
         # groove at the boundary was dropped.
-        edge = analyzer.EDGE_EXCLUSION_PERIODS
+        edge = settings.edge_exclusion_periods
         if edge > 0 and len(centers) > 0:
             period_um = result['period_nm'] / 1000.0
             margin = edge * period_um
@@ -200,6 +204,7 @@ class MainWindow(QMainWindow):
         self._group_profiles = None
         self._group_info = None
         self._result = None
+        self._settings = None
 
         self._build_ui()
 
@@ -290,7 +295,7 @@ class MainWindow(QMainWindow):
         self.period_spin = QDoubleSpinBox()
         self.period_spin.setRange(1.0, 100000.0)
         self.period_spin.setDecimals(2)
-        self.period_spin.setValue(analyzer.PERIOD_EST)
+        self.period_spin.setValue(_DEFAULTS.period_est)
         self.period_spin.setToolTip("Groove spacing. Must match your grating.")
         layout.addWidget(self.period_spin)
 
@@ -299,10 +304,10 @@ class MainWindow(QMainWindow):
         # Capped at 0.28, not 0.5: the blaze facet is trimmed 2.5x harder on the
         # trough side, so trim x 3.5 is removed in total and anything above
         # ~0.286 empties the facet and the analysis returns nothing.
-        self.trim_spin.setRange(0.0, 0.28)
+        self.trim_spin.setRange(0.0, MAX_FACET_TRIM)
         self.trim_spin.setSingleStep(0.05)
         self.trim_spin.setDecimals(2)
-        self.trim_spin.setValue(analyzer.FACET_TRIM)
+        self.trim_spin.setValue(_DEFAULTS.facet_trim)
         self.trim_spin.setToolTip(
             "Fraction trimmed from each end of the facet before fitting.\n"
             "Too small risks measuring the rounded groove top and reading low.\n"
@@ -313,7 +318,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(QLabel("Blaze side:"))
         self.side_combo = QComboBox()
         self.side_combo.addItems(['negative_slope', 'positive_slope', 'longer'])
-        self.side_combo.setCurrentText(analyzer.BLAZE_SIDE)
+        self.side_combo.setCurrentText(_DEFAULTS.blaze_side)
         self.side_combo.setToolTip(
             "Which facet to measure, chosen by slope sign rather than position.")
         layout.addWidget(self.side_combo)
@@ -323,7 +328,7 @@ class MainWindow(QMainWindow):
         self.edge_spin.setRange(0.0, 3.0)
         self.edge_spin.setSingleStep(0.1)
         self.edge_spin.setDecimals(2)
-        self.edge_spin.setValue(analyzer.EDGE_EXCLUSION_PERIODS)
+        self.edge_spin.setValue(_DEFAULTS.edge_exclusion_periods)
         self.edge_spin.setToolTip(
             "Reject grooves this close to either end of the scan line.\n"
             "Their facet is clipped by the edge, so the fitted angle is\n"
@@ -331,7 +336,7 @@ class MainWindow(QMainWindow):
         layout.addWidget(self.edge_spin)
 
         self.row_groups_check = QCheckBox("Use row groups")
-        self.row_groups_check.setChecked(analyzer.USE_ROW_GROUPS)
+        self.row_groups_check.setChecked(_DEFAULTS.use_row_groups)
         self.row_groups_check.setToolTip(
             "Analyse N horizontal bands separately instead of averaging the\n"
             "whole image into one profile. Many more measurements, but they\n"
@@ -342,7 +347,7 @@ class MainWindow(QMainWindow):
         n_layout.addWidget(QLabel("N groups:"))
         self.n_groups_spin = QSpinBox()
         self.n_groups_spin.setRange(2, 200)
-        self.n_groups_spin.setValue(analyzer.N_ROW_GROUPS)
+        self.n_groups_spin.setValue(_DEFAULTS.n_row_groups)
         n_layout.addWidget(self.n_groups_spin)
         layout.addLayout(n_layout)
 
@@ -450,22 +455,22 @@ class MainWindow(QMainWindow):
             self._set_status(f"Error loading file: {exc}")
             self.info_label.setText(f"Error:\n{exc}")
 
-    def _apply_parameters(self):
+    def _current_settings(self):
         """
-        Push the GUI's settings into the analyzer module.
+        Build an AnalysisSettings from the controls.
 
-        analyzer.py binds its configuration at import time via
-        `from .config import ...`, so rebinding these module-level names is what
-        actually takes effect - Python resolves them at call time. It also means
-        config.py cannot be overridden any other way, which is worth fixing
-        properly when the CLI is built.
+        This used to rebind module-level names inside analyzer, which worked only
+        because analyzer bound its configuration at import. Settings are now a
+        value that gets passed in, so the window mutates nothing.
         """
-        analyzer.PERIOD_EST = self.period_spin.value()
-        analyzer.FACET_TRIM = self.trim_spin.value()
-        analyzer.BLAZE_SIDE = self.side_combo.currentText()
-        analyzer.EDGE_EXCLUSION_PERIODS = self.edge_spin.value()
-        analyzer.USE_ROW_GROUPS = self.row_groups_check.isChecked()
-        analyzer.N_ROW_GROUPS = self.n_groups_spin.value()
+        return AnalysisSettings.from_config().with_(
+            period_est=self.period_spin.value(),
+            facet_trim=self.trim_spin.value(),
+            blaze_side=self.side_combo.currentText(),
+            edge_exclusion_periods=self.edge_spin.value(),
+            use_row_groups=self.row_groups_check.isChecked(),
+            n_row_groups=self.n_groups_spin.value(),
+        )
 
     def _run_analysis(self):
         if self._filename is None:
@@ -473,16 +478,18 @@ class MainWindow(QMainWindow):
         try:
             self._set_status("Running analysis…")
             QApplication.processEvents()
-            self._apply_parameters()
+            settings = self._current_settings()
 
             log = io.StringIO()
             with contextlib.redirect_stdout(log):
-                result = analyzer.analyze_single_file(self._filename, show_plots=False)
+                result = analyzer.analyze_single_file(
+                    self._filename, show_plots=False, settings=settings)
 
             if result is None:
                 # Clear the previous result too, or the panel and the view
                 # buttons keep describing a run that is no longer current.
                 self._result = None
+                self._settings = None
                 self._set_status("Analysis produced no measurements.")
                 self.results_label.setText(
                     "No blaze angles could be extracted.\n"
@@ -493,6 +500,7 @@ class MainWindow(QMainWindow):
                 return
 
             self._result = result
+            self._settings = settings
             for b in self._result_buttons:
                 b.setEnabled(True)
             self._update_results_panel(result)
@@ -542,7 +550,8 @@ class MainWindow(QMainWindow):
 
     def _show_detection(self):
         if self._result is not None:
-            self.canvas.plot_groove_detection(self._result, self._filename)
+            self.canvas.plot_groove_detection(self._result, self._filename,
+                                             self._settings)
 
     def _show_angles(self):
         if self._result is not None:

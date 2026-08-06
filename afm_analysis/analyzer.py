@@ -7,14 +7,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import os
 
-from .config import (
-    SCAN_X_SIZE, PERIOD_EST, PROMINENCE_FACTOR, DISTANCE_FACTOR,
-    FACET_TRIM, BLAZE_SIDE, FLATTEN_METHOD, FLATTEN_POLY_ORDER,
-    FLATTEN_EXCLUDE_EDGES, FLATTEN_FEATURE, SHOW_2D_IMAGE,
-    SHOW_INDIVIDUAL_GROOVES, SHOW_FULL_PROFILE, SHOW_FLATTENING_DIAGNOSTIC,
-    SHOW_LOCAL_ANGLE_DISTRIBUTION, SHOW_ANALYZED_REGIONS,
-    USE_ROW_GROUPS, N_ROW_GROUPS, EDGE_EXCLUSION_PERIODS
-)
+from .settings import AnalysisSettings
 from .core.processing import (
     raw_data, raw_data_multi_group,  # NEW: added raw_data_multi_group
     flatten_profile, find_groove_positions, load_afm_data
@@ -24,32 +17,37 @@ from .visualization.diagnostics import plot_analyzed_regions_overlay, plot_flatt
 from .visualization.statistics import plot_summary_statistics
 
 
-def analyze_single_file(filename, show_plots=True):
+def analyze_single_file(filename, show_plots=True, settings=None):
     """
     Analyze a single AFM file and extract blaze angles
     
-    This function now supports two modes:
+    Supports two modes:
     1. Traditional: Average all rows → single profile → few measurements
     2. Row-group: Multiple row-group profiles → many measurements
-    
-    Set USE_ROW_GROUPS=True in config.py to enable row-group analysis
-    
+
+    Set USE_ROW_GROUPS = True in config.py to enable row-group analysis, or pass
+    settings with use_row_groups set.
+
     Parameters:
         filename: path to AFM data file
         show_plots: whether to show diagnostic plots
-        
+        settings: AnalysisSettings to use. Defaults to the values in config.py,
+            which is what every config-driven workflow relies on.
+
     Returns:
         dict with analysis results, or None if analysis failed
     """
-    
+    if settings is None:
+        settings = AnalysisSettings.from_config()
+
     # Check if row-group analysis is enabled
-    if USE_ROW_GROUPS:
-        return analyze_single_file_with_row_groups(filename, show_plots)
+    if settings.use_row_groups:
+        return analyze_single_file_with_row_groups(filename, show_plots, settings)
     else:
-        return _analyze_single_file_traditional(filename, show_plots)
+        return _analyze_single_file_traditional(filename, show_plots, settings)
 
 
-def analyze_single_file_with_row_groups(filename, show_plots=True):
+def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None):
     """
     Analyze a single AFM file using row-group analysis
     
@@ -64,26 +62,29 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
         dict with analysis results, or None if analysis failed
     """
     
+    if settings is None:
+        settings = AnalysisSettings.from_config()
+
     print(f"\n{'='*60}")
     print(f"Analyzing: {filename}")
-    print(f"Mode: ROW-GROUP ANALYSIS (n_groups={N_ROW_GROUPS})")
+    print(f"Mode: ROW-GROUP ANALYSIS (n_groups={settings.n_row_groups})")
     print(f"{'='*60}")
     
     # Load and validate data
-    data, scan_x_size = _load_and_validate(filename)
+    data, scan_x_size = _load_and_validate(filename, settings)
     if data is None:
         return None
     
     # Show 2D image if requested
-    if SHOW_2D_IMAGE and show_plots:
+    if settings.show_2d_image and show_plots:
         _plot_2d_image(data, scan_x_size, filename)
     
     # Extract multiple profiles from row groups
-    raw_x, profiles_list, group_info = raw_data_multi_group(data, scan_x_size, N_ROW_GROUPS)
+    raw_x, profiles_list, group_info = raw_data_multi_group(data, scan_x_size, settings.n_row_groups)
     
     # Calculate scan parameters (same for all profiles)
     scan_width_nm = scan_x_size * 1000
-    estimated_grooves = max(2, int(scan_width_nm / PERIOD_EST))
+    estimated_grooves = max(2, int(scan_width_nm / settings.period_est))
     period_nm_est = scan_width_nm / estimated_grooves
     
     print(f"Scan width: {scan_width_nm:.1f} nm")
@@ -101,26 +102,26 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
     all_groove_groups = []     # row group index of each accepted measurement
 
     for group_idx, raw_y in enumerate(profiles_list):
-        print(f"\n  Processing row group {group_idx + 1}/{N_ROW_GROUPS}...")
+        print(f"\n  Processing row group {group_idx + 1}/{settings.n_row_groups}...")
         
         # Flatten this profile
         flat_y, background = flatten_profile(raw_x, raw_y,
-                                             method=FLATTEN_METHOD,
-                                             poly_order=FLATTEN_POLY_ORDER,
-                                             exclude_edges=FLATTEN_EXCLUDE_EDGES,
-                                             feature=FLATTEN_FEATURE,
+                                             method=settings.flatten_method,
+                                             poly_order=settings.flatten_poly_order,
+                                             exclude_edges=settings.flatten_exclude_edges,
+                                             feature=settings.flatten_feature,
                                              period_nm=period_nm_est)
         
         # Show flattening diagnostic for first group only
-        if show_plots and SHOW_FLATTENING_DIAGNOSTIC and group_idx == 0:
+        if show_plots and settings.show_flattening_diagnostic and group_idx == 0:
             plot_flattening_diagnostic(raw_x, raw_y, flat_y, background,
-                                      FLATTEN_METHOD, FLATTEN_FEATURE, period_nm_est)
+                                      settings.flatten_method, settings.flatten_feature, period_nm_est)
         
         # Find grooves in this profile
         groove_centers, n_edge = find_groove_positions(raw_x, flat_y, period_nm_est,
-                                              prominence_factor=PROMINENCE_FACTOR,
-                                              distance_factor=DISTANCE_FACTOR,
-                                              edge_exclusion=EDGE_EXCLUSION_PERIODS,
+                                              prominence_factor=settings.prominence_factor,
+                                              distance_factor=settings.distance_factor,
+                                              edge_exclusion=settings.edge_exclusion_periods,
                                               return_n_edge_rejected=True)
         n_edge_rejected += n_edge
 
@@ -146,17 +147,17 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
         )
         
         # Extract blaze angles from all grooves in this group
-        show_individual = show_plots and SHOW_INDIVIDUAL_GROOVES and group_idx == 0
+        show_individual = show_plots and settings.show_individual_grooves and group_idx == 0
         
         for groove_idx, (center, local_period) in enumerate(zip(groove_centers, local_periods)):
             angle, steep, slope, qual = extract_blaze_angle(
                 raw_x, flat_y, center, local_period_nm,
-                trim_fraction=FACET_TRIM,
-                side=BLAZE_SIDE,
+                trim_fraction=settings.facet_trim,
+                side=settings.blaze_side,
                 show_plot=show_individual,
                 groove_num=groove_idx + 1,
                 return_local_angles=True,
-                return_regions=show_plots and SHOW_ANALYZED_REGIONS and group_idx == 0,
+                return_regions=show_plots and settings.show_analyzed_regions and group_idx == 0,
                 local_period_nm=local_period
             )
             
@@ -202,10 +203,10 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
     print(f"{'='*60}")
     print(f"Total measurements: {len(all_blaze_angles)}")
     print(f"  (compared to ~{len(group_results) * 4} with traditional averaging)")
-    print(f"Row groups processed: {len(group_results)}/{N_ROW_GROUPS}")
+    print(f"Row groups processed: {len(group_results)}/{settings.n_row_groups}")
     if n_edge_rejected:
         print(f"Edge-clipped grooves rejected: {n_edge_rejected} "
-              f"(within {EDGE_EXCLUSION_PERIODS}x period of a scan edge)")
+              f"(within {settings.edge_exclusion_periods}x period of a scan edge)")
     
     # Calculate overall period statistics
     if len(all_groove_periods) > 0:
@@ -217,7 +218,7 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
         period_std = 0
     
     # Show analyzed regions for first group only
-    if show_plots and SHOW_ANALYZED_REGIONS and len(group_results) > 0:
+    if show_plots and settings.show_analyzed_regions and len(group_results) > 0:
         first_group = group_results[0]
         n_qual_first = min(len(first_group['groove_centers']), 
                           sum(1 for q in all_quality if 'regions' in q))
@@ -227,7 +228,7 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
             plot_analyzed_regions_overlay(
                 raw_x, first_group['flat_y'], 
                 first_group['groove_centers'][:n_qual_first],
-                period_nm, qual_with_regions, FACET_TRIM
+                period_nm, qual_with_regions, settings.facet_trim
             )
     
     # Calculate statistics with row-group data
@@ -244,7 +245,7 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
             plot_summary_statistics(
                 all_blaze_angles, all_groove_positions,
                 all_local_angles, stats['mean_angle'], stats['std_angle'],
-                SHOW_LOCAL_ANGLE_DISTRIBUTION
+                settings.show_local_angle_distribution
             )
         
         # Additional row-group specific plot
@@ -252,8 +253,9 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
             _plot_row_group_variation(group_results, all_blaze_angles, all_quality)
     
     # Print summary
-    _print_summary_row_groups(filename, all_blaze_angles, stats, 
-                             period_nm, period_std, all_quality, group_info)
+    _print_summary_row_groups(filename, all_blaze_angles, stats,
+                             period_nm, period_std, all_quality, group_info,
+                             settings)
     
     # Package results
     result = _package_results_row_groups(
@@ -265,35 +267,38 @@ def analyze_single_file_with_row_groups(filename, show_plots=True):
     return result
 
 
-def _analyze_single_file_traditional(filename, show_plots=True):
+def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
     """
     Traditional analysis: average all rows into single profile
     
     This is the original analysis method. Kept for compatibility and comparison.
     """
     
+    if settings is None:
+        settings = AnalysisSettings.from_config()
+
     print(f"\n{'='*60}")
     print(f"Analyzing: {filename}")
     print(f"Mode: TRADITIONAL (single averaged profile)")
     print(f"{'='*60}")
     
     # Load and validate data
-    data, scan_x_size = _load_and_validate(filename)
+    data, scan_x_size = _load_and_validate(filename, settings)
     if data is None:
         return None
     
     # Show 2D image if requested
-    if SHOW_2D_IMAGE and show_plots:
+    if settings.show_2d_image and show_plots:
         _plot_2d_image(data, scan_x_size, filename)
     
     # Extract and flatten profile
-    raw_x, raw_y, flat_y, background, period_nm_est = _process_profile(data, scan_x_size, show_plots)
+    raw_x, raw_y, flat_y, background, period_nm_est = _process_profile(data, scan_x_size, show_plots, settings)
     
     # Find grooves
     groove_centers, n_edge_rejected = find_groove_positions(raw_x, flat_y, period_nm_est,
-                                          prominence_factor=PROMINENCE_FACTOR,
-                                          distance_factor=DISTANCE_FACTOR,
-                                          edge_exclusion=EDGE_EXCLUSION_PERIODS,
+                                          prominence_factor=settings.prominence_factor,
+                                          distance_factor=settings.distance_factor,
+                                          edge_exclusion=settings.edge_exclusion_periods,
                                           return_n_edge_rejected=True)
 
     edge_note = f" ({n_edge_rejected} rejected: clipped by scan edge)" if n_edge_rejected else ""
@@ -308,12 +313,12 @@ def _analyze_single_file_traditional(filename, show_plots=True):
     local_periods = _calculate_local_periods(groove_centers, groove_periods, period_nm)
     
     # Plot full profile if requested
-    if show_plots and SHOW_FULL_PROFILE:
+    if show_plots and settings.show_full_profile:
         _plot_full_profile(raw_x, flat_y, groove_centers, filename)
     
     # Extract blaze angles
     blaze_angles, quality, all_local_angles, angle_uncertainties = _extract_all_angles(
-        raw_x, flat_y, groove_centers, period_nm, local_periods, show_plots
+        raw_x, flat_y, groove_centers, period_nm, local_periods, show_plots, settings
     )
     
     if len(blaze_angles) == 0:
@@ -321,9 +326,9 @@ def _analyze_single_file_traditional(filename, show_plots=True):
         return None
     
     # Show analyzed regions if requested
-    if show_plots and SHOW_ANALYZED_REGIONS:
+    if show_plots and settings.show_analyzed_regions:
         plot_analyzed_regions_overlay(raw_x, flat_y, groove_centers[:len(quality)],
-                                     period_nm, quality, FACET_TRIM)
+                                     period_nm, quality, settings.facet_trim)
     
     # Calculate and display statistics
     stats = _calculate_statistics(blaze_angles, quality, all_local_angles, angle_uncertainties)
@@ -334,10 +339,11 @@ def _analyze_single_file_traditional(filename, show_plots=True):
                               raw_x[groove_centers[:len(blaze_angles)]],
                               all_local_angles,
                               stats['mean_angle'], stats['std_angle'], 
-                              SHOW_LOCAL_ANGLE_DISTRIBUTION)
+                              settings.show_local_angle_distribution)
     
     # Print summary
-    _print_summary(filename, blaze_angles, stats, period_nm, period_std, quality)
+    _print_summary(filename, blaze_angles, stats, period_nm, period_std, quality,
+                   settings)
     
     # Combine all results
     return _package_results(filename, blaze_angles, stats, period_nm, period_std,
@@ -347,10 +353,10 @@ def _analyze_single_file_traditional(filename, show_plots=True):
 
 # ============ HELPER FUNCTIONS ============
 
-def _load_and_validate(filename):
+def _load_and_validate(filename, settings):
     """Load AFM data and validate it"""
     try:
-        data, scan_x_size = load_afm_data(filename, default_scan_size=SCAN_X_SIZE)
+        data, scan_x_size = load_afm_data(filename, default_scan_size=settings.scan_x_size)
         return data, scan_x_size
     except Exception as e:
         print(f"Error loading {filename}: {e}")
@@ -368,14 +374,14 @@ def _plot_2d_image(data, scan_x_size, filename):
     plt.colorbar(label='Height (m)')
 
 
-def _process_profile(data, scan_x_size, show_plots):
+def _process_profile(data, scan_x_size, show_plots, settings):
     """Extract profile, flatten it, and show diagnostics"""
     # Extract profile
     raw_x, raw_y = raw_data(data, scan_x_size)
     
     # Calculate scan parameters
     scan_width_nm = scan_x_size * 1000
-    estimated_grooves = max(2, int(scan_width_nm / PERIOD_EST))
+    estimated_grooves = max(2, int(scan_width_nm / settings.period_est))
     period_nm_est = scan_width_nm / estimated_grooves
     
     print(f"Scan width: {scan_width_nm:.1f} nm")
@@ -383,32 +389,32 @@ def _process_profile(data, scan_x_size, show_plots):
     
     # Flatten profile
     flat_y, background = flatten_profile(raw_x, raw_y,
-                                         method=FLATTEN_METHOD,
-                                         poly_order=FLATTEN_POLY_ORDER,
-                                         exclude_edges=FLATTEN_EXCLUDE_EDGES,
-                                         feature=FLATTEN_FEATURE,
+                                         method=settings.flatten_method,
+                                         poly_order=settings.flatten_poly_order,
+                                         exclude_edges=settings.flatten_exclude_edges,
+                                         feature=settings.flatten_feature,
                                          period_nm=period_nm_est)
     
     # Show flattening diagnostic if requested
-    if show_plots and SHOW_FLATTENING_DIAGNOSTIC:
+    if show_plots and settings.show_flattening_diagnostic:
         plot_flattening_diagnostic(raw_x, raw_y, flat_y, background,
-                                  FLATTEN_METHOD, FLATTEN_FEATURE, period_nm_est)
+                                  settings.flatten_method, settings.flatten_feature, period_nm_est)
     
     # Print flattening info
-    _print_flattening_info(raw_x, background)
+    _print_flattening_info(raw_x, background, settings)
     
     return raw_x, raw_y, flat_y, background, period_nm_est
 
 
-def _print_flattening_info(raw_x, background):
+def _print_flattening_info(raw_x, background, settings):
     """Print information about the flattening process"""
     tilt_angle = np.arctan(np.polyfit(raw_x, background, 1)[0] / 1000) * 180 / np.pi
-    print(f"Flattening method: {FLATTEN_METHOD}")
-    if FLATTEN_METHOD == 'polynomial':
-        print(f"  Polynomial order: {FLATTEN_POLY_ORDER}")
-    elif FLATTEN_METHOD == 'level_grooves':
-        print(f"  Polynomial order: {FLATTEN_POLY_ORDER}")
-        print(f"  Feature: {FLATTEN_FEATURE}")
+    print(f"Flattening method: {settings.flatten_method}")
+    if settings.flatten_method == 'polynomial':
+        print(f"  Polynomial order: {settings.flatten_poly_order}")
+    elif settings.flatten_method == 'level_grooves':
+        print(f"  Polynomial order: {settings.flatten_poly_order}")
+        print(f"  Feature: {settings.flatten_feature}")
     print(f"  Approximate tilt angle: {tilt_angle:.4f} degrees")
     print(f"  Background range: {np.max(background) - np.min(background):.2f} nm")
 
@@ -472,7 +478,8 @@ def _plot_full_profile(raw_x, flat_y, groove_centers, filename):
     plt.grid(True, alpha=0.3)
 
 
-def _extract_all_angles(raw_x, flat_y, groove_centers, period_nm, local_periods, show_plots):
+def _extract_all_angles(raw_x, flat_y, groove_centers, period_nm, local_periods,
+                        show_plots, settings):
     """Extract blaze angles from all grooves"""
     blaze_angles = []
     steep_angles = []
@@ -482,12 +489,12 @@ def _extract_all_angles(raw_x, flat_y, groove_centers, period_nm, local_periods,
     angle_uncertainties = []
     
     for i, (center, local_period) in enumerate(zip(groove_centers, local_periods)):
-        show_individual = show_plots and SHOW_INDIVIDUAL_GROOVES
+        show_individual = show_plots and settings.show_individual_grooves
         
         angle, steep, slope, qual = extract_blaze_angle(
             raw_x, flat_y, center, period_nm,
-            trim_fraction=FACET_TRIM,
-            side=BLAZE_SIDE,
+            trim_fraction=settings.facet_trim,
+            side=settings.blaze_side,
             show_plot=show_individual,
             groove_num=i+1,
             return_local_angles=True,
@@ -662,12 +669,13 @@ def _plot_row_group_variation(group_results, all_blaze_angles, all_quality):
     plt.tight_layout()
 
 
-def _print_summary(filename, blaze_angles, stats, period_nm, period_std, quality):
+def _print_summary(filename, blaze_angles, stats, period_nm, period_std, quality,
+                   settings):
     """Print analysis summary to console"""
     print(f"\n{'='*60}")
     print(f"RESULTS FOR {os.path.basename(filename)}")
     print(f"{'='*60}")
-    print(f"Analysis side: {BLAZE_SIDE}")
+    print(f"Analysis side: {settings.blaze_side}")
     print(f"Grooves analyzed: {len(blaze_angles)}")
     print(f"\nPer-groove statistics (groove-to-groove variation):")
     print(f"  Mean blaze angle: {stats['mean_angle']:.2f} deg ± {stats['std_angle']:.2f} deg (physical variation)")
@@ -694,14 +702,14 @@ def _print_summary(filename, blaze_angles, stats, period_nm, period_std, quality
     print(f"  Mean blaze facet width: {np.mean([q['blaze_width_nm'] for q in quality]):.2f} nm")
 
 
-def _print_summary_row_groups(filename, blaze_angles, stats, period_nm, period_std, 
-                              quality, group_info):
+def _print_summary_row_groups(filename, blaze_angles, stats, period_nm,
+                              period_std, quality, group_info, settings):
     """Print summary for row-group analysis"""
     print(f"\n{'='*60}")
     print(f"RESULTS FOR {os.path.basename(filename)}")
     print(f"{'='*60}")
     print(f"Analysis mode: ROW-GROUP ANALYSIS")
-    print(f"Analysis side: {BLAZE_SIDE}")
+    print(f"Analysis side: {settings.blaze_side}")
     print(f"Row groups: {stats.get('n_groups', group_info['n_groups'])}")
     print(f"Total measurements: {len(blaze_angles)}")
     
