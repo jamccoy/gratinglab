@@ -18,7 +18,7 @@ from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame,
     QGroupBox, QHBoxLayout, QLabel, QMainWindow, QPushButton, QScrollArea,
-    QSpinBox, QStatusBar, QVBoxLayout, QWidget,
+    QSpinBox, QStatusBar, QTabWidget, QVBoxLayout, QWidget,
 )
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 
@@ -27,6 +27,7 @@ from ...core.processing import load_afm_data, raw_data, raw_data_multi_group
 from ...settings import AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES
 from ..state import FormState, build, summarize_result
 from .canvas import PlotCanvas
+from .wiki_view import WikiView
 from .worker import AnalysisWorker
 
 __all__ = ["MainWindow"]
@@ -75,8 +76,15 @@ class MainWindow(QMainWindow):
     # ── UI construction ──────────────────────────────────────────────────────
 
     def _build_ui(self):
+        # Tabs rather than a single pane: the analysis and the prose explaining
+        # it are both things a user wants to return to. The Analysis tab is the
+        # previous central widget, moved wholesale - no control, view or signal
+        # changed, which is what lets the existing GUI tests prove the move was
+        # clean.
+        self.tabs = QTabWidget()
+        self.setCentralWidget(self.tabs)
+
         central = QWidget()
-        self.setCentralWidget(central)
         root = QHBoxLayout(central)
         root.setContentsMargins(8, 8, 8, 8)
         root.setSpacing(8)
@@ -111,6 +119,10 @@ class MainWindow(QMainWindow):
         divider.setFrameShadow(QFrame.Sunken)
         root.addWidget(divider)
         root.addWidget(right, stretch=1)
+
+        self.tabs.addTab(central, "Analysis")
+        self.wiki = WikiView()
+        self.tabs.addTab(self.wiki, "Wiki")
 
         self.status = QStatusBar()
         self.setStatusBar(self.status)
