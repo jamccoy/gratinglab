@@ -1,7 +1,0 @@
-# Python 3.12 (see .python-version)
-#   python3 -m venv .venv
-#   .venv/bin/pip install -r requirements.txt
-numpy==2.5.1
-scipy==1.18.0
-matplotlib==3.11.1
-PyQt5==5.15.11

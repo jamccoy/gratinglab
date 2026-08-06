@@ -79,8 +79,22 @@ Requires Python 3.12 (pinned in `.python-version`).
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -e .
 ```
+
+That installs the analysis, the PCGrate export and the ICC diagnostic, and pulls
+in **no GUI toolkit**. The Qt window is an optional extra:
+
+```bash
+.venv/bin/pip install -e '.[dev,gui]'
+```
+
+PySide6 (LGPL) rather than PyQt (GPL), so this BSD-3 package stays free of a GPL
+dependency. Earlier versions listed PyQt5 as a hard requirement, which put GPL
+code in the install path of anyone who only wanted the analysis.
+
+Verified against numpy 2.5.1 / scipy 1.18.0 / matplotlib 3.11.1 — see
+`docs/BASELINES.md` if you need to reproduce a stored result exactly.
 
 ### Basic Usage
 
@@ -104,8 +118,10 @@ python3 -m venv .venv
 
 2. **Run the analysis**:
    ```bash
-   .venv/bin/python main.py
+   .venv/bin/python main.py     # or: afm-analysis
    ```
+
+   The Qt window is `afm-gui`.
 
    Paths in `config.py` resolve against the project root, so this works from any
    working directory.
@@ -539,47 +555,39 @@ Individual groove measurements:
 
 ```
 afm_blaze_meas/
-├── main.py                        # Entry point
-├── afm_gui.py                     # PyQt5 GUI (v0.1 - viewing only, no analysis)
-├── README.md                      # This file
-├── requirements.txt               # Pinned dependencies
+├── pyproject.toml                 # Packaging; Qt is an optional [gui] extra
+├── main.py                        # Entry point (same dispatch as afm-analysis)
 ├── .python-version                # Python 3.12.9 (pyenv)
 ├── data/                          # Your AFM data files
 ├── results/                       # Analysis outputs (git-ignored, regenerable)
 ├── docs/
+│   ├── BASELINES.md               # How to prove a change altered nothing
 │   ├── PROGRESS_SUMMARY.md        # Status and open work
 │   ├── stat_analysis.md           # Statistical methodology
 │   └── history/                   # Superseded migration guides (reference only)
-├── examples/
-│   └── uncertainty_demo.py        # Standalone demo of uncertainty decomposition
-├── tests/
-│   ├── test_ggp_equivalence.py    # Boundary port must match the original script
-│   └── fixtures/                  # Reference .ggp from the pre-port script
-├── experimental/
-│   └── hierarchical_stats/        # NOT integrated - see its README
-├── legacy/
-│   └── gebl_dose_metrology/       # 2023 dose/write-uniformity work, frozen
-└── afm_analysis/                  # Main package
-    ├── config.py                  # ⚙️ CONFIGURE HERE (also defines PROJECT_ROOT)
-    ├── analyzer.py                # Single-file analysis
-    ├── workflows.py               # Analysis modes (incl. boundary export)
+├── tests/                         # pytest; GUI tests skip without PySide6
+├── examples/  experimental/  legacy/
+└── src/afm_analysis/
+    ├── config.py                  # ⚙️ CONFIGURE HERE
+    ├── settings.py                # AnalysisSettings - config as a passed value
+    ├── cli.py                     # Mode dispatch
+    ├── analyzer.py  workflows.py
     ├── core/                      # SHARED FRONT-END - used by both outputs
-    │   ├── processing.py          # Loading, flattening, groove detection/windowing
+    │   ├── processing.py          # Loading, flattening, groove detection
     │   └── analysis.py            # Blaze angle extraction with uncertainty
     ├── boundary/                  # Back-end: PCGrate boundary profiles
-    │   └── average.py             # Groove averaging, normalisation, metrics
-    ├── io/
-    │   ├── file_io.py             # Save blaze results (TXT + CSV)
-    │   └── ggp.py                 # PCGrate .ggp writer
-    ├── data/
-    │   └── aggregation.py         # Combine scans, temperature grouping
-    ├── stats/
-    │   └── analysis.py            # Statistical comparisons, p-values
-    └── visualization/
-        ├── diagnostics.py         # Flattening, groove detection plots
-        ├── statistics.py          # Histograms, bar charts
-        └── profiles.py            # AFM profile plots
+    ├── io/                        # Result CSV/TXT, and the .ggp writer
+    ├── data/  stats/              # Scan aggregation; comparisons, p-values, ICC
+    ├── visualization/
+    └── gui/                       # PySide6 front-end
+        ├── state.py               # PURE - form validation, no toolkit import
+        └── qt/                    # The ONLY modules importing PySide6
+            ├── app.py  main_window.py  canvas.py  worker.py
 ```
+
+The `gui/` vs `gui/qt/` split is enforced by `tests/test_gui_boundary.py`, which
+fails if a Qt binding is imported outside `gui/qt`. It caught a violation on its
+first run.
 
 ### Running the tests
 

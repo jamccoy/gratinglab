@@ -15,7 +15,10 @@ import sys
 
 import numpy as np
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# src/ is placed on the path by tests/conftest.py; repeated here so the file
+# also runs directly as a script, not only under pytest.
+sys.path.insert(0, os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
 
 import matplotlib
 matplotlib.use('Agg')
