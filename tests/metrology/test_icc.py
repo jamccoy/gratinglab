@@ -101,14 +101,19 @@ def test_interpretation_thresholds():
 # ── Label integrity on real data ─────────────────────────────────────────────
 
 def _analyze(path, trim):
-    import afm_analysis.analyzer as analyzer
-    saved = analyzer.FACET_TRIM
-    try:
-        analyzer.FACET_TRIM = trim
-        with contextlib.redirect_stdout(io.StringIO()):
-            return analyzer.analyze_single_file(path, show_plots=False)
-    finally:
-        analyzer.FACET_TRIM = saved
+    """
+    Run an analysis at a given facet trim.
+
+    Settings are passed, not patched. This used to rebind analyzer.FACET_TRIM and
+    restore it in a finally block, which worked only because the module bound its
+    configuration at import - the same coupling that made a CLI impossible.
+    """
+    from afm_analysis.analyzer import analyze_single_file
+    from afm_analysis.settings import AnalysisSettings
+
+    settings = AnalysisSettings.from_config().with_(facet_trim=trim)
+    with contextlib.redirect_stdout(io.StringIO()):
+        return analyze_single_file(path, show_plots=False, settings=settings)
 
 
 def test_row_group_labels_align_with_angles():
