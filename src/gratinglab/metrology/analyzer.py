@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import os
 
 from .settings import AnalysisSettings
+from .stats.icc import compute_icc, effective_sample_size
 from .core.processing import (
     raw_data, raw_data_multi_group,  # NEW: added raw_data_multi_group
     flatten_profile, find_groove_positions, load_afm_data
@@ -604,6 +605,32 @@ def _calculate_statistics_row_groups(blaze_angles, quality, all_local_angles,
     stats['within_image_std'] = (float(np.std(group_means, ddof=1))
                                  if len(group_means) > 1 else 0.0)
 
+    # Correct the standard error for the fact that these measurements are not
+    # independent: every row group re-measures the same physical grooves. The
+    # plain SEM above divides by sqrt(N) over all of them, which is only valid at
+    # ICC = 0. Measured ICC on this project's samples is 0.10-0.43.
+    #
+    # stats/icc.py is the single source of this arithmetic. improved_statistics.py
+    # in experimental/ computes its own ICC with a size-weighted within-group
+    # variance; keeping two implementations is exactly the duplication that let
+    # the scan-edge bug survive in one code path and not another.
+    icc_stats = compute_icc(angles, labels)
+    stats['icc'] = icc_stats['icc']
+    stats['design_effect'] = float('nan')
+    stats['n_effective'] = float(len(angles))
+    stats['sem_corrected'] = stats['sem']
+
+    if np.isfinite(icc_stats['icc']):
+        n_eff = effective_sample_size(icc_stats['n_measurements'],
+                                      icc_stats['mean_group_size'],
+                                      icc_stats['icc'])
+        stats['design_effect'] = float(len(angles) / n_eff) if n_eff else float('nan')
+        stats['n_effective'] = float(n_eff)
+        # Same total_std as the uncorrected SEM, over the effective sample size.
+        # At ICC = 0, n_eff == N and this equals stats['sem'] exactly.
+        stats['sem_corrected'] = (float(stats['total_std'] / np.sqrt(n_eff))
+                                  if n_eff > 0 else float('nan'))
+
     return stats
 
 
@@ -809,7 +836,13 @@ def _package_results_row_groups(filename, blaze_angles, stats, period_nm, period
         'measurement_variance': stats['measurement_variance'],
         'physical_variance': stats['physical_variance'],
         'mean_measurement_uncertainty': stats['mean_measurement_uncertainty'],
-        'within_image_std': stats.get('within_image_std', 0),  # NEW
+        'within_image_std': stats.get('within_image_std', 0),
+        # Correlation-corrected uncertainty. Row groups re-measure the same
+        # physical grooves, so 'sem' above is optimistic; see stats/icc.py.
+        'icc': stats.get('icc'),
+        'design_effect': stats.get('design_effect'),
+        'n_effective': stats.get('n_effective'),
+        'sem_corrected': stats.get('sem_corrected'),
         # Store profile data for visualization (use first group)
         'raw_x': raw_x,
         'flat_y': first_group['flat_y'] if first_group else None,

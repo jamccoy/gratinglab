@@ -32,12 +32,22 @@ Traditional AFM analysis averages all rows into a single profile, extracting onl
 - **Spatial variation mapping** across the sample
 - **Smaller error bars** — but not by √N, see below
 
-⚠️ **The bands are not independent.** Each one re-measures the same physical grooves,
-so SEM does *not* scale as 1/√N. Measured intraclass correlation is 0.097–0.429
-(median 0.244), which puts the effective sample size at 37–70 rather than 78–102 and
-means reported standard errors are 1.17–1.65× too small. Run `ANALYSIS_MODE = 'icc'`
-to reproduce. Treat sub-0.5° differences with suspicion until the hierarchical
-correction lands.
+**The bands are not independent**, and the statistics account for that. Each band
+re-measures the same physical grooves, so SEM does *not* scale as 1/√N. Measured
+intraclass correlation is 0.097–0.429 (median 0.244), which puts the effective
+sample size at 37–70 rather than 78–102.
+
+Every standard error, confidence interval and p-value is computed on the
+**effective** sample size, `N_eff = N / (1 + (m−1)·ICC)`. Reported SEMs are
+1.17–1.65× wider than the naive value as a result. `ANALYSIS_MODE = 'icc'`
+reproduces the diagnostic; `ICC`, `N_eff`, `SEM_deg` and `SEM_corrected_deg` are
+columns in every `analysis_data_*.csv`.
+
+Applying it changed no conclusion on the bundled samples: master-vs-treated and
+the 500°C step stay highly significant, and the adjacent-temperature steps stay
+null — slightly more clearly so. Effect sizes (Cohen's d) deliberately keep the
+raw counts, since a standardised mean difference describes spread rather than
+inferring from it.
 
 ### 2. Facet Curvature (Camber) Quantification
 Beyond measuring the overall blaze angle of each groove, the software quantifies **within-facet angle variation** by analyzing local slopes along each facet. This reveals:
