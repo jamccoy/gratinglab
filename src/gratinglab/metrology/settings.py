@@ -69,6 +69,13 @@ class AnalysisSettings:
     flatten_exclude_edges: float = 0.05
     flatten_feature: str = 'peaks'
 
+    # PCGrate boundary export. Only read by the boundary path; the blaze-angle
+    # analysis ignores them.
+    ggp_n_points: int = 2000
+    ggp_apply_smoothing: bool = True
+    ggp_smoothing_window: int = 5
+    ggp_min_half_width: int = 10
+
     # Row groups
     use_row_groups: bool = True
     n_row_groups: int = 20
@@ -105,6 +112,10 @@ class AnalysisSettings:
             flatten_feature=config.FLATTEN_FEATURE,
             spm_channel=getattr(config, 'SPM_CHANNEL', 'Height Sensor'),
             spm_direction=getattr(config, 'SPM_DIRECTION', 'Retrace'),
+            ggp_n_points=getattr(config, 'GGP_N_POINTS', 2000),
+            ggp_apply_smoothing=getattr(config, 'GGP_APPLY_SMOOTHING', True),
+            ggp_smoothing_window=getattr(config, 'GGP_SMOOTHING_WINDOW', 5),
+            ggp_min_half_width=getattr(config, 'GGP_MIN_HALF_WIDTH', 10),
             use_row_groups=config.USE_ROW_GROUPS,
             n_row_groups=config.N_ROW_GROUPS,
             show_2d_image=config.SHOW_2D_IMAGE,
@@ -161,6 +172,13 @@ class AnalysisSettings:
 
         if self.use_row_groups and self.n_row_groups < 2:
             errors.append(('n_row_groups', "needs at least 2 groups"))
+        if self.ggp_n_points < 10:
+            errors.append(('ggp_n_points', "needs at least 10 points"))
+        if self.ggp_smoothing_window < 1:
+            errors.append(('ggp_smoothing_window', "must be at least 1"))
+        if self.ggp_min_half_width < 1:
+            errors.append(('ggp_min_half_width', "must be at least 1"))
+
         if self.edge_exclusion_periods < 0:
             errors.append(('edge_exclusion_periods', "cannot be negative"))
         if not 0 <= self.flatten_exclude_edges < 0.5:
