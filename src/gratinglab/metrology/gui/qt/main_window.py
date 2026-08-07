@@ -28,6 +28,7 @@ from ...settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES,
                          VALID_SPM_DIRECTIONS)
 from ..state import FormState, build, summarize_result
 from .canvas import PlotCanvas
+from .import_view import ImportView
 from .wiki_view import WikiView
 from .worker import AnalysisWorker
 
@@ -85,6 +86,12 @@ class MainWindow(QMainWindow):
         self.tabs = QTabWidget()
         self.setCentralWidget(self.tabs)
 
+        # Import first: a scan enters the application here, and the Analysis tab
+        # consumes whatever this produces.
+        self.importer = ImportView()
+        self.importer.dataChanged.connect(self._on_import_changed)
+        self.tabs.addTab(self.importer, "Import")
+
         central = QWidget()
         root = QHBoxLayout(central)
         root.setContentsMargins(8, 8, 8, 8)
@@ -95,7 +102,6 @@ class MainWindow(QMainWindow):
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(8)
-        left_layout.addWidget(self._build_file_group())
         left_layout.addWidget(self._build_analysis_group())
         left_layout.addWidget(self._build_view_group())
         left_layout.addStretch()
@@ -129,51 +135,6 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status)
         self._set_status("Ready. Open an AFM file to begin.")
 
-    def _build_file_group(self):
-        group = QGroupBox("File")
-        layout = QVBoxLayout(group)
-        self.file_label = QLabel("No file loaded")
-        self.file_label.setWordWrap(True)
-        self.file_label.setStyleSheet("color: gray; font-size: 11px;")
-        layout.addWidget(self.file_label)
-        browse = QPushButton("Browse…")
-        browse.clicked.connect(self._browse_file)
-        layout.addWidget(browse)
-
-        layout.addWidget(QLabel("Fallback scan width (µm):"))
-        self.scan_size_spin = QDoubleSpinBox()
-        self.scan_size_spin.setRange(0.1, 1000.0)
-        self.scan_size_spin.setDecimals(3)
-        self.scan_size_spin.setSingleStep(0.1)
-        self.scan_size_spin.setValue(self._defaults.scan_x_size)
-        self.scan_size_spin.setToolTip(
-            "Used only when the scan width cannot be read from the file header.")
-        layout.addWidget(self.scan_size_spin)
-
-        layout.addWidget(QLabel("Scan direction (.spm only):"))
-        self.direction_combo = QComboBox()
-        self.direction_combo.addItems(list(VALID_SPM_DIRECTIONS))
-        self.direction_combo.setCurrentText(self._defaults.spm_direction)
-        self.direction_combo.setEnabled(False)
-        self.direction_combo.setToolTip(
-            "Which pass of the tip to analyse. A Nanoscope file records both.\n"
-            "Retrace is the default because it is the plane the project's\n"
-            "existing Gwyddion exports were taken from.\n"
-            "Disabled for text exports, which contain a single plane.")
-        self.direction_combo.currentTextChanged.connect(self._reload_current)
-        layout.addWidget(self.direction_combo)
-
-        self.info_label = QLabel("—")
-        self.info_label.setWordWrap(True)
-        self.info_label.setStyleSheet("font-size: 11px;")
-        layout.addWidget(self.info_label)
-        return group
-
-    def _reload_current(self):
-        """Re-read the open file, e.g. after switching scan direction."""
-        if self._filename:
-            self.load(self._filename)
-
     def _build_analysis_group(self):
         group = QGroupBox("Analysis parameters")
         layout = QVBoxLayout(group)
@@ -184,6 +145,10 @@ class MainWindow(QMainWindow):
         self.period_spin.setDecimals(2)
         self.period_spin.setValue(self._defaults.period_est)
         self.period_spin.setToolTip("Groove spacing. Must match your grating.")
+        # level_grooves needs the period to find what it levels on, so the
+        # Import preview has to know when this changes.
+        self.period_spin.valueChanged.connect(
+            lambda v: self.importer.set_period_est(v))
         layout.addWidget(self.period_spin)
 
         layout.addWidget(QLabel("Facet trim (fraction):"))
@@ -281,6 +246,7 @@ class MainWindow(QMainWindow):
 
     def form_state(self) -> FormState:
         """Current control values, as plain data"""
+        overrides = self.importer.settings_overrides()
         return FormState(
             period_est=self.period_spin.value(),
             facet_trim=self.trim_spin.value(),
@@ -288,79 +254,56 @@ class MainWindow(QMainWindow):
             edge_exclusion_periods=self.edge_spin.value(),
             use_row_groups=self.row_groups_check.isChecked(),
             n_row_groups=self.n_groups_spin.value(),
-            scan_x_size=self.scan_size_spin.value(),
-            spm_direction=self.direction_combo.currentText(),
+            scan_x_size=overrides['scan_x_size'],
+            spm_direction=overrides['spm_direction'],
+            image_flatten_method=overrides['image_flatten_method'],
+            flatten_method=overrides['flatten_method'],
+            flatten_poly_order=overrides['flatten_poly_order'],
+            flatten_feature=overrides['flatten_feature'],
+            flatten_exclude_edges=overrides['flatten_exclude_edges'],
         )
 
     # ── Actions ──────────────────────────────────────────────────────────────
 
-    def _browse_file(self):
-        start_dir = os.path.join(PROJECT_ROOT, 'data')
-        if not os.path.isdir(start_dir):
-            start_dir = ""
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Open AFM File", start_dir,
-            "AFM data (*.txt *.dat *.asc *.spm);;"
-            "Nanoscope (*.spm);;Text export (*.txt);;All files (*)")
-        if path:
-            self.load(path)
+    def _on_import_changed(self):
+        """
+        Take whatever the Import tab produced.
+
+        The Import tab owns loading and both flattening stages; this window keeps
+        one copy of the current scan so the Analysis views and the worker all see
+        the same thing.
+        """
+        self._data = self.importer.data
+        self._scan_size = self.importer.scan_size
+        self._filename = self.importer.filename
+        self._result = self._settings = None
+
+        if self._data is None:
+            for button in self._file_buttons + self._result_buttons:
+                button.setEnabled(False)
+            self.run_btn.setEnabled(False)
+            self.canvas.show_placeholder("Load an AFM file in the Import tab")
+            self._set_status("No data loaded.")
+            return
+
+        self._disp_um, self._profile_nm = raw_data(self._data, self._scan_size)
+
+        for button in self._file_buttons:
+            button.setEnabled(True)
+        for button in self._result_buttons:
+            button.setEnabled(False)
+        self.run_btn.setEnabled(True)
+        self.results_label.setText("Press Run Analysis.")
+
+        self.n_groups_spin.setMaximum(max(2, self._data.shape[0] // 3))
+        self.show_raw_profile()
+        self._set_status(f"Loaded: {os.path.basename(self._filename)}  "
+                         f"(image flattening: "
+                         f"{self.importer.settings_overrides()['image_flatten_method']})")
 
     def load(self, path):
-        try:
-            self._set_status(f"Loading {os.path.basename(path)}…")
-            QApplication.processEvents()
-
-            from ...io.spm import is_nanoscope_file
-            nanoscope = is_nanoscope_file(path)
-
-            # The direction control only means something for a Nanoscope file.
-            # Blocking signals so enabling it cannot re-enter load().
-            self.direction_combo.blockSignals(True)
-            self.direction_combo.setEnabled(nanoscope)
-            self.direction_combo.blockSignals(False)
-
-            settings = self._defaults.with_(
-                spm_direction=self.direction_combo.currentText())
-
-            with contextlib.redirect_stdout(io.StringIO()):
-                data, scan_size = load_afm_data(
-                    path, default_scan_size=self.scan_size_spin.value(),
-                    settings=settings)
-                disp_um, profile_nm = raw_data(data, scan_size)
-
-            self._data, self._scan_size = data, scan_size
-            self._disp_um, self._profile_nm = disp_um, profile_nm
-            self._filename = path
-            self._result = self._settings = None
-
-            self.file_label.setText(os.path.basename(path))
-            self.file_label.setStyleSheet("font-size: 11px;")
-            self.scan_size_spin.setValue(scan_size)
-
-            rows, cols = data.shape
-            # Name the plane actually read, so a result can be traced back to it.
-            source = (f"Nanoscope: {settings.spm_channel} / "
-                      f"{settings.spm_direction}" if nanoscope else "Text export")
-            self.info_label.setText(
-                f"{source}\n"
-                f"Shape: {rows} × {cols} px\n"
-                f"Scan width: {scan_size:.3f} µm\n"
-                f"Height range: {profile_nm.min():.1f} – {profile_nm.max():.1f} nm")
-
-            for b in self._file_buttons:
-                b.setEnabled(True)
-            for b in self._result_buttons:
-                b.setEnabled(False)
-            self.run_btn.setEnabled(True)
-            self.results_label.setText("Press Run Analysis.")
-
-            self.n_groups_spin.setMaximum(max(2, rows // 3))
-            self.show_raw_profile()
-            self._set_status(f"Loaded: {os.path.basename(path)}")
-
-        except Exception as exc:
-            self._set_status(f"Error loading file: {exc}")
-            self.info_label.setText(f"Error:\n{exc}")
+        """Load a file. Delegates to the Import tab, which owns loading."""
+        self.importer.load(path)
 
     def run_analysis(self):
         """Validate the form, then hand the work to the thread."""

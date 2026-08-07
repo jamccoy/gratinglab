@@ -77,6 +77,13 @@ every summary file.
 The GUI exists partly so this is easy to explore. Drag the trim spinner, re-run,
 and watch the number move.
 
+## Before any of this: flattening
+
+The facet is fitted to the *flattened* profile, so the flattening method shapes
+what is being measured. Across the four profile-flattening methods the mean blaze
+angle moves by about 0.49° on a typical scan — comparable to facet trim, and
+comparable to the differences between samples. See **Flattening**.
+
 ## Fit quality
 
 Every groove fit records an R². It is **reported, not enforced** — no measurement

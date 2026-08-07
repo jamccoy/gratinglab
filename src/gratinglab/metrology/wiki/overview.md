@@ -39,6 +39,7 @@ band re-measures the same physical grooves. See **The correlation correction**.
 
 ## Where to go next
 
+- **Flattening** — the two stages, which one changes the answer, and by how much
 - **Row groups and scan edges** — what row-group analysis buys, and why grooves
   at the edge of a scan are thrown away
 - **The correlation correction** — why the error bars are wider than √N suggests
