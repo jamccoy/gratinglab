@@ -73,6 +73,73 @@ Produced by `ANALYSIS_MODE = 'icc'`. Per-scan ICC, effective sample size, and th
 factor by which the naive SEM is understated. Diagnostic only — it changes
 nothing, it just tells you how much the correction is doing.
 
+## The boundary profile: `.ggp` and its metrics
+
+Produced by the **Boundary** tab, or by `ANALYSIS_MODE = 'ggp'`. Both share one
+computation, so they cannot drift apart.
+
+### `averaged_groove_profile_<sample>.ggp`
+
+What PCGrate reads. Two header lines, then one `x y` pair per line:
+
+```
+3 0 - Polygonal type
+Period: 1 PSC: 1
+0.000000 0.000000
+0.000500 0.000001
+```
+
+Both columns are normalised — **x runs 0 to 1 across exactly one period**, and
+**y is height as a fraction of that period**. So a groove 0.33 deep in this file
+is a third as deep as the grating's period is wide, whatever that period happens
+to be in nanometres.
+
+**The header must not be commented.** Writing this file with
+`np.savetxt(header=...)` prepends `# `, which PCGrate rejects. Three different
+header variants were found among the hand-made files before this was automated:
+correct, `#`-commented, and one carrying only the numpy header with no PCGrate
+lines at all.
+
+**The endpoints are forced to exactly zero** so successive periods tile without a
+step. A seam at the period boundary is the defect that makes an efficiency curve
+wrong while the file still looks entirely reasonable, which is why the panel
+plots the profile rather than only reporting numbers.
+
+### `<sample>_metrics.txt`
+
+| Field | Meaning |
+|---|---|
+| Period | Measured groove spacing, nm |
+| Grooves averaged | How many went into the average |
+| Groove depth | Peak height, as a fraction of the period |
+| Peak-to-valley | Full range, as a fraction of the period |
+| RMS slope | Root-mean-square gradient of the normalised profile |
+| Max slope magnitude | Steepest gradient |
+| Max curvature | Sharpest bend — a proxy for how rounded the groove is |
+
+### Why edge exclusion matters especially here
+
+`average_grooves` trims every groove to the **most restrictive** common extent,
+so one groove near a scan edge narrows the window shared by all of them. The
+normalisation step then stretches whatever window it has to span a full period.
+
+On the TASTE scan the last groove sits 38 samples from the edge against a
+half-width of 40, which stretched the exported profile horizontally by **5.5%**.
+With the edge rule applied: **0.31%**. A 5% error in the groove's aspect ratio is
+a real error in the efficiency it predicts, and nothing about the file would have
+shown it.
+
+### Controls worth understanding
+
+- **Points in the profile** — how finely the averaged groove is resampled. This
+  is the line count in the file.
+- **Smoothing** — light smoothing that wraps at the period boundary, removing
+  kinks left by interpolating each groove onto a common axis. It does change the
+  exported curve.
+- **Minimum half-width** — grooves whose symmetric extent falls at or below this
+  are skipped. On a typical scan the exclusion is all-or-nothing rather than
+  gradual, because the surviving grooves all share one extent.
+
 ## The GUI results panel
 
 Shows the corrected SEM with the ICC and effective N beside it, the spread and

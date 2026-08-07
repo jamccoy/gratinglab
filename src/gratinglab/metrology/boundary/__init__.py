@@ -9,6 +9,7 @@ Shares the profile front-end (loading, groove detection, groove windowing)
 with the blaze-angle analysis in afm_analysis.core.
 """
 
+from .pipeline import BoundaryProfile, build_boundary_profile
 from .average import (
     flatten_endpoints,
     average_grooves,
@@ -17,6 +18,8 @@ from .average import (
 )
 
 __all__ = [
+    'BoundaryProfile',
+    'build_boundary_profile',
     'flatten_endpoints',
     'average_grooves',
     'normalize_profile',

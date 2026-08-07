@@ -122,10 +122,6 @@ class TestViews:
 class TestImportTab:
     """Import owns loading; Analysis consumes what it produces."""
 
-    def test_import_is_the_first_tab(self, qtbot, window):
-        assert [window.tabs.tabText(i) for i in range(window.tabs.count())] == \
-            ["Import", "Analysis", "Wiki"]
-
     def test_loading_in_import_enables_analysis(self, qtbot, window):
         window.load(SAMPLE)
         assert window.run_btn.isEnabled()
@@ -168,6 +164,59 @@ class TestImportTab:
         window.importer.image_method_combo.setCurrentText('none')
         _run_and_wait(qtbot, window)
         assert abs(window._result['mean_angle'] - with_align) < 1e-9
+
+
+class TestBoundaryTab:
+    """PCGrate export, driven from the window."""
+
+    def test_tab_order(self, qtbot, window):
+        assert [window.tabs.tabText(i) for i in range(window.tabs.count())] == \
+            ["Import", "Analysis", "Boundary", "Wiki"]
+
+    def test_loading_populates_the_boundary_panel(self, qtbot, window):
+        assert window.boundary.profile is None
+        window.load(SAMPLE)
+        assert window.boundary.profile is not None
+        assert window.boundary.export_btn.isEnabled()
+
+    def test_metrics_are_shown(self, qtbot, window):
+        window.load(SAMPLE)
+        text = window.boundary.metrics_label.text()
+        for field in ("Period", "Grooves averaged", "Groove depth",
+                      "Max sidewall"):
+            assert field in text, f"{field} missing from the metrics panel"
+
+    def test_point_count_control_reaches_the_profile(self, qtbot, window):
+        window.load(SAMPLE)
+        window.boundary.n_points_spin.setValue(500)
+        assert len(window.boundary.profile.x_norm) == 500
+
+    def test_export_writes_a_valid_ggp(self, qtbot, window, tmp_path, monkeypatch):
+        """The header must be the uncommented two-line form PCGrate accepts"""
+        from PySide6.QtWidgets import QFileDialog
+        window.load(SAMPLE)
+        target = str(tmp_path / "out.ggp")
+        monkeypatch.setattr(QFileDialog, "getSaveFileName",
+                            staticmethod(lambda *a, **k: (target, "")))
+        monkeypatch.setattr("afm_analysis.gui.qt.boundary_view.QMessageBox",
+                            type("Stub", (), {"information": staticmethod(lambda *a: None),
+                                              "warning": staticmethod(lambda *a: None)}))
+        window.boundary.export()
+
+        lines = open(target).read().splitlines()
+        assert lines[0] == "3 0 - Polygonal type"
+        assert lines[1] == "Period: 1 PSC: 1"
+        assert os.path.exists(str(tmp_path / "out_metrics.txt"))
+
+    def test_panel_matches_a_direct_build(self, qtbot, window):
+        """The window must show what the pipeline computes"""
+        import numpy as np
+        from afm_analysis.boundary import build_boundary_profile
+        window.load(SAMPLE)
+        direct = build_boundary_profile(
+            window._data, window._scan_size,
+            window._defaults.with_(**window.boundary.settings_overrides()))
+        assert np.array_equal(direct.y_norm, window.boundary.profile.y_norm)
 
 
 class TestWikiTab:

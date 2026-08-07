@@ -109,76 +109,74 @@ def run_comparison_analysis():
     return combined_results
 
 
-def run_boundary_profile_export():
+def run_boundary_profile_export(settings=None, filename=None):
     """
     Average the grooves of one scan into a PCGrate .ggp boundary profile.
 
-    Shares the profile front-end with the blaze-angle workflows, then diverges:
-    instead of fitting facets, the grooves are averaged, normalised to one
-    period and exported for grating-efficiency modelling.
-    """
-    from .core.processing import load_afm_data, raw_data, find_groove_positions
-    from .boundary import (flatten_endpoints, average_grooves,
-                           normalize_profile, profile_metrics)
-    from .io.ggp import write_ggp, write_profile_metrics
+    Shares the front-end with the blaze-angle workflows - loading, image
+    flattening, groove detection - then diverges: instead of fitting facets, the
+    grooves are averaged, normalised to one period and exported for
+    grating-efficiency modelling.
 
-    filename = resolve_path(GGP_SOURCE_FILE)
+    Parameters:
+        settings: AnalysisSettings; defaults to config.py, so the CLI behaves as
+            it always has. The GUI passes its own.
+        filename: overrides GGP_SOURCE_FILE, for the GUI which already has a file
+            open.
+
+    The computation lives in boundary.build_boundary_profile so the GUI can
+    preview exactly what this writes.
+    """
+    from .core.processing import load_afm_data
+    from .core.image_flatten import flatten_image
+    from .boundary import build_boundary_profile
+    from .io.ggp import write_ggp, write_profile_metrics
+    from .settings import AnalysisSettings
+
+    if settings is None:
+        settings = AnalysisSettings.from_config()
+    filename = resolve_path(filename or GGP_SOURCE_FILE)
+
     print(f"Mode: PCGrate boundary profile export")
     print(f"Source: {filename}")
 
-    data, scan_x_size = load_afm_data(filename, default_scan_size=SCAN_X_SIZE)
-    raw_x, raw_y = raw_data(data, scan_x_size)
+    data, scan_x_size = load_afm_data(filename,
+                                      default_scan_size=settings.scan_x_size,
+                                      settings=settings)
 
-    # Boundary-profile flattening: endpoints to zero, then remove residual tilt.
-    # Deliberately not core.flatten_profile - see boundary/average.py.
-    flat_y = flatten_endpoints(raw_x, raw_y)
-    flat_y = flat_y - np.polyval(np.polyfit(raw_x, flat_y, 1), raw_x)
+    # Applied here too, so both outputs treat a scan the same way. Provably a
+    # no-op for the affine methods - the endpoint flattening downstream removes
+    # constant and linear terms again - and verified identical at the written
+    # precision, so the stored .ggp fixture still matches.
+    if settings.image_flatten_method != 'none':
+        data = flatten_image(data, settings.image_flatten_method)
 
-    scan_width_nm = scan_x_size * 1000
-    period_nm = scan_width_nm / max(2, int(scan_width_nm / PERIOD_EST))
-
-    groove_centers, n_edge = find_groove_positions(
-        raw_x, flat_y, period_nm,
-        prominence_factor=PROMINENCE_FACTOR,
-        distance_factor=DISTANCE_FACTOR,
-        edge_exclusion=EDGE_EXCLUSION_PERIODS,
-        return_n_edge_rejected=True)
-
-    if len(groove_centers) == 0:
-        print("No grooves detected!")
+    try:
+        profile = build_boundary_profile(data, scan_x_size, settings)
+    except ValueError as exc:
+        print(f"{exc}")
         return None
 
-    edge_note = f" ({n_edge} rejected: clipped by scan edge)" if n_edge else ""
-    print(f"Found {len(groove_centers)} grooves{edge_note}")
-
-    if len(groove_centers) > 1:
-        period_nm = np.mean(np.diff(groove_centers) * (raw_x[1] - raw_x[0]) * 1000)
-    print(f"Measured period: {period_nm:.2f} nm")
-
-    x_avg, y_avg, y_std, n_used = average_grooves(
-        raw_x, flat_y, groove_centers, period_nm,
-        margin=0.0, n_points=GGP_N_POINTS, min_half_width=GGP_MIN_HALF_WIDTH)
-    print(f"Averaged {n_used} of {len(groove_centers)} grooves")
-
-    x_norm, y_norm, edge_height = normalize_profile(
-        x_avg, y_avg, period_nm,
-        apply_smoothing=GGP_APPLY_SMOOTHING,
-        smoothing_window=GGP_SMOOTHING_WINDOW)
-
-    metrics = profile_metrics(x_norm, y_norm, period_nm, n_used)
+    edge_note = (f" ({profile.n_edge_rejected} rejected: clipped by scan edge)"
+                 if profile.n_edge_rejected else "")
+    print(f"Found {profile.n_grooves} grooves{edge_note}")
+    print(f"Measured period: {profile.period_nm:.2f} nm")
+    print(f"Averaged {profile.n_used} of {profile.n_grooves} grooves")
 
     stem = os.path.splitext(os.path.basename(filename))[0]
     ggp_path = os.path.join(RESULTS_DIR, f'averaged_groove_profile_{stem}.ggp')
     met_path = os.path.join(RESULTS_DIR, f'groove_analysis_metrics_{stem}.txt')
-    write_ggp(ggp_path, x_norm, y_norm)
-    write_profile_metrics(met_path, metrics)
+    write_ggp(ggp_path, profile.x_norm, profile.y_norm)
+    write_profile_metrics(met_path, profile.metrics)
 
-    print(f"\n  Groove depth: {metrics['groove_depth']:.4f} of period")
-    print(f"  Max sidewall angle: {metrics['max_angle_deg']:.2f}deg")
+    print(f"\n  Groove depth: {profile.metrics['groove_depth']:.4f} of period")
+    print(f"  Max sidewall angle: {profile.metrics['max_angle_deg']:.2f}deg")
     print(f"\n✓ Boundary profile saved to: {ggp_path}")
     print(f"✓ Profile metrics saved to: {met_path}")
 
-    return {'x': x_norm, 'y': y_norm, 'metrics': metrics, 'ggp_path': ggp_path}
+    return {'x': profile.x_norm, 'y': profile.y_norm,
+            'metrics': profile.metrics, 'ggp_path': ggp_path,
+            'profile': profile}
 
 
 def run_icc_report():

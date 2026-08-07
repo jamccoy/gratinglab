@@ -28,6 +28,7 @@ from ...settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES,
                          VALID_SPM_DIRECTIONS)
 from ..state import FormState, build, summarize_result
 from .canvas import PlotCanvas
+from .boundary_view import BoundaryView
 from .import_view import ImportView
 from .wiki_view import WikiView
 from .worker import AnalysisWorker
@@ -128,6 +129,10 @@ class MainWindow(QMainWindow):
         root.addWidget(right, stretch=1)
 
         self.tabs.addTab(central, "Analysis")
+
+        self.boundary = BoundaryView()
+        self.tabs.addTab(self.boundary, "Boundary")
+
         self.wiki = WikiView()
         self.tabs.addTab(self.wiki, "Wiki")
 
@@ -283,6 +288,7 @@ class MainWindow(QMainWindow):
                 button.setEnabled(False)
             self.run_btn.setEnabled(False)
             self.canvas.show_placeholder("Load an AFM file in the Import tab")
+            self.boundary.set_scan(None, None, None, None)
             self._set_status("No data loaded.")
             return
 
@@ -294,6 +300,13 @@ class MainWindow(QMainWindow):
             button.setEnabled(False)
         self.run_btn.setEnabled(True)
         self.results_label.setText("Press Run Analysis.")
+
+        # The boundary export works from the same scan and the same settings,
+        # so it sees whatever Import produced too.
+        settings, errors = build(self.form_state())
+        if settings is not None:
+            self.boundary.set_scan(self._data, self._scan_size,
+                                   self._filename, settings)
 
         self.n_groups_spin.setMaximum(max(2, self._data.shape[0] // 3))
         self.show_raw_profile()
