@@ -12,7 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES)
+from ..settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES,
+                        VALID_SPM_DIRECTIONS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -39,6 +40,8 @@ class FormState:
     use_row_groups: bool = True
     n_row_groups: int = 20
     scan_x_size: float = 2.0
+    # Only meaningful for raw Nanoscope input; a text export has one plane.
+    spm_direction: str = 'Retrace'
 
     @classmethod
     def from_settings(cls, settings: AnalysisSettings) -> "FormState":
@@ -51,6 +54,7 @@ class FormState:
             use_row_groups=settings.use_row_groups,
             n_row_groups=settings.n_row_groups,
             scan_x_size=settings.scan_x_size,
+            spm_direction=settings.spm_direction,
         )
 
 
@@ -90,6 +94,7 @@ def _to_settings(form: FormState) -> AnalysisSettings:
         use_row_groups=form.use_row_groups,
         n_row_groups=form.n_row_groups,
         scan_x_size=form.scan_x_size,
+        spm_direction=form.spm_direction,
     )
 
 

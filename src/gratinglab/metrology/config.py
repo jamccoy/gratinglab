@@ -79,6 +79,15 @@ SHOW_FLATTENING_DIAGNOSTIC = False  # Show before/after flattening comparison (n
 SHOW_LOCAL_ANGLE_DISTRIBUTION = True  # Show distribution of local angles within facets
 SHOW_ANALYZED_REGIONS = False  # Show which portions of facets are being analyzed (now per-group, can be verbose)
 
+# ============ RAW NANOSCOPE (.spm) INPUT ============
+# Used only when the input is a raw .spm rather than a text export. A Nanoscope
+# file holds several planes; these choose which one to analyse.
+SPM_CHANNEL = 'Height Sensor'   # 'Height Sensor' is the topography channel.
+                                # 'Peak Force Error' is not a height map and
+                                # cannot yield a blaze angle.
+SPM_DIRECTION = 'Retrace'       # 'Retrace' or 'Trace'. Retrace matches the
+                                # existing Gwyddion exports in data/.
+
 # ============ PCGRATE BOUNDARY PROFILE EXPORT ============
 # Used by ANALYSIS_MODE = 'ggp'. Averages the grooves of one scan into a single
 # representative groove and writes it as a PCGrate .ggp boundary profile.

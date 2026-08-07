@@ -24,6 +24,11 @@ from dataclasses import dataclass, replace
 MAX_FACET_TRIM = 0.28
 
 VALID_BLAZE_SIDES = ('negative_slope', 'positive_slope', 'longer')
+
+#: Scan directions a Nanoscope file records. Retrace is the default because it is
+#: the plane this project's existing Gwyddion exports were taken from, so a .spm
+#: and its .txt export agree by construction rather than by luck.
+VALID_SPM_DIRECTIONS = ('Retrace', 'Trace')
 VALID_FLATTEN_METHODS = ('linear', 'polynomial', 'groove_peaks', 'level_grooves')
 VALID_FLATTEN_FEATURES = ('peaks', 'troughs', 'both')
 
@@ -35,6 +40,11 @@ class AnalysisSettings:
     # Scan
     scan_x_size: float = 2.0
     period_est: float = 315.0
+
+    # Raw Nanoscope (.spm) input. Ignored for text exports, which carry one
+    # channel and no direction.
+    spm_channel: str = 'Height Sensor'
+    spm_direction: str = 'Retrace'
 
     # Groove detection
     prominence_factor: float = 0.01
@@ -83,6 +93,8 @@ class AnalysisSettings:
             flatten_poly_order=config.FLATTEN_POLY_ORDER,
             flatten_exclude_edges=config.FLATTEN_EXCLUDE_EDGES,
             flatten_feature=config.FLATTEN_FEATURE,
+            spm_channel=getattr(config, 'SPM_CHANNEL', 'Height Sensor'),
+            spm_direction=getattr(config, 'SPM_DIRECTION', 'Retrace'),
             use_row_groups=config.USE_ROW_GROUPS,
             n_row_groups=config.N_ROW_GROUPS,
             show_2d_image=config.SHOW_2D_IMAGE,
@@ -124,6 +136,10 @@ class AnalysisSettings:
         if self.flatten_method not in VALID_FLATTEN_METHODS:
             errors.append(('flatten_method',
                            f"must be one of {', '.join(VALID_FLATTEN_METHODS)}"))
+        if self.spm_direction not in VALID_SPM_DIRECTIONS:
+            errors.append(('spm_direction',
+                           f"must be one of {', '.join(VALID_SPM_DIRECTIONS)}"))
+
         if self.flatten_feature not in VALID_FLATTEN_FEATURES:
             errors.append(('flatten_feature',
                            f"must be one of {', '.join(VALID_FLATTEN_FEATURES)}"))
