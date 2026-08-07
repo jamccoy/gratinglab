@@ -26,6 +26,7 @@ WIKI_DIR = Path(__file__).resolve().parent
 #: be registered in two places.
 PAGE_ORDER = (
     "overview",
+    "file-formats",
     "row-groups",
     "icc-correction",
     "facet-fitting",

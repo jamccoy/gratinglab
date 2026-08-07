@@ -357,7 +357,9 @@ def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
 def _load_and_validate(filename, settings):
     """Load AFM data and validate it"""
     try:
-        data, scan_x_size = load_afm_data(filename, default_scan_size=settings.scan_x_size)
+        data, scan_x_size = load_afm_data(filename,
+                                          default_scan_size=settings.scan_x_size,
+                                          settings=settings)
         return data, scan_x_size
     except Exception as e:
         print(f"Error loading {filename}: {e}")

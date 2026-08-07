@@ -24,7 +24,8 @@ from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as Navigation
 
 from ...config import PROJECT_ROOT
 from ...core.processing import load_afm_data, raw_data, raw_data_multi_group
-from ...settings import AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES
+from ...settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES,
+                         VALID_SPM_DIRECTIONS)
 from ..state import FormState, build, summarize_result
 from .canvas import PlotCanvas
 from .wiki_view import WikiView
@@ -149,11 +150,29 @@ class MainWindow(QMainWindow):
             "Used only when the scan width cannot be read from the file header.")
         layout.addWidget(self.scan_size_spin)
 
+        layout.addWidget(QLabel("Scan direction (.spm only):"))
+        self.direction_combo = QComboBox()
+        self.direction_combo.addItems(list(VALID_SPM_DIRECTIONS))
+        self.direction_combo.setCurrentText(self._defaults.spm_direction)
+        self.direction_combo.setEnabled(False)
+        self.direction_combo.setToolTip(
+            "Which pass of the tip to analyse. A Nanoscope file records both.\n"
+            "Retrace is the default because it is the plane the project's\n"
+            "existing Gwyddion exports were taken from.\n"
+            "Disabled for text exports, which contain a single plane.")
+        self.direction_combo.currentTextChanged.connect(self._reload_current)
+        layout.addWidget(self.direction_combo)
+
         self.info_label = QLabel("—")
         self.info_label.setWordWrap(True)
         self.info_label.setStyleSheet("font-size: 11px;")
         layout.addWidget(self.info_label)
         return group
+
+    def _reload_current(self):
+        """Re-read the open file, e.g. after switching scan direction."""
+        if self._filename:
+            self.load(self._filename)
 
     def _build_analysis_group(self):
         group = QGroupBox("Analysis parameters")
@@ -270,6 +289,7 @@ class MainWindow(QMainWindow):
             use_row_groups=self.row_groups_check.isChecked(),
             n_row_groups=self.n_groups_spin.value(),
             scan_x_size=self.scan_size_spin.value(),
+            spm_direction=self.direction_combo.currentText(),
         )
 
     # ── Actions ──────────────────────────────────────────────────────────────
@@ -280,7 +300,8 @@ class MainWindow(QMainWindow):
             start_dir = ""
         path, _ = QFileDialog.getOpenFileName(
             self, "Open AFM File", start_dir,
-            "AFM Data Files (*.txt *.dat *.asc);;All Files (*)")
+            "AFM data (*.txt *.dat *.asc *.spm);;"
+            "Nanoscope (*.spm);;Text export (*.txt);;All files (*)")
         if path:
             self.load(path)
 
@@ -289,9 +310,22 @@ class MainWindow(QMainWindow):
             self._set_status(f"Loading {os.path.basename(path)}…")
             QApplication.processEvents()
 
+            from ...io.spm import is_nanoscope_file
+            nanoscope = is_nanoscope_file(path)
+
+            # The direction control only means something for a Nanoscope file.
+            # Blocking signals so enabling it cannot re-enter load().
+            self.direction_combo.blockSignals(True)
+            self.direction_combo.setEnabled(nanoscope)
+            self.direction_combo.blockSignals(False)
+
+            settings = self._defaults.with_(
+                spm_direction=self.direction_combo.currentText())
+
             with contextlib.redirect_stdout(io.StringIO()):
                 data, scan_size = load_afm_data(
-                    path, default_scan_size=self.scan_size_spin.value())
+                    path, default_scan_size=self.scan_size_spin.value(),
+                    settings=settings)
                 disp_um, profile_nm = raw_data(data, scan_size)
 
             self._data, self._scan_size = data, scan_size
@@ -304,7 +338,11 @@ class MainWindow(QMainWindow):
             self.scan_size_spin.setValue(scan_size)
 
             rows, cols = data.shape
+            # Name the plane actually read, so a result can be traced back to it.
+            source = (f"Nanoscope: {settings.spm_channel} / "
+                      f"{settings.spm_direction}" if nanoscope else "Text export")
             self.info_label.setText(
+                f"{source}\n"
                 f"Shape: {rows} × {cols} px\n"
                 f"Scan width: {scan_size:.3f} µm\n"
                 f"Height range: {profile_nm.min():.1f} – {profile_nm.max():.1f} nm")

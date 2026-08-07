@@ -5,13 +5,48 @@ import numpy as np
 from scipy.signal import find_peaks
 
 
-def load_afm_data(filename, default_scan_size=2.0):
+def load_afm_data(filename, default_scan_size=2.0, settings=None):
     """
-    Load AFM data and try to extract scan size from header
-    
+    Load AFM data, whatever format it arrived in.
+
+    Dispatches on content rather than on the caller knowing: raw Nanoscope files
+    (.spm, and the extensionless companions Nanoscope also writes) are read
+    directly; everything else takes the text path used for Gwyddion exports.
+
+    Dispatching here rather than at each call site is deliberate - there are six
+    callers, and none of them should have to care.
+
+    Parameters:
+        settings: optional AnalysisSettings, consulted for which .spm channel and
+            scan direction to read. Ignored for text files.
+
     Returns:
-        data: 2D array of height data
+        data: 2D array of height data, in metres
         scan_x_size: scan width in microns
+    """
+    from .. import io as _io  # noqa: F401 - keeps the package import explicit
+    from ..io.spm import (DEFAULT_CHANNEL, DEFAULT_DIRECTION, is_nanoscope_file,
+                          read_spm)
+
+    if is_nanoscope_file(filename):
+        channel = getattr(settings, 'spm_channel', None) or DEFAULT_CHANNEL
+        direction = getattr(settings, 'spm_direction', None) or DEFAULT_DIRECTION
+        data, scan_x_size = read_spm(filename, channel=channel,
+                                     direction=direction)
+        print(f"  Nanoscope file: {channel} / {direction}, "
+              f"{data.shape[0]}x{data.shape[1]} px, {scan_x_size:g} µm")
+        return data, scan_x_size
+
+    return _load_text(filename, default_scan_size)
+
+
+def _load_text(filename, default_scan_size=2.0):
+    """
+    Load a text export (Gwyddion and similar), reading the scan size from the
+    header comments when they carry it.
+
+    Unchanged behaviour - this is the original load_afm_data body, moved so the
+    dispatcher above stays readable. The stored baselines depend on it.
     """
     import re
     
