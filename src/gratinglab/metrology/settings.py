@@ -16,6 +16,8 @@ settings in one process were all impossible. Settings now travel as an argument.
 """
 from dataclasses import dataclass, replace
 
+from .core.image_flatten import VALID_IMAGE_FLATTEN_METHODS
+
 # The blaze facet is trimmed 2.5x harder on the trough side than the land side
 # (see core/analysis.py trim_facet), so the total removed is FACET_TRIM * 3.5.
 # At 1/3.5 = 0.2857 nothing is left, every fit fails, and the analysis returns no
@@ -55,7 +57,13 @@ class AnalysisSettings:
     facet_trim: float = 0.1
     blaze_side: str = 'negative_slope'
 
-    # Flattening
+    # Image flattening: the 2-D stage, before rows are averaged. Affine methods
+    # provably cannot change a blaze angle here (see core/image_flatten.py), so
+    # the default costs nothing - measured 0.0000 deg on all eight samples.
+    image_flatten_method: str = 'align_rows'
+
+    # Profile flattening: the 1-D stage, after each row group is averaged. This
+    # one does move the answer - about 0.49 deg across the four methods.
     flatten_method: str = 'level_grooves'
     flatten_poly_order: int = 2
     flatten_exclude_edges: float = 0.05
@@ -89,6 +97,8 @@ class AnalysisSettings:
             edge_exclusion_periods=config.EDGE_EXCLUSION_PERIODS,
             facet_trim=config.FACET_TRIM,
             blaze_side=config.BLAZE_SIDE,
+            image_flatten_method=getattr(config, 'IMAGE_FLATTEN_METHOD',
+                                         'align_rows'),
             flatten_method=config.FLATTEN_METHOD,
             flatten_poly_order=config.FLATTEN_POLY_ORDER,
             flatten_exclude_edges=config.FLATTEN_EXCLUDE_EDGES,
@@ -133,6 +143,11 @@ class AnalysisSettings:
         if self.blaze_side not in VALID_BLAZE_SIDES:
             errors.append(('blaze_side',
                            f"must be one of {', '.join(VALID_BLAZE_SIDES)}"))
+        if self.image_flatten_method not in VALID_IMAGE_FLATTEN_METHODS:
+            errors.append(('image_flatten_method',
+                           f"must be one of "
+                           f"{', '.join(VALID_IMAGE_FLATTEN_METHODS)}"))
+
         if self.flatten_method not in VALID_FLATTEN_METHODS:
             errors.append(('flatten_method',
                            f"must be one of {', '.join(VALID_FLATTEN_METHODS)}"))

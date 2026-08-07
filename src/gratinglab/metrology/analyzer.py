@@ -9,6 +9,7 @@ import os
 
 from .settings import AnalysisSettings
 from .stats.icc import compute_icc, effective_sample_size
+from .core.image_flatten import flatten_image, row_offset_spread
 from .core.processing import (
     raw_data, raw_data_multi_group,  # NEW: added raw_data_multi_group
     flatten_profile, find_groove_positions, load_afm_data
@@ -355,11 +356,26 @@ def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
 # ============ HELPER FUNCTIONS ============
 
 def _load_and_validate(filename, settings):
-    """Load AFM data and validate it"""
+    """
+    Load AFM data, flatten the image, and validate it.
+
+    Image flattening happens here because this is the only point where the 2-D
+    array exists and every workflow passes through it - the next step averages
+    rows away.
+    """
     try:
         data, scan_x_size = load_afm_data(filename,
                                           default_scan_size=settings.scan_x_size,
                                           settings=settings)
+
+        method = getattr(settings, 'image_flatten_method', 'none')
+        if method != 'none':
+            before = row_offset_spread(data)
+            data = flatten_image(data, method)
+            print(f"Image flattening: {method} "
+                  f"(row-offset spread {before*1e9:.2f} -> "
+                  f"{row_offset_spread(data)*1e9:.2f} nm)")
+
         return data, scan_x_size
     except Exception as e:
         print(f"Error loading {filename}: {e}")

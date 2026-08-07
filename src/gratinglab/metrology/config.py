@@ -65,7 +65,18 @@ N_ROW_GROUPS = 20      # Number of row groups to extract from each image
                        # Each group gets averaged separately and analyzed
                        # This gives you N_ROW_GROUPS × N_GROOVES measurements per image!
 
-# ============ FLATTENING OPTIONS ============
+# ============ IMAGE FLATTENING (2-D, before rows are averaged) ============
+# Corrects scan lines relative to one another, on the image as it came off the
+# instrument. 'none', 'plane', or 'align_rows'.
+#
+# Affine methods cannot change a blaze angle in this pipeline: the profile
+# flattening below removes any constant or linear term again. Measured 0.0000 deg
+# across all eight compare-mode samples. It matters for viewing the image, and as
+# the place to add a method that is not affine.
+IMAGE_FLATTEN_METHOD = 'align_rows'
+
+# ============ PROFILE FLATTENING (1-D, after row averaging) ============
+# This is the one that moves the answer: about 0.49 deg between methods.
 FLATTEN_METHOD = 'level_grooves'  # 'linear', 'polynomial', 'groove_peaks', or 'level_grooves'
 FLATTEN_POLY_ORDER = 2  # For polynomial and level_grooves: 1=linear, 2=quadratic, 3=cubic
 FLATTEN_EXCLUDE_EDGES = 0.05  # Exclude this fraction from each edge when fitting

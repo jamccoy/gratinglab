@@ -43,6 +43,15 @@ class FormState:
     # Only meaningful for raw Nanoscope input; a text export has one plane.
     spm_direction: str = 'Retrace'
 
+    # Owned by the Import tab. Image flattening acts on the 2-D scan; profile
+    # flattening acts on each averaged row group and is the one that moves the
+    # measured angle.
+    image_flatten_method: str = 'align_rows'
+    flatten_method: str = 'level_grooves'
+    flatten_poly_order: int = 2
+    flatten_feature: str = 'peaks'
+    flatten_exclude_edges: float = 0.05
+
     @classmethod
     def from_settings(cls, settings: AnalysisSettings) -> "FormState":
         """Initial control values, taken from config.py defaults"""
@@ -55,6 +64,11 @@ class FormState:
             n_row_groups=settings.n_row_groups,
             scan_x_size=settings.scan_x_size,
             spm_direction=settings.spm_direction,
+            image_flatten_method=settings.image_flatten_method,
+            flatten_method=settings.flatten_method,
+            flatten_poly_order=settings.flatten_poly_order,
+            flatten_feature=settings.flatten_feature,
+            flatten_exclude_edges=settings.flatten_exclude_edges,
         )
 
 
@@ -95,6 +109,11 @@ def _to_settings(form: FormState) -> AnalysisSettings:
         n_row_groups=form.n_row_groups,
         scan_x_size=form.scan_x_size,
         spm_direction=form.spm_direction,
+        image_flatten_method=form.image_flatten_method,
+        flatten_method=form.flatten_method,
+        flatten_poly_order=form.flatten_poly_order,
+        flatten_feature=form.flatten_feature,
+        flatten_exclude_edges=form.flatten_exclude_edges,
     )
 
 

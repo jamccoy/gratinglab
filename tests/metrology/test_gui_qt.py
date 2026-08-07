@@ -61,7 +61,7 @@ class TestLoading:
     def test_loading_enables_analysis(self, qtbot, window):
         window.load(SAMPLE)
         assert window.run_btn.isEnabled()
-        assert os.path.basename(SAMPLE) in window.file_label.text()
+        assert os.path.basename(SAMPLE) in window.importer.file_label.text()
 
     def test_result_views_stay_disabled_until_there_is_a_result(self, qtbot, window):
         window.load(SAMPLE)
@@ -119,12 +119,59 @@ class TestViews:
         assert all(b.isEnabled() for b in window._result_buttons)
 
 
+class TestImportTab:
+    """Import owns loading; Analysis consumes what it produces."""
+
+    def test_import_is_the_first_tab(self, qtbot, window):
+        assert [window.tabs.tabText(i) for i in range(window.tabs.count())] == \
+            ["Import", "Analysis", "Wiki"]
+
+    def test_loading_in_import_enables_analysis(self, qtbot, window):
+        window.load(SAMPLE)
+        assert window.run_btn.isEnabled()
+        assert window._data is not None
+        assert window.importer.filename == SAMPLE
+
+    def test_image_flattening_choice_reaches_the_form(self, qtbot, window):
+        window.load(SAMPLE)
+        window.importer.image_method_combo.setCurrentText('none')
+        assert window.form_state().image_flatten_method == 'none'
+
+    def test_profile_flattening_choice_changes_the_result(self, qtbot, window):
+        """
+        The knob that matters. Roughly 0.5 degrees between methods, so a control
+        that leaves the answer alone is not wired up.
+        """
+        window.load(SAMPLE)
+        _run_and_wait(qtbot, window)
+        before = window._result['mean_angle']
+
+        window.importer.profile_method_combo.setCurrentText('groove_peaks')
+        _run_and_wait(qtbot, window)
+        after = window._result['mean_angle']
+
+        assert abs(after - before) > 0.05, (
+            f"profile flattening did not reach the analysis: {before} -> {after}")
+
+    def test_affine_image_flattening_leaves_the_answer_alone(self, qtbot, window):
+        """
+        Free by construction - the reason align_rows could be the default.
+
+        Equal to within floating point, not bit-for-bit: subtracting row medians
+        perturbs the last bits, and the averaging that follows is not
+        associative. Measured at 5e-15 degrees, against a sigma near 2.
+        """
+        window.load(SAMPLE)
+        _run_and_wait(qtbot, window)
+        with_align = window._result['mean_angle']
+
+        window.importer.image_method_combo.setCurrentText('none')
+        _run_and_wait(qtbot, window)
+        assert abs(window._result['mean_angle'] - with_align) < 1e-9
+
+
 class TestWikiTab:
     """The Wiki tab, and that adding it disturbed nothing."""
-
-    def test_both_tabs_exist(self, qtbot, window):
-        assert [window.tabs.tabText(i) for i in range(window.tabs.count())] == \
-            ["Analysis", "Wiki"]
 
     def test_every_page_renders(self, qtbot, window):
         for slug in window.wiki.slugs:
@@ -144,9 +191,9 @@ class TestWikiTab:
         _run_and_wait(qtbot, window)
         before = window._result['mean_angle']
 
-        window.tabs.setCurrentIndex(1)
+        window.tabs.setCurrentIndex(2)          # Wiki
         window.wiki.show_page('facet-fitting')
-        window.tabs.setCurrentIndex(0)
+        window.tabs.setCurrentIndex(1)          # back to Analysis
 
         assert window._result['mean_angle'] == before
         assert all(b.isEnabled() for b in window._result_buttons)

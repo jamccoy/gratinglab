@@ -27,6 +27,7 @@ WIKI_DIR = Path(__file__).resolve().parent
 PAGE_ORDER = (
     "overview",
     "file-formats",
+    "flattening",
     "row-groups",
     "icc-correction",
     "facet-fitting",
