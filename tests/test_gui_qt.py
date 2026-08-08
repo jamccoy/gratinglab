@@ -445,6 +445,61 @@ class TestOrderPanel:
         assert deselected not in win.tabs["scalar"]._visible_orders
 
 
+class TestGeometryDock:
+    """The geometry inputs, in a panel that can be got out of the way."""
+
+    def test_the_geometry_panel_lives_in_a_dock(self, win):
+        from PySide6.QtWidgets import QDockWidget
+
+        assert isinstance(win.geometry_dock, QDockWidget)
+        assert win.geometry_dock.widget().widget() is win.geometry
+
+    def test_it_docks_left_and_refuses_top_and_bottom(self, win):
+        """A tall column of form rows docked along the top becomes a
+        1180-px-wide strip of three fields: allowed by Qt, useless here."""
+        from PySide6.QtCore import Qt
+
+        areas = win.geometry_dock.allowedAreas()
+        assert areas & Qt.DockWidgetArea.LeftDockWidgetArea
+        assert areas & Qt.DockWidgetArea.RightDockWidgetArea
+        assert not (areas & Qt.DockWidgetArea.TopDockWidgetArea)
+        assert not (areas & Qt.DockWidgetArea.BottomDockWidgetArea)
+
+    def test_it_is_closable(self, win):
+        from PySide6.QtWidgets import QDockWidget
+
+        features = win.geometry_dock.features()
+        assert features & QDockWidget.DockWidgetFeature.DockWidgetClosable
+
+    def test_closing_it_leaves_a_way_back(self, win):
+        """A closable control with no route to reopen it is a trap."""
+        toggle = win._view_menu.actions()[0]
+        win.geometry_dock.hide()
+        assert win.geometry_dock.isHidden()
+
+        toggle.trigger()
+        assert not win.geometry_dock.isHidden()
+
+    def test_the_view_menu_holds_exactly_the_docks_own_toggle(self, win):
+        """The dock's own action, so its checked state and its label cannot
+        drift from the dock -- which a hand-rolled checkable action would, the
+        moment someone clicked the dock's own close button."""
+        actions = win._view_menu.actions()
+        assert len(actions) == 1
+        assert actions[0] is win.geometry_dock.toggleViewAction()
+
+    def test_the_toggle_is_reachable_by_keyboard(self, win):
+        from PySide6.QtGui import QKeySequence
+
+        assert win._view_menu.actions()[0].shortcut() == QKeySequence("Ctrl+G")
+
+    def test_the_dock_is_outside_the_central_widget(self, win):
+        """What lets closing it hand the reclaimed width to the tabs. (The
+        central widget still carries the profile plot above the tabs until
+        M13-C moves it into the geometry tab.)"""
+        assert not win.centralWidget().isAncestorOf(win.geometry)
+
+
 class TestGeometryTab:
     """The tab and its wiring. What the *drawing* contains is decided and
     tested in `tests/test_gui_diagram.py`, without a window."""
@@ -601,9 +656,12 @@ class TestHelpMenu:
             if separators or not action.isSeparator()
         ]
 
-    def test_a_help_menu_is_attached_to_the_menu_bar(self, win):
+    def test_the_menu_bar_holds_exactly_view_and_help(self, win):
+        """Two menus, and only two. View exists solely because the geometry
+        dock is closable and a control with no way back is a trap; Help is
+        still the one that matters."""
         titles = [action.text() for action in win._menu_bar.actions()]
-        assert titles == ["&Help"], "Help is meant to be the only menu"
+        assert titles == ["&View", "&Help"]
 
     def test_lists_every_registered_solver_and_general_page(self, win):
         from gratinglab.gui.docs import general_pages, theory_pages

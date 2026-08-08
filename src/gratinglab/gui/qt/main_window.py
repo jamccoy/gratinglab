@@ -21,7 +21,9 @@ solver yet to justify concurrent per-tab workers.
 from __future__ import annotations
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
+    QDockWidget,
     QMainWindow,
     QMessageBox,
     QScrollArea,
@@ -85,8 +87,10 @@ class MainWindow(QMainWindow):
         self._running = False
         self._active_name: str | None = None
 
-        self._build_menu()
+        # Layout first: `_build_menu` puts the dock's own toggleViewAction in
+        # the View menu, so the dock has to exist by then.
         self._build_layout()
+        self._build_menu()
         self._start_worker()
         # Geometry first: it needs no solver, so it can be right before any
         # result exists rather than showing an empty panel until one does.
@@ -96,15 +100,17 @@ class MainWindow(QMainWindow):
     # -- construction ----------------------------------------------------
 
     def _build_layout(self) -> None:
-        body = QSplitter(Qt.Orientation.Horizontal)
-        body.addWidget(self._build_left_column())
-        body.addWidget(self._build_right_column())
-        body.setStretchFactor(0, 0)
-        body.setStretchFactor(1, 1)
-        body.setSizes([300, 880])
-        self.setCentralWidget(body)
+        self._build_dock()
+        self.setCentralWidget(self._build_right_column())
 
-    def _build_left_column(self) -> QWidget:
+    def _build_dock(self) -> None:
+        """Geometry inputs, in a panel the user is allowed to close.
+
+        A `QDockWidget` rather than a splitter pane because this is already a
+        `QMainWindow`, so a title bar, a close button, drag-to-float and a
+        restorable action all come for free -- and the panel is a permanent
+        300 px tax on a 1180 px window otherwise.
+        """
         self.geometry = GeometryPanel()
         self.geometry.solve_requested.connect(self._solve_active_tab)
 
@@ -112,7 +118,24 @@ class MainWindow(QMainWindow):
         scroller.setWidget(self.geometry)
         scroller.setWidgetResizable(True)
         scroller.setMinimumWidth(280)
-        return scroller
+
+        dock = self.geometry_dock = QDockWidget("Grating geometry", self)
+        dock.setObjectName("geometry_dock")  # so a future saveState() works
+        dock.setWidget(scroller)
+        dock.setFeatures(
+            QDockWidget.DockWidgetFeature.DockWidgetClosable
+            | QDockWidget.DockWidgetFeature.DockWidgetMovable
+            | QDockWidget.DockWidgetFeature.DockWidgetFloatable
+        )
+        # Left or right only. Docked top or bottom, a tall column of form rows
+        # becomes a 1180-px-wide strip of three fields -- allowed by Qt,
+        # useless in practice.
+        dock.setAllowedAreas(
+            Qt.DockWidgetArea.LeftDockWidgetArea | Qt.DockWidgetArea.RightDockWidgetArea
+        )
+        self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
+        # resize() does nothing to a dock; this is the supported way.
+        self.resizeDocks([dock], [300], Qt.Orientation.Horizontal)
 
     def _build_right_column(self) -> QWidget:
         """Profile above the tabs -- the profile is shared, so it sits once,
@@ -165,16 +188,28 @@ class MainWindow(QMainWindow):
         return self._tab_widget
 
     def _build_menu(self) -> None:
-        """Help only, and deliberately so.
+        """Two menus, and only two.
 
-        This is not a general-purpose application with File/Edit/View
-        concerns. It is one window with one job, and the single thing worth a
-        menu for is explaining the math, which the window itself never does.
+        Help is the original and still the main one: this is not a
+        general-purpose application with File/Edit concerns, and the single
+        thing worth a menu for is explaining the math, which the window itself
+        never does.
+
+        View exists for exactly one reason and holds exactly one action. The
+        geometry panel is closable now -- it costs 300 px of a 1180 px window
+        otherwise -- and a control the user can close with no way to reopen it
+        is a trap. Putting the way back under *Help* would be worse than a
+        View menu: Help here means "explain the math", and diluting that has a
+        real cost.
+
+        `QDockWidget.toggleViewAction()` rather than a hand-rolled checkable
+        action, because a hand-rolled one desynchronises the moment the user
+        clicks the dock's own close button.
         """
         from ..docs import general_pages, theory_pages
         from ..richtext import menu_label
 
-        # Both the bar and the menu are held on the instance rather than
+        # Both the bar and the menus are held on the instance rather than
         # merely added. Under PySide6 6.11 a QMenu reached back through
         # `menuBar().actions()[i].menu()` is not reliably usable -- touching
         # it raises "Internal C++ object already deleted" even while the menu
@@ -184,6 +219,14 @@ class MainWindow(QMainWindow):
         # So the window owns what it builds, and nothing (tests included)
         # should navigate back down from the menu bar to get at it.
         self._menu_bar = self.menuBar()
+
+        # View first, so the bar reads View | Help.
+        self._view_menu = self._menu_bar.addMenu("&View")
+        toggle = self.geometry_dock.toggleViewAction()
+        toggle.setText("&Geometry inputs")
+        toggle.setShortcut(QKeySequence("Ctrl+G"))
+        self._view_menu.addAction(toggle)
+
         menu = self._help_menu = self._menu_bar.addMenu("&Help")
         menu.addAction("About GratingLab", self.show_about)
         menu.addSeparator()
