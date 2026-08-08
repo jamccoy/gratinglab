@@ -8,10 +8,16 @@ this file misplaces a widget rather than producing a wrong answer -- and
 `tests/test_gui_qt.py` pins that by comparing what the window plotted against a
 direct solver call.
 
-Three regions, unchanged from the Tk version: inputs on the left, the groove
-profile and efficiency stacked on the right, provenance along the bottom. The
-splitters are new, and are the one thing `pack()` could not give -- the panel
-holds warnings several lines long and used to be a fixed seven lines tall.
+Regions, unchanged in spirit from the Tk version: geometry inputs on the left,
+the groove profile and efficiency stacked on the right, provenance along the
+bottom. Geometry (:class:`~.geometry_panel.GeometryPanel`) and the profile plot
+(:class:`~.profile_plot_panel.ProfilePlotPanel`) are shared, standalone
+widgets now -- neither depends on which solver is about to run, since a
+`Problem`/`Illumination` and a groove's own shape mean the same thing
+regardless. Scalar's own controls (its options, Solve/Cancel/Export, the
+efficiency plot) stay directly on this window for now; they move into their
+own tab once a second solver exists to prove what "a solver's own tab" should
+actually contain.
 """
 
 from __future__ import annotations
@@ -27,8 +33,8 @@ from PySide6.QtWidgets import (
     QFormLayout,
     QGroupBox,
     QHBoxLayout,
-    QLabel,
     QLineEdit,
+    QLabel,
     QMainWindow,
     QMessageBox,
     QProgressBar,
@@ -42,21 +48,12 @@ from PySide6.QtWidgets import (
 
 from .. import provenance
 from ..scalar_options import ScalarOptionsState, build_options
-from ..state import (
-    ANGLE_LABELS,
-    MOUNTS,
-    PROFILE_FIELDS,
-    PROFILE_KINDS,
-    FormErrors,
-    FormState,
-    build,
-)
+from ..state import FormErrors, build
+from .geometry_panel import GeometryPanel
+from .profile_plot_panel import ProfilePlotPanel
 from .worker import SolveWorker
 
 __all__ = ["MainWindow"]
-
-#: Fields whose visibility depends on the selected profile kind.
-_PROFILE_ROW_KEYS = ("blaze_angle", "antiblaze_angle", "depth_fraction", "duty_cycle")
 
 #: A solve faster than this never shows a progress bar. The scalar solver takes
 #: about 70 ms, and flashing a bar on and off within one frame reads as a
@@ -94,17 +91,14 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._build_layout()
         self._start_worker()
-
-        self._on_mount_change()
-        self._on_profile_change()
         self.solve()
 
     # -- construction ----------------------------------------------------
 
     def _build_layout(self) -> None:
         body = QSplitter(Qt.Orientation.Horizontal)
-        body.addWidget(self._build_inputs())
-        body.addWidget(self._build_plots())
+        body.addWidget(self._build_left_column())
+        body.addWidget(self._build_right_column())
         body.setStretchFactor(0, 0)
         body.setStretchFactor(1, 1)
         body.setSizes([300, 880])
@@ -118,87 +112,44 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(outer)
 
-    def _build_inputs(self) -> QWidget:
-        defaults = FormState()
-        scalar_defaults = ScalarOptionsState()
-
-        # Transitional: geometry and scalar's own options still share one
-        # groupbox layout (see _check_fields_match_formstate), so a field's
-        # default may live on either dataclass. Splits cleanly once
-        # GeometryPanel and ScalarTab each build their own widgets.
-        def default_for(key: str) -> str:
-            return getattr(defaults, key, None) or getattr(scalar_defaults, key)
+    def _build_left_column(self) -> QWidget:
+        """Geometry, then scalar's own controls, stacked -- the same visual
+        grouping the flat window had before the split, just now assembled
+        from a shared `GeometryPanel` plus this window's own remaining
+        solver-specific widgets."""
+        self.geometry = GeometryPanel()
+        self.geometry.solve_requested.connect(self.solve)
 
         panel = QWidget()
         column = QVBoxLayout(panel)
+        column.setContentsMargins(0, 0, 0, 0)
+        column.addWidget(self.geometry)
+        column.addWidget(self._build_solver_controls())
 
-        def entry(form: QFormLayout, label: str, key: str) -> QLineEdit:
-            widget = QLineEdit(default_for(key))
-            widget.returnPressed.connect(self.solve)
-            self._fields[key] = widget
-            form.addRow(label, widget)
-            return widget
+        # The column outgrows a short window once the order panel joins it.
+        scroller = QScrollArea()
+        scroller.setWidget(panel)
+        scroller.setWidgetResizable(True)
+        scroller.setMinimumWidth(280)
+        return scroller
 
-        def combo(form: QFormLayout, label: str, key: str, values, on_change) -> QComboBox:
-            widget = QComboBox()
-            widget.addItems(list(values))
-            widget.setCurrentText(default_for(key))
-            widget.currentTextChanged.connect(lambda _t: on_change())
-            self._fields[key] = widget
-            form.addRow(label, widget)
-            return widget
+    def _build_solver_controls(self) -> QWidget:
+        """Scalar's own options and actions.
 
-        grating = QGroupBox("Grating")
-        grating_form = self._grating_form = QFormLayout(grating)
-        entry(grating_form, "Period (nm)", "period")
-        combo(grating_form, "Profile", "profile_kind", PROFILE_KINDS,
-              self._on_profile_change)
-
-        self._profile_rows: dict[str, QWidget] = {}
-        for key, label in (
-            ("blaze_angle", "Blaze δ (deg)"),
-            ("antiblaze_angle", "Anti-blaze (deg)"),
-            ("depth_fraction", "Depth / period"),
-            ("duty_cycle", "Duty cycle"),
-        ):
-            self._profile_rows[key] = entry(grating_form, label, key)
-
-        # Not a visible row: the path is set by the file dialog, and shown by
-        # the label beneath it. It still has to be a field, because _read_form
-        # builds FormState from exactly this dict.
-        path_field = QLineEdit("")
-        path_field.hide()
-        self._fields["profile_path"] = path_field
-
-        self._path_label = QLabel("")
-        self._path_label.setWordWrap(True)
-        self._path_label.setStyleSheet("color: #555")
-        self._load_button = QPushButton("Load profile…")
-        self._load_button.clicked.connect(self.load_profile)
-        grating_form.addRow(self._load_button)
-        grating_form.addRow(self._path_label)
-
-        mount = QGroupBox("Mount")
-        mount_form = QFormLayout(mount)
-        combo(mount_form, "Geometry", "mount", MOUNTS, self._on_mount_change)
-        self._angle_labels: dict[str, QLabel] = {}
-        for key in ("alpha", "gamma"):
-            widget = QLineEdit(getattr(defaults, key))
-            widget.returnPressed.connect(self.solve)
-            self._fields[key] = widget
-            label = QLabel("")
-            mount_form.addRow(label, widget)
-            self._angle_labels[key] = label
-
-        scan = QGroupBox("Wavelengths (nm)")
-        scan_form = QFormLayout(scan)
-        entry(scan_form, "Start", "wavelength_start")
-        entry(scan_form, "Stop", "wavelength_stop")
-        entry(scan_form, "Points", "wavelength_count")
+        Everything here moves into its own tab once a second solver exists to
+        prove what that tab should actually contain -- see M11-C.
+        """
+        scalar_defaults = ScalarOptionsState()
+        panel = QWidget()
+        column = QVBoxLayout(panel)
+        column.setContentsMargins(0, 0, 0, 0)
 
         solver = QGroupBox("Scalar solver")
         solver_form = QFormLayout(solver)
-        entry(solver_form, "Quadrature pts", "quadrature_points")
+        quadrature = QLineEdit(scalar_defaults.quadrature_points)
+        quadrature.returnPressed.connect(self.solve)
+        self._fields["quadrature_points"] = quadrature
+        solver_form.addRow("Quadrature pts", quadrature)
 
         self._solve_button = QPushButton("Solve")
         self._solve_button.clicked.connect(self.solve)
@@ -216,63 +167,61 @@ class MainWindow(QMainWindow):
         buttons.addWidget(self._solve_button)
         buttons.addWidget(self._cancel_button)
 
-        for group in (grating, mount, scan, solver):
-            column.addWidget(group)
+        column.addWidget(solver)
         column.addLayout(buttons)
         column.addWidget(self._export_button)
         column.addWidget(self._progress)
         column.addStretch(1)
 
-        self._check_fields_match_formstate()
+        self._check_fields_match_scalar_options()
+        return panel
 
-        # The column outgrows a short window once the order panel joins it.
-        scroller = QScrollArea()
-        scroller.setWidget(panel)
-        scroller.setWidgetResizable(True)
-        scroller.setMinimumWidth(280)
-        return scroller
-
-    def _check_fields_match_formstate(self) -> None:
+    def _check_fields_match_scalar_options(self) -> None:
         """Refuse to open rather than fail later on one code path.
 
-        `_read_form`/`_read_scalar_options` build their dataclasses by keyword
-        from this one dict, so a renamed or forgotten field is a TypeError at
-        solve time -- visible only to whoever presses Solve. Checking here
-        makes it immediate and says which field.
-
-        Transitional: geometry and scalar's own options still share one
-        `_fields` dict and one groupbox layout, so this checks the *union* of
-        both dataclasses' fields rather than either alone. Splits cleanly once
-        `GeometryPanel` and `ScalarTab` each own their own widgets and their
-        own check.
+        `_read_scalar_options` builds `ScalarOptionsState` by keyword from
+        this dict, so a renamed or forgotten field is a TypeError at solve
+        time -- visible only to whoever presses Solve. Checking here makes it
+        immediate and says which field. `GeometryPanel` runs the equivalent
+        check for its own fields against `FormState`.
         """
-        declared = {f.name for f in dataclasses.fields(FormState)} | {
-            f.name for f in dataclasses.fields(ScalarOptionsState)
-        }
+        declared = {f.name for f in dataclasses.fields(ScalarOptionsState)}
         if self._fields.keys() != declared:
             raise AssertionError(
-                "form fields do not match FormState + ScalarOptionsState: "
+                "scalar-option fields do not match ScalarOptionsState: "
                 f"missing {sorted(declared - self._fields.keys())}, "
                 f"extra {sorted(self._fields.keys() - declared)}"
             )
 
-    def _build_plots(self) -> QWidget:
+    def _build_right_column(self) -> QWidget:
+        """Profile above efficiency -- the same stacked arrangement the flat
+        window had as two subplots of one figure, now two separate plots so
+        the profile can be shared once solver tabs exist."""
+        self.profile_panel = ProfilePlotPanel()
+
+        right = QSplitter(Qt.Orientation.Vertical)
+        right.addWidget(self.profile_panel)
+        right.addWidget(self._build_efficiency_plot())
+        right.setStretchFactor(0, 0)
+        right.setStretchFactor(1, 1)
+        return right
+
+    def _build_efficiency_plot(self) -> QWidget:
         from matplotlib.backends.backend_qtagg import (
             FigureCanvasQTAgg,
             NavigationToolbar2QT,
         )
         from matplotlib.figure import Figure
 
-        self._figure = Figure(figsize=(8, 6), layout="constrained")
-        self._profile_axes = self._figure.add_subplot(2, 1, 1)
-        self._efficiency_axes = self._figure.add_subplot(2, 1, 2)
-        self._canvas = FigureCanvasQTAgg(self._figure)
+        self._efficiency_figure = Figure(figsize=(8, 3), layout="constrained")
+        self._efficiency_axes = self._efficiency_figure.add_subplot(1, 1, 1)
+        self._efficiency_canvas = FigureCanvasQTAgg(self._efficiency_figure)
 
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(NavigationToolbar2QT(self._canvas, panel))
-        layout.addWidget(self._canvas)
+        layout.addWidget(NavigationToolbar2QT(self._efficiency_canvas, panel))
+        layout.addWidget(self._efficiency_canvas)
         return panel
 
     def _build_provenance(self) -> QWidget:
@@ -339,40 +288,6 @@ class MainWindow(QMainWindow):
 
     # -- reactions -------------------------------------------------------
 
-    def _on_profile_change(self) -> None:
-        """Show only the parameters the selected profile actually uses."""
-        needed = PROFILE_FIELDS.get(
-            self._fields["profile_kind"].currentText(), frozenset()
-        )
-        for key, widget in self._profile_rows.items():
-            # setRowVisible hides the label with the field. Hiding the field
-            # alone would leave a caption for a control that is not there.
-            self._grating_form.setRowVisible(widget, key in needed)
-        from_file = "profile_path" in needed
-        self._load_button.setVisible(from_file)
-        self._path_label.setVisible(from_file)
-
-    def _on_mount_change(self) -> None:
-        """Relabel the two angle fields; the mount decides what they mean."""
-        primary, secondary = ANGLE_LABELS[self._fields["mount"].currentText()]
-        self._angle_labels["alpha"].setText(primary)
-        self._angle_labels["alpha"].show()
-        self._fields["alpha"].show()
-
-        if secondary is None:
-            self._angle_labels["gamma"].hide()
-            self._fields["gamma"].hide()
-        else:
-            self._angle_labels["gamma"].setText(secondary)
-            self._angle_labels["gamma"].show()
-            self._fields["gamma"].show()
-
-    def _read_form(self) -> FormState:
-        geometry_fields = {f.name for f in dataclasses.fields(FormState)}
-        return FormState(
-            **{k: _value(w) for k, w in self._fields.items() if k in geometry_fields}
-        )
-
     def _read_scalar_options(self) -> ScalarOptionsState:
         return ScalarOptionsState(
             quadrature_points=_value(self._fields["quadrature_points"])
@@ -393,7 +308,7 @@ class MainWindow(QMainWindow):
             return
 
         try:
-            geometry = build(self._read_form())
+            geometry = build(self.geometry.read_form())
             options = build_options(
                 geometry.problem, geometry.illumination, geometry.wavelengths,
                 self._read_scalar_options(),
@@ -439,9 +354,9 @@ class MainWindow(QMainWindow):
         self._set_running(False)
         self._scan, self._energy = result.scan, result.energy
 
-        self._draw_profile(self._parsed)
+        self.profile_panel.draw(self._parsed)
         self._draw_efficiency(result.scan)
-        self._canvas.draw_idle()
+        self._efficiency_canvas.draw_idle()
         self._paint(
             provenance.provenance_lines(
                 result.scan, result.energy, self._parsed.lambda_over_period
@@ -465,15 +380,6 @@ class MainWindow(QMainWindow):
     def _show_progress_if_still_running(self) -> None:
         if self._running:
             self._progress.show()
-
-    def load_profile(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Load boundary profile", "", "PCGrate boundary (*.ggp);;All files (*)"
-        )
-        if path:
-            self._fields["profile_path"].setText(path)
-            self._path_label.setText(Path(path).name)
-            self.solve()
 
     def export_csv(self) -> None:
         if self._scan is None:
@@ -510,27 +416,6 @@ class MainWindow(QMainWindow):
 
     def _paint(self, lines) -> None:
         self._provenance.setHtml(provenance.to_html(lines))
-
-    def _draw_profile(self, parsed) -> None:
-        import numpy as np
-
-        axes = self._profile_axes
-        axes.clear()
-        # Drawn from the same Profile the solver integrates, so what is shown
-        # is literally what is computed.
-        t = np.linspace(0.0, 1.0, 600, endpoint=False)
-        two_periods = np.concatenate([t, t + 1.0])
-        height = parsed.problem.height_nm(two_periods)
-        axes.plot(two_periods, height, color="#1f3b73", lw=1.8)
-        axes.fill_between(two_periods, 0, height, color="#1f3b73", alpha=0.12)
-        axes.set_xlabel("position / period  (two periods shown)")
-        axes.set_ylabel("height (nm)")
-        axes.set_title(
-            f"{type(parsed.problem.profile).__name__} — "
-            f"period {parsed.problem.period:g} nm, depth {parsed.problem.depth:.4g} nm",
-            fontsize=10,
-        )
-        axes.grid(alpha=0.25)
 
     def _draw_efficiency(self, scan) -> None:
         axes = self._efficiency_axes

@@ -124,7 +124,7 @@ class TestNotASecondSourceOfTruth:
         assert np.array_equal(win._scan.orders, expected.orders)
 
     def test_changing_a_field_changes_the_result_consistently(self, qtbot, win):
-        win._fields["blaze_angle"].setText("12.0")
+        win.geometry._fields["blaze_angle"].setText("12.0")
         resolve(qtbot, win)
 
         parsed = build(FormState(blaze_angle="12.0"))
@@ -145,7 +145,7 @@ class TestBehaviour:
         assert len(win._scan) == 200
 
     def test_invalid_input_reports_errors_without_crashing(self, win):
-        win._fields["period"].setText("not a number")
+        win.geometry._fields["period"].setText("not a number")
         win.solve()  # rejected synchronously; never reaches the worker
         text = win._provenance.toPlainText()
         assert "period" in text
@@ -153,7 +153,7 @@ class TestBehaviour:
 
     def test_a_failed_solve_leaves_the_previous_result_intact(self, win):
         good = win._scan
-        win._fields["period"].setText("")
+        win.geometry._fields["period"].setText("")
         win.solve()
         assert win._scan is good
 
@@ -170,55 +170,73 @@ class TestBehaviour:
             assert line.text.strip() in shown
 
     def test_reads_every_form_field(self, win):
-        form = win._read_form()
+        form = win.geometry.read_form()
         assert isinstance(form, FormState)
         assert form.period == "315.15"
 
-    def test_a_field_missing_from_formstate_stops_the_window_opening(self, qtbot):
-        """The `_fields` keys must exactly match FormState's field names --
-        `_read_form` builds one by keyword. Previously a mismatch was a
-        TypeError at solve time, visible only to whoever pressed Solve."""
+    def test_a_geometry_field_missing_from_formstate_stops_the_window_opening(
+        self, qtbot
+    ):
+        """`GeometryPanel._fields`' keys must exactly match FormState's field
+        names -- `read_form` builds one by keyword. Previously a mismatch was
+        a TypeError at solve time, visible only to whoever pressed Solve."""
+        from gratinglab.gui.qt import geometry_panel as module
+
+        original = module.GeometryPanel._build
+
+        def drop_a_field(self):
+            original(self)
+            del self._fields["period"]
+
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(module.GeometryPanel, "_build", drop_a_field)
+            with pytest.raises(AssertionError, match="period"):
+                module.GeometryPanel()
+
+    def test_a_scalar_option_field_missing_stops_the_window_opening(self, qtbot):
+        """The other half of the same guard, now that scalar's own options
+        are checked separately from geometry's."""
         from gratinglab.gui.qt import main_window as module
 
-        original = module.MainWindow._build_inputs
+        original = module.MainWindow._build_solver_controls
 
         def drop_a_field(self):
             widget = original(self)
-            del self._fields["period"]
-            self._check_fields_match_formstate()
+            del self._fields["quadrature_points"]
+            self._check_fields_match_scalar_options()
             return widget
 
         with pytest.MonkeyPatch.context() as patch:
-            patch.setattr(module.MainWindow, "_build_inputs", drop_a_field)
-            with pytest.raises(AssertionError, match="period"):
+            patch.setattr(module.MainWindow, "_build_solver_controls", drop_a_field)
+            with pytest.raises(AssertionError, match="quadrature_points"):
                 module.MainWindow()
 
     def test_mount_change_relabels_the_angle_fields(self, win):
-        win._fields["mount"].setCurrentText("Classical")
-        assert "α" in win._angle_labels["alpha"].text()
+        win.geometry._fields["mount"].setCurrentText("Classical")
+        assert "α" in win.geometry._angle_labels["alpha"].text()
 
     def test_classical_hides_the_second_angle(self, win):
         """Checked with isHidden, not isVisible: under the offscreen platform
         an unshown window reports every child invisible, which would make this
         pass without testing anything."""
-        win._fields["mount"].setCurrentText("Classical")
-        assert win._fields["gamma"].isHidden()
+        win.geometry._fields["mount"].setCurrentText("Classical")
+        assert win.geometry._fields["gamma"].isHidden()
 
     def test_off_plane_shows_the_second_angle(self, win):
-        win._fields["mount"].setCurrentText("Off-plane")
-        assert not win._fields["gamma"].isHidden()
+        win.geometry._fields["mount"].setCurrentText("Off-plane")
+        assert not win.geometry._fields["gamma"].isHidden()
 
     def test_profile_change_hides_irrelevant_fields(self, win):
         """duty_cycle is meaningless for a sinusoid. The mapping itself is
         tested headlessly against PROFILE_FIELDS."""
-        win._fields["profile_kind"].setCurrentText("Sinusoidal")
-        assert win._profile_rows["duty_cycle"].isHidden()
-        assert not win._profile_rows["depth_fraction"].isHidden()
+        win.geometry._fields["profile_kind"].setCurrentText("Sinusoidal")
+        assert win.geometry._profile_rows["duty_cycle"].isHidden()
+        assert not win.geometry._profile_rows["depth_fraction"].isHidden()
 
     def test_from_file_reveals_the_load_button(self, win):
-        win._fields["profile_kind"].setCurrentText("From file")
-        assert not win._load_button.isHidden()
-        assert win._profile_rows["blaze_angle"].isHidden()
+        win.geometry._fields["profile_kind"].setCurrentText("From file")
+        assert not win.geometry._load_button.isHidden()
+        assert win.geometry._profile_rows["blaze_angle"].isHidden()
 
 
 class TestBackgroundSolve:
