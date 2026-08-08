@@ -43,6 +43,7 @@ from .. import orders as orders_module
 from .. import provenance
 from ..scalar_options import ScalarOptionsState
 from ..scalar_options import build_options as build_scalar_options
+from .sizing import fit_width_to_contents
 
 __all__ = ["ScalarTab"]
 
@@ -92,7 +93,11 @@ class ScalarTab(QWidget):
         scroller = QScrollArea()
         scroller.setWidget(controls)
         scroller.setWidgetResizable(True)
-        scroller.setMinimumWidth(240)
+        # The Orders All/None/Default row sets this column's floor and it is
+        # wider than it looks: 3 buttons at Qt's push-button minimum, plus
+        # spacing, groupbox margins, the scrollbar and the frame. Derived, not
+        # a literal -- those metrics differ across the three CI platforms.
+        fit_width_to_contents(scroller)
 
         right = QSplitter(Qt.Orientation.Vertical)
         right.addWidget(self._build_efficiency_plot())

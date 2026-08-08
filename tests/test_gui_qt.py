@@ -445,6 +445,35 @@ class TestOrderPanel:
         assert deselected not in win.tabs["scalar"]._visible_orders
 
 
+class TestLayoutFloors:
+    """Sizing regressions, which is the class of bug that has shipped here
+    twice unnoticed because nothing asserted on a pixel."""
+
+    def test_no_scroll_area_promises_less_width_than_its_content(self, win):
+        """A minimumWidth below the inner widget's own minimumSizeHint is not
+        a tight budget -- it is a constraint Qt cannot satisfy, and it answers
+        with a horizontal scrollbar and a clipped control.
+
+        Would have failed before M13-B: ScalarTab declared 240 against 276 px
+        of content. Needs no laid-out geometry, so it is deterministic.
+        """
+        from PySide6.QtWidgets import QScrollArea
+
+        areas = [a for a in win.findChildren(QScrollArea) if a.widget() is not None]
+        assert areas, "vacuous unless the window actually has scroll areas"
+
+        for area in areas:
+            needed = (
+                area.widget().minimumSizeHint().width()
+                + area.verticalScrollBar().sizeHint().width()
+                + 2 * area.frameWidth()
+            )
+            assert area.minimumWidth() >= needed, (
+                f"{type(area.widget()).__name__} promises "
+                f"{area.minimumWidth()} px but needs {needed}"
+            )
+
+
 class TestGeometryDock:
     """The geometry inputs, in a panel that can be got out of the way."""
 
