@@ -33,6 +33,7 @@ from PySide6.QtWidgets import (
 from .. import provenance
 from ..state import FormErrors, build
 from .geometry_panel import GeometryPanel
+from .geometry_tab import GeometryTab
 from .profile_plot_panel import ProfilePlotPanel
 from .scalar_tab import ScalarTab
 from .setup_tab import SetupTab
@@ -87,6 +88,9 @@ class MainWindow(QMainWindow):
         self._build_menu()
         self._build_layout()
         self._start_worker()
+        # Geometry first: it needs no solver, so it can be right before any
+        # result exists rather than showing an empty panel until one does.
+        self._refresh_geometry_tab()
         self._solve_active_tab()
 
     # -- construction ----------------------------------------------------
@@ -129,10 +133,15 @@ class MainWindow(QMainWindow):
         self.tabs: dict[str, QWidget] = {}
         self._tab_widget = QTabWidget()
 
-        # Leftmost, always, and never in `self.tabs`: Setup is not a solver,
-        # has no solve/cancel contract, and MainWindow never routes to it.
+        # The two non-solver tabs come first, so the bar has a single boundary
+        # between "about the problem" and "about a method". Neither is in
+        # `self.tabs`: neither implements the solve/cancel contract, and
+        # `_solve_active_tab`'s `getattr(..., "name", None)` skips both.
         self._setup_tab = SetupTab()
         self._tab_widget.addTab(self._setup_tab, "Setup")
+
+        self.geometry_tab = GeometryTab()
+        self._tab_widget.addTab(self.geometry_tab, "Grating Geometry")
 
         for name in available_solvers():
             factory = _TAB_FACTORIES.get(name)
@@ -207,6 +216,22 @@ class MainWindow(QMainWindow):
 
     # -- actions ---------------------------------------------------------
 
+    def _refresh_geometry_tab(self) -> None:
+        """Redraw the geometry tab from the form as it stands.
+
+        Deliberately not driven off `_on_solved`: the tab holds no solver
+        output, so waiting for a solve to redraw a picture no solver
+        contributed to would be a false dependency. M12-D makes this live on
+        every keystroke; for now it runs at construction and after each solve.
+        """
+        try:
+            self.geometry_tab.show_geometry(build(self.geometry.read_form()))
+        except FormErrors:
+            # A form that does not parse has no geometry to draw. Leaving the
+            # last good drawing up is handled properly in M12-D; here the tab
+            # simply keeps whatever it had.
+            pass
+
     def _solve_active_tab(self) -> None:
         """Enter in a geometry field solves whichever tab is showing.
 
@@ -275,6 +300,7 @@ class MainWindow(QMainWindow):
             return  # cancelled or superseded; the window has moved on
         self._set_running(False)
         self.profile_panel.draw(self._parsed)
+        self.geometry_tab.show_geometry(self._parsed)
         self.tabs[method].show_result(
             result.scan, result.energy, self._parsed.lambda_over_period
         )

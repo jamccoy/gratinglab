@@ -42,14 +42,21 @@ class ProfilePlotPanel(QWidget):
         """
         import numpy as np
 
+        from .. import diagram
+
         axes = self._axes
         axes.clear()
-        t = np.linspace(0.0, 1.0, 600, endpoint=False)
-        two_periods = np.concatenate([t, t + 1.0])
-        height = parsed.problem.height_nm(two_periods)
-        axes.plot(two_periods, height, color="#1f3b73", lw=1.8)
-        axes.fill_between(two_periods, 0, height, color="#1f3b73", alpha=0.12)
-        axes.set_xlabel("position / period  (two periods shown)")
+        # Physical nm along d-hat, not the raw profile parameter. `t` runs
+        # against the dispersion direction (conventions.md §3), so plotting
+        # against `t` mirrors the groove -- and this panel sits beside a
+        # diagram that draws the same object with rays on it. Two plots of one
+        # grating with opposite handedness would be a small lie.
+        t = np.linspace(-2.0, 0.0, 1200)
+        x = diagram.x_nm(t, parsed.problem.period)
+        height = parsed.problem.height_nm(t)
+        axes.plot(x, height, color="#1f3b73", lw=1.8)
+        axes.fill_between(x, 0, height, color="#1f3b73", alpha=0.12)
+        axes.set_xlabel("position along d̂ (nm)  —  two periods shown")
         axes.set_ylabel("height (nm)")
         axes.set_title(
             f"{type(parsed.problem.profile).__name__} — "

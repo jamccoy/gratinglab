@@ -445,6 +445,92 @@ class TestOrderPanel:
         assert deselected not in win.tabs["scalar"]._visible_orders
 
 
+class TestGeometryTab:
+    """The tab and its wiring. What the *drawing* contains is decided and
+    tested in `tests/test_gui_diagram.py`, without a window."""
+
+    def test_it_sits_between_setup_and_the_solver_tabs(self, win):
+        titles = [win._tab_widget.tabText(i) for i in range(win._tab_widget.count())]
+        assert titles[0] == "Setup"
+        assert titles[1] == "Grating Geometry"
+        assert "Scalar" in titles[2]
+
+    def test_it_is_not_in_the_solver_tab_registry(self, win):
+        """It implements none of the solve/cancel contract, so it must never
+        be somewhere `solve(name)` could reach."""
+        assert win.geometry_tab not in win.tabs.values()
+        assert not hasattr(win.geometry_tab, "name")
+
+    def test_it_draws_before_any_solve_completes(self, qtbot):
+        """Geometry needs no solver, so it should be right immediately rather
+        than showing an empty panel until a result exists."""
+        from gratinglab.gui.qt.main_window import MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+        assert window.geometry_tab._diagram is not None
+
+    def test_what_it_draws_equals_what_the_pure_module_returns(self, win):
+        """TestNotASecondSourceOfTruth, extended to the diagram. If the tab
+        ever computed an angle itself, this drifts."""
+        from gratinglab.gui import diagram
+
+        tab = win.geometry_tab
+        expected = diagram.build(
+            tab._parsed.problem, tab._parsed.illumination, tab._diagram.wavelength
+        )
+        assert [m.order for m in tab._diagram.orders] == [m.order for m in expected.orders]
+        assert [m.sin_beta for m in tab._diagram.orders] == [
+            m.sin_beta for m in expected.orders
+        ]
+        assert [a.tag for a in tab._diagram.arrows] == [a.tag for a in expected.arrows]
+
+    def test_the_slider_spans_the_scan_and_starts_in_the_middle(self, win):
+        tab = win.geometry_tab
+        assert tab._slider.maximum() == len(tab._parsed.wavelengths) - 1
+        assert tab._slider.value() == len(tab._parsed.wavelengths) // 2
+
+    def test_moving_the_slider_redraws_and_never_solves(self, win):
+        """The geometry is already known; nothing here depends on a solver."""
+        tab = win.geometry_tab
+        before = tab._diagram.wavelength
+        token = win._token
+
+        tab._slider.setValue(tab._slider.value() + 20)
+
+        assert tab._diagram.wavelength != before
+        assert win._token == token, "moving the slider must not trigger a solve"
+
+    def test_the_blaze_button_jumps_to_the_blaze_wavelength(self, win):
+        """At the shipped defaults lambda_b(m=2) = 4.05 nm, inside the 1-5 nm
+        scan."""
+        tab = win.geometry_tab
+        tab._blaze_button.click()
+        assert 4.0 < tab._diagram.wavelength < 4.1
+
+    def test_the_blaze_button_is_disabled_with_a_reason_when_it_cannot_apply(
+        self, qtbot, win
+    ):
+        """A dead control that explains itself, not a dead control. An enabled
+        one that silently did nothing is the mistake M9 named."""
+        win.geometry._fields["profile_kind"].setCurrentText("Sinusoidal")
+        win._refresh_geometry_tab()
+
+        tab = win.geometry_tab
+        assert not tab._blaze_button.isEnabled()
+        assert "no blaze angle" in tab._blaze_button.toolTip()
+
+    def test_the_blaze_button_is_enabled_for_a_blazed_profile(self, win):
+        """Non-vacuity for the test above."""
+        assert win.geometry_tab._blaze_button.isEnabled()
+        assert win.geometry_tab._blaze_button.toolTip() == ""
+
+    def test_the_captions_reach_the_panel(self, win):
+        text = win.geometry_tab._captions.toPlainText()
+        assert "groove axis" in text
+        assert "evanescent" in text
+
+
 class TestSetupTab:
     """The stub, and the guard that keeps it honest."""
 
