@@ -675,6 +675,132 @@ class TestGeometryTab:
         assert "evanescent" in text
 
 
+class TestRimFocusAndPresets:
+    """M13-G. All on the shared `win` fixture -- test_gui_qt.py is already 76%
+    of suite wall time, so no test here builds its own window."""
+
+    def _panel(self, win):
+        """The tab defers `_paint` to `showEvent` and the shared fixture never
+        shows it, so paint once on demand rather than making the tab current
+        (which would cost every test in this class a full relayout)."""
+        panel = win.geometry_tab._scene3d
+        if not panel._artists["fine"]:
+            panel.show_scene(win.geometry_tab._scene)
+        return panel
+
+    def test_the_preset_round_trips_back_to_the_physical_direction(self, win):
+        """`_view_angles` inverts `diagram3d.view_direction` after the display
+        permutation. Setting the preset and reading the camera back recovers
+        the vector the pure module declared."""
+        from gratinglab.gui import diagram3d
+        from gratinglab.gui.qt.scene3d_panel import _display
+
+        panel = self._panel(win)
+        panel._preset_box.setCurrentText(diagram3d.RIM_PRESET)
+        looking = diagram3d.view_direction(panel._axes.elev, panel._axes.azim)
+        wanted = np.asarray(_display(diagram3d.PRESET_VIEWS[diagram3d.RIM_PRESET]))
+        assert looking == pytest.approx(wanted, abs=1e-9)
+
+    def test_and_that_direction_is_the_groove_axis(self, win):
+        """Non-vacuity: the round-trip above would pass on any preset, so pin
+        which one this is."""
+        from gratinglab.gui import diagram3d
+
+        assert diagram3d.PRESET_VIEWS[diagram3d.RIM_PRESET] == pytest.approx(
+            diagram3d.G_HAT, abs=1e-12
+        )
+
+    def test_choosing_it_also_focuses_on_the_rim(self, win):
+        """The pairing is the entire point; separating them would make the one
+        useful combination a two-step discovery."""
+        from gratinglab.gui import diagram3d
+
+        panel = self._panel(win)
+        panel._focus_button.setChecked(False)
+        panel._preset_box.setCurrentText(diagram3d.RIM_PRESET)
+        assert panel._focus_button.isChecked()
+        assert panel._focus == "rim"
+
+    def test_another_preset_does_not(self, win):
+        """Non-vacuity for the test above."""
+        panel = self._panel(win)
+        panel._focus_button.setChecked(False)
+        panel._preset_box.setCurrentText("Oblique")
+        assert not panel._focus_button.isChecked()
+
+    def test_focusing_shrinks_the_frame_by_the_stated_magnification(self, win):
+        panel = self._panel(win)
+        scene = win.geometry_tab._scene
+
+        panel._focus_button.setChecked(False)
+        wide = panel._axes.get_xlim3d()
+        panel._focus_button.setChecked(True)
+        close = panel._axes.get_xlim3d()
+
+        assert (wide[1] - wide[0]) / (close[1] - close[0]) == pytest.approx(
+            scene.rim_magnification, rel=1e-9
+        )
+
+    def test_and_says_so_on_the_canvas(self, win):
+        panel = self._panel(win)
+        panel._focus_button.setChecked(True)
+        assert "27" in panel._magnification.text()
+
+    def test_dragging_swaps_in_the_coarse_artists(self, win):
+        """Both levels of detail are built once by `build_scene`; the drag
+        flips visibility and resamples nothing."""
+        from matplotlib.backend_bases import MouseButton, MouseEvent
+
+        panel = self._panel(win)
+        panel._focus_button.setChecked(False)
+        assert panel._lod == "fine"
+
+        press = MouseEvent(
+            "button_press_event", panel._canvas, 200, 200, MouseButton.LEFT
+        )
+        press.inaxes = panel._axes
+        panel._on_press(press)
+        assert panel._lod == "coarse"
+        assert any(a.get_visible() for a in panel._artists["coarse"])
+        assert not any(a.get_visible() for a in panel._artists["fine"])
+
+        panel._on_release(None)
+        assert panel._lod == "fine"
+        assert any(a.get_visible() for a in panel._artists["fine"])
+
+    def test_the_two_artist_groups_are_different_objects(self, win):
+        """Companion: without this the swap test would pass on an
+        implementation that swapped nothing."""
+        panel = self._panel(win)
+        fine, coarse = panel._artists["fine"], panel._artists["coarse"]
+        assert fine and coarse
+        assert not (set(map(id, fine)) & set(map(id, coarse)))
+
+    def test_rim_focus_is_offered_at_grazing_incidence(self, win):
+        panel = self._panel(win)
+        assert panel._focus_button.isEnabled()
+        assert panel._focus_button.toolTip() == ""
+
+    def test_and_refused_with_a_reason_in_plane(self, win):
+        """The `blaze_jump` contract: a disabled control explains itself. At
+        gamma = 90 the rim already is the whole scene."""
+        from gratinglab.gui import diagram3d
+        from gratinglab.illumination import Illumination
+
+        tab = win.geometry_tab
+        panel = self._panel(win)
+        scene = diagram3d.build_scene(
+            tab._parsed.problem,
+            Illumination.classical(alpha=25.0, polarization="unpolarized"),
+            600.0,
+        )
+        panel.show_scene(scene)
+        assert not panel._focus_button.isEnabled()
+        assert panel._focus_button.toolTip()
+
+        panel.show_scene(tab._scene)  # leave the fixture as we found it
+
+
 class TestSetupTab:
     """The stub, and the guard that keeps it honest."""
 

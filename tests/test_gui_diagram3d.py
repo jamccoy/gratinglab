@@ -16,7 +16,9 @@ from gratinglab.gui.diagram3d import (
     D_HAT,
     G_HAT,
     N_HAT,
+    MIN_RIM_MAGNIFICATION,
     PRESET_VIEWS,
+    RIM_PRESET,
     build_scene,
     incident_vector,
     view_direction,
@@ -264,24 +266,40 @@ class TestSceneShape:
 
 
 class TestPresetViews:
-    def test_down_the_cone_axis_looks_along_it(self):
-        looking = view_direction(*PRESET_VIEWS["down the cone axis"])
-        assert looking == pytest.approx(-CONE_AXIS, abs=1e-12)
+    """Presets are physical look-directions, so they mean the same thing
+    whatever permutation the widget applies for display."""
 
-    def test_along_d_looks_along_the_dispersion_axis(self):
-        assert view_direction(*PRESET_VIEWS["along d̂"]) == pytest.approx(
-            -D_HAT, abs=1e-12
-        )
+    def test_every_preset_is_a_unit_vector(self):
+        for name, look in PRESET_VIEWS.items():
+            assert np.linalg.norm(look) == pytest.approx(1.0, abs=1e-12), name
 
-    def test_the_presets_are_distinct(self):
-        dirs = [view_direction(*v) for v in PRESET_VIEWS.values()]
-        for i, a in enumerate(dirs):
-            for b in dirs[i + 1:]:
+    def test_down_the_cone_axis_looks_along_g(self):
+        assert PRESET_VIEWS[RIM_PRESET] == pytest.approx(G_HAT, abs=1e-12)
+
+    def test_which_is_opposite_the_way_the_cone_opens(self):
+        """Non-vacuity, and the M13-E finding again: looking *along* the
+        groove axis means the rays come back at you."""
+        assert PRESET_VIEWS[RIM_PRESET] @ CONE_AXIS == pytest.approx(-1.0)
+
+    def test_along_d_looks_against_the_dispersion_axis(self):
+        assert PRESET_VIEWS["Along d\u0302"] == pytest.approx(-D_HAT, abs=1e-12)
+
+    def test_face_n_looks_against_the_normal(self):
+        assert PRESET_VIEWS["Face n\u0302"] == pytest.approx(-N_HAT, abs=1e-12)
+
+    def test_the_presets_are_pairwise_distinct(self):
+        looks = list(PRESET_VIEWS.values())
+        assert len(looks) > 2
+        for i, a in enumerate(looks):
+            for b in looks[i + 1:]:
                 assert abs(a @ b) < 0.99
 
-    def test_view_direction_is_a_unit_vector(self):
-        for preset in PRESET_VIEWS.values():
-            assert np.linalg.norm(view_direction(*preset)) == pytest.approx(1.0)
+    def test_view_direction_is_a_unit_vector_for_any_camera_angles(self):
+        """`view_direction` is the forward map the panel inverts; a preset
+        round-trip through it is asserted at the widget level."""
+        for elev in (-60.0, 0.0, 25.0, 89.0):
+            for azim in (-135.0, 0.0, 30.0, 200.0):
+                assert np.linalg.norm(view_direction(elev, azim)) == pytest.approx(1.0)
 
 
 class TestPurity:
@@ -297,3 +315,79 @@ class TestPurity:
                 imported.add(node.module.split(".")[0])
 
         assert not {"tkinter", "PySide6", "PyQt6", "matplotlib"} & imported
+
+
+class TestRimFocus:
+    """Framing the cone rim, which is what makes the 93.8-degree fan
+    readable at true scale."""
+
+    def test_the_rim_box_is_a_cube(self, scene):
+        """Both boxes cubes is what makes moving between them a similarity
+        transform rather than a distortion."""
+        spans = [hi - lo for lo, hi in scene.rim_limits]
+        assert spans[0] == pytest.approx(spans[1]) == pytest.approx(spans[2])
+
+    def test_it_is_centred_on_the_rim(self, scene):
+        (x0, x1), (y0, y1), (z0, z1) = scene.rim_limits
+        assert 0.5 * (x0 + x1) == pytest.approx(0.0)
+        assert 0.5 * (y0 + y1) == pytest.approx(0.0)
+        assert 0.5 * (z0 + z1) == pytest.approx(np.cos(np.radians(GAMMA)))
+
+    def test_every_ray_tip_falls_inside_it(self, scene):
+        (x0, x1), (y0, y1), (z0, z1) = scene.rim_limits
+        for ray in order_rays(scene):
+            hx, hy, hz = ray.head
+            assert x0 <= hx <= x1 and y0 <= hy <= y1 and z0 <= hz <= z1
+
+    def test_the_magnification_is_the_ratio_of_the_two_half_extents(self, scene):
+        half = diagram3d.RIM_MARGIN * np.sin(np.radians(GAMMA))
+        assert scene.rim_magnification == pytest.approx(diagram3d.BOX_HALF / half)
+
+    def test_and_is_worth_having(self, scene):
+        assert scene.rim_magnification > 20.0
+        assert scene.rim_magnification > MIN_RIM_MAGNIFICATION
+
+    def test_because_the_whole_scene_box_leaves_the_fan_microscopic(self, scene):
+        """Non-vacuity for the test above, measured rather than asserted: in
+        the full box the entire fan spans under 3% of the frame."""
+        (x0, x1), _, _ = scene.limits
+        fan_width = 2.0 * np.sin(np.radians(GAMMA))
+        assert fan_width / (x1 - x0) < 0.03
+
+    def test_zooming_changes_no_angle(self, scene):
+        """The claim that uniform zoom is honest, as a fact.
+
+        The boxes differ by a scale and a translation, so the angle between
+        every pair of drawn rays is identical in both -- there is nothing for
+        a caption to disclaim.
+        """
+        rays = [np.asarray(r.direction) for r in order_rays(scene)]
+        scale = scene.rim_magnification
+        for i, a in enumerate(rays):
+            for b in rays[i + 1:]:
+                before = np.arccos(np.clip(a @ b, -1.0, 1.0))
+                after = np.arccos(np.clip((scale * a) @ (scale * b)
+                                          / (scale * scale), -1.0, 1.0))
+                assert before == pytest.approx(after, abs=1e-12)
+
+    def test_the_reason_is_non_empty_exactly_when_unavailable(self):
+        """The `blaze_jump` contract, so a disabled control can explain
+        itself instead of sitting there dead."""
+        cases = [
+            offplane(gamma=1.5),
+            offplane(gamma=30.0),
+            Illumination.classical(alpha=25.0, polarization=UNPOL),
+        ]
+        seen = set()
+        for ill in cases:
+            s = build_scene(blazed(), ill, LAMBDA)
+            assert bool(s.rim_reason) == (not s.rim_available)
+            seen.add(s.rim_available)
+        assert seen == {True, False}, "both branches must be exercised"
+
+    def test_in_plane_says_the_rim_is_already_the_whole_scene(self):
+        s = build_scene(
+            blazed(), Illumination.classical(alpha=25.0, polarization=UNPOL), 600.0
+        )
+        assert not s.rim_available
+        assert "nothing to zoom into" in s.rim_reason

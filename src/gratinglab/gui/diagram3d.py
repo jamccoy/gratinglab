@@ -93,6 +93,8 @@ __all__ = [
     "CONE_AXIS",
     "TAG_COLORS",
     "PRESET_VIEWS",
+    "RIM_PRESET",
+    "rim_box",
     "Ray3D",
     "Surface3D",
     "Curve3D",
@@ -129,13 +131,37 @@ PATCH_SPAN: float = 0.5
 #: Half-extent of the scene's bounding cube.
 BOX_HALF: float = 1.15
 
-#: ``(elev, azim)`` in degrees, matplotlib's convention.
-PRESET_VIEWS: dict[str, tuple[float, float]] = {
-    "oblique": (22.0, -60.0),
-    "down the cone axis": (90.0, -90.0),
-    "along d̂": (0.0, 0.0),
-    "face n̂": (0.0, 90.0),
+#: How far out the rim-focus box reaches, in units of the rim radius
+#: :math:`\sin\gamma`. 1.6 puts the rim circle across ~62% of the frame.
+RIM_MARGIN: float = 1.6
+
+#: Below this, focusing on the rim is not worth offering -- and at
+#: :math:`\gamma = 90°` it would be a zoom *out*.
+MIN_RIM_MAGNIFICATION: float = 1.5
+
+#: The direction the camera looks **along**, in the physical
+#: :math:`(\hat{d}, \hat{n}, -\hat{g})` frame of ``conventions.md`` §3.
+#:
+#: Physical, not matplotlib ``(elev, azim)``: the widget permutes the scene to
+#: put :math:`\hat{n}` upward for display, so an ``(elev, azim)`` pair here
+#: would no longer mean what its name says. The widget converts.
+PRESET_VIEWS: dict[str, NDArray[np.float64]] = {
+    # Off-axis: the grazing bundle skimming along the grooves.
+    "Oblique": np.array([-0.42, -0.35, -0.84]),
+    # From +ẑ looking back, so every order projects onto a circle at its true
+    # azimuth. Paired with rim focus, this is where the fan is readable.
+    "Down the cone axis": G_HAT.copy(),
+    # The (n̂, ĝ) plane, where γ itself is the visible angle.
+    "Along d̂": -D_HAT.copy(),
+    # The grating face-on, grooves running across.
+    "Face n̂": -N_HAT.copy(),
 }
+PRESET_VIEWS = {
+    name: v / np.linalg.norm(v) for name, v in PRESET_VIEWS.items()
+}
+
+#: The preset whose whole point is the rim, so choosing it switches focus too.
+RIM_PRESET = "Down the cone axis"
 
 #: Mesh resolutions. Both surfaces are *ruled* -- the grating patch is the
 #: cross-section extruded along ẑ, and every generator of a cone is straight --
@@ -233,10 +259,25 @@ class Scene:
     captions: tuple[Line, ...]
     title: str
     limits: tuple[tuple[float, float], tuple[float, float], tuple[float, float]]
+    #: The same scene, framed on the cone rim. **Also a cube**, so moving
+    #: between the two is a uniform scale plus a translation -- a similarity
+    #: transform, which preserves every angle exactly. Nothing is distorted;
+    #: only which part of the geometry fills the frame changes.
+    rim_limits: tuple[tuple[float, float], tuple[float, float], tuple[float, float]]
+    #: How much closer that is, for the label on the canvas.
+    rim_magnification: float
+    #: Non-empty **exactly** when the rim focus is not worth offering, so a
+    #: caller puts *this* in a disabled control's tooltip rather than
+    #: inventing one. Same contract as ``blaze_jump``.
+    rim_reason: str
     scale_nm: float
     gamma: float
     wavelength: float
     blaze_order: int | None
+
+    @property
+    def rim_available(self) -> bool:
+        return not self.rim_reason
 
     def ray(self, order: int) -> Ray3D:
         """The ray for one order. Raises if it has none -- an evanescent order
@@ -276,6 +317,51 @@ def incident_vector(alpha: float, gamma: float) -> NDArray[np.float64]:
     r""":math:`\hat{k}_i`, which travels *toward* the grating (negative
     :math:`\hat{y}`). Equals ``Illumination.direction_cosines``."""
     return np.array([*(-direction(alpha) * np.sin(gamma)), np.cos(gamma)])
+
+
+def rim_box(
+    gamma: float,
+) -> tuple[
+    tuple[tuple[float, float], tuple[float, float], tuple[float, float]], float, str
+]:
+    r"""``(limits, magnification, reason)`` for a view framed on the cone rim.
+
+    The rim is a circle of radius :math:`\sin\gamma` at height
+    :math:`\cos\gamma`, so the box is a cube centred there. At
+    :math:`\gamma = 1.5°` that is a 27x uniform magnification -- which is what
+    turns the 93.8° azimuth fan from a point cluster into something readable,
+    without touching a single angle.
+
+    ``reason`` is non-empty **exactly** when the magnification is not worth
+    offering. At :math:`\gamma = 90°` the rim already *is* the whole scene and
+    focusing on it would zoom *out*; a control that did nothing would be the
+    mistake this project has named before.
+    """
+    half = RIM_MARGIN * float(np.sin(gamma))
+    magnification = BOX_HALF / half if half > 0.0 else float("inf")
+    centre = float(np.cos(gamma))
+
+    limits = (
+        (-half, half),
+        (-half, half),
+        (centre - half, centre + half),
+    )
+
+    if magnification < MIN_RIM_MAGNIFICATION:
+        degrees = np.degrees(gamma)
+        if np.isclose(degrees, 90.0):
+            reason = (
+                "γ = 90°: the cone rim is the whole scene, so there is nothing "
+                "to zoom into."
+            )
+        else:
+            reason = (
+                f"γ = {degrees:g}° already separates the orders; focusing on "
+                "the rim would change little."
+            )
+        return limits, magnification, reason
+
+    return limits, magnification, ""
 
 
 def view_direction(elev_deg: float, azim_deg: float) -> NDArray[np.float64]:
@@ -435,6 +521,7 @@ def build_scene(
     labelled = label_orders(marks)
     scale_nm = periods * problem.period / PATCH_SPAN
     origin = (0.0, 0.0, 0.0)
+    rim_limits, rim_magnification, rim_reason = rim_box(gamma)
 
     rays: list[Ray3D] = []
     surfaces: list[Surface3D] = []
@@ -514,6 +601,9 @@ def build_scene(
             (-BOX_HALF, BOX_HALF),
             (-BOX_HALF, BOX_HALF),
         ),
+        rim_limits=rim_limits,
+        rim_magnification=rim_magnification,
+        rim_reason=rim_reason,
         scale_nm=scale_nm,
         gamma=float(gamma),
         wavelength=float(wavelength),
