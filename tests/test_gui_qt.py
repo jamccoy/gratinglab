@@ -416,7 +416,16 @@ class TestToolkitBoundary:
     def test_only_gui_qt_may_import_a_toolkit(self):
         """A package boundary rather than a convention, so the drift that
         always happens -- someone needing 'just a QColor' in a pure module --
-        fails here instead of quietly spreading."""
+        fails here instead of quietly spreading.
+
+        `app.py` is the one file at this level that's expected to *reach into*
+        the toolkit -- but only deferred, inside `_require_qt()`, which is
+        exactly what keeps `import gratinglab.gui.app` safe without the `gui`
+        extra. So this checks module-*level* imports only (`.body`, not a full
+        recursive walk) -- a recursive walk would flag that sanctioned
+        deferred import as if it were the unconditional kind this test exists
+        to catch.
+        """
         import ast
         from pathlib import Path
 
@@ -426,7 +435,7 @@ class TestToolkitBoundary:
         offenders = {}
         for path in sorted(root.glob("*.py")):
             imported: set[str] = set()
-            for node in ast.walk(ast.parse(path.read_text())):
+            for node in ast.parse(path.read_text()).body:
                 if isinstance(node, ast.Import):
                     imported.update(a.name.split(".")[0] for a in node.names)
                 elif isinstance(node, ast.ImportFrom) and node.module:
@@ -435,6 +444,50 @@ class TestToolkitBoundary:
             if found:
                 offenders[path.name] = found
 
-        assert offenders == {"app.py": {"tkinter"}}, (
-            "only gui/qt/ may import a toolkit; app.py's tkinter goes at cut-over"
-        )
+        assert offenders == {}, "only gui/qt/ may import a toolkit unconditionally"
+
+
+class TestEntryPoint:
+    """`app.py`'s own two jobs: explain a missing toolkit, and stay safe to
+    import without one.
+
+    Ported from the Tk suite this replaces -- PySide6 is pip-installable
+    (unlike Tk), so the *message* changed, but the failure mode is still real:
+    an install of `[dev]` without `[gui]` hits exactly this.
+    """
+
+    def test_gives_an_explanation_not_a_traceback(self, monkeypatch):
+        import builtins
+
+        from gratinglab.gui import app as app_module
+
+        real_import = builtins.__import__
+
+        def refuse(name, *args, **kwargs):
+            if name == "PySide6.QtWidgets" or name.startswith("PySide6"):
+                raise ImportError("No module named 'PySide6'")
+            return real_import(name, *args, **kwargs)
+
+        monkeypatch.setattr(builtins, "__import__", refuse)
+
+        with pytest.raises(SystemExit) as excinfo:
+            app_module._require_qt()
+
+        message = str(excinfo.value)
+        assert 'pip install -e ".[gui]"' in message
+        assert "Everything except the GUI works without it" in message
+
+    def test_importing_the_module_does_not_require_pyside6(self):
+        """Import must be safe where PySide6 is missing; only calling
+        `_require_qt`/`main` needs it."""
+        import ast
+        import inspect
+
+        from gratinglab.gui import app as app_module
+
+        top_level = {
+            node.names[0].name
+            for node in ast.parse(inspect.getsource(app_module)).body
+            if isinstance(node, ast.Import)
+        }
+        assert "PySide6" not in top_level

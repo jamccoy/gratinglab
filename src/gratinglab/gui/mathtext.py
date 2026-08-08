@@ -1,14 +1,14 @@
 r"""Rendering LaTeX math from a theory page, without a markdown dependency.
 
-The theory viewer previously showed `$$\Phi_m(x) = ...$$` as literal source --
-backslashes and all -- because it was a plain :class:`tkinter.Text` insertion.
-This module is the fix's pure half: splitting a markdown string into text and
-math spans, and rasterizing math spans to PNG bytes via
-:func:`matplotlib.mathtext.math_to_image`, which is already a dependency (it is
-what draws every axis label in the plots) and needs no live display to run --
-the whole pipeline down to PNG bytes is headlessly testable. Only the final
-step of turning those bytes into a `tkinter.PhotoImage` and inserting it into a
-`Text` widget lives in :mod:`gratinglab.gui.app`, where it needs a real Tk root.
+A theory page's `$$\Phi_m(x) = ...$$` should not reach a reader as literal
+source, backslashes and all. This module is the pure half of the fix:
+splitting a markdown string into text and math spans, and rasterizing math
+spans to PNG bytes via :func:`matplotlib.mathtext.math_to_image`, which is
+already a dependency (it is what draws every axis label in the plots) and
+needs no live display to run -- the whole pipeline down to PNG bytes is
+headlessly testable. Only the final step of turning those bytes into an
+embeddable image lives in :mod:`gratinglab.gui.richtext` and
+:mod:`gratinglab.gui.qt.theory_viewer`, where it needs a real Qt document.
 
 Two things worth knowing before touching this file:
 
