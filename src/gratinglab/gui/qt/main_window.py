@@ -244,7 +244,15 @@ class MainWindow(QMainWindow):
         self._token += 1
         self._set_running(True)
         tab.show_solving(len(geometry.wavelengths))
-        QTimer.singleShot(_PROGRESS_DELAY_MS, lambda: self._show_progress_if_still_running(tab))
+        # `tab` as the context object, not a bare singleShot: Qt then cancels
+        # the timer if the tab is destroyed first. Without it, closing the
+        # window inside the 150 ms delay leaves the timer holding a deleted
+        # QProgressBar, and an exception escaping a slot under PySide6 can
+        # abort the process rather than surfacing. Found by macOS CI, where the
+        # timing landed the stale timer inside the *next* test's setup.
+        QTimer.singleShot(
+            _PROGRESS_DELAY_MS, tab, lambda: self._show_progress_if_still_running(tab)
+        )
         self._requested.emit(self._token, name, geometry, options)
 
     def cancel(self) -> None:

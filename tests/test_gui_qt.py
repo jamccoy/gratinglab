@@ -353,6 +353,29 @@ class TestBackgroundSolve:
         window.close()
         assert not window._thread.isRunning()
 
+    def test_the_progress_timer_does_not_outlive_the_tab_that_armed_it(self, qtbot):
+        """Solve arms a 150 ms timer holding the tab's progress bar. If the
+        window goes away inside that delay the timer used to fire on a deleted
+        QProgressBar, and an exception escaping a slot under PySide6 can abort
+        the process rather than surfacing.
+
+        Caught by macOS CI, where the stale timer landed in the *next* test's
+        setup; the race is timing-dependent and does not reproduce reliably
+        here, so this exercises the path rather than pinning the crash. The
+        fix is the context-object overload of `QTimer.singleShot`, which Qt
+        cancels when the context dies -- verified directly: a timer whose
+        context is destroyed does not fire.
+        """
+        from gratinglab.gui.qt.main_window import _PROGRESS_DELAY_MS, MainWindow
+
+        window = MainWindow()
+        qtbot.addWidget(window)
+        window.solve("scalar")
+        window.close()
+        window.deleteLater()
+        # pytest-qt fails the test if any slot raises during this wait.
+        qtbot.wait(_PROGRESS_DELAY_MS * 3)
+
 
 class TestOrderPanel:
     """Wiring for `gui/orders.py` inside `ScalarTab`.
