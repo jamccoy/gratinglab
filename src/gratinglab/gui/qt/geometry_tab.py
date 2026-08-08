@@ -31,8 +31,10 @@ from PySide6.QtWidgets import (
 )
 
 from .. import diagram as diagram_module
+from .. import diagram3d as diagram3d_module
 from .. import provenance
 from .profile_plot_panel import ProfilePlotPanel
+from .scene3d_panel import Scene3DPanel
 
 __all__ = ["GeometryTab"]
 
@@ -57,6 +59,7 @@ class GeometryTab(QWidget):
         super().__init__(parent)
         self._parsed = None
         self._diagram = None
+        self._scene = None
         self._needs_paint = False
         self._build()
 
@@ -82,7 +85,6 @@ class GeometryTab(QWidget):
         was spending the scarce dimension; a ~170 px strip spends the one we
         now have to spare, handing that width back to the plots.
         """
-        # Hero first: `_build_plots` reuses its axes for the "main" panel.
         hero = self._build_hero()
         self.profile_panel = ProfilePlotPanel()
 
@@ -114,42 +116,29 @@ class GeometryTab(QWidget):
         layout.addWidget(outer)
 
     def _build_hero(self) -> QWidget:
-        """The main view. Holds the dispersion-plane cross-section for now;
-        the 3D conical view takes this slot at M13-G and the cross-section
-        moves to the side column."""
-        from matplotlib.backends.backend_qtagg import (
-            FigureCanvasQTAgg,
-            NavigationToolbar2QT,
-        )
-        from matplotlib.figure import Figure
-
-        self._hero_figure = Figure(figsize=(6, 5), layout="constrained")
-        self._hero_axes = self._hero_figure.add_subplot(1, 1, 1)
-        self._hero_canvas = FigureCanvasQTAgg(self._hero_figure)
-
-        panel = QWidget()
-        panel.setMinimumWidth(380)
-        panel.setMinimumHeight(320)
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(NavigationToolbar2QT(self._hero_canvas, panel))
-        layout.addWidget(self._hero_canvas)
-        return panel
+        """The 3D conical view -- the one thing a dispersion-plane drawing
+        cannot show."""
+        self._scene3d = Scene3DPanel()
+        self._scene3d.setMinimumWidth(380)
+        self._scene3d.setMinimumHeight(320)
+        return self._scene3d
 
     def _build_plots(self) -> QWidget:
-        """The sin β ladder and the γ sliver -- both about one number each."""
+        """The 2D panels, beside the 3D one: the dispersion-plane
+        cross-section (where the groove facets are legible), the sin β ladder,
+        and the γ sliver."""
         from matplotlib.backends.backend_qtagg import (
             FigureCanvasQTAgg,
             NavigationToolbar2QT,
         )
         from matplotlib.figure import Figure
 
-        self._figure = Figure(figsize=(4, 3), layout="constrained")
-        grid = self._figure.add_gridspec(2, 1)
+        self._figure = Figure(figsize=(4, 6), layout="constrained")
+        grid = self._figure.add_gridspec(3, 1, height_ratios=[3.0, 1.0, 1.0])
         self._axes = {
-            "main": self._hero_axes,  # the hero canvas, drawn on separately
-            "ladder": self._figure.add_subplot(grid[0, 0]),
-            "cone": self._figure.add_subplot(grid[1, 0]),
+            "main": self._figure.add_subplot(grid[0, 0]),
+            "ladder": self._figure.add_subplot(grid[1, 0]),
+            "cone": self._figure.add_subplot(grid[2, 0]),
         }
         self._canvas = FigureCanvasQTAgg(self._figure)
 
@@ -268,9 +257,15 @@ class GeometryTab(QWidget):
         self._diagram = diagram_module.build(
             self._parsed.problem, self._parsed.illumination, wavelength
         )
+        self._scene = diagram3d_module.build_scene(
+            self._parsed.problem, self._parsed.illumination, wavelength
+        )
         # Cheap, and it is the part a reader needs even before the picture
-        # arrives, so it is never deferred.
-        self._captions.setHtml(provenance.to_html(self._diagram.captions))
+        # arrives, so it is never deferred. The 3D scene's captions carry what
+        # the projection cannot show, so both sets appear.
+        self._captions.setHtml(
+            provenance.to_html(self._scene.captions + self._diagram.captions)
+        )
 
         if self.isVisible():
             self._paint(self._diagram)
@@ -281,6 +276,7 @@ class GeometryTab(QWidget):
     def _paint(self, drawing) -> None:
         """Position what `diagram` decided. No trig, no cutoffs, no colours."""
         colors = diagram_module.TAG_COLORS
+        self._scene3d.show_scene(self._scene)
 
         for name, axes in self._axes.items():
             axes.clear()
@@ -362,7 +358,4 @@ class GeometryTab(QWidget):
             axes.tick_params(labelsize=7)
         self._axes["main"].grid(alpha=0.15)
 
-        # Two canvases: the hero holds the "main" axes, the side figure holds
-        # the ladder and the γ sliver.
-        self._hero_canvas.draw_idle()
         self._canvas.draw_idle()

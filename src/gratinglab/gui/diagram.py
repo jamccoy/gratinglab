@@ -84,6 +84,7 @@ __all__ = [
     "Diagram",
     "build",
     "x_nm",
+    "direction",
     "order_span",
     "order_marks",
     "strike_point",
@@ -261,7 +262,7 @@ def x_nm(t: ArrayLike, period: float) -> NDArray[np.float64]:
     return T_AXIS_SIGN * np.asarray(t, dtype=np.float64) * period
 
 
-def _direction(azimuth: float) -> NDArray[np.float64]:
+def direction(azimuth: float) -> NDArray[np.float64]:
     """Unit vector at an azimuth measured from :math:`\\hat{n}` toward
     :math:`\\hat{d}` -- the convention every angle in §3 uses."""
     return np.array([np.sin(azimuth), np.cos(azimuth)])
@@ -595,7 +596,7 @@ def build(
     # -- incident ray ----------------------------------------------------
     # k_i projects to (-sin a, -cos a): it *travels* that way, so the tail sits
     # back along the opposite direction and the head is the strike point.
-    incoming = _direction(illumination.alpha)
+    incoming = direction(illumination.alpha)
     tail = strike + ray * incoming
     arrows.append(
         Arrow(
@@ -623,7 +624,7 @@ def build(
     for mark in marks:
         if mark.beta is None:
             continue  # no direction; it lives on the ladder instead
-        head = strike + ray * _direction(mark.beta)
+        head = strike + ray * direction(mark.beta)
         arrows.append(
             Arrow(
                 float(strike[0]), float(strike[1]), float(head[0]), float(head[1]),
@@ -648,7 +649,7 @@ def build(
     blaze_angle = getattr(problem.profile, "blaze_angle", None)
     if blaze_angle is not None:
         beta_b = blaze_direction(np.radians(blaze_angle), illumination.alpha)
-        head = strike + ray * _direction(beta_b)
+        head = strike + ray * direction(beta_b)
         arrows.append(
             Arrow(
                 float(strike[0]), float(strike[1]), float(head[0]), float(head[1]),

@@ -626,10 +626,48 @@ class TestGeometryTab:
         qtbot.wait(50)
 
         tab = win.geometry_tab
-        hero = tab._hero_canvas.size()
+        hero = tab._scene3d._canvas.size()
         side = tab._canvas.size()
         assert hero.width() > side.width()
         assert hero.width() * hero.height() > 2 * side.width() * side.height()
+
+    def test_the_hero_is_a_real_3d_axes(self, win):
+        assert win.geometry_tab._scene3d._axes.name == "3d"
+
+    def test_the_3d_scene_matches_what_the_pure_module_returns(self, win):
+        """TestNotASecondSourceOfTruth, extended to 3D. If the panel ever
+        computed a direction itself, this drifts."""
+        from gratinglab.gui import diagram3d
+
+        tab = win.geometry_tab
+        expected = diagram3d.build_scene(
+            tab._parsed.problem, tab._parsed.illumination, tab._scene.wavelength
+        )
+        drawn = {r.order: r.direction for r in tab._scene.rays if r.order is not None}
+        wanted = {r.order: r.direction for r in expected.rays if r.order is not None}
+        assert drawn == wanted
+
+    def test_the_3d_view_offers_no_pan_or_zoom(self, win):
+        """A NavigationToolbar2QT zoom rescales an Axes3D's data limits, which
+        breaks the cube box aspect the true angles depend on. A control that
+        can make the picture lie must not be offered."""
+        from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
+
+        assert win.geometry_tab._scene3d.findChildren(NavigationToolbar2QT) == []
+
+    def test_but_the_2d_figures_do_keep_theirs(self, win):
+        """Non-vacuity for the test above: pan and zoom cannot distort an
+        angle the 2D panels are not claiming."""
+        from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
+
+        assert win.geometry_tab.profile_panel.findChildren(NavigationToolbar2QT)
+
+    def test_the_3d_box_is_a_cube(self, win):
+        """Without equal box aspect every angle in the view is a lie."""
+        tab = win.geometry_tab
+        tab._scene3d.show_scene(tab._scene)
+        aspect = tab._scene3d._axes.get_box_aspect()
+        assert aspect[0] == pytest.approx(aspect[1]) == pytest.approx(aspect[2])
 
     def test_the_captions_reach_the_panel(self, win):
         text = win.geometry_tab._captions.toPlainText()
