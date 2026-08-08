@@ -79,6 +79,9 @@ $$\mathbf{k}_m = k\left[\sin\beta_m\,\sin\gamma\,\hat{x} + \cos\beta_m\,\sin\gam
 The incident wave travels toward the grating (**negative** ŷ component); reflected orders
 travel away from it (**positive** ŷ component). `k_z` is conserved for all orders.
 
+Every wave vector carries `k_z = +k cos γ > 0` for γ < 90°, so all propagation is toward
+`−ĝ`. The frame table's `ĝ = −ẑ` is forced by `d̂ × ĝ = n̂` and is not a free choice.
+
 ### Angles
 
 - **α** — azimuthal angle of incidence, measured from the grating normal `n̂` in the
@@ -86,13 +89,22 @@ travel away from it (**positive** ŷ component). `k_z` is conserved for all orde
   `Illumination`: an incidence angle at or past grazing carries no power onto the
   grating.
 - **β_m** — azimuthal angle of diffracted order *m*, same reference.
-- **γ** — half-angle of the diffraction cone about the groove axis: the *polar* angle
-  measured from the groove axis, in the spherical-coordinate sense — γ is what sweeps
-  out the cone, α is the azimuthal position around it. Operationally: `k_z = k cos γ`
-  is conserved, and **`sin γ = 1` (γ = 90°) is the in-plane case**. Extreme off-plane
-  mounts have small γ; the soft-X-ray work runs γ ≈ 1.5°. Range **γ ∈ (0°, 90°]**,
-  enforced by `Illumination`: γ = 90° is in-plane; γ = 0° would send the wave along
-  the grooves, which diffracts nothing.
+- **γ** — half-angle of the diffraction cone about the groove axis. The cone's axis is
+  the groove-axis **line**, and γ is the acute angle between a wave vector and that
+  line; γ is what sweeps out the cone, α is the azimuthal position around it.
+
+  As a *directed* statement, γ is the polar angle in the spherical system whose pole is
+  **`+ẑ = −ĝ`**, because every wave vector above carries `k_z = +k cos γ`. Concretely,
+  at γ = 1.5° every ray lies **1.5000° from `+ẑ` and 178.5000° from `ĝ`: the cone opens
+  along `−ĝ`, not along `ĝ`.** A drawing that opens it along `ĝ` points every ray 180°
+  out. Nothing that consumes γ as the scalars `sin γ` / `cos γ` can tell the difference,
+  which is why this went unstated until something had to draw it — see
+  `docs/findings.md`.
+
+  Operationally: `k_z = k cos γ` is conserved, and **`sin γ = 1` (γ = 90°) is the
+  in-plane case**. Extreme off-plane mounts have small γ; the soft-X-ray work runs
+  γ ≈ 1.5°. Range **γ ∈ (0°, 90°]**, enforced by `Illumination`: γ = 90° is in-plane;
+  γ = 0° would send the wave along the grooves, which diffracts nothing.
 - **δ** — groove-facet (blaze) angle of a sawtooth profile.
 - **ζ** — graze angle onto the groove facet, `sin ζ = sin γ · cos(δ - α)`.
 

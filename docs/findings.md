@@ -188,6 +188,47 @@ the *quadrature*. Reciprocity constrains the *structure* of the phase function.
 
 ---
 
+## The cone opens away from the groove-axis vector
+
+Three individually true statements in `conventions.md` §3, whose conjunction is
+contradictory under a directed reading:
+
+| Where | Statement |
+|---|---|
+| frame table | `ĝ = -ẑ` |
+| wave vectors | every `k` carries `+\cos\gamma\,\hat{z}` |
+| angles | γ is "the *polar* angle measured from the groove axis" |
+
+Measured directly at the reference geometry (α = 25°, γ = 1.5°): the angle from `+ẑ` is
+**1.5000°**, and the angle from `ĝ` is **178.5000°**. Every propagating order sits at
+exactly 1.5000° from `+ẑ` with an identical `k_z = 0.999657325` — they genuinely lie on
+one cone, and **that cone opens along `-ĝ`.**
+
+$$\hat{d} \times \hat{g} = \hat{n} \;\Longrightarrow\; \hat{x} \times \hat{g} = \hat{y}
+\;\Longrightarrow\; \hat{g} = -\hat{z}$$
+
+so `ĝ = -ẑ` is forced by the right-handedness relation — which comes from Heilmann et al.
+(2024) §2.1 — and is not a free choice. What was loose was the *wording* of the γ bullet:
+γ is the acute angle to the groove-axis **line**, i.e. the polar angle about `-ĝ`.
+
+**Nothing was ever wrong.** Every consumer of γ — `facet_graze`, `sin_beta`,
+`blaze_wavelength`, `Illumination` — takes it as the scalars `sin γ` / `cos γ`, where the
+direction of `ĝ` cannot enter. `Illumination.direction_cosines` gets the sign of its `z`
+component right, but nothing asserted it *against* `ĝ`. **No code had ever needed a
+directed groove-axis vector.**
+
+Same shape as [the `t̂ = -d̂` finding](#the-profile-parameter-runs-backwards-and-nothing-had-noticed):
+invisible until something drew it. The first thing to need a directed `ĝ` is a 3D view of
+the diffraction cone, and getting it backwards would open the cone into the grating
+instead of away from it — every ray 180° out.
+
+Recorded rather than "fixed" by flipping `ĝ` to `+ẑ`, which would break `d̂ × ĝ = n̂` and
+diverge from the reference. Pinned by
+`tests/test_illumination.py::TestTheConeOpensAwayFromTheGrooveAxis` — placed where the bug
+would have lived, not where it would have been noticed.
+
+---
+
 ## The profile parameter runs backwards, and nothing had noticed
 
 `geometry.blaze_direction` returns $\beta_b = 2\delta - \alpha$. That value requires the

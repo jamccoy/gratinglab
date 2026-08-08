@@ -115,3 +115,88 @@ class TestSerialization:
             "gamma_deg",
             "polarization",
         }
+
+
+#: `conventions.md` §3: the frame table's value, forced by `d̂ × ĝ = n̂`.
+G_HAT = np.array([0.0, 0.0, -1.0])
+Z_HAT = np.array([0.0, 0.0, 1.0])
+
+
+def diffracted(beta: float, gamma: float) -> np.ndarray:
+    r"""`conventions.md` §3's :math:`\hat{k}_m`, for a given azimuth."""
+    return np.array(
+        [
+            np.sin(beta) * np.sin(gamma),
+            np.cos(beta) * np.sin(gamma),
+            np.cos(gamma),
+        ]
+    )
+
+
+class TestTheConeOpensAwayFromTheGrooveAxis:
+    r"""Which *direction* the diffraction cone opens.
+
+    `conventions.md` §3's frame table says :math:`\hat{g} = -\hat{z}`, its wave
+    vectors all carry :math:`+\cos\gamma\,\hat{z}`, and its γ bullet used to
+    say γ was "the polar angle measured from the groove axis". Those three are
+    contradictory under a directed reading: γ is measured from
+    :math:`-\hat{g}`, so **the cone opens along** :math:`-\hat{g}`.
+
+    Nothing that consumes γ as the scalars `sin γ` / `cos γ` can tell the
+    difference, which is why this went unstated. A 3D drawing of the cone is
+    the first thing that has to know, and getting it backwards would open the
+    cone into the grating instead of away from it. See `docs/findings.md`.
+    """
+
+    ALPHA, GAMMA = np.radians([25.0, 1.5])
+
+    def test_the_frame_table_is_forced_by_right_handedness(self):
+        r""":math:`\hat{d} \times \hat{g} = \hat{n}` leaves no choice, so this
+        is not a convention that could simply be flipped."""
+        assert np.allclose(np.cross([1.0, 0.0, 0.0], G_HAT), [0.0, 1.0, 0.0])
+
+    def test_the_incident_ray_lies_gamma_from_the_cone_axis(self):
+        incident = Illumination(
+            alpha_deg=25.0, gamma_deg=1.5, polarization="unpolarized"
+        ).direction_cosines
+        assert np.arccos(incident @ Z_HAT) == pytest.approx(self.GAMMA)
+
+    def test_and_therefore_almost_180_degrees_from_the_groove_axis(self):
+        """The half that would have been drawn backwards."""
+        incident = Illumination(
+            alpha_deg=25.0, gamma_deg=1.5, polarization="unpolarized"
+        ).direction_cosines
+        assert np.degrees(np.arccos(incident @ G_HAT)) == pytest.approx(178.5)
+
+    @pytest.mark.parametrize("beta_deg", [-51.8, -25.0, -3.4, 17.7, 41.9])
+    def test_every_diffracted_order_lies_on_that_same_cone(self, beta_deg):
+        r"""The orders differ in *azimuth*, never in polar angle -- which is
+        exactly why a narrow cone can still carry a wide fan."""
+        k = diffracted(np.radians(beta_deg), self.GAMMA)
+        assert np.linalg.norm(k) == pytest.approx(1.0)
+        assert np.arccos(k @ Z_HAT) == pytest.approx(self.GAMMA)
+        assert k[2] == pytest.approx(np.cos(self.GAMMA))
+
+    def test_the_azimuth_fan_is_wide_even_though_the_cone_is_narrow(self):
+        """Non-vacuity for the test above: without this, "they all share a
+        polar angle" would be unremarkable -- it is only interesting because
+        they are otherwise spread right across the cone."""
+        betas = np.radians([-51.8, 41.9])
+        assert np.degrees(betas[1] - betas[0]) > 90.0
+        assert np.degrees(self.GAMMA) < 2.0
+
+    def test_the_fixture_is_genuinely_off_plane(self):
+        """The other non-vacuity guard. At γ = 90° the cone degenerates to the
+        dispersion plane and every angle here would be trivial."""
+        assert not Illumination(
+            alpha_deg=25.0, gamma_deg=1.5, polarization="unpolarized"
+        ).is_in_plane
+
+    def test_in_plane_puts_every_ray_in_the_dispersion_plane(self):
+        r"""γ = 90°: :math:`k_z = 0` exactly, the cone flattens, and the
+        groove-axis question stops having an answer."""
+        incident = Illumination.classical(
+            alpha=25.0, polarization="unpolarized"
+        ).direction_cosines
+        assert incident[2] == pytest.approx(0.0, abs=1e-15)
+        assert diffracted(np.radians(10.0), np.pi / 2)[2] == pytest.approx(0.0, abs=1e-15)
