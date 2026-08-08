@@ -31,7 +31,13 @@ from pathlib import Path
 
 from ..solvers.base import available_solvers, get_solver
 
-__all__ = ["TheoryPage", "find_theory_root", "theory_pages", "general_pages"]
+__all__ = [
+    "TheoryPage",
+    "find_theory_root",
+    "theory_pages",
+    "general_pages",
+    "display_title",
+]
 
 #: Human-readable titles for known solvers. Falls back to the bare registry
 #: name for anything not listed here, so a new solver still gets a menu entry
@@ -79,6 +85,17 @@ class TheoryPage:
     path: Path | None
     text: str
     rigorous: bool
+
+
+def display_title(name: str) -> str:
+    """A solver's human-readable name, e.g. ``"scalar"`` -> ``"Scalar
+    (Kirchhoff)"``.
+
+    Public so both the Help menu and a solver's own tab label read the same
+    name -- there is exactly one place that decides what a solver is called,
+    not two that could quietly drift apart.
+    """
+    return _TITLES.get(name, name)
 
 
 def find_theory_root(start: Path | None = None) -> Path | None:
@@ -137,7 +154,7 @@ def theory_pages() -> tuple[TheoryPage, ...]:
     return tuple(
         _load_page(
             name,
-            _TITLES.get(name, name),
+            display_title(name),
             None if root is None else root / f"{name}.md",
             rigorous=get_solver(name).capabilities.rigorous,
             not_written=f"docs/theory/{name}.md",

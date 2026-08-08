@@ -40,10 +40,10 @@ def win(qtbot):
     return window
 
 
-def resolve(qtbot, window):
-    """Press Solve and wait for the result to land."""
+def resolve(qtbot, window, name="scalar"):
+    """Press Solve on the named tab and wait for the result to land."""
     with qtbot.waitSignal(window.solved, timeout=SOLVE_TIMEOUT_MS):
-        window.solve()
+        window.solve(name)
 
 
 class TestToolchain:
@@ -106,9 +106,9 @@ class TestToolchain:
 class TestNotASecondSourceOfTruth:
     """The single most important property of this layer.
 
-    It survived the toolkit change unchanged, which is the point of having
-    written it this way: if the window ever computed anything itself, these
-    would drift.
+    It survived both the toolkit change and the move to tabs unchanged, which
+    is the point of having written it this way: if a tab ever computed
+    anything itself, these would drift.
     """
 
     def test_plotted_values_equal_a_direct_solve(self, win):
@@ -120,8 +120,9 @@ class TestNotASecondSourceOfTruth:
         expected = scalar.solve(
             parsed.problem, parsed.illumination, parsed.wavelengths, **options
         )
-        assert np.array_equal(win._scan.efficiency, expected.efficiency)
-        assert np.array_equal(win._scan.orders, expected.orders)
+        scalar_tab = win.tabs["scalar"]
+        assert np.array_equal(scalar_tab._scan.efficiency, expected.efficiency)
+        assert np.array_equal(scalar_tab._scan.orders, expected.orders)
 
     def test_changing_a_field_changes_the_result_consistently(self, qtbot, win):
         win.geometry._fields["blaze_angle"].setText("12.0")
@@ -135,37 +136,39 @@ class TestNotASecondSourceOfTruth:
         expected = scalar.solve(
             parsed.problem, parsed.illumination, parsed.wavelengths, **options
         )
-        assert np.array_equal(win._scan.efficiency, expected.efficiency)
+        assert np.array_equal(win.tabs["scalar"]._scan.efficiency, expected.efficiency)
 
 
 class TestBehaviour:
     def test_solves_on_construction(self, win):
         """Opening the app shows something, not an empty window."""
-        assert win._scan is not None
-        assert len(win._scan) == 200
+        scan = win.tabs["scalar"]._scan
+        assert scan is not None
+        assert len(scan) == 200
 
     def test_invalid_input_reports_errors_without_crashing(self, win):
         win.geometry._fields["period"].setText("not a number")
-        win.solve()  # rejected synchronously; never reaches the worker
-        text = win._provenance.toPlainText()
+        win.solve("scalar")  # rejected synchronously; never reaches the worker
+        text = win.tabs["scalar"]._provenance.toPlainText()
         assert "period" in text
         assert "need attention" in text
 
     def test_a_failed_solve_leaves_the_previous_result_intact(self, win):
-        good = win._scan
+        good = win.tabs["scalar"]._scan
         win.geometry._fields["period"].setText("")
-        win.solve()
-        assert win._scan is good
+        win.solve("scalar")
+        assert win.tabs["scalar"]._scan is good
 
     def test_the_panel_shows_what_provenance_decided(self, win):
         """All this layer owes: paint the lines it was given. What each line
         says is checked in tests/test_gui_provenance.py."""
         from gratinglab.gui.provenance import provenance_lines
 
+        scalar_tab = win.tabs["scalar"]
         expected = provenance_lines(
-            win._scan, win._energy, win._parsed.lambda_over_period
+            scalar_tab._scan, scalar_tab._energy, scalar_tab._lambda_over_period
         )
-        shown = win._provenance.toPlainText()
+        shown = scalar_tab._provenance.toPlainText()
         for line in expected:
             assert line.text.strip() in shown
 
@@ -193,23 +196,22 @@ class TestBehaviour:
             with pytest.raises(AssertionError, match="period"):
                 module.GeometryPanel()
 
-    def test_a_scalar_option_field_missing_stops_the_window_opening(self, qtbot):
+    def test_a_scalar_option_field_missing_stops_the_tab_opening(self, qtbot):
         """The other half of the same guard, now that scalar's own options
-        are checked separately from geometry's."""
-        from gratinglab.gui.qt import main_window as module
+        are checked inside ScalarTab rather than on MainWindow."""
+        from gratinglab.gui.qt import scalar_tab as module
 
-        original = module.MainWindow._build_solver_controls
+        original = module.ScalarTab._build_options_group
 
         def drop_a_field(self):
             widget = original(self)
             del self._fields["quadrature_points"]
-            self._check_fields_match_scalar_options()
             return widget
 
         with pytest.MonkeyPatch.context() as patch:
-            patch.setattr(module.MainWindow, "_build_solver_controls", drop_a_field)
+            patch.setattr(module.ScalarTab, "_build_options_group", drop_a_field)
             with pytest.raises(AssertionError, match="quadrature_points"):
-                module.MainWindow()
+                module.ScalarTab()
 
     def test_mount_change_relabels_the_angle_fields(self, win):
         win.geometry._fields["mount"].setCurrentText("Classical")
@@ -264,56 +266,76 @@ class TestBackgroundSolve:
         assert seen["thread"] != threading.current_thread().ident
 
     def test_solve_is_disabled_while_one_is_running(self, win):
-        win.solve()
-        assert not win._solve_button.isEnabled()
-        assert win._cancel_button.isEnabled()
+        win.solve("scalar")
+        scalar_tab = win.tabs["scalar"]
+        assert not scalar_tab._solve_button.isEnabled()
+        assert scalar_tab._cancel_button.isEnabled()
 
     def test_a_second_solve_while_running_is_ignored(self, win):
         """One window, one result. Superseding would stack CPU-burning
         threads; queueing would surprise the user with a stale-then-fresh
         double redraw."""
-        win.solve()
+        win.solve("scalar")
         token = win._token
-        win.solve()
+        win.solve("scalar")
         assert win._token == token
 
     def test_cancel_keeps_the_previous_result_on_screen(self, win):
-        previous = win._scan
-        win.solve()
+        scalar_tab = win.tabs["scalar"]
+        previous = scalar_tab._scan
+        win.solve("scalar")
         win.cancel()
-        assert win._scan is previous
-        assert win._solve_button.isEnabled()
+        assert scalar_tab._scan is previous
+        assert scalar_tab._solve_button.isEnabled()
 
     def test_cancel_says_the_calculation_is_still_finishing(self, win):
         """Cancel abandons a result; it cannot stop the CPU. Claiming
         otherwise would be the panel's first lie."""
-        win.solve()
+        win.solve("scalar")
         win.cancel()
-        assert "still finishing" in win._provenance.toPlainText()
+        assert "still finishing" in win.tabs["scalar"]._provenance.toPlainText()
 
     def test_a_cancelled_result_is_dropped_when_it_arrives(self, win):
         from gratinglab.gui.qt.worker import SolveResult
 
-        win.solve()
+        win.solve("scalar")
         stale = win._token
         win.cancel()
         # would crash if accepted
         win._on_solved(stale, "scalar", SolveResult(None, None))
-        assert win._scan is not None
+        assert win.tabs["scalar"]._scan is not None
 
     def test_a_solver_exception_becomes_a_message_not_a_crash(self, win):
         """A Python exception escaping a slot under PySide6 can abort the
         process rather than surfacing."""
         win._token += 1
+        win._active_name = "scalar"
         win._set_running(True)
         win._on_failed(win._token, "scalar", "ValueError: contrived")
-        assert "solve failed" in win._provenance.toPlainText()
-        assert win._solve_button.isEnabled()
+        scalar_tab = win.tabs["scalar"]
+        assert "solve failed" in scalar_tab._provenance.toPlainText()
+        assert scalar_tab._solve_button.isEnabled()
 
     def test_no_progress_bar_for_a_fast_solve(self, win):
         """The scalar solve takes about 70 ms; flashing a bar on and off
         within a frame reads as a glitch."""
-        assert win._progress.isHidden()
+        assert win.tabs["scalar"]._progress.isHidden()
+
+    def test_every_tabs_solve_button_disables_together(self, win):
+        """Cross-tab coordination: only one solve can be in flight
+        window-wide, so no tab's Solve button may stay clickable while
+        another tab's solve runs.
+
+        With only Setup (no Solve button, added at M11-D) and Scalar
+        registered, there is no *second* Solve button to prove this against
+        yet -- this asserts the mechanism (`_set_running` loops every tab),
+        not a second tab's behaviour. Worth revisiting once a second solver
+        tab exists.
+        """
+        win.solve("scalar")
+        assert all(not t._solve_button.isEnabled() for t in win.tabs.values())
+        win.cancel()
+        assert all(t._solve_button.isEnabled() for t in win.tabs.values())
 
     def test_closing_joins_the_worker_thread(self, qtbot):
         """Otherwise Qt reports 'QThread: Destroyed while thread is still
@@ -330,6 +352,74 @@ class TestBackgroundSolve:
         assert window._thread.isRunning()
         window.close()
         assert not window._thread.isRunning()
+
+
+class TestOrderPanel:
+    """Wiring for `gui/orders.py` inside `ScalarTab`.
+
+    The rule itself -- which orders default to visible, how a re-solve
+    carries a selection forward -- is already covered headlessly in
+    `tests/test_gui_orders.py`. This is the wiring: does toggling a checkbox
+    actually redraw, and does it do so without re-solving.
+    """
+
+    def test_every_order_from_the_default_scan_is_listed(self, win):
+        scalar_tab = win.tabs["scalar"]
+        assert scalar_tab._order_list.count() == len(scalar_tab._scan.orders)
+
+    def test_the_count_label_matches_the_checked_items(self, win):
+        scalar_tab = win.tabs["scalar"]
+        shown = len(scalar_tab._visible_orders)
+        assert scalar_tab._order_count_label.text() == f"{shown} of {scalar_tab._order_list.count()} shown"
+
+    def test_unchecking_an_order_removes_its_curve_without_a_resolve(self, win):
+        from PySide6.QtCore import Qt as QtCoreQt
+
+        from gratinglab.gui.qt.scalar_tab import _ORDER_ROLE
+
+        scalar_tab = win.tabs["scalar"]
+        token_before = win._token
+        item = scalar_tab._order_list.item(0)
+        order = item.data(_ORDER_ROLE)
+        assert order in scalar_tab._visible_orders
+
+        item.setCheckState(QtCoreQt.CheckState.Unchecked)
+
+        assert win._token == token_before, "toggling an order must not trigger a solve"
+        assert order not in scalar_tab._visible_orders
+
+    def test_the_none_button_hides_every_curve(self, win):
+        scalar_tab = win.tabs["scalar"]
+        scalar_tab._show_no_orders()
+        assert scalar_tab._visible_orders == frozenset()
+        assert scalar_tab._order_count_label.text().startswith("0 of")
+
+    def test_the_all_button_shows_every_order_that_existed_last_solve(self, win):
+        scalar_tab = win.tabs["scalar"]
+        scalar_tab._show_no_orders()
+        scalar_tab._show_all_orders()
+        assert scalar_tab._visible_orders == scalar_tab._previous_orders
+
+    def test_the_default_button_reapplies_the_default_rule(self, win):
+        from gratinglab.gui.orders import default_visible, summarize
+
+        scalar_tab = win.tabs["scalar"]
+        scalar_tab._show_no_orders()
+        scalar_tab._show_default_orders()
+        assert scalar_tab._visible_orders == default_visible(summarize(scalar_tab._scan))
+
+    def test_a_deselected_order_survives_a_resolve(self, qtbot, win):
+        """The behaviour that makes the panel feel right: nudge a geometry
+        field, re-solve, and an order you unchecked stays unchecked."""
+        scalar_tab = win.tabs["scalar"]
+        deselected = next(iter(scalar_tab._previous_orders))
+        scalar_tab._visible_orders = scalar_tab._visible_orders - {deselected}
+        scalar_tab._resync_order_checkboxes()
+
+        win.geometry._fields["blaze_angle"].setText("12.0")
+        resolve(qtbot, win)
+
+        assert deselected not in win.tabs["scalar"]._visible_orders
 
 
 class TestHelpMenu:
