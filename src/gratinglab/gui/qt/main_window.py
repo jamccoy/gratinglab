@@ -35,6 +35,7 @@ from ..state import FormErrors, build
 from .geometry_panel import GeometryPanel
 from .profile_plot_panel import ProfilePlotPanel
 from .scalar_tab import ScalarTab
+from .setup_tab import SetupTab
 from .worker import SolveWorker
 
 __all__ = ["MainWindow"]
@@ -127,6 +128,12 @@ class MainWindow(QMainWindow):
 
         self.tabs: dict[str, QWidget] = {}
         self._tab_widget = QTabWidget()
+
+        # Leftmost, always, and never in `self.tabs`: Setup is not a solver,
+        # has no solve/cancel contract, and MainWindow never routes to it.
+        self._setup_tab = SetupTab()
+        self._tab_widget.addTab(self._setup_tab, "Setup")
+
         for name in available_solvers():
             factory = _TAB_FACTORIES.get(name)
             if factory is None:
@@ -136,6 +143,16 @@ class MainWindow(QMainWindow):
             tab.cancel_requested.connect(self.cancel)
             self.tabs[name] = tab
             self._tab_widget.addTab(tab, display_title(name))
+
+        # Setup is leftmost so it is easy to find, but a solver tab -- not
+        # the explanatory stub -- is what should be showing, and solving,
+        # when the window opens: a user wants a result, not a "nothing here
+        # yet" page. `_solve_active_tab` (used for both the construction-time
+        # solve and Enter-in-a-geometry-field) reads `currentWidget()`, so
+        # this is also what makes the window open already solving.
+        if self.tabs:
+            self._tab_widget.setCurrentWidget(next(iter(self.tabs.values())))
+
         return self._tab_widget
 
     def _build_menu(self) -> None:

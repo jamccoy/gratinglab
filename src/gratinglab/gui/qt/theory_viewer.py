@@ -21,7 +21,30 @@ from PySide6.QtWidgets import QTextBrowser, QVBoxLayout, QWidget
 
 from .. import richtext
 
-__all__ = ["TheoryViewer"]
+__all__ = ["TheoryViewer", "render_into"]
+
+
+def render_into(
+    browser: QTextBrowser, page, *, device_pixel_ratio: float, text_color: str
+) -> None:
+    """Render a page into an existing `QTextBrowser`, images and all.
+
+    Shared by :class:`TheoryViewer` and :class:`~.setup_tab.SetupTab` --
+    both are "one markdown-ish page, typeset, in a browser," and the second
+    use is exactly the signal that this was worth factoring out rather than
+    copied.
+    """
+    rendered = richtext.to_html(
+        page, device_pixel_ratio=device_pixel_ratio, color=text_color
+    )
+    document = browser.document()
+    for image in rendered.images:
+        document.addResource(
+            QTextDocument.ResourceType.ImageResource,
+            QUrl(image.key),
+            QImage.fromData(image.png, "PNG"),
+        )
+    browser.setHtml(rendered.html)
 
 
 class TheoryViewer(QWidget):
@@ -49,19 +72,12 @@ class TheoryViewer(QWidget):
 
     def set_page(self, page) -> None:
         """Render a page into the browser, images and all."""
-        rendered = richtext.to_html(
+        render_into(
+            self._browser,
             page,
             device_pixel_ratio=self.devicePixelRatioF(),
-            color=self._text_color(),
+            text_color=self._text_color(),
         )
-        document = self._browser.document()
-        for image in rendered.images:
-            document.addResource(
-                QTextDocument.ResourceType.ImageResource,
-                QUrl(image.key),
-                QImage.fromData(image.png, "PNG"),
-            )
-        self._browser.setHtml(rendered.html)
 
     def _text_color(self) -> str:
         """Rasterise math in the palette's own text colour.

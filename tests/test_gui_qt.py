@@ -422,6 +422,59 @@ class TestOrderPanel:
         assert deselected not in win.tabs["scalar"]._visible_orders
 
 
+class TestSetupTab:
+    """The stub, and the guard that keeps it honest."""
+
+    def test_it_is_the_leftmost_tab(self, win):
+        assert win._tab_widget.tabText(0) == "Setup"
+
+    def test_a_solver_tab_is_what_is_actually_selected_on_open(self, win):
+        """Regression, and a real bug caught by this milestone: adding Setup
+        at index 0 made it the *current* tab, so `_solve_active_tab` found no
+        `name` on it and the construction-time solve silently never ran --
+        every test then sat out its full waitSignal timeout.
+
+        Setup is leftmost because it is easy to find there; it is not what
+        should be showing when the window opens.
+        """
+        current = win._tab_widget.currentWidget()
+        assert getattr(current, "name", None) == "scalar"
+
+    def test_it_explains_what_will_live_there(self, win):
+        text = win._setup_tab._browser.toPlainText()
+        assert "materials layer" in text
+        assert "roadmap" in text
+
+    def test_it_says_why_no_control_is_offered_yet(self, win):
+        """The project's own rule, stated where a user would otherwise
+        wonder why the tab is empty."""
+        text = win._setup_tab._browser.toPlainText()
+        assert "silently does nothing" in text
+        assert "relative" in text
+
+    def test_it_offers_no_input_at_all(self, win):
+        """The guard. `Problem.coating` exists and is inert; a coating field
+        here would look like a working option that changes nothing -- exactly
+        the mistake M9 named and rejected. A future 'let's just add a field'
+        fails here rather than slipping through review.
+        """
+        from PySide6.QtWidgets import QComboBox, QLineEdit
+
+        assert win._setup_tab.findChildren(QLineEdit) == []
+        assert win._setup_tab.findChildren(QComboBox) == []
+
+    def test_it_is_not_in_the_solver_tab_registry(self, win):
+        """Setup implements none of the solve/cancel contract, so it must
+        never be somewhere `solve(name)` could reach."""
+        assert win._setup_tab not in win.tabs.values()
+        assert "setup" not in win.tabs
+
+    def test_it_renders_as_typeset_markdown_not_raw_source(self, win):
+        html = win._setup_tab._browser.toHtml()
+        assert "<h1" in html
+        assert "# Setup" not in win._setup_tab._browser.toPlainText()
+
+
 class TestHelpMenu:
     """Read through `win._help_menu`, never `menuBar().actions()[i].menu()`.
 
