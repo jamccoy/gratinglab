@@ -188,6 +188,48 @@ the *quadrature*. Reciprocity constrains the *structure* of the phase function.
 
 ---
 
+## The profile parameter runs backwards, and nothing had noticed
+
+`geometry.blaze_direction` returns $\beta_b = 2\delta - \alpha$. That value requires the
+active facet's outward normal at azimuth $+\delta$ — the facet *descending* with
+increasing $x$. Reflecting the projected incident direction about the other orientation
+gives $\sin\beta = -\sin(2\delta + \alpha)$ instead: at the reference geometry
+($\delta = 29.5°$, $\alpha = 25°$) that is **−84.0°** where the blaze direction is
+**+34.0°**.
+
+But `Blazed.slope()` returns $+\tan\delta$ for $t \leq$ `apex` — the active facet *rises*
+with $t$. Rising in $t$ while descending in $x$ means $\hat{t} = -\hat{d}$.
+
+**Nothing was ever wrong.** The scalar solver's blaze peak lands where
+`blaze_wavelength` predicts:
+
+| order | predicted $\lambda_b$ | solver peak | ratio |
+|---|---|---|---|
+| 2 | 4.0498 nm | 3.9970 nm | 0.987 |
+| 3 | 2.6999 nm | 2.6863 nm | 0.995 |
+
+(The residual is the sinc envelope peaking between discrete orders, not a sign error.)
+`scalar.py` computes $\int e^{+i\Phi_m(t)}e^{-2\pi imt}\,dt$ where §2/§3 imply
+$e^{-i\Phi_m}$ under $t \leftrightarrow +x$; the substitution $t \leftrightarrow -x$ maps
+one integral onto the **complex conjugate** of the other, and conjugation leaves
+$\|G_m\|^2$ bit-identical. The codebase has been self-consistent all along.
+
+**What made it invisible:** no code had ever drawn the groove profile and the diffracted
+rays in the same frame. `ProfilePlotPanel` plots height against $t$ left-to-right, which
+*implies* $t \leftrightarrow +\hat{d}$ without asserting anything physical, and every
+other consumer takes $\|G_m\|^2$ where the handedness cancels. The geometry visualizer is
+the first thing that has to place a facet relative to a ray — and getting it backwards
+would have drawn the beam striking the anti-blaze facet with the blaze arrow leaving
+through the back of the active one.
+
+Recorded in [`conventions.md` §3](conventions.md) rather than repaired by flipping
+`scalar.py`'s signs. That flip is equally modulus-preserving and every test would still
+pass, but it would move the module's headline formula away from the form transcribed from
+the ISSI chapter and Appendix D. **Neither reference states a handedness** — both quote
+only $\|G_m\|^2$ — which is the finding rather than an oversight to correct.
+
+---
+
 ## An exactly-correct solver produced an unusable report
 
 CI failed on all three matrix jobs while the same commit passed locally.

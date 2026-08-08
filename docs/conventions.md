@@ -100,6 +100,43 @@ Storage is by **direction cosines**, not angles — see `Illumination`. The thre
 constructors (`classical`, `conical`, `offplane`) exist so that each community can pass
 the angles it actually uses, and they all resolve to the same internal representation.
 
+### Which way the profile parameter runs
+
+$$\hat{t} = -\hat{d}$$
+
+`Profile.height(t)` is a shape in a normalised parameter `t`; `profiles.py` never says
+which physical direction `+t` points, because until something drew a profile and a ray in
+the *same* frame, nothing needed to know. The wave conventions above fix it, and the
+answer is that **`+t` runs along `-d̂`**, i.e. against the dispersion direction.
+
+Two independent derivations agree:
+
+**From the blaze direction.** `geometry.blaze_direction` returns `β_b = 2δ - α`.
+Reflecting the projected incident direction `(-sin α, -cos α)` about a facet with outward
+normal `n̂_f` gives `sin β = sin(2δ - α)` for `n̂_f = (+sin δ, cos δ)`, and
+`sin β = -sin(2δ + α)` for `n̂_f = (-sin δ, cos δ)` — at the reference geometry
+(δ = 29.5°, α = 25°), **+34.0°** versus **−84.0°**. So the active facet's outward normal
+sits at azimuth `+δ`, meaning the facet *descends* with increasing `x`. But
+`Blazed.slope()` returns `+tan δ` for `t ≤ apex`: the active facet *rises* with `t`.
+Rising in `t`, descending in `x` ⟹ `t̂ = -d̂`.
+
+**From the Kirchhoff integral.** `solvers/scalar.py` forms
+`G_m = ∫ e^{+iΦ_m(t)} e^{-2πimt} dt`, whereas §2's time convention and the `k` vectors
+above give `∫ e^{-iΦ_m(t)} e^{-2πimt} dx/p` when `t ↔ +x`. Substituting `t ↔ -x` maps one
+integral onto the complex conjugate of the other.
+
+**Nothing depends on the choice numerically.** Conjugation leaves `|G_m|²` — the only
+quantity any caller consumes — bit-identical, which is why this was consistent but
+unstated for so long. It matters only where a drawing places a facet relative to a ray:
+get it backwards and the incident beam strikes the *anti-blaze* facet while the blaze
+arrow leaves through the back of the active one.
+
+Recorded rather than "fixed" by flipping the signs in `scalar.py`, which would also be
+modulus-preserving but would move that module's headline formula away from the form
+transcribed from the two primary references. The references themselves state no
+handedness — they quote only `|G_m|²` — which is itself the finding. Pinned by
+`tests/test_geometry.py::TestFacetHandedness`; see also `docs/findings.md`.
+
 #### Alternate names in the literature
 
 Two clashes worth flagging rather than silently picking a side on.

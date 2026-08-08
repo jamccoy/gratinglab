@@ -170,3 +170,120 @@ class TestBlaze:
 
     def test_zeroth_order_has_no_blaze_wavelength(self):
         assert np.isinf(blaze_wavelength(0, 160.0, 0.5, 0.4, 0.03))
+
+
+def _reflect(direction, normal):
+    """Specular reflection of a 2D unit vector about a unit normal."""
+    return direction - 2.0 * (direction @ normal) * normal
+
+
+def _projected_incident(alpha):
+    r"""Incident direction projected onto the (d-hat, n-hat) plane.
+
+    From `conventions.md` §3's :math:`\mathbf{k}_i`, dropping the common
+    :math:`\sin\gamma` scale and the out-of-plane :math:`\cos\gamma\,\hat{z}`.
+    """
+    return np.array([-np.sin(alpha), -np.cos(alpha)])
+
+
+class TestFacetHandedness:
+    r"""Which physical direction the profile parameter runs.
+
+    `Profile.height(t)` is a shape in `t`; `profiles.py` never says whether
+    `+t` points along `+d-hat` or `-d-hat`, and until something drew a groove
+    and a ray in the same frame, nothing had to know -- every consumer takes
+    :math:`\|G_m\|^2`, where the choice cancels.
+
+    It does not cancel in a *drawing*. These tests pin the answer,
+    :math:`\hat{t} = -\hat{d}`, against the two things that constrain it:
+    `blaze_direction` and `facet_graze`. See `docs/conventions.md` §3 and the
+    findings entry.
+    """
+
+    #: The reference off-plane case, and the one whose numbers appear in the
+    #: docs: beta_b = 2(29.5) - 25 = +34.0 degrees.
+    DELTA, ALPHA, GAMMA = np.radians([29.5, 25.0, 1.5])
+
+    #: Outward normal of the active facet under t-hat = -d-hat. `Blazed.slope`
+    #: rises at +tan(delta) in `t`, so the facet descends in `x`, so its
+    #: outward normal leans toward +x by delta.
+    @property
+    def active_normal(self):
+        return np.array([np.sin(self.DELTA), np.cos(self.DELTA)])
+
+    @property
+    def mirrored_normal(self):
+        """What you get by assuming `t-hat = +d-hat` instead."""
+        return np.array([-np.sin(self.DELTA), np.cos(self.DELTA)])
+
+    def test_the_active_facet_reflects_into_the_blaze_direction(self):
+        reflected = _reflect(_projected_incident(self.ALPHA), self.active_normal)
+        expected = blaze_direction(self.DELTA, self.ALPHA)
+        # k_m = k[sin(beta) x-hat + cos(beta) y-hat], so azimuth is atan2(x, y).
+        assert np.isclose(np.arctan2(reflected[0], reflected[1]), expected)
+
+    def test_the_mirrored_facet_does_not(self):
+        """Non-vacuity. Without this the test above is a tautology: it would
+        pass for any normal that happened to reproduce one number."""
+        reflected = _reflect(_projected_incident(self.ALPHA), self.mirrored_normal)
+        expected = blaze_direction(self.DELTA, self.ALPHA)
+        assert not np.isclose(np.arctan2(reflected[0], reflected[1]), expected)
+        # It lands on the other branch, -(2*delta + alpha) -- -84 deg, not +34.
+        assert np.isclose(reflected[0], -np.sin(2 * self.DELTA + self.ALPHA))
+
+    def test_the_incident_ray_strikes_the_active_facet_from_the_front(self):
+        """A mirrored drawing puts the beam on the anti-blaze facet, arriving
+        from behind the one it is supposed to illuminate."""
+        assert _projected_incident(self.ALPHA) @ self.active_normal < 0.0
+
+    def test_the_three_dimensional_graze_onto_that_facet_is_zeta(self):
+        r"""`facet_graze` must be the angle to the *same* plane the blaze
+        direction implies, or the two disagree about which facet is active.
+
+        The full 3D incident direction is
+        :math:`[-\sin\alpha\sin\gamma,\ -\cos\alpha\sin\gamma,\ \cos\gamma]`;
+        the facet normal has no z component, so
+        :math:`\sin\zeta = -\hat{k}_i \cdot \hat{n}_f`.
+        """
+        incident = np.array(
+            [
+                -np.sin(self.ALPHA) * np.sin(self.GAMMA),
+                -np.cos(self.ALPHA) * np.sin(self.GAMMA),
+                np.cos(self.GAMMA),
+            ]
+        )
+        normal = np.array([*self.active_normal, 0.0])
+        assert np.isclose(
+            np.arcsin(-incident @ normal), facet_graze(self.GAMMA, self.DELTA, self.ALPHA)
+        )
+
+    def test_the_mirrored_facet_gives_the_wrong_graze(self):
+        """The other half of the non-vacuity check."""
+        incident = np.array(
+            [
+                -np.sin(self.ALPHA) * np.sin(self.GAMMA),
+                -np.cos(self.ALPHA) * np.sin(self.GAMMA),
+                np.cos(self.GAMMA),
+            ]
+        )
+        normal = np.array([*self.mirrored_normal, 0.0])
+        assert not np.isclose(
+            np.arcsin(-incident @ normal), facet_graze(self.GAMMA, self.DELTA, self.ALPHA)
+        )
+
+    @pytest.mark.parametrize("blaze_deg,alpha_deg", [(29.5, 25.0), (30.0, 5.0), (12.0, -8.0)])
+    def test_blazed_rises_in_t_which_is_what_makes_it_descend_in_x(
+        self, blaze_deg, alpha_deg
+    ):
+        """Ties the convention back to the actual profile object.
+
+        `Blazed.slope` is positive on the active facet, i.e. it rises with
+        `t`. Under `t-hat = -d-hat` that is a descent in `x`, which is the
+        orientation the reflection tests above require.
+        """
+        from gratinglab.profiles import Blazed
+
+        profile = Blazed(blaze_angle=blaze_deg, antiblaze_angle=70.5)
+        slope_on_active_facet = float(profile.slope(profile.apex * 0.5))
+        assert slope_on_active_facet > 0.0
+        assert np.isclose(slope_on_active_facet, np.tan(np.radians(blaze_deg)))
