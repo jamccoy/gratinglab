@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import provenance
+from ..scalar_options import ScalarOptionsState, build_options
 from ..state import (
     ANGLE_LABELS,
     MOUNTS,
@@ -74,7 +75,9 @@ class MainWindow(QMainWindow):
     #: `moveToThread` only redirects *signal* delivery, so calling
     #: `worker.run(...)` directly would run the solve on the UI thread and
     #: freeze the window -- the exact thing this design exists to prevent.
-    _requested = Signal(int, object)
+    #: (token, method, geometry, options) -- method and options are still
+    #: always "scalar" and its options dict until a tab exists to vary them.
+    _requested = Signal(int, str, object, dict)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -117,11 +120,20 @@ class MainWindow(QMainWindow):
 
     def _build_inputs(self) -> QWidget:
         defaults = FormState()
+        scalar_defaults = ScalarOptionsState()
+
+        # Transitional: geometry and scalar's own options still share one
+        # groupbox layout (see _check_fields_match_formstate), so a field's
+        # default may live on either dataclass. Splits cleanly once
+        # GeometryPanel and ScalarTab each build their own widgets.
+        def default_for(key: str) -> str:
+            return getattr(defaults, key, None) or getattr(scalar_defaults, key)
+
         panel = QWidget()
         column = QVBoxLayout(panel)
 
         def entry(form: QFormLayout, label: str, key: str) -> QLineEdit:
-            widget = QLineEdit(getattr(defaults, key))
+            widget = QLineEdit(default_for(key))
             widget.returnPressed.connect(self.solve)
             self._fields[key] = widget
             form.addRow(label, widget)
@@ -130,7 +142,7 @@ class MainWindow(QMainWindow):
         def combo(form: QFormLayout, label: str, key: str, values, on_change) -> QComboBox:
             widget = QComboBox()
             widget.addItems(list(values))
-            widget.setCurrentText(getattr(defaults, key))
+            widget.setCurrentText(default_for(key))
             widget.currentTextChanged.connect(lambda _t: on_change())
             self._fields[key] = widget
             form.addRow(label, widget)
@@ -223,15 +235,23 @@ class MainWindow(QMainWindow):
     def _check_fields_match_formstate(self) -> None:
         """Refuse to open rather than fail later on one code path.
 
-        `_read_form` builds a `FormState` by keyword from this dict, so a
-        renamed or forgotten field is a TypeError at solve time -- visible only
-        to whoever presses Solve. Checking here makes it immediate and says
-        which field.
+        `_read_form`/`_read_scalar_options` build their dataclasses by keyword
+        from this one dict, so a renamed or forgotten field is a TypeError at
+        solve time -- visible only to whoever presses Solve. Checking here
+        makes it immediate and says which field.
+
+        Transitional: geometry and scalar's own options still share one
+        `_fields` dict and one groupbox layout, so this checks the *union* of
+        both dataclasses' fields rather than either alone. Splits cleanly once
+        `GeometryPanel` and `ScalarTab` each own their own widgets and their
+        own check.
         """
-        declared = {f.name for f in dataclasses.fields(FormState)}
+        declared = {f.name for f in dataclasses.fields(FormState)} | {
+            f.name for f in dataclasses.fields(ScalarOptionsState)
+        }
         if self._fields.keys() != declared:
             raise AssertionError(
-                "form fields do not match FormState: "
+                "form fields do not match FormState + ScalarOptionsState: "
                 f"missing {sorted(declared - self._fields.keys())}, "
                 f"extra {sorted(self._fields.keys() - declared)}"
             )
@@ -348,27 +368,46 @@ class MainWindow(QMainWindow):
             self._fields["gamma"].show()
 
     def _read_form(self) -> FormState:
-        return FormState(**{k: _value(w) for k, w in self._fields.items()})
+        geometry_fields = {f.name for f in dataclasses.fields(FormState)}
+        return FormState(
+            **{k: _value(w) for k, w in self._fields.items() if k in geometry_fields}
+        )
+
+    def _read_scalar_options(self) -> ScalarOptionsState:
+        return ScalarOptionsState(
+            quadrature_points=_value(self._fields["quadrature_points"])
+        )
 
     # -- actions ---------------------------------------------------------
 
     def solve(self) -> None:
-        """Validate here, solve on the worker thread."""
+        """Validate here, solve on the worker thread.
+
+        Geometry and scalar's own options are validated as two separate
+        steps, but both are caught before anything reaches the worker --
+        preserving "rejected synchronously, never reaches the worker" for
+        either kind of error, exactly as it was when there was only one
+        dataclass to validate.
+        """
         if self._running:
             return
 
         try:
-            parsed = build(self._read_form())
+            geometry = build(self._read_form())
+            options = build_options(
+                geometry.problem, geometry.illumination, geometry.wavelengths,
+                self._read_scalar_options(),
+            )
         except FormErrors as exc:
             self._paint(provenance.error_lines(exc.errors))
             return
 
-        self._parsed = parsed
+        self._parsed = geometry
         self._token += 1
         self._set_running(True)
-        self._paint(provenance.solving_lines("scalar", len(parsed.wavelengths)))
+        self._paint(provenance.solving_lines("scalar", len(geometry.wavelengths)))
         QTimer.singleShot(_PROGRESS_DELAY_MS, self._show_progress_if_still_running)
-        self._requested.emit(self._token, parsed)
+        self._requested.emit(self._token, "scalar", geometry, options)
 
     def cancel(self) -> None:
         """Stop waiting for the running solve.
@@ -390,7 +429,11 @@ class MainWindow(QMainWindow):
                 )
             )
 
-    def _on_solved(self, token: int, result) -> None:
+    def _on_solved(self, token: int, method: str, result) -> None:
+        # `method` is unused until a second solver tab exists to route
+        # between -- for now there is exactly one tab and it is always
+        # "scalar". Accepted here so the signal signature is already what
+        # M11-C needs.
         if token != self._token:
             return  # cancelled or superseded; the window has moved on
         self._set_running(False)
@@ -406,7 +449,7 @@ class MainWindow(QMainWindow):
         )
         self.solved.emit()
 
-    def _on_failed(self, token: int, message: str) -> None:
+    def _on_failed(self, token: int, method: str, message: str) -> None:
         if token != self._token:
             return
         self._set_running(False)

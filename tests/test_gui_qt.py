@@ -18,6 +18,7 @@ pytest.importorskip(
     "PySide6", reason='Qt not installed; pip install -e ".[dev,gui]"'
 )
 
+from gratinglab.gui.scalar_options import ScalarOptionsState, build_options  # noqa: E402
 from gratinglab.gui.state import FormState, build  # noqa: E402
 from gratinglab.solvers import scalar  # noqa: E402
 
@@ -112,8 +113,12 @@ class TestNotASecondSourceOfTruth:
 
     def test_plotted_values_equal_a_direct_solve(self, win):
         parsed = build(FormState())
+        options = build_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths,
+            ScalarOptionsState(),
+        )
         expected = scalar.solve(
-            parsed.problem, parsed.illumination, parsed.wavelengths, **parsed.options
+            parsed.problem, parsed.illumination, parsed.wavelengths, **options
         )
         assert np.array_equal(win._scan.efficiency, expected.efficiency)
         assert np.array_equal(win._scan.orders, expected.orders)
@@ -123,8 +128,12 @@ class TestNotASecondSourceOfTruth:
         resolve(qtbot, win)
 
         parsed = build(FormState(blaze_angle="12.0"))
+        options = build_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths,
+            ScalarOptionsState(),
+        )
         expected = scalar.solve(
-            parsed.problem, parsed.illumination, parsed.wavelengths, **parsed.options
+            parsed.problem, parsed.illumination, parsed.wavelengths, **options
         )
         assert np.array_equal(win._scan.efficiency, expected.efficiency)
 
@@ -220,15 +229,14 @@ class TestBackgroundSolve:
         import threading
 
         seen = {}
-        real_sweep = None
 
         from gratinglab.gui.qt import worker as worker_module
 
         original_run = worker_module.SolveWorker.run
 
-        def record(self, token, parsed):
+        def record(self, token, method, geometry, options):
             seen["thread"] = threading.current_thread().ident
-            return original_run(self, token, parsed)
+            return original_run(self, token, method, geometry, options)
 
         with pytest.MonkeyPatch.context() as patch:
             patch.setattr(worker_module.SolveWorker, "run", record)
@@ -271,7 +279,8 @@ class TestBackgroundSolve:
         win.solve()
         stale = win._token
         win.cancel()
-        win._on_solved(stale, SolveResult(None, None))  # would crash if accepted
+        # would crash if accepted
+        win._on_solved(stale, "scalar", SolveResult(None, None))
         assert win._scan is not None
 
     def test_a_solver_exception_becomes_a_message_not_a_crash(self, win):
@@ -279,7 +288,7 @@ class TestBackgroundSolve:
         process rather than surfacing."""
         win._token += 1
         win._set_running(True)
-        win._on_failed(win._token, "ValueError: contrived")
+        win._on_failed(win._token, "scalar", "ValueError: contrived")
         assert "solve failed" in win._provenance.toPlainText()
         assert win._solve_button.isEnabled()
 

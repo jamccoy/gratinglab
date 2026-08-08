@@ -92,7 +92,14 @@ class FormErrors(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class FormState:
-    """Every field exactly as typed. Strings, because that is what a form holds.
+    """The grating geometry, exactly as typed. Strings, because that is what a
+    form holds.
+
+    Geometry only -- period, profile, mount, wavelengths -- shared across
+    every solver a tab might run. A solver's own knobs (scalar's
+    ``quadrature_points``, say) live in that solver's own state, e.g.
+    :class:`gratinglab.gui.scalar_options.ScalarOptionsState`, not here; this
+    dataclass has no way to know which solver is about to use it.
 
     Defaults describe a soft-X-ray off-plane case, which is the project's
     primary application and exercises the interesting physics immediately.
@@ -115,8 +122,6 @@ class FormState:
     wavelength_stop: str = "5.0"
     wavelength_count: str = "200"
 
-    quadrature_points: str = "2048"
-
     def with_field(self, name: str, value: Any) -> "FormState":
         """Return a copy with one field changed."""
         return replace(self, **{name: value})
@@ -124,12 +129,17 @@ class FormState:
 
 @dataclass(frozen=True, slots=True)
 class Parsed:
-    """A form that made sense, ready to hand to a solver."""
+    """A geometry that made sense, ready to hand to any solver.
+
+    No ``options`` field: geometry is shared across every solver a tab might
+    run, but each solver's own options (and their own validation, e.g.
+    scalar's Nyquist guard in :mod:`gratinglab.gui.scalar_options`) are that
+    solver's business, built separately from whichever tab is about to solve.
+    """
 
     problem: Problem
     illumination: Illumination
     wavelengths: NDArray[np.float64]
-    options: dict[str, Any]
 
     @property
     def lambda_over_period(self) -> float:
@@ -314,47 +324,16 @@ def build(form: FormState) -> Parsed:
             FieldError("wavelength_stop", f"must exceed the start ({start:g} nm)")
         )
 
-    quadrature = _number(
-        form.quadrature_points, "quadrature_points", errors, minimum=16, integer=True
-    )
-
     if errors:
         raise FormErrors(tuple(errors))
 
     assert period is not None and profile is not None and illumination is not None
     assert start is not None and stop is not None and count is not None
-    assert quadrature is not None
 
     problem = Problem(period=period, profile=profile)
     wavelengths = np.linspace(start, stop, int(count))
 
-    # Nyquist is enforced by the solver, but catching it here turns a traceback
-    # into a field error the user can act on.
-    from ..geometry import order_range
-
-    orders = order_range(
-        float(wavelengths.min()), period, illumination.sin_alpha, illumination.sin_gamma
-    )
-    needed = 2 * int(np.abs(orders).max()) + 1
-    if quadrature < needed:
-        raise FormErrors(
-            (
-                FieldError(
-                    "quadrature_points",
-                    f"needs at least {needed} to resolve order "
-                    f"{int(np.abs(orders).max())} at {wavelengths.min():g} nm",
-                ),
-            )
-        )
-
-    return Parsed(
-        problem=problem,
-        illumination=illumination,
-        wavelengths=wavelengths,
-        options={
-            "quadrature_points": int(quadrature),
-        },
-    )
+    return Parsed(problem=problem, illumination=illumination, wavelengths=wavelengths)
 
 
 def validate(form: FormState) -> tuple[FieldError, ...]:

@@ -8,6 +8,7 @@ widget layer gets none.
 import numpy as np
 import pytest
 
+from gratinglab.gui.scalar_options import ScalarOptionsState, build_options
 from gratinglab.gui.state import (
     ANGLE_LABELS,
     MOUNTS,
@@ -35,13 +36,22 @@ class TestDefaults:
         assert not parsed.illumination.is_in_plane
 
     def test_the_default_actually_solves(self):
-        """End to end through the real solver, not a mock."""
+        """End to end through the real solver, not a mock.
+
+        `build()` no longer carries solver options -- see
+        `gratinglab.gui.scalar_options` -- so scalar's own defaults are built
+        separately, the way a solver tab does.
+        """
         parsed = build(FormState())
+        options = build_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths,
+            ScalarOptionsState(),
+        )
         scan = scalar.solve(
             parsed.problem,
             parsed.illumination,
             parsed.wavelengths,
-            **parsed.options,
+            **options,
         )
         assert len(scan) == 200
         assert np.isfinite(scan.efficiency).all()
@@ -140,7 +150,6 @@ class TestNumericValidation:
             ("blaze_angle", "0"),
             ("wavelength_start", "0"),
             ("wavelength_count", "0"),
-            ("quadrature_points", "8"),
         ],
     )
     def test_rejects_out_of_range_or_unparseable(self, field, value):
@@ -180,42 +189,6 @@ class TestNumericValidation:
         message = validate(FormState(blaze_angle="95"))[0].message
         assert "90" in message
 
-
-class TestNyquistGuard:
-    def test_catches_insufficient_quadrature_before_the_solver_does(self):
-        """Turns a solver traceback into an actionable field error."""
-        errors = validate(
-            FormState(
-                period="1400", wavelength_start="20", wavelength_stop="30",
-                quadrature_points="16", mount="Classical", alpha="10",
-            )
-        )
-        assert any(e.field == "quadrature_points" for e in errors)
-        assert "at least" in errors[0].message
-
-    def test_a_valid_form_never_trips_the_solvers_own_nyquist_check(self):
-        """If build() accepts it, solve() must not reject it."""
-        form = FormState(
-            period="1400", wavelength_start="400", wavelength_stop="700",
-            quadrature_points="4096", mount="Classical", alpha="10",
-        )
-        parsed = build(form)
-        scalar.solve(
-            parsed.problem, parsed.illumination, parsed.wavelengths, **parsed.options
-        )
-
-
-class TestOptions:
-    def test_passes_solver_options_through(self):
-        parsed = build(FormState(quadrature_points="4096"))
-        assert parsed.options == {"quadrature_points": 4096}
-
-    def test_options_are_exactly_what_the_solver_accepts(self):
-        """A renamed solver keyword would break the GUI silently otherwise."""
-        parsed = build(FormState())
-        scalar.solve(
-            parsed.problem, parsed.illumination, [2.4], **parsed.options
-        )
 
 class TestFormState:
     def test_with_field_does_not_mutate(self):

@@ -20,6 +20,7 @@ from gratinglab.gui.provenance import (
     solving_lines,
     to_html,
 )
+from gratinglab.gui.scalar_options import ScalarOptionsState, build_options
 from gratinglab.gui.state import FieldError, FormState, build
 from gratinglab.illumination import Illumination
 from gratinglab.problem import Problem
@@ -34,8 +35,11 @@ UNPOL = "unpolarized"
 def default_run():
     """The scan a user gets by opening the app and pressing nothing."""
     parsed = build(FormState())
+    options = build_options(
+        parsed.problem, parsed.illumination, parsed.wavelengths, ScalarOptionsState()
+    )
     scan = scalar.solve(
-        parsed.problem, parsed.illumination, parsed.wavelengths, **parsed.options
+        parsed.problem, parsed.illumination, parsed.wavelengths, **options
     )
     return scan, check_energy_balance(scan), parsed.lambda_over_period
 

@@ -17,6 +17,7 @@ from gratinglab.gui.orders import (
     describe,
     summarize,
 )
+from gratinglab.gui.scalar_options import ScalarOptionsState, build_options
 from gratinglab.gui.state import FormState, build
 from gratinglab.result import EfficiencyScan, Provenance
 from gratinglab.solvers import scalar
@@ -41,8 +42,11 @@ def make_scan(peaks, propagating=None):
 def default_scan():
     """What the app shows on open: off-plane, 315.15 nm, λ 1-5 nm."""
     parsed = build(FormState())
+    options = build_options(
+        parsed.problem, parsed.illumination, parsed.wavelengths, ScalarOptionsState()
+    )
     return scalar.solve(
-        parsed.problem, parsed.illumination, parsed.wavelengths, **parsed.options
+        parsed.problem, parsed.illumination, parsed.wavelengths, **options
     )
 
 
