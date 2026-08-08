@@ -609,6 +609,28 @@ class TestGeometryTab:
         assert win.geometry_tab._blaze_button.isEnabled()
         assert win.geometry_tab._blaze_button.toolTip() == ""
 
+    def test_the_profile_plot_lives_here_now(self, win):
+        """It was above the tabs, taking 876x345 -- more pixels than the whole
+        geometry canvas got. A groove's shape is geometry, so it belongs in
+        this tab."""
+        assert win.geometry_tab.isAncestorOf(win.geometry_tab.profile_panel)
+        assert not hasattr(win, "profile_panel")
+
+    def test_the_hero_canvas_is_larger_than_the_side_panels(self, qtbot, win):
+        """The point of the restructure. Needs real geometry, so the window is
+        shown and laid out."""
+        win.resize(1180, 820)
+        win.show()
+        qtbot.waitExposed(win)
+        win._tab_widget.setCurrentWidget(win.geometry_tab)
+        qtbot.wait(50)
+
+        tab = win.geometry_tab
+        hero = tab._hero_canvas.size()
+        side = tab._canvas.size()
+        assert hero.width() > side.width()
+        assert hero.width() * hero.height() > 2 * side.width() * side.height()
+
     def test_the_captions_reach_the_panel(self, win):
         text = win.geometry_tab._captions.toPlainText()
         assert "groove axis" in text

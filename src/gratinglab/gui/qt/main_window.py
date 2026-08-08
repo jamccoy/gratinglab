@@ -8,14 +8,17 @@ this file misplaces a widget rather than producing a wrong answer -- and
 `tests/test_gui_qt.py` pins that by comparing what a tab plotted against a
 direct solver call.
 
-Shared, above the tabs: geometry (:class:`~.geometry_panel.GeometryPanel`) and
-the groove-profile plot (:class:`~.profile_plot_panel.ProfilePlotPanel`),
-neither of which depends on which solver is about to run -- a
-`Problem`/`Illumination` and a groove's own shape mean the same thing
-regardless. Per tab: a solver's own options, its result, and its own
-provenance, since those genuinely differ by method. Only one solve runs
-window-wide at a time (see `solve`/`_set_running`) -- there is no second, slow
-solver yet to justify concurrent per-tab workers.
+Geometry inputs (:class:`~.geometry_panel.GeometryPanel`) live in a closable
+dock, because they apply to every tab but should not tax the window when you
+are not editing them -- Ctrl+G, and the tabs get the full width. The tabs are
+the central widget, and nothing else is.
+
+Per tab: whatever genuinely differs by method. A solver tab owns its options,
+its result and its own provenance; the geometry tab owns every picture of the
+grating itself, since a groove's shape and the directions light leaves in owe
+nothing to a solver. Only one solve runs window-wide at a time (see
+`solve`/`_set_running`) -- there is no second, slow solver yet to justify
+concurrent per-tab workers.
 """
 
 from __future__ import annotations
@@ -27,7 +30,6 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QScrollArea,
-    QSplitter,
     QTabWidget,
     QWidget,
 )
@@ -36,7 +38,6 @@ from .. import provenance
 from ..state import FormErrors, build
 from .geometry_panel import GeometryPanel
 from .geometry_tab import GeometryTab
-from .profile_plot_panel import ProfilePlotPanel
 from .scalar_tab import ScalarTab
 from .setup_tab import SetupTab
 from .worker import SolveWorker
@@ -101,7 +102,10 @@ class MainWindow(QMainWindow):
 
     def _build_layout(self) -> None:
         self._build_dock()
-        self.setCentralWidget(self._build_right_column())
+        # The tabs *are* the central widget. With the dock closable, that is
+        # what lets Ctrl+G hand the whole window width to whichever tab is
+        # showing.
+        self.setCentralWidget(self._build_tabs())
 
     def _build_dock(self) -> None:
         """Geometry inputs, in a panel the user is allowed to close.
@@ -136,18 +140,6 @@ class MainWindow(QMainWindow):
         self.addDockWidget(Qt.DockWidgetArea.LeftDockWidgetArea, dock)
         # resize() does nothing to a dock; this is the supported way.
         self.resizeDocks([dock], [300], Qt.Orientation.Horizontal)
-
-    def _build_right_column(self) -> QWidget:
-        """Profile above the tabs -- the profile is shared, so it sits once,
-        outside whichever tab is active."""
-        self.profile_panel = ProfilePlotPanel()
-
-        right = QSplitter(Qt.Orientation.Vertical)
-        right.addWidget(self.profile_panel)
-        right.addWidget(self._build_tabs())
-        right.setStretchFactor(0, 0)
-        right.setStretchFactor(1, 1)
-        return right
 
     def _build_tabs(self) -> QWidget:
         from ..docs import display_title
@@ -342,7 +334,9 @@ class MainWindow(QMainWindow):
         if token != self._token:
             return  # cancelled or superseded; the window has moved on
         self._set_running(False)
-        self.profile_panel.draw(self._parsed)
+        # No `profile_panel.draw` here any more: the groove's shape owes
+        # nothing to a solver, so redrawing it on solve completion was a false
+        # dependency. It lives in the geometry tab now and redraws with it.
         self.geometry_tab.show_geometry(self._parsed)
         self.tabs[method].show_result(
             result.scan, result.energy, self._parsed.lambda_over_period

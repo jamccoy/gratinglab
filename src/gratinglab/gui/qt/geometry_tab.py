@@ -32,6 +32,7 @@ from PySide6.QtWidgets import (
 
 from .. import diagram as diagram_module
 from .. import provenance
+from .profile_plot_panel import ProfilePlotPanel
 
 __all__ = ["GeometryTab"]
 
@@ -73,48 +74,102 @@ class GeometryTab(QWidget):
     # -- construction ------------------------------------------------
 
     def _build(self) -> None:
-        controls = QWidget()
-        column = QVBoxLayout(controls)
-        column.setContentsMargins(0, 0, 0, 0)
-        column.addWidget(self._build_wavelength_group())
-        column.addWidget(self._build_caption_group())
-        column.addStretch(1)
+        """Hero on the left, supporting panels on the right, controls beneath.
+
+        Controls sit in a bottom *strip* rather than the right *column* they
+        had before. Once the profile plot moved in here the tab became
+        width-constrained rather than height-constrained, and a 320 px column
+        was spending the scarce dimension; a ~170 px strip spends the one we
+        now have to spare, handing that width back to the plots.
+        """
+        # Hero first: `_build_plots` reuses its axes for the "main" panel.
+        hero = self._build_hero()
+        self.profile_panel = ProfilePlotPanel()
+
+        side = QSplitter(Qt.Orientation.Vertical)
+        side.addWidget(self._build_plots())
+        side.addWidget(self.profile_panel)
+        side.setStretchFactor(0, 1)
+        side.setStretchFactor(1, 1)
+        side.setSizes([360, 229])
+        side.setMinimumWidth(280)
+        self.profile_panel.setMinimumHeight(150)
 
         body = QSplitter(Qt.Orientation.Horizontal)
-        body.addWidget(self._build_plots())
-        body.addWidget(controls)
-        body.setStretchFactor(0, 1)
-        body.setStretchFactor(1, 0)
-        body.setSizes([620, 320])
+        body.addWidget(hero)
+        body.addWidget(side)
+        body.setStretchFactor(0, 2)
+        body.setStretchFactor(1, 1)
+        body.setSizes([578, 290])
 
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(0, 0, 0, 0)
+        outer = QSplitter(Qt.Orientation.Vertical)
         outer.addWidget(body)
+        outer.addWidget(self._build_controls())
+        outer.setStretchFactor(0, 1)
+        outer.setStretchFactor(1, 0)
+        outer.setSizes([593, 170])
 
-    def _build_plots(self) -> QWidget:
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(outer)
+
+    def _build_hero(self) -> QWidget:
+        """The main view. Holds the dispersion-plane cross-section for now;
+        the 3D conical view takes this slot at M13-G and the cross-section
+        moves to the side column."""
         from matplotlib.backends.backend_qtagg import (
             FigureCanvasQTAgg,
             NavigationToolbar2QT,
         )
         from matplotlib.figure import Figure
 
-        self._figure = Figure(figsize=(7, 6), layout="constrained")
-        # The main view gets the room; the ladder and the gamma sliver are
-        # both about one number each.
-        grid = self._figure.add_gridspec(2, 2, height_ratios=[3.0, 1.0])
+        self._hero_figure = Figure(figsize=(6, 5), layout="constrained")
+        self._hero_axes = self._hero_figure.add_subplot(1, 1, 1)
+        self._hero_canvas = FigureCanvasQTAgg(self._hero_figure)
+
+        panel = QWidget()
+        panel.setMinimumWidth(380)
+        panel.setMinimumHeight(320)
+        layout = QVBoxLayout(panel)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(NavigationToolbar2QT(self._hero_canvas, panel))
+        layout.addWidget(self._hero_canvas)
+        return panel
+
+    def _build_plots(self) -> QWidget:
+        """The sin β ladder and the γ sliver -- both about one number each."""
+        from matplotlib.backends.backend_qtagg import (
+            FigureCanvasQTAgg,
+            NavigationToolbar2QT,
+        )
+        from matplotlib.figure import Figure
+
+        self._figure = Figure(figsize=(4, 3), layout="constrained")
+        grid = self._figure.add_gridspec(2, 1)
         self._axes = {
-            "main": self._figure.add_subplot(grid[0, :]),
-            "ladder": self._figure.add_subplot(grid[1, 0]),
-            "cone": self._figure.add_subplot(grid[1, 1]),
+            "main": self._hero_axes,  # the hero canvas, drawn on separately
+            "ladder": self._figure.add_subplot(grid[0, 0]),
+            "cone": self._figure.add_subplot(grid[1, 0]),
         }
         self._canvas = FigureCanvasQTAgg(self._figure)
 
         panel = QWidget()
+        panel.setMinimumHeight(200)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(NavigationToolbar2QT(self._canvas, panel))
         layout.addWidget(self._canvas)
         return panel
+
+    def _build_controls(self) -> QWidget:
+        strip = QWidget()
+        strip.setMinimumHeight(150)
+        strip.setMaximumHeight(240)
+        row = QHBoxLayout(strip)
+        row.setContentsMargins(0, 0, 0, 0)
+        row.addWidget(self._build_wavelength_group(), 2)
+        row.addWidget(self._build_caption_group(), 3)
+        return strip
 
     def _build_wavelength_group(self) -> QWidget:
         group = QGroupBox("Wavelength")
@@ -162,6 +217,7 @@ class GeometryTab(QWidget):
         self._slider.blockSignals(False)
 
         self._sync_blaze_button()
+        self.profile_panel.draw(parsed)
         self._redraw()
 
     # -- reactions ----------------------------------------------------
@@ -306,4 +362,7 @@ class GeometryTab(QWidget):
             axes.tick_params(labelsize=7)
         self._axes["main"].grid(alpha=0.15)
 
+        # Two canvases: the hero holds the "main" axes, the side figure holds
+        # the ladder and the γ sliver.
+        self._hero_canvas.draw_idle()
         self._canvas.draw_idle()
