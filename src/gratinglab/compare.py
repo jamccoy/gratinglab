@@ -21,7 +21,7 @@ from numpy.typing import ArrayLike, NDArray
 from .illumination import Illumination
 from .problem import Problem
 from .result import EfficiencyScan
-from .solvers.base import get_solver
+from .solvers.base import Progress, get_solver
 
 __all__ = ["sweep", "align", "Comparison", "records"]
 
@@ -35,6 +35,8 @@ def sweep(
     wavelengths: ArrayLike,
     methods: Sequence[Method],
     options: dict[str, dict[str, Any]] | None = None,
+    *,
+    progress: "Progress | None" = None,
 ) -> list[EfficiencyScan]:
     """Solve ``problem`` with each method on a common wavelength grid.
 
@@ -48,22 +50,65 @@ def sweep(
     options
         Per-method keyword arguments, keyed by method name, e.g.
         ``{"scalar": {"quadrature_points": 8192}}``.
+    progress
+        Called ``(done, total)`` over the **whole sweep**, not per method, so
+        a bar driven by it never restarts at a method boundary. Units are
+        wavelengths, and ``total`` is ``len(methods) * len(wavelengths)``.
+
+        Raising from it aborts the sweep -- see
+        :class:`~gratinglab.solvers.base.SolveCancelled`. A keyword of its own
+        rather than an entry in ``options``, so it can never collide with a
+        solver's own parameter name.
     """
     wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=np.float64))
     options = options or {}
+    per_method = len(wavelengths)
+    total = len(methods) * per_method
 
     scans: list[EfficiencyScan] = []
-    for method in methods:
+    for index, method in enumerate(methods):
+        finished = index * per_method
+
         if isinstance(method, EfficiencyScan):
+            # Resampling is instant, so this block completes at once. Stepping
+            # the counter by the whole block is honest; pretending a
+            # precomputed table has wavelengths still to compute is not.
             scans.append(_resample(method, wavelengths))
+            if progress is not None:
+                progress(finished + per_method, total)
             continue
+
         solver = get_solver(method)
+        forwarded = _progress_option(solver, progress, finished, total)
         scans.append(
             solver.solve(
-                problem, illumination, wavelengths, **options.get(method, {})
+                problem, illumination, wavelengths,
+                **forwarded, **options.get(method, {}),
             )
         )
+        if progress is not None and not forwarded:
+            # Only for a solver that did *not* report: this is what stops the
+            # bar stalling at a method boundary. One that did report already
+            # ended its block exactly here, and repeating the call would emit
+            # a duplicate for no reason.
+            progress(finished + per_method, total)
     return scans
+
+
+def _progress_option(
+    solver, progress: "Progress | None", finished: int, total: int
+) -> dict[str, Any]:
+    """``{"progress": ...}`` for a solver that declared it, else ``{}``.
+
+    A backend that has not been updated -- including a third-party one
+    arriving through the ``gratinglab.solvers`` entry point -- has an explicit
+    signature that would raise ``TypeError`` on an unexpected keyword, which
+    is why :attr:`~gratinglab.solvers.base.Capabilities.reports_progress` is
+    declared rather than assumed.
+    """
+    if progress is None or not solver.capabilities.reports_progress:
+        return {}
+    return {"progress": lambda done, _per_method: progress(finished + done, total)}
 
 
 def _resample(scan: EfficiencyScan, wavelengths: NDArray[np.float64]) -> EfficiencyScan:

@@ -13,6 +13,7 @@ from gratinglab.io.efficiency_table import read_scan
 from gratinglab.problem import Problem
 from gratinglab.profiles import Blazed
 from gratinglab.result import EfficiencyScan, Provenance
+from gratinglab.solvers.base import Capabilities
 
 from .conftest import reference_dir
 
@@ -57,6 +58,115 @@ class TestSweep:
     def test_unknown_method_raises(self):
         with pytest.raises(KeyError, match="no solver registered"):
             sweep(PROBLEM, ILL, [2.4], ["nonexistent"])
+
+
+class TestProgressAcrossASweep:
+    """One counter for the whole sweep, so a bar never restarts at a method
+    boundary."""
+
+    WAVELENGTHS = np.linspace(1.0, 5.0, 6)
+
+    def _run(self, methods):
+        seen = []
+        scans = sweep(
+            PROBLEM, ILL, self.WAVELENGTHS, methods,
+            progress=lambda done, total: seen.append((done, total)),
+        )
+        return seen, scans
+
+    def test_the_total_spans_every_method(self):
+        seen, _ = self._run(["scalar", "scalar"])
+        assert {t for _, t in seen} == {2 * len(self.WAVELENGTHS)}
+
+    def test_the_counter_never_restarts(self):
+        """The property the offset exists for. Per-method counters would drop
+        back to zero here."""
+        seen, _ = self._run(["scalar", "scalar"])
+        dones = [d for d, _ in seen]
+        assert dones == sorted(dones)
+        assert dones[-1] == 2 * len(self.WAVELENGTHS)
+
+    def test_it_crosses_the_boundary_rather_than_stopping_at_it(self):
+        """Non-vacuity: without a second method's reports the counter would
+        stop at 6 of 12 and still be monotone."""
+        seen, _ = self._run(["scalar", "scalar"])
+        assert max(d for d, _ in seen) > len(self.WAVELENGTHS)
+
+    def test_a_precomputed_scan_advances_its_whole_block_at_once(self):
+        """Resampling is instant. Pretending an imported table has
+        wavelengths still to compute would be the dishonest option."""
+        precomputed = sweep(PROBLEM, ILL, self.WAVELENGTHS, ["scalar"])[0]
+        seen, _ = self._run([precomputed, "scalar"])
+        assert seen[0] == (len(self.WAVELENGTHS), 2 * len(self.WAVELENGTHS))
+
+    def test_a_solver_that_does_not_report_still_advances_its_block(self):
+        """Otherwise a bar stalls at a method boundary for the whole duration
+        of a backend that has not been updated."""
+        from gratinglab.solvers.base import register
+
+        quiet = _QuietSolver()
+        register(quiet)
+        try:
+            seen, _ = self._run(["quiet", "scalar"])
+        finally:
+            _unregister("quiet")
+        assert seen[0] == (len(self.WAVELENGTHS), 2 * len(self.WAVELENGTHS))
+
+    def test_and_is_never_handed_a_keyword_it_cannot_take(self):
+        """Non-vacuity for the test above, and the reason `reports_progress`
+        is declared: `_QuietSolver.solve` would raise TypeError."""
+        from gratinglab.solvers.base import register
+
+        quiet = _QuietSolver()
+        register(quiet)
+        try:
+            self._run(["quiet"])  # must not raise
+        finally:
+            _unregister("quiet")
+        with pytest.raises(TypeError):
+            quiet.solve(PROBLEM, ILL, self.WAVELENGTHS, progress=lambda d, t: None)
+
+    def test_raising_from_it_aborts_the_sweep(self):
+        from gratinglab.solvers.base import SolveCancelled
+
+        def stop(done, total):
+            if done >= 3:
+                raise SolveCancelled("enough")
+
+        with pytest.raises(SolveCancelled):
+            sweep(PROBLEM, ILL, self.WAVELENGTHS, ["scalar", "scalar"], progress=stop)
+
+    def test_not_passing_it_changes_nothing(self):
+        with_it = self._run(["scalar"])[1][0]
+        without = sweep(PROBLEM, ILL, self.WAVELENGTHS, ["scalar"])[0]
+        assert np.array_equal(with_it.efficiency, without.efficiency)
+
+
+class _QuietSolver:
+    """A backend from before the progress hook existed: strict signature, no
+    `reports_progress`, so handing it one would be a TypeError."""
+
+    capabilities = Capabilities(name="quiet", rigorous=False)
+
+    def solve(self, problem, illumination, wavelengths):
+        wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+        orders = np.array([0])
+        efficiency = np.full((len(wavelengths), 1), 0.5)
+        return EfficiencyScan(
+            wavelengths=wavelengths,
+            orders=orders,
+            efficiency=efficiency,
+            propagating=np.ones_like(efficiency, dtype=bool),
+            provenance=Provenance(method="quiet"),
+        )
+
+
+def _unregister(name: str) -> None:
+    """The registry is process-global; leaving a stand-in in it would leak
+    into `available_solvers()` and give the GUI suite a phantom tab."""
+    from gratinglab.solvers import base
+
+    base._REGISTRY.pop(name, None)
 
 
 class TestResampling:
