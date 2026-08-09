@@ -97,6 +97,24 @@ class TestTheConeProperty:
         assert not offplane().is_in_plane
         assert np.cos(np.radians(GAMMA)) > 0.99
 
+    def test_gamma_is_drawn_true_to_scale_here_instead(self, scene):
+        """The successor to the retired 2D γ sliver (M13-I).
+
+        That panel existed because the projection hides `k_z`. This view does
+        not hide it: γ is the angle between the incident ray and the cone
+        axis, in the scene, at true scale -- no exaggeration and no stand-in.
+        """
+        incident = next(r for r in scene.rays if r.tag == "incident")
+        angle = np.arccos(np.clip(np.dot(incident.direction, CONE_AXIS), -1.0, 1.0))
+        assert np.degrees(angle) == pytest.approx(GAMMA, abs=1e-12)
+
+    def test_and_it_really_is_the_sliver_that_was_the_message(self, scene):
+        """Non-vacuity: 1.5° is small enough that anything exaggerating it
+        would fail the test above by orders of magnitude, not by a
+        tolerance."""
+        assert GAMMA < 5.0
+        assert np.sin(np.radians(GAMMA)) < 0.1
+
     def test_the_incident_vector_is_the_illuminations_own(self):
         """Not a second source of truth for the one vector we transcribe."""
         ill = offplane()

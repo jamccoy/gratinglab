@@ -363,14 +363,14 @@ class TestWavelengthChoice:
 
 class TestDiagramShape:
     def test_every_panel_has_limits(self, reference):
-        for panel in ("main", "ladder", "cone"):
+        for panel in ("main", "ladder"):
             assert panel in reference.limits
             (x0, x1), (y0, y1) = reference.limits[panel]
             assert x1 > x0 and y1 > y0
 
     def test_on_partitions_the_primitives_by_panel(self, reference):
         total = len(reference.paths) + len(reference.arrows) + len(reference.markers)
-        assert sum(len(reference.on(p)) for p in ("main", "ladder", "cone")) == total
+        assert sum(len(reference.on(p)) for p in ("main", "ladder")) == total
 
     def test_every_tag_used_has_a_colour(self, reference):
         used = {p.tag for p in reference.paths} | {a.tag for a in reference.arrows}
@@ -383,11 +383,28 @@ class TestDiagramShape:
         with pytest.raises(KeyError):
             reference.mark(999)
 
-    def test_the_gamma_panel_draws_gamma_true_to_scale(self, reference):
-        """At 1.5 degrees this is a near-flat sliver, and the sliver is the
-        message. Exaggerating it would betray the main panel's honesty."""
-        ray = arrow(reference, "incident", panel="cone")
-        assert np.degrees(np.arctan2(ray.y1 - ray.y0, ray.x1 - ray.x0)) == pytest.approx(GAMMA)
+    def test_there_is_no_gamma_panel_any_more(self, reference):
+        """Retired in M13-I. `diagram3d` draws the real cone, with γ as an
+        angle in a real scene rather than a sliver standing in beside one, and
+        two drawings of one angle are two answers to one question.
+
+        γ did not lose its evidence with it: see
+        `test_gui_diagram3d.py::TestTheConeProperty`, which asserts every drawn
+        ray -- including the incident one -- sits at exactly γ from the cone
+        axis, and that the transverse extent is `sin γ` rather than a
+        normalised stand-in.
+        """
+        assert "cone" not in reference.limits
+        assert not [p for p in reference.paths if p.panel == "cone"]
+        assert not [a for a in reference.arrows if a.panel == "cone"]
+
+    def test_but_the_cone_itself_is_still_drawn_in_the_main_panel(self, reference):
+        """Non-vacuity, and the distinction the removal turns on: `"cone"` as
+        a *panel* is gone; `"cone"` as a *tag* -- the end-on circle every
+        propagating order lands on -- is what made the panel redundant, and
+        stays."""
+        circle = next(p for p in reference.paths if p.tag == "cone")
+        assert circle.panel == "main"
 
     def test_every_ray_carries_the_same_out_of_page_marker(self):
         """What 'k_z is conserved' looks like: the same glyph on every ray."""

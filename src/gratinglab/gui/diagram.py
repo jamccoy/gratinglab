@@ -33,12 +33,15 @@ silently dropped, never NaN"). So an evanescent order sits here, outside the
 :math:`[-1, 1]` propagating window, with no ray attached. Omitting it from the
 picture would be exactly the silent drop that section exists to prevent.
 
-**cone** -- :math:`\gamma` itself, true to scale. The main panel is the view
-down the groove axis, so :math:`k_z = k\cos\gamma` is perpendicular to it and
-invisible; at :math:`\gamma = 1.5°` that is 99.97% of :math:`|k|`. A reader who
-sees rays at 25° from the normal and concludes the mount is not grazing has
-been misled by a drawing that is otherwise entirely true. This panel and the
-captions are what stop that.
+There used to be a third panel here, drawing :math:`\gamma` as a true-to-scale
+sliver. It existed because the main panel is a projection: :math:`k_z =
+k\cos\gamma` is perpendicular to it and invisible, and at :math:`\gamma = 1.5°`
+that is 99.97% of :math:`|k|`, so a reader who sees rays at 25° from the normal
+could conclude the mount is not grazing. :mod:`gratinglab.gui.diagram3d` now
+draws the actual cone, with :math:`\gamma` as a real angle in a real scene
+rather than a stand-in beside one -- so the sliver was retired (M13-I). Two
+drawings of one angle are two answers to one question. The captions still say
+what this projection cannot show, and now point at the view that can.
 
 What is deliberately *not* drawn
 ================================
@@ -511,8 +514,9 @@ def captions(
             Line(
                 f"γ = {illumination.gamma_deg:g}°: every ray also carries "
                 f"k_z = k cos γ = {cos_gamma:.5f} k out of the page, "
-                "identically for all orders. It is not drawn — see the γ "
-                "panel.\n",
+                "identically for all orders. It is perpendicular to this "
+                "projection and so cannot appear in it — the 3D view beside "
+                "it draws γ as a real angle.\n",
                 "dim",
             )
         )
@@ -673,19 +677,6 @@ def build(
                    label=f"{mark.order:+d}")
         )
 
-    # -- gamma, true to scale --------------------------------------------
-    # At 1.5 degrees this is a near-flat sliver, and the sliver is the message.
-    # Exaggerating it would betray the property the main panel is selling.
-    gamma = illumination.gamma
-    paths.append(
-        Polyline(np.array([0.0, 1.0]), np.array([0.0, 0.0]), "axis", panel="cone",
-                 label="groove axis ĝ")
-    )
-    arrows.append(
-        Arrow(0.0, 0.0, float(np.cos(gamma)), float(np.sin(gamma)), "incident",
-              panel="cone", label=f"γ = {illumination.gamma_deg:g}°")
-    )
-
     span = periods * period
     pad = 0.12 * span
     limits = {
@@ -694,7 +685,6 @@ def build(
             (floor, float(strike[1]) + ray + pad),
         ),
         "ladder": ((-1.6, 1.6), (-1.0, 1.0)),
-        "cone": ((-0.05, 1.15), (-0.1, 1.15)),
     }
 
     return Diagram(

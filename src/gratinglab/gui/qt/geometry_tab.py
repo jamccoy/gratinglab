@@ -48,7 +48,6 @@ _GLYPHS = {
 _PANEL_TITLES = {
     "main": "Down the groove axis ĝ",
     "ladder": "sin β  —  every order, propagating or not",
-    "cone": "γ, to scale",
 }
 
 
@@ -125,20 +124,22 @@ class GeometryTab(QWidget):
 
     def _build_plots(self) -> QWidget:
         """The 2D panels, beside the 3D one: the dispersion-plane
-        cross-section (where the groove facets are legible), the sin β ladder,
-        and the γ sliver."""
+        cross-section (where the groove facets are legible) and the sin β
+        ladder (where an evanescent order still appears)."""
         from matplotlib.backends.backend_qtagg import (
             FigureCanvasQTAgg,
             NavigationToolbar2QT,
         )
         from matplotlib.figure import Figure
 
+        # Two panels since M13-I: the γ sliver retired when the 3D view began
+        # drawing the cone itself. Its row goes to the cross-section, which is
+        # the one that has angles to be read.
         self._figure = Figure(figsize=(4, 6), layout="constrained")
-        grid = self._figure.add_gridspec(3, 1, height_ratios=[3.0, 1.0, 1.0])
+        grid = self._figure.add_gridspec(2, 1, height_ratios=[3.0, 1.0])
         self._axes = {
             "main": self._figure.add_subplot(grid[0, 0]),
             "ladder": self._figure.add_subplot(grid[1, 0]),
-            "cone": self._figure.add_subplot(grid[2, 0]),
         }
         self._canvas = FigureCanvasQTAgg(self._figure)
 
@@ -374,15 +375,12 @@ class GeometryTab(QWidget):
             axes.set_xlim(x0, x1)
             axes.set_ylim(y0, y1)
 
-        # Equal aspect on the two panels whose angles are meant to be true.
-        # The ladder is a number line and has no aspect to preserve.
+        # Equal aspect on the panel whose angles are meant to be true. The
+        # ladder is a number line and has no aspect to preserve.
         self._axes["main"].set_aspect("equal", adjustable="box")
-        self._axes["cone"].set_aspect("equal", adjustable="box")
         self._axes["main"].set_xlabel("position along d̂ (nm)", fontsize=8)
         self._axes["main"].set_ylabel("height (nm)", fontsize=8)
         self._axes["ladder"].set_yticks([])
-        self._axes["cone"].set_xticks([])
-        self._axes["cone"].set_yticks([])
         for axes in self._axes.values():
             axes.tick_params(labelsize=7)
         self._axes["main"].grid(alpha=0.15)
