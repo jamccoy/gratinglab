@@ -32,3 +32,8 @@ GEMINI.md
 # Generated artifacts
 build/
 *.app/
+
+# mutmut copies the whole project here to mutate it, and caches results.
+mutants/
+.mutmut-cache
+mutmut-stats.json

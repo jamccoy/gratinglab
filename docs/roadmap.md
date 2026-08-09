@@ -49,6 +49,7 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | Physics self-checks — reciprocity, energy balance | done |
 | Convergence harness ([`convergence.py`](../src/gratinglab/convergence.py)) | done |
 | Progress + cancellation on the `Solver` protocol | done |
+| Mutation testing ([`mutation-testing.md`](mutation-testing.md)) | done, on demand |
 | GUI (Qt/PySide6) — tabs, geometry dock, 3D conical view | done |
 | CI (Linux + macOS, py3.11/3.12) | green |
 | Materials layer (CXRO) | **next** |
@@ -64,14 +65,7 @@ Rounded on purpose: this line previously claimed 328 and was wrong by 400, so
 
 ## What is next, in order
 
-### 1. Mutation testing (`mutmut`)
-
-A hand-rolled sweep of 7 mutations found a real gap (see
-[findings](findings.md#the-obliquity-factor-was-unverified)). A proper tool runs
-hundreds. Run on demand, not on every push — a surviving mutant is a missing
-test.
-
-### 2. Materials layer
+### 1. Materials layer
 
 Port `CXRO_to_n_k` from the prototype. Unlocks absolute efficiency via Fresnel
 `R_F`, the Névot–Croce and Debye–Waller roughness factors, and the
@@ -79,7 +73,7 @@ finite-conductivity comparison. Deliberately deferred: the perfect-conductivity
 reference data sums to 1.0, so it is effectively relative efficiency and the
 first scalar comparison needed no optical constants at all.
 
-### 3. RCWA
+### 2. RCWA
 
 The independent rigorous check that would validate the scalar *model* rather
 than just its quadrature. Non-negotiables:
@@ -89,7 +83,7 @@ than just its quadrature. Non-negotiables:
 - S-matrix / enhanced transmittance-matrix propagation, never plain T-matrix.
 - Full vectorial conical formulation — off-plane is not an afterthought.
 
-### 4. Native boundary format
+### 3. Native boundary format
 
 `.ggp` cannot carry the period in nm, provenance, undercut boundaries, or a
 format version. The missing period is exactly why
@@ -97,7 +91,7 @@ format version. The missing period is exactly why
 JSON, since the profile classes are already pydantic models with tested
 round-tripping.
 
-### 5. First release + JOSS
+### 4. First release + JOSS
 
 Shipping something citable and correct early is what recruits the collaborators
 who make the integral method tractable. **Do not attempt the integral method

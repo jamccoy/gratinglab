@@ -98,6 +98,31 @@ class TestBranches:
         s = np.linspace(-0.99, 0.99, 51)
         assert np.allclose(np.sin(beta(s)), s)
 
+    def test_the_transmitted_branch_still_inverts_sin_beta(self):
+        """`docs/conventions.md` 4 in one assertion: the branch flips the sign
+        of cos(beta) and leaves sin(beta) alone. `pi - b` does that; `pi + b`
+        negates sin(beta) instead, and nothing noticed -- mutation testing
+        found it, because `beta(..., transmitted=True)` had no test at all
+        (only `cos_beta` did)."""
+        s = np.linspace(-0.99, 0.99, 51)
+        b = beta(s, transmitted=True)
+        assert np.allclose(np.sin(b), s)
+        assert np.all(np.cos(b) < 0)
+
+    @pytest.mark.parametrize("s", [1.0, -1.0])
+    def test_an_order_exactly_at_cutoff_gets_a_real_angle(self, s):
+        """The passing-off boundary, which this project cares about more than
+        most: `is_propagating` includes |sin(beta)| == 1, so `beta` must too,
+        or an order counted as propagating has no direction to be drawn or
+        summed at."""
+        assert is_propagating(s)
+        assert beta(s) == pytest.approx(np.sign(s) * np.pi / 2)
+
+    def test_and_just_past_it_does_not(self):
+        """Non-vacuity for the pair above: the boundary is a boundary."""
+        assert not is_propagating(1.0 + 1e-12)
+        assert np.isnan(beta(1.0 + 1e-12))
+
 
 class TestBlaze:
     """Cross-check between the McCoy thesis and the ISSI chapter.

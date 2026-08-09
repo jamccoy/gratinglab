@@ -12,7 +12,7 @@ import pytest
 from gratinglab.io.efficiency_table import read_table, read_scan, to_scan
 from gratinglab.result import EfficiencyScan
 
-from .conftest import reference_dir
+from corpus import reference_dir
 
 
 class TestSyntheticFixture:

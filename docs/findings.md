@@ -218,6 +218,41 @@ closed-form check now runs in **both** mounts.
 
 After both fixes, all 12 mutations are caught.
 
+### Then a real tool ran, and found two more
+
+The hand-rolled sweep was seven mutations chosen by someone who knew where to
+look. `mutmut` generated **19 for `geometry.beta` alone**, and four survived.
+Two were real:
+
+- **`np.pi - b` → `np.pi + b` for transmitted orders.** `beta(..., transmitted=True)`
+  had no test at all — only `cos_beta` did. The mutant negates \(\sin\beta\)
+  while leaving \(\cos\beta\) negative, which is precisely the thing
+  `conventions.md` §4 forbids ("we do not flip the sign of \(\sin\beta_m\)
+  for transmission"). Now pinned by asserting both halves of that sentence in
+  one test.
+- **`|s| <= 1.0` → `|s| < 1.0`.** At exactly \(|\sin\beta_m| = 1\) — the
+  passing-off boundary — the mutant returns NaN. `is_propagating` uses `<=`, so
+  an order it counts as propagating would have had no direction to be drawn or
+  summed at. The two functions now have to agree at the boundary, with a
+  companion showing the boundary is a boundary.
+
+The other two are **equivalent mutants**, verified rather than assumed:
+
+- `<= 1.0` → `<= 2.0` is unobservable, because `arcsin` of anything outside
+  \([-1, 1]\) is NaN anyway and `errstate(invalid="ignore")` suppresses the
+  warning either way. The guard is doing less than it looks.
+- Dropping `dtype=np.float64` from `np.asarray` changes nothing NumPy does not
+  already do by promotion.
+
+No test can kill either, and chasing them would mean writing assertions about
+nothing. Recorded here so the next reader does not try.
+
+**The lesson, sharpened.** The earlier sweep's conclusion was "a test that only
+asserts something changed verifies nothing". This one adds: *a branch with no
+test at all is invisible to code coverage when another function exercises the
+same line*. `cos_beta(0.5, transmitted=True)` covered the concept; nothing
+covered `beta`'s version of it.
+
 ---
 
 ## Reciprocity is the sharpest available check

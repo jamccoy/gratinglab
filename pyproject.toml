@@ -38,6 +38,13 @@ dev = ["pytest>=7", "pytest-qt>=4.5", "matplotlib>=3.8", "pandas>=2.1"]
 # PySide6 (LGPLv3) rather than PyQt6 (GPL): this package is BSD-3, and an
 # optional dynamically-linked dependency keeps it that way.
 gui = ["matplotlib>=3.8", "PySide6-Essentials>=6.7"]
+# Mutation testing, run on demand rather than in CI -- a full sweep is orders
+# of magnitude slower than the suite. Deliberately *not* in `dev`: nothing in
+# CI needs it, and pinning below mutmut 3.3 keeps it installable without a Rust
+# toolchain. mutmut >= 3.3 requires libcst, which ships no macOS x86_64 wheel
+# and must then be compiled; 3.2.3 uses parso and is pure Python. mutmut's own
+# README names this case ("known for at least the x86_64-darwin architecture").
+mut = ["mutmut>=3.2,<3.3"]
 
 [project.scripts]
 gratinglab-gui = "gratinglab.gui.app:main"
@@ -53,9 +60,46 @@ where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Relative to rootdir, so a run driven from a copied tree imports *that*
+# tree's package. Without it, mutation testing silently imports the real
+# source and reports every mutant as surviving -- a useless green run rather
+# than a loud failure. A no-op for a plain `pytest` here, where it is the same
+# path the editable install already provides.
+pythonpath = ["src"]
 filterwarnings = ["error"]
 # pytest-qt would otherwise probe every binding it knows. Verified clean under
 # `python -W error -c "import PySide6.QtWidgets"`, so `filterwarnings = error`
 # above needs no exemption; if a future PySide6 starts warning at import, add a
 # narrow ignore naming the exact message -- never a bare DeprecationWarning.
 qt_api = "pyside6"
+
+[tool.mutmut]
+# The whole package, so the copy under `mutants/` is a working package -- this
+# list controls what is *copied* as well as what is mutated, and omitting
+# __init__.py leaves an incomplete tree that silently falls through to the real
+# source, at which case every mutant "survives" and the run means nothing.
+paths_to_mutate = ["src/gratinglab/"]
+
+# Excluded rather than uncopied, so the package stays importable.
+#
+# `gui/` computes nothing: a surviving mutant in a widget means a misplaced
+# button, not a wrong number, which is the whole reason that layer was arranged
+# to be thin. `io/` is pinned by round-trip and corpus-parsing tests rather than
+# by anything a mutation operator reaches usefully.
+do_not_mutate = [
+    "*/gui/*",
+    "*/io/*",
+    "*/__init__.py",
+    # Pydantic models. mutmut's trampoline adds an un-annotated class
+    # attribute holding the mutant table, and `BaseModel.__init_subclass__`
+    # rejects any un-annotated attribute outright -- the module fails to
+    # import, so nothing can be tested rather than something being tested
+    # wrongly. A tool limitation, not a coverage judgement -- their validators
+    # are covered by tests/test_illumination.py and tests/test_profiles.py.
+    "*/illumination.py",
+    "*/problem.py",
+    "*/profiles.py",
+]
+
+# corpus.toml, which the reference tests read.
+also_copy = ["benchmarks/"]

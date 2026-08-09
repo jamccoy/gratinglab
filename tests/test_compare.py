@@ -15,7 +15,7 @@ from gratinglab.profiles import Blazed
 from gratinglab.result import EfficiencyScan, Provenance
 from gratinglab.solvers.base import Capabilities
 
-from .conftest import reference_dir
+from corpus import reference_dir
 
 UNPOL = "unpolarized"
 PROBLEM = Problem(period=315.15, profile=Blazed(blaze_angle=29.5, antiblaze_angle=70.5))

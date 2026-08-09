@@ -26,16 +26,10 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_API", "PySide6")
 
-DATA = Path(__file__).parent / "data"
-
-DEFAULT_REF_DIR = Path.home() / "Documents" / "diffraction_efficiency"
-
-
-def reference_dir() -> Path | None:
-    """The PCGrate reference corpus, or ``None`` if unavailable."""
-    override = os.environ.get("GRATINGLAB_REF_DIR")
-    candidate = Path(override) if override else DEFAULT_REF_DIR
-    return candidate if candidate.is_dir() else None
+# Re-exported so existing fixtures keep working. The definitions live in
+# `corpus.py` because a module-level `from .conftest import ...` breaks under
+# a tool that drives pytest in-process from a copied tree -- see that file.
+from corpus import DATA, DEFAULT_REF_DIR, reference_dir  # noqa: F401
 
 
 @pytest.fixture(scope="session")

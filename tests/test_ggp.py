@@ -10,7 +10,7 @@ import pytest
 from gratinglab.io.ggp import GGP_HEADER, read_ggp, read_profile, write_ggp
 from gratinglab.profiles import FromProfileData, Sinusoidal
 
-from .conftest import reference_dir
+from corpus import reference_dir
 
 CANONICAL = "3 0 - Polygonal type\nPeriod: 1 PSC: 1\n"
 POINTS = "0.0 0.0\n0.25 0.2\n0.5 0.3\n0.75 0.1\n1.0 0.0\n"
