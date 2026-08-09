@@ -2,7 +2,7 @@
 
 This module is the GUI's only interesting logic, and it is deliberately
 separated from the widgets so it can be tested headlessly. **Nothing here
-imports tkinter**, and nothing here computes physics -- it parses strings,
+imports a GUI toolkit**, and nothing here computes physics -- it parses strings,
 validates ranges, and hands the result to the tested core.
 
 The split matters: widget code is the least testable part of any project, and

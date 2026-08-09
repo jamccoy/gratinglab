@@ -1,6 +1,6 @@
 """Locating each solver's theory page.
 
-Pure and tkinter-free, like :mod:`gratinglab.gui.state`, because this is the one
+Pure and toolkit-free, like :mod:`gratinglab.gui.state`, because this is the one
 piece of "which page goes with which solver" logic worth testing on its own.
 
 ``docs/theory/`` lives at the **repo root**, outside ``src/gratinglab/``, so it

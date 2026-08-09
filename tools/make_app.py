@@ -57,7 +57,11 @@ def build(destination: Path) -> Path:
                 "CFBundlePackageType": "APPL",
                 "CFBundleShortVersionString": version,
                 "CFBundleVersion": version,
-                "LSMinimumSystemVersion": "11.0",
+                # Not a guess and not a preference: PySide6-Essentials ships
+                # as pyside6_essentials-6.11.1-cp310-abi3-macosx_13_0_universal2,
+                # so the GUI extra cannot install below macOS 13. Claiming 11.0
+                # would let Finder launch a bundle whose window can never open.
+                "LSMinimumSystemVersion": "13.0",
                 # Without this the window renders blurry on a Retina display.
                 "NSHighResolutionCapable": True,
             }

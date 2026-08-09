@@ -214,7 +214,7 @@ class TestFormState:
 
 
 class TestNoWidgetDependency:
-    def test_state_module_does_not_import_tkinter(self):
+    def test_state_module_imports_no_toolkit(self):
         """The whole reason this module exists separately.
 
         Checked against the parsed imports rather than the source text -- the

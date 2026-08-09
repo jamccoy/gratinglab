@@ -47,6 +47,7 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | `.ggp` boundary profiles | done |
 | Comparison harness | done |
 | Physics self-checks — reciprocity, energy balance | done |
+| GUI (Qt/PySide6) — tabs, geometry dock, 3D conical view | done |
 | CI (Linux + macOS, py3.11/3.12) | green |
 | Convergence harness | **next** |
 | Materials layer (CXRO) | not started |
@@ -54,7 +55,9 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | C-method | not started |
 | Integral method | not started |
 
-328 tests, 11 skipped (the skips need the private reference corpus).
+Roughly 740 tests, 11 skipped (the skips need the private reference corpus).
+Rounded on purpose: this line previously claimed 328 and was wrong by 400, so
+`pytest -q` is the authority and this is only the order of magnitude.
 
 ---
 
@@ -71,14 +74,29 @@ Build it against the scalar solver, whose knob (`quadrature_points`) is cheap,
 so it is proven before RCWA depends on it — and RCWA is where it matters, since
 truncation at N ≈ 200–400 is the whole ballgame in the off-plane regime.
 
-### 2. Mutation testing (`mutmut`)
+### 2. A progress hook on the `Solver` protocol
+
+Cancelling a solve today **abandons** it; it does not interrupt it.
+`sweep` → `scalar.solve` is one NumPy-bound call with no check point, and a
+Python thread cannot be killed, so Cancel bumps a token, the in-flight result
+arrives and is dropped, and the previous result stays on screen. The GUI says
+exactly that rather than implying more.
+
+The real fix is one change that buys both halves: an optional
+`progress: Callable[[int, int], None]` on the `Solver` protocol, called per
+wavelength. That gives genuine progress (the bar stops being indeterminate) and
+genuine cancellation (raise a sentinel from the callback) at once. Cheap for
+scalar; it becomes necessary the moment a solve takes long enough that watching
+it matters, which is RCWA.
+
+### 3. Mutation testing (`mutmut`)
 
 A hand-rolled sweep of 7 mutations found a real gap (see
 [findings](findings.md#the-obliquity-factor-was-unverified)). A proper tool runs
 hundreds. Run on demand, not on every push — a surviving mutant is a missing
 test.
 
-### 3. Materials layer
+### 4. Materials layer
 
 Port `CXRO_to_n_k` from the prototype. Unlocks absolute efficiency via Fresnel
 `R_F`, the Névot–Croce and Debye–Waller roughness factors, and the
@@ -86,7 +104,7 @@ finite-conductivity comparison. Deliberately deferred: the perfect-conductivity
 reference data sums to 1.0, so it is effectively relative efficiency and the
 first scalar comparison needed no optical constants at all.
 
-### 4. RCWA
+### 5. RCWA
 
 The independent rigorous check that would validate the scalar *model* rather
 than just its quadrature. Non-negotiables:
@@ -96,7 +114,7 @@ than just its quadrature. Non-negotiables:
 - S-matrix / enhanced transmittance-matrix propagation, never plain T-matrix.
 - Full vectorial conical formulation — off-plane is not an afterthought.
 
-### 5. Native boundary format
+### 6. Native boundary format
 
 `.ggp` cannot carry the period in nm, provenance, undercut boundaries, or a
 format version. The missing period is exactly why
@@ -104,7 +122,7 @@ format version. The missing period is exactly why
 JSON, since the profile classes are already pydantic models with tested
 round-tripping.
 
-### 6. First release + JOSS
+### 7. First release + JOSS
 
 Shipping something citable and correct early is what recruits the collaborators
 who make the integral method tractable. **Do not attempt the integral method

@@ -37,26 +37,31 @@ def _require_qt():
 def _bring_to_front(window) -> None:
     """Put the window in front on launch.
 
-    A window started from a shell stub opens *behind* whatever is frontmost on
-    macOS, because the process has no bundle identity of its own. `raise_()` +
-    `activateWindow()` is the ordinary Qt remedy; the `osascript` call beneath
-    it is the same belt-and-braces fallback the Tk window used, kept for now
-    and worth re-testing once the app bundle carries real identity.
+    There used to be an `osascript`/System Events fallback here, inherited
+    from the Tk window. M10-H measured what it actually bought, and the answer
+    was nothing:
+
+    ============================  =============  ==============
+    Launched from                 with the hack  without it
+    ============================  =============  ==============
+    ``GratingLab.app``            front          front
+    ``gratinglab-gui`` in a shell not front      not front
+    ============================  =============  ==============
+
+    The bundle is what does the work: it carries a real `CFBundleIdentifier`,
+    so macOS treats the process as an application ("GratingLab", not
+    "python") and LaunchServices activates it. From a bare shell the process
+    has no such identity and stays behind -- and the AppleScript does not
+    rescue it, because driving System Events needs Accessibility permission
+    the launching terminal has usually never been granted.
+
+    So it was a `subprocess.run` on every launch, wrapped in a bare `except`,
+    that silently no-opped in the one case it existed for. Removed rather than
+    kept as a talisman. The supported fix for the shell path is to launch the
+    bundle, which `tools/make_app.py` builds and the README points at.
     """
     window.raise_()
     window.activateWindow()
-    try:
-        import os
-        from subprocess import run
-
-        run(
-            ["osascript", "-e",
-             'tell application "System Events" to set frontmost of the first '
-             f'process whose unix id is {os.getpid()} to true'],
-            capture_output=True, timeout=3,
-        )
-    except Exception:  # pragma: no cover - best effort only
-        pass
 
 
 def main() -> int:

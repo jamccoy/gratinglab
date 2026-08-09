@@ -1,9 +1,10 @@
 r"""LaTeX splitting and rendering.
 
 Headless -- matplotlib's Agg backend needs no display, so this whole pipeline
-down to PNG bytes is testable in CI. Only turning those bytes into a
-tkinter.PhotoImage needs a live root, which is tested separately in
-test_gui_app.py behind the display gate.
+down to PNG bytes is testable in CI. Turning those bytes into an image a
+widget can show is `gui/richtext.py`'s job, tested in
+test_gui_richtext.py -- also headless, since Qt's rich-text engine takes
+HTML and `QImage.fromData` needs no display either.
 """
 
 import pytest

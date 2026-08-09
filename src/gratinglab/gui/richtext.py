@@ -2,8 +2,8 @@ r"""Theory pages as rich text: markdown structure *and* typeset math.
 
 M7 got the equations rendering and deliberately stopped there -- tables and
 bullet lists stayed as literal pipes and dashes, because real column layout in a
-`tkinter.Text` widget is a great deal of engineering for content that is
-readable enough as-is. That trade has since gone bad: `docs/theory/scalar.md`
+`tkinter.Text` widget -- the toolkit at the time -- is a great deal of
+engineering for content that is readable enough as-is. That trade has since gone bad: `docs/theory/scalar.md`
 carries the three-way tension table and the shallow-limit evidence table, and
 `docs/conventions.md` carries the angle reconciliation and the errata table.
 The tables *are* the content now, in the one place a user goes to understand
