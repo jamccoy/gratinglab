@@ -239,3 +239,325 @@ class TestEnergyBalance:
         report = check_energy_balance(make_scan([0.3, 0.9]))
         assert "energy balance" in str(report)
         assert report.total.tolist() == pytest.approx([0.3, 0.9])
+
+
+class RecordingSolver:
+    """A reciprocal solver whose per-order efficiency we dictate, and which
+    remembers every illumination it was asked about.
+
+    The real solver cannot answer "which orders did the check pick?" -- the
+    selection happens inside `check_reciprocity` and leaves no trace on the
+    report. That made the whole strategy unverifiable, which is how mutation
+    testing found `np.argsort(strength)` -> `np.argsort(None)` surviving.
+
+    Reciprocal by construction: efficiency depends on the order index alone,
+    never on the incidence azimuth, so a correct check must find zero
+    violation and any failure is the check's own.
+    """
+
+    def __init__(self, strength_of, polarization_sensitive: bool = False) -> None:
+        from gratinglab.solvers.base import Capabilities
+
+        self.capabilities = Capabilities(name="recording", rigorous=False)
+        self._strength_of = strength_of
+        self._polarization_sensitive = polarization_sensitive
+        self.calls: list[tuple[float, str]] = []
+
+    def solve(self, problem, illumination, wavelengths, **options):
+        """A physically consistent scan with dictated efficiencies.
+
+        The propagating set comes from the real grating equation, not from a
+        fixed range: `check_reciprocity` re-derives it independently and skips
+        anything that disagrees, so a stand-in claiming orders that do not
+        propagate would silently have every one of them dropped.
+        """
+        from gratinglab.geometry import is_propagating, order_range, sin_beta
+
+        wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=float))
+        self.calls.append((illumination.alpha_deg, illumination.polarization))
+
+        orders = order_range(
+            float(wavelengths.min()), problem.period,
+            illumination.sin_alpha, illumination.sin_gamma,
+        )
+        values = np.array([self._strength_of(int(m)) for m in orders], dtype=float)
+        if self._polarization_sensitive and illumination.polarization != "TM":
+            # A backend that resolves polarization answers differently. Scalar
+            # does not, which is why this has to be dictated rather than found.
+            values = values * 0.5
+
+        efficiency = np.tile(values, (len(wavelengths), 1))
+        propagating = np.array([
+            is_propagating(sin_beta(orders, float(lam), problem.period,
+                                    illumination.sin_alpha, illumination.sin_gamma))
+            for lam in wavelengths
+        ])
+        return EfficiencyScan(
+            wavelengths=wavelengths,
+            orders=orders,
+            efficiency=np.where(propagating, efficiency, 0.0),
+            propagating=propagating,
+            provenance=Provenance("recording"),
+        )
+
+    def reversed_azimuths(self) -> list[float]:
+        """Every alpha the check solved at *except* the forward one."""
+        return [alpha for alpha, _ in self.calls[1:]]
+
+
+def orders_behind(azimuths, problem, illumination, wavelength):
+    """Which order each reversed azimuth came from.
+
+    `check_reciprocity` sets the reversed incidence to beta_m, so inverting
+    that recovers the order it chose to test.
+    """
+    from gratinglab.geometry import beta as beta_from_sin
+    from gratinglab.geometry import order_range, sin_beta
+
+    # Searched over the orders this geometry actually has, not a fixed window:
+    # a hardcoded range silently truncates the answer when the geometry moves,
+    # which is how this helper first under-reported by five orders.
+    candidates = order_range(
+        wavelength, problem.period, illumination.sin_alpha, illumination.sin_gamma
+    )
+    found = []
+    for alpha in azimuths:
+        for order in candidates:
+            sine = sin_beta(
+                order, wavelength, problem.period,
+                illumination.sin_alpha, illumination.sin_gamma,
+            )
+            if abs(sine) <= 1.0 and abs(np.degrees(beta_from_sin(sine)) - alpha) < 1e-9:
+                found.append(order)
+                break
+    return found
+
+
+class TestWhichOrdersGetTested:
+    """The strategy `max_orders` implements, which was entirely unverified --
+    18 of the 33 survivors in the full mutation sweep were in this function,
+    and most of them here.
+
+    A short wavelength on purpose: the cap only does anything when there are
+    more orders than it allows, and the visible-light geometry used elsewhere
+    in this file propagates four.
+    """
+
+    PROBLEM = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
+    ILL = Illumination.classical(alpha=10.0, polarization=UNPOL)
+    WAVELENGTH = 150.0
+
+    @property
+    def live(self):
+        """The orders this geometry actually propagates, derived rather than
+        counted -- a hardcoded number would be wrong the moment the geometry
+        moved."""
+        from gratinglab.geometry import order_range
+
+        return order_range(
+            self.WAVELENGTH, self.PROBLEM.period,
+            self.ILL.sin_alpha, self.ILL.sin_gamma,
+        )
+
+    def _run(self, strength_of, **kwargs):
+        solver = RecordingSolver(strength_of)
+        report = check_reciprocity(
+            solver, self.PROBLEM, self.ILL, [self.WAVELENGTH], **kwargs
+        )
+        chosen = orders_behind(
+            solver.reversed_azimuths(), self.PROBLEM, self.ILL, self.WAVELENGTH
+        )
+        return report, chosen
+
+    def test_the_geometry_has_more_orders_than_the_cap(self):
+        """Non-vacuity for the whole class: with fewer, nothing is ever
+        trimmed and every selection test below passes trivially."""
+        assert len(self.live) > 5
+
+    def test_the_strongest_orders_are_the_ones_tested(self):
+        """The docstring says "keep the strongest orders: a violation there
+        matters most". Nothing checked it, so the sort could have been
+        arbitrary -- reciprocity holds for whichever orders get picked, and
+        every existing test would still have passed."""
+        strongest = sorted(self.live, key=abs)[:3]
+        _, chosen = self._run(lambda m: 1.0 / (1 + abs(m)), max_orders=3)
+        assert sorted(chosen) == sorted(strongest)
+
+    def test_and_not_the_weakest(self):
+        """Non-vacuity, and the mutant that survived: reversing the sort picks
+        the far orders instead, and with this ranking the two sets are
+        disjoint."""
+        weakest = sorted(self.live, key=abs)[-3:]
+        _, chosen = self._run(lambda m: 1.0 / (1 + abs(m)), max_orders=3)
+        assert not (set(weakest) & set(chosen))
+
+    def test_the_ranking_follows_the_efficiencies_not_the_order_index(self):
+        """A second ranking with a different answer, so the test cannot be
+        satisfied by any fixed choice of orders -- here the *outermost* three
+        are the strong ones."""
+        favoured = set(sorted(self.live, key=abs)[-3:])
+        _, chosen = self._run(
+            lambda m: 1.0 if m in favoured else 0.01, max_orders=3
+        )
+        assert sorted(chosen) == sorted(favoured)
+
+    def test_every_order_is_tested_when_the_cap_allows(self):
+        report, chosen = self._run(lambda m: 1.0, max_orders=None)
+        assert len(chosen) == len(self.live)
+        assert report.pairs_tested == len(self.live)
+
+    def test_a_cap_equal_to_the_order_count_trims_nothing(self):
+        """The boundary. `>` becoming `>=` here would drop an order whenever
+        the cap exactly matched, which is the off-by-one mutation testing keeps
+        finding -- `geometry.beta` had the same shape."""
+        report, _ = self._run(lambda m: 1.0, max_orders=len(self.live))
+        assert report.pairs_tested == len(self.live)
+
+    def test_and_one_below_it_trims_exactly_one(self):
+        report, _ = self._run(lambda m: 1.0, max_orders=len(self.live) - 1)
+        assert report.pairs_tested == len(self.live) - 1
+
+
+class TestTheGrazingSkip:
+    """Orders diffracting within half a degree of grazing are skipped, because
+    the reciprocal illumination is undefined there. Nothing tested that the
+    skip happens, nor that it skips only the one order."""
+
+    PROBLEM = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
+    WAVELENGTH = 600.0
+    #: Chosen, not stumbled on: it solves `sin(beta_1) = sin(89.7 deg)` for
+    #: alpha, putting order +1 inside the margin while four others stay well
+    #: clear -- which is what lets the `continue`-not-`break` test mean
+    #: something.
+    GRAZING_ALPHA = -34.8489
+
+    def _near_grazing(self, ill):
+        from gratinglab.geometry import beta as beta_from_sin
+        from gratinglab.geometry import order_range, sin_beta
+
+        return {
+            int(m)
+            for m in order_range(
+                self.WAVELENGTH, self.PROBLEM.period,
+                ill.sin_alpha, ill.sin_gamma,
+            )
+            if abs(
+                np.degrees(
+                    beta_from_sin(
+                        sin_beta(m, self.WAVELENGTH, self.PROBLEM.period,
+                                 ill.sin_alpha, ill.sin_gamma)
+                    )
+                )
+            )
+            > 89.5
+        }
+
+    def _run(self, alpha, **kwargs):
+        ill = Illumination.classical(alpha=alpha, polarization=UNPOL)
+        solver = RecordingSolver(lambda m: 1.0)
+        report = check_reciprocity(
+            solver, self.PROBLEM, ill, [self.WAVELENGTH], **kwargs
+        )
+        chosen = orders_behind(
+            solver.reversed_azimuths(), self.PROBLEM, ill, self.WAVELENGTH
+        )
+        return report, chosen, ill
+
+    def test_the_chosen_geometry_really_has_one(self):
+        """Non-vacuity first: without a near-grazing order the skip has
+        nothing to skip and both tests below pass for free."""
+        ill = Illumination.classical(alpha=self.GRAZING_ALPHA, polarization=UNPOL)
+        assert self._near_grazing(ill) == {1}
+
+    def test_it_is_skipped(self):
+        _, chosen, ill = self._run(self.GRAZING_ALPHA, max_orders=None)
+        assert not (self._near_grazing(ill) & set(chosen))
+
+    def test_but_the_orders_after_it_are_still_tested(self):
+        """`continue`, not `break`. Stopping at the first grazing order would
+        silently drop everything past it -- here orders -3 through 0 come
+        before +1 and nothing comes after, so the count is what catches it."""
+        report, chosen, ill = self._run(self.GRAZING_ALPHA, max_orders=None)
+        from gratinglab.geometry import order_range
+
+        live = order_range(
+            self.WAVELENGTH, self.PROBLEM.period, ill.sin_alpha, ill.sin_gamma
+        )
+        assert report.pairs_tested == len(live) - 1
+        assert len(chosen) == len(live) - 1
+
+    def test_a_geometry_with_nothing_near_grazing_loses_no_order(self):
+        """The margin must not be trimming orders in the ordinary case."""
+        report, _, ill = self._run(10.0, max_orders=None)
+        from gratinglab.geometry import order_range
+
+        live = order_range(
+            self.WAVELENGTH, self.PROBLEM.period, ill.sin_alpha, ill.sin_gamma
+        )
+        assert self._near_grazing(ill) == set()
+        assert report.pairs_tested == len(live)
+
+
+class TestTheReversedIlluminationMatches:
+    def test_it_keeps_the_polarization(self):
+        """Reciprocity compares one geometry with its reverse -- everything
+        else has to be held fixed. Dropping `polarization` leaves the reverse
+        solve on `Illumination`'s default of TE, and the check then compares
+        two different physical problems and blames the solver.
+
+        Invisible to the scalar solver, which neglects polarization entirely,
+        so it needs a backend that resolves it. That is exactly the class of
+        bug the first contributed RCWA would hit.
+        """
+        solver = RecordingSolver(lambda m: 1.0, polarization_sensitive=True)
+        report = check_reciprocity(
+            solver,
+            Problem(period=1400.0, profile=Blazed(blaze_angle=30.0)),
+            Illumination.classical(alpha=10.0, polarization="TM"),
+            [600.0],
+            max_orders=3,
+        )
+        assert report.passed
+        assert {p for _, p in solver.calls} == {"TM"}
+
+    def test_and_the_stand_in_really_would_notice(self):
+        """Non-vacuity for the test above: the same solver answers differently
+        for a different polarization, so a mismatch could not go unseen."""
+        solver = RecordingSolver(lambda m: 1.0, polarization_sensitive=True)
+        problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
+        tm = solver.solve(problem, Illumination.classical(alpha=10.0, polarization="TM"), [600.0])
+        te = solver.solve(problem, Illumination.classical(alpha=10.0, polarization="TE"), [600.0])
+        assert not np.array_equal(tm.efficiency, te.efficiency)
+
+
+class TestTheEmptyReport:
+    """`max_orders=0` reaches the early return. Only `pairs_tested` and
+    `passed` were asserted, so the rest of the report could say anything."""
+
+    def _empty(self):
+        return check_reciprocity(
+            scalar,
+            Problem(period=1400.0, profile=Blazed(blaze_angle=30.0)),
+            Illumination.classical(alpha=10.0, polarization=UNPOL),
+            [600.0],
+            max_orders=0,
+            tolerance=1e-7,
+        )
+
+    def test_it_claims_no_violation_it_did_not_measure(self):
+        """A report that never compared anything must not report a violation
+        of 1.0 -- that is a measurement it did not make, which is precisely
+        what `Provenance` exists to prevent elsewhere."""
+        assert self._empty().max_violation == 0.0
+
+    def test_and_carries_the_tolerance_it_was_given(self):
+        """Otherwise the report cannot say what it would have accepted."""
+        assert self._empty().tolerance == 1e-7
+
+    def test_and_names_no_worst_case(self):
+        report = self._empty()
+        assert report.worst_order is None
+        assert report.worst_wavelength is None
+
+    def test_and_still_does_not_pass(self):
+        assert not self._empty().passed

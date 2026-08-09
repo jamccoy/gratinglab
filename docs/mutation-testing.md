@@ -84,10 +84,17 @@ Rust toolchain; nothing else depends on it.
 
 ## Where it stands
 
-796 mutants across the physics core, 763 killed — **95.9%**. The per-module
-breakdown, and the reason `check_reciprocity` accounts for 18 of the 33
-survivors on its own, are in
+796 mutants across the physics core. The first full sweep killed 763 — 95.9% —
+with 18 of the 33 survivors in `check_reciprocity` alone. Those are now closed,
+so `checks.py` and `geometry.py` both sit at 100% (`geometry`'s two remaining
+survivors are equivalent mutants, verified as such). The breakdown and what
+closing them took are in
 [`findings.md`](findings.md#the-full-sweep-959-and-where-the-4-is).
+
+The useful lesson from that round: a strategy with no trace on its own output
+cannot be tested through the public API. `check_reciprocity` picks which orders
+to test and the report never says which — so verifying it needed a **recording
+stand-in solver**, not a cleverer assertion against the real one.
 
 A full sweep takes roughly half an hour on this machine (~6 mutants/second),
 which is why it is a deliberate act rather than a CI step.

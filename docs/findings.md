@@ -328,8 +328,34 @@ Three kinds of gap, from reading the diffs:
   untested. A report claiming a measurement it never made is exactly what
   `Provenance` exists to prevent elsewhere.
 
-Not fixed here — closing them is its own piece of work, tracked on the
-roadmap, and worth doing deliberately rather than by chasing a number.
+**Closed.** All 18 are killed and `checks.py` is now at 96/96. What it took is
+the part worth recording: the strategy could not be tested against the real
+solver at all, because the selection happens inside `check_reciprocity` and
+leaves no trace on the report. It needed a **recording stand-in** — a solver
+reciprocal by construction (efficiency depends on the order index, never on
+the incidence azimuth), whose per-order strength the test dictates, and which
+remembers every illumination it was asked about. The orders it chose are then
+recovered by inverting the reversed azimuth back through `sin_beta`.
+
+That also reached a gap no scalar test could. The reversed illumination must
+carry the **original polarization**; dropping it leaves the reverse solve on
+`Illumination`'s default of TE, so the check compares two different physical
+problems and blames the solver. Scalar neglects polarization, so that mutant
+survives against it and always would — catching it needs a backend that
+resolves polarization, which a stand-in can be made to do. Precisely the class
+of bug the first contributed RCWA will meet.
+
+Two mistakes made while writing these, both worth the warning:
+
+- The first stand-in returned a fixed order window rather than the geometry's
+  real propagating set. `check_reciprocity` re-derives that set independently
+  and skips anything that disagrees, so every dictated order was silently
+  dropped and `pairs_tested` came back 0.
+- The first grazing test assumed a near-grazing order existed at a convenient
+  geometry. None did — the margin is half a degree, so the geometry has to be
+  *solved for*. `sin(beta_1) = sin(89.7°)` gives `alpha = -34.8489°`, which
+  puts order +1 inside the margin with four others clear of it. Without that,
+  "the skip happens" passes for free.
 
 ---
 

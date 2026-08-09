@@ -49,7 +49,7 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | Physics self-checks — reciprocity, energy balance | done |
 | Convergence harness ([`convergence.py`](../src/gratinglab/convergence.py)) | done |
 | Progress + cancellation on the `Solver` protocol | done |
-| Mutation testing ([`mutation-testing.md`](mutation-testing.md)) | done, on demand |
+| Mutation testing ([`mutation-testing.md`](mutation-testing.md)) | done, on demand; `checks.py` and `geometry.py` at 100% |
 | Materials — CXRO constants, Fresnel, roughness, absolute efficiency | done |
 | GUI (Qt/PySide6) — tabs, geometry dock, 3D conical view | done |
 | CI (Linux + macOS, py3.11/3.12) | green |
@@ -57,7 +57,7 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | C-method | not started |
 | Integral method | not started |
 
-Roughly 930 tests, 11 skipped (the skips need the private reference corpus).
+Roughly 945 tests, 11 skipped (the skips need the private reference corpus).
 Rounded on purpose: this line previously claimed 328 and was wrong by 400, so
 `pytest -q` is the authority and this is only the order of magnitude.
 
@@ -65,17 +65,7 @@ Rounded on purpose: this line previously claimed 328 and was wrong by 400, so
 
 ## What is next, in order
 
-### 1. Close the `check_reciprocity` gaps
-
-The full mutation sweep scores 95.9% across the physics core, and **18 of the
-33 survivors are in `check_reciprocity` alone** — 81% against 98–100%
-everywhere else. The check this project leans on hardest is the least
-validated thing in it. Three specific gaps are named in
-[findings](findings.md#the-full-sweep-959-and-where-the-4-is): the
-strongest-orders selection strategy, two boundary comparisons, and the
-no-pairs early return.
-
-### 2. RCWA — integrating a contributed backend
+### 1. RCWA — integrating a contributed backend
 
 **Not ours to write.** `fgrise` has RCWA code. The physics list below is
 therefore a set of requirements to *state to a contributor* rather than a plan
@@ -110,7 +100,7 @@ A conformance test every registered solver must pass is the natural follow-up.
 It belongs *with* that work rather than before it: there is nothing to run it
 against until a second solver exists.
 
-### 3. Native boundary format
+### 2. Native boundary format
 
 `.ggp` cannot carry the period in nm, provenance, undercut boundaries, or a
 format version. The missing period is exactly why
@@ -118,7 +108,7 @@ format version. The missing period is exactly why
 JSON, since the profile classes are already pydantic models with tested
 round-tripping.
 
-### 4. First release + JOSS
+### 3. First release + JOSS
 
 Shipping something citable and correct early is what recruits the collaborators
 who make the integral method tractable. **Do not attempt the integral method
