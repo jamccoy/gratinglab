@@ -69,7 +69,9 @@ _REDRAW_DEBOUNCE_MS = 120
 #: `show_progress()`; `show_progress_value(done, total)`;
 #: `show_solving(wavelength_count)`; `show_result(scan, energy,
 #: lambda_over_period)`; `show_cancelled()`; `show_error(message)`;
-#: `show_field_errors(errors)`.
+#: `show_field_errors(errors)`. Optionally a `convergence_requested` signal and
+#: `show_convergence(scan, energy, lambda_over_period, report)` -- optional
+#: because a backend with no `accuracy_knob` has nothing to sweep.
 _TAB_FACTORIES = {"scalar": ScalarTab}
 
 
@@ -85,6 +87,10 @@ class MainWindow(QMainWindow):
     #: `worker.run(...)` directly would run the solve on the UI thread and
     #: freeze the window -- the exact thing this design exists to prevent.
     _requested = Signal(int, str, object, dict, object)
+    #: The same payload, routed to the worker's sweep slot instead. A second
+    #: signal rather than a mode flag: `moveToThread` dispatches per slot, and
+    #: a flag would put the branch on the worker thread instead of here.
+    _convergence_requested = Signal(int, str, object, dict, object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -186,6 +192,11 @@ class MainWindow(QMainWindow):
             tab = factory()
             tab.solve_requested.connect(lambda _checked=False, n=name: self.solve(n))
             tab.cancel_requested.connect(self.cancel)
+            converge = getattr(tab, "convergence_requested", None)
+            if converge is not None:
+                # Optional: a future tab for a backend with no accuracy_knob
+                # has nothing to sweep and should not carry the button.
+                converge.connect(lambda _checked=False, n=name: self.solve(n, sweep=True))
             self.tabs[name] = tab
             self._tab_widget.addTab(tab, display_title(name))
 
@@ -270,6 +281,8 @@ class MainWindow(QMainWindow):
         self._worker.failed.connect(self._on_failed)
         self._worker.cancelled.connect(self._on_cancelled)
         self._worker.progress.connect(self._on_progress)
+        self._worker.converged.connect(self._on_converged)
+        self._convergence_requested.connect(self._worker.run_convergence)
         self._thread.start()
 
     # -- actions ---------------------------------------------------------
@@ -314,13 +327,18 @@ class MainWindow(QMainWindow):
         if name is not None:
             self.solve(name)
 
-    def solve(self, name: str) -> None:
+    def solve(self, name: str, *, sweep: bool = False) -> None:
         """Validate here, solve on the worker thread.
 
         Geometry and the tab's own options are validated as two separate
         steps, but both are caught before anything reaches the worker: a
         rejected form is never sent to the worker, whichever kind of error it
         was.
+
+        ``sweep`` runs the convergence harness instead of a single solve. It
+        shares every bit of the machinery below -- one token, one cancel
+        event, one "only one at a time window-wide" rule -- because it is the
+        same kind of thing, only longer. Only the destination slot differs.
         """
         if self._running:
             return
@@ -350,7 +368,8 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(
             _PROGRESS_DELAY_MS, tab, lambda: self._show_progress_if_still_running(tab)
         )
-        self._requested.emit(self._token, name, geometry, options, self._cancel)
+        signal = self._convergence_requested if sweep else self._requested
+        signal.emit(self._token, name, geometry, options, self._cancel)
 
     def cancel(self) -> None:
         """Stop the running solve.
@@ -407,6 +426,16 @@ class MainWindow(QMainWindow):
         so the worker has somewhere to report to other than `failed` -- a stop
         the user asked for is not an error.
         """
+
+    def _on_converged(self, token: int, method: str, result, report) -> None:
+        if token != self._token:
+            return
+        self._set_running(False)
+        self.geometry_tab.show_geometry(self._parsed)
+        self.tabs[method].show_convergence(
+            result.scan, result.energy, self._parsed.lambda_over_period, report
+        )
+        self.solved.emit()
 
     def _on_failed(self, token: int, method: str, message: str) -> None:
         if token != self._token:

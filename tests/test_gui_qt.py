@@ -598,6 +598,82 @@ class TestTheProgressBar:
         assert bar.value() == 50
 
 
+class TestTheConvergenceButton:
+    """M14-E. The sweep is the first operation here long enough for a progress
+    bar to be worth having, and the first a user is likely to want out of."""
+
+    def _sweep(self, qtbot, win):
+        with qtbot.waitSignal(win.solved, timeout=SOLVE_TIMEOUT_MS):
+            win.tabs["scalar"]._converge_button.click()
+
+    def test_it_runs_the_harness_and_the_panel_says_so(self, qtbot, win):
+        """No new rendering: `provenance_lines` already reads the study off
+        `notes["convergence"]`, which is what M3-C put there."""
+        self._sweep(qtbot, win)
+        text = win.tabs["scalar"]._provenance.toPlainText()
+        assert "convergence: yes" in text
+        assert "quadrature_points=4096 is enough" in text
+
+    def test_a_plain_solve_still_says_it_did_not_sweep(self, qtbot, win):
+        """Non-vacuity: pressing Solve must not silently sweep."""
+        resolve(qtbot, win)
+        assert "not checked" in win.tabs["scalar"]._provenance.toPlainText()
+
+    def test_the_knob_field_ends_at_the_coarsest_defensible_setting(self, qtbot, win):
+        """The actionable number, put where the next plain Solve will use it."""
+        field = win.tabs["scalar"]._fields["quadrature_points"]
+        assert field.text() == "2048"
+        self._sweep(qtbot, win)
+        assert field.text() == "4096"
+
+    def test_the_knob_field_is_dead_while_the_sweep_chooses_it(self, win):
+        """An input that looks live and is ignored is the M9 mistake."""
+        field = win.tabs["scalar"]._fields["quadrature_points"]
+        assert field.isEnabled()
+        win.solve("scalar", sweep=True)
+        assert not field.isEnabled()
+        assert not win.tabs["scalar"]._converge_button.isEnabled()
+
+    def test_and_comes_back_afterwards(self, qtbot, win):
+        self._sweep(qtbot, win)
+        assert win.tabs["scalar"]._fields["quadrature_points"].isEnabled()
+        assert win.tabs["scalar"]._converge_button.isEnabled()
+
+    def test_it_shares_the_one_at_a_time_rule(self, win):
+        """Same token, same event, same window-wide lock as an ordinary solve
+        -- it is the same kind of thing, only longer."""
+        win.solve("scalar", sweep=True)
+        assert win._running
+        assert not win.tabs["scalar"]._solve_button.isEnabled()
+        token = win._token
+        win.solve("scalar")  # ignored while one is in flight
+        assert win._token == token
+
+    def test_the_bar_counts_rungs_not_wavelengths(self, qtbot, win):
+        """`check_convergence` reports per rung: the numbers a bar can show
+        without jumping backwards."""
+        self._sweep(qtbot, win)
+        assert win.tabs["scalar"]._progress.maximum() == 10
+
+    def test_cancelling_a_sweep_stops_it(self, qtbot, win):
+        stopped = []
+        rungs = []
+        win._worker.cancelled.connect(lambda t, m: stopped.append(t))
+        win._worker.progress.connect(lambda t, d, n: rungs.append(d))
+
+        win.solve("scalar", sweep=True)
+        qtbot.waitUntil(lambda: bool(rungs), timeout=SOLVE_TIMEOUT_MS)
+        win.cancel()
+        qtbot.waitUntil(lambda: bool(stopped), timeout=SOLVE_TIMEOUT_MS)
+        assert max(rungs) < 9, "it worked through the whole ladder anyway"
+
+    def test_the_result_survives_a_cancelled_sweep(self, qtbot, win):
+        previous = win.tabs["scalar"]._scan
+        win.solve("scalar", sweep=True)
+        win.cancel()
+        assert win.tabs["scalar"]._scan is previous
+
+
 class TestGeometryDock:
     """The geometry inputs, in a panel that can be got out of the way."""
 

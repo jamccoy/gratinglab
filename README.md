@@ -78,7 +78,10 @@ and the tabs are one per concern:
 - **Scalar (Kirchhoff)** — the solve, efficiency per order with per-order visibility, and
   the **provenance panel**: every validity warning verbatim, the summed-efficiency check,
   and whether convergence was actually demonstrated. Nothing is hidden there; a result
-  that violates energy conservation says so.
+  that violates energy conservation says so. **Check convergence…** runs the sweep and
+  reports the coarsest defensible setting, with a progress bar and a Cancel that really
+  stops it — solvers report per wavelength, so cancellation is not a euphemism for
+  looking away.
 - **Setup** — a stub that explains itself. Materials configuration lands here once the
   materials layer exists; an input with nothing behind it would look like a working
   option that silently does nothing.

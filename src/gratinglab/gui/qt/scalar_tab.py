@@ -66,6 +66,11 @@ class ScalarTab(QWidget):
 
     solve_requested = Signal()
     cancel_requested = Signal()
+    #: Sweep the accuracy knob instead of solving once. A separate signal
+    #: rather than a flag on `solve_requested`: the window routes it to a
+    #: different worker slot, and one signal meaning two things is how a tab
+    #: starts deciding what a solve *is*.
+    convergence_requested = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -158,7 +163,7 @@ class ScalarTab(QWidget):
         layout.addWidget(self._order_count_label)
         return group
 
-    def _build_action_buttons(self) -> QHBoxLayout:
+    def _build_action_buttons(self) -> QVBoxLayout:
         self._solve_button = QPushButton("Solve")
         self._solve_button.clicked.connect(self.solve_requested)
         self._cancel_button = QPushButton("Cancel")
@@ -166,6 +171,17 @@ class ScalarTab(QWidget):
         self._cancel_button.setEnabled(False)
         self._export_button = QPushButton("Export CSV…")
         self._export_button.clicked.connect(self.export_csv)
+
+        # Its own row rather than a third button beside Solve and Cancel.
+        # `TestLayoutFloors` pins this column at the 276 px its Orders
+        # All/None/Default row needs, and a third text-width button here would
+        # push past it -- which is that test doing its job, not an obstacle.
+        self._converge_button = QPushButton("Check convergence…")
+        self._converge_button.setToolTip(
+            "Sweep quadrature_points until the answer stops moving, and report "
+            "the coarsest setting that can be defended."
+        )
+        self._converge_button.clicked.connect(self.convergence_requested)
 
         self._progress = QProgressBar()
         # Starts indeterminate and becomes determinate on the first report, so
@@ -177,7 +193,11 @@ class ScalarTab(QWidget):
         row = QHBoxLayout()
         row.addWidget(self._solve_button)
         row.addWidget(self._cancel_button)
-        return row
+
+        column = QVBoxLayout()
+        column.addLayout(row)
+        column.addWidget(self._converge_button)
+        return column
 
     def _build_efficiency_plot(self) -> QWidget:
         from matplotlib.backends.backend_qtagg import (
@@ -236,7 +256,12 @@ class ScalarTab(QWidget):
 
     def set_running(self, running: bool) -> None:
         self._solve_button.setEnabled(not running)
+        self._converge_button.setEnabled(not running)
         self._cancel_button.setEnabled(running)
+        # The sweep chooses the knob, so the field it would come from is dead
+        # for the duration. Leaving an ignored input live is the M9 mistake --
+        # a control that looks like it does something and does not.
+        self._fields["quadrature_points"].setEnabled(not running)
         if not running:
             self._progress.hide()
 
@@ -269,6 +294,21 @@ class ScalarTab(QWidget):
 
         self._draw_efficiency(scan)
         self._paint(provenance.provenance_lines(scan, energy, lambda_over_period))
+
+    def show_convergence(self, scan, energy, lambda_over_period: float, report) -> None:
+        """A completed sweep, through the ordinary result path.
+
+        No new rendering: `provenance_lines` already reads the study off
+        `scan.provenance.notes["convergence"]` -- that is what M3-C put there
+        -- so the panel says "convergence: yes — quadrature_points=4096 is
+        enough" with no help from here.
+        """
+        self.show_result(scan, energy, lambda_over_period)
+        if report.converged_at is not None:
+            # The actionable number, put where the next plain Solve will use
+            # it. It is usually far cheaper than the value the sweep had to
+            # reach to prove it.
+            self._fields["quadrature_points"].setText(str(report.converged_at))
 
     def show_cancelled(self) -> None:
         if self._scan is None:

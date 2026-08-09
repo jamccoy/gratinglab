@@ -72,6 +72,10 @@ class SolveWorker(QObject):
     #: must not be rendered as one.
     cancelled = Signal(int, str)
     progress = Signal(int, int, int)  # token, done, total
+    #: token, method, SolveResult, ConvergenceReport. Carries the result
+    #: separately from the study so a tab can reuse its ordinary result path
+    #: and show the evidence through the provenance panel it already has.
+    converged = Signal(int, str, object, object)
 
     @Slot(int, str, object, dict, object)
     def run(
@@ -108,6 +112,51 @@ class SolveWorker(QObject):
             # version and excepthook state it prints a traceback and aborts
             # the process. Turning any failure into a signal keeps the window
             # alive and able to say what went wrong.
+            self.failed.emit(token, method, f"{type(exc).__name__}: {exc}")
+
+    @Slot(int, str, object, dict, object)
+    def run_convergence(
+        self,
+        token: int,
+        method: str,
+        geometry: "Parsed",
+        options: dict,
+        cancel: threading.Event,
+    ) -> None:
+        """Sweep the solver's accuracy knob instead of solving once.
+
+        Up to ten solves, which is what makes this the first operation in the
+        project long enough for a progress bar to be worth having -- and the
+        first a user is likely to want out of.
+
+        The knob is dropped from ``options``: the sweep chooses it. Passing
+        both would be refused by `check_convergence` anyway, and refusing here
+        with a clear reason beats surfacing that as a solver error.
+        """
+        from ...checks import check_energy_balance
+        from ...convergence import check_convergence
+        from ...solvers.base import get_solver
+
+        try:
+            solver = get_solver(method)
+            knob = solver.capabilities.accuracy_knob
+            report = check_convergence(
+                solver,
+                geometry.problem,
+                geometry.illumination,
+                geometry.wavelengths,
+                progress=self._reporter(token, cancel),
+                **{k: v for k, v in options.items() if k != knob},
+            )
+            self.converged.emit(
+                token,
+                method,
+                SolveResult(report.scan, check_energy_balance(report.scan)),
+                report,
+            )
+        except SolveCancelled:
+            self.cancelled.emit(token, method)
+        except Exception as exc:  # noqa: BLE001 - see `run`
             self.failed.emit(token, method, f"{type(exc).__name__}: {exc}")
 
     def _reporter(self, token: int, cancel: threading.Event):
