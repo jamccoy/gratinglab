@@ -198,7 +198,7 @@ class TestCancellation:
         lines = lines_for(make_scan(), cancelled=True)
         text = "".join(l.text for l in lines)
         assert "previous result" in text
-        assert "still finishing" in text
+        assert "the calculation stopped" in text
 
     def test_is_not_styled_as_an_error(self):
         lines = lines_for(make_scan(), cancelled=True)

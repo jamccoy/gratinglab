@@ -168,7 +168,10 @@ class ScalarTab(QWidget):
         self._export_button.clicked.connect(self.export_csv)
 
         self._progress = QProgressBar()
-        self._progress.setRange(0, 0)  # indeterminate: sweep reports nothing
+        # Starts indeterminate and becomes determinate on the first report, so
+        # a backend that declares no `reports_progress` still looks alive
+        # rather than stuck at 0%.
+        self._progress.setRange(0, 0)
         self._progress.hide()
 
         row = QHBoxLayout()
@@ -240,7 +243,17 @@ class ScalarTab(QWidget):
     def show_progress(self) -> None:
         self._progress.show()
 
+    def show_progress_value(self, done: int, total: int) -> None:
+        """Advance the bar, switching it to determinate on the first report."""
+        if self._progress.maximum() != total:
+            self._progress.setRange(0, total)
+        self._progress.setValue(done)
+
     def show_solving(self, wavelength_count: int) -> None:
+        # Back to indeterminate for each new run: the previous run's range is
+        # meaningless here, and leaving it would show a full bar for a solve
+        # that has not started.
+        self._progress.setRange(0, 0)
         self._paint(provenance.solving_lines(self.name, wavelength_count))
 
     def show_result(self, scan, energy, lambda_over_period: float) -> None:

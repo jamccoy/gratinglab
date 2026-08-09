@@ -254,9 +254,9 @@ class TestBackgroundSolve:
 
         original_run = worker_module.SolveWorker.run
 
-        def record(self, token, method, geometry, options):
+        def record(self, token, method, geometry, options, cancel):
             seen["thread"] = threading.current_thread().ident
-            return original_run(self, token, method, geometry, options)
+            return original_run(self, token, method, geometry, options, cancel)
 
         with pytest.MonkeyPatch.context() as patch:
             patch.setattr(worker_module.SolveWorker, "run", record)
@@ -288,12 +288,15 @@ class TestBackgroundSolve:
         assert scalar_tab._scan is previous
         assert scalar_tab._solve_button.isEnabled()
 
-    def test_cancel_says_the_calculation_is_still_finishing(self, win):
-        """Cancel abandons a result; it cannot stop the CPU. Claiming
-        otherwise would be the panel's first lie."""
+    def test_cancel_says_the_calculation_stopped(self, win):
+        """It used to say "still finishing", which was true when cancelling
+        could only stop the waiting. The solver now checks at every
+        wavelength, so that sentence would be the panel's first lie."""
         win.solve("scalar")
         win.cancel()
-        assert "still finishing" in win.tabs["scalar"]._provenance.toPlainText()
+        text = win.tabs["scalar"]._provenance.toPlainText()
+        assert "the calculation stopped" in text
+        assert "still finishing" not in text
 
     def test_a_cancelled_result_is_dropped_when_it_arrives(self, win):
         from gratinglab.gui.qt.worker import SolveResult
@@ -472,6 +475,127 @@ class TestLayoutFloors:
                 f"{type(area.widget()).__name__} promises "
                 f"{area.minimumWidth()} px but needs {needed}"
             )
+
+
+class TestCancellationReallyStops:
+    """M14-D. Before this, Cancel stopped the *waiting* and the CPU kept
+    going. These measure the difference rather than asserting it."""
+
+    def _long_solve(self, win, points="4000"):
+        """A scan slow enough that Cancel lands mid-flight."""
+        win.geometry._fields["wavelength_count"].setText(points)
+
+    def test_cancel_sets_the_event_the_solver_reads(self, win):
+        win.solve("scalar")
+        assert not win._cancel.is_set()
+        win.cancel()
+        assert win._cancel.is_set()
+
+    def test_and_the_worker_stops_where_it_was_told(self, qtbot, win):
+        """The measured half: it stops *mid-flight*, not merely before it
+        started.
+
+        Waiting for real progress first is what makes this a test of
+        cancellation rather than of racing the thread to the starting line --
+        a fixed sleep let the flag be set before the worker's first callback,
+        and the assertion passed on a solve that never began.
+        """
+        reached = []
+        stopped = []
+        win._worker.progress.connect(lambda t, d, n: reached.append(d))
+        win._worker.cancelled.connect(lambda t, m: stopped.append(t))
+
+        self._long_solve(win)
+        win.solve("scalar")
+        qtbot.waitUntil(lambda: any(d > 0 for d in reached), timeout=SOLVE_TIMEOUT_MS)
+        under_way = max(reached)
+        win.cancel()
+
+        qtbot.waitUntil(lambda: bool(stopped), timeout=SOLVE_TIMEOUT_MS)
+        assert under_way > 0, "it had not started, so stopping proves nothing"
+        # Reports are throttled to whole percent, so the last one can trail the
+        # true stopping point by up to 40 wavelengths here. Half the scan is
+        # far outside that and still fails loudly if nothing was interrupted.
+        assert max(reached) < 2000, (
+            f"reached {max(reached)} of 4000 -- it ran on despite being cancelled"
+        )
+
+    def test_a_solve_left_alone_runs_to_the_end(self, qtbot, win):
+        """Non-vacuity for the test above: without it, a solver that stopped
+        early for some entirely different reason would pass."""
+        reached = []
+        win._worker.progress.connect(lambda t, d, n: reached.append(d))
+        resolve(qtbot, win)
+        assert max(reached) == 200
+
+    def test_cancelling_is_reported_as_cancelled_not_failed(self, qtbot, win):
+        """A stop the user asked for is not an error, and rendering it as one
+        would be the category mistake M8 fixed for the no-coating default."""
+        events = []
+        win._worker.cancelled.connect(lambda t, m: events.append("cancelled"))
+        win._worker.failed.connect(lambda t, m, msg: events.append("failed"))
+
+        self._long_solve(win)
+        win.solve("scalar")
+        qtbot.wait(30)
+        win.cancel()
+
+        qtbot.waitUntil(lambda: bool(events), timeout=SOLVE_TIMEOUT_MS)
+        assert events == ["cancelled"]
+
+    def test_but_a_real_solver_failure_still_is(self, win):
+        """Non-vacuity: the distinction only means something if `failed` can
+        still happen."""
+        seen = []
+        win._worker.failed.connect(lambda t, m, msg: seen.append(msg))
+        win._active_name = "scalar"
+        win._on_failed(win._token, "scalar", "ValueError: boom")
+        assert "solve failed" in win.tabs["scalar"]._provenance.toPlainText()
+
+    def test_each_solve_gets_its_own_event(self, win):
+        """A worker-owned event cleared at the top of `run` loses a Cancel
+        clicked between the request and the clear. A fresh one per solve
+        cannot."""
+        win.solve("scalar")
+        first = win._cancel
+        win.cancel()
+        win.solve("scalar")
+        assert win._cancel is not first
+        assert not win._cancel.is_set()
+
+
+class TestTheProgressBar:
+    def test_it_is_determinate_once_the_solver_reports(self, qtbot, win):
+        resolve(qtbot, win)
+        bar = win.tabs["scalar"]._progress
+        assert bar.maximum() == 200
+
+    def test_and_indeterminate_again_for_the_next_run(self, qtbot, win):
+        """The previous run's range is meaningless for a solve that has not
+        started, and leaving it would show a full bar for no work."""
+        resolve(qtbot, win)
+        win.tabs["scalar"].show_solving(200)
+        assert win.tabs["scalar"]._progress.maximum() == 0
+
+    def test_reports_are_throttled_to_whole_percent(self, qtbot, win):
+        """200 queued cross-thread signals for a bar with ~100 visible states
+        is 100 of them nobody could have seen."""
+        seen = []
+        win._worker.progress.connect(lambda t, d, n: seen.append(d))
+        resolve(qtbot, win)
+        assert len(seen) <= 101
+        assert len(seen) > 1, "and it does report"
+
+    def test_a_stale_report_does_not_move_the_bar(self, win):
+        """A cancelled solve keeps reporting for the wavelength it is in.
+        Letting that walk the bar over a result the window has moved on from
+        would be the same staleness the token exists to catch."""
+        win._active_name = "scalar"
+        bar = win.tabs["scalar"]._progress
+        bar.setRange(0, 100)
+        bar.setValue(50)
+        win._on_progress(win._token - 1, 7, 100)
+        assert bar.value() == 50
 
 
 class TestGeometryDock:

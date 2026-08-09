@@ -23,6 +23,8 @@ concurrent per-tab workers.
 
 from __future__ import annotations
 
+import threading
+
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
@@ -64,8 +66,9 @@ _REDRAW_DEBOUNCE_MS = 120
 #: why): a `name` class attribute matching its registry key; `solve_requested`
 #: and `cancel_requested` signals; `build_options(problem, illumination,
 #: wavelengths) -> dict` (raising `FormErrors`); `set_running(bool)`;
-#: `show_progress()`; `show_solving(wavelength_count)`; `show_result(scan,
-#: energy, lambda_over_period)`; `show_cancelled()`; `show_error(message)`;
+#: `show_progress()`; `show_progress_value(done, total)`;
+#: `show_solving(wavelength_count)`; `show_result(scan, energy,
+#: lambda_over_period)`; `show_cancelled()`; `show_error(message)`;
 #: `show_field_errors(errors)`.
 _TAB_FACTORIES = {"scalar": ScalarTab}
 
@@ -81,7 +84,7 @@ class MainWindow(QMainWindow):
     #: `moveToThread` only redirects *signal* delivery, so calling
     #: `worker.run(...)` directly would run the solve on the UI thread and
     #: freeze the window -- the exact thing this design exists to prevent.
-    _requested = Signal(int, str, object, dict)
+    _requested = Signal(int, str, object, dict, object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -92,6 +95,9 @@ class MainWindow(QMainWindow):
         self._token = 0
         self._running = False
         self._active_name: str | None = None
+        # Replaced per solve rather than reused, so a Cancel clicked between
+        # the request and the worker picking it up cannot be lost to a clear().
+        self._cancel = threading.Event()
 
         # Coalesces a burst of keystrokes into one redraw. Restartable and
         # single-shot, parented to the window so it dies with it -- a bare
@@ -262,6 +268,8 @@ class MainWindow(QMainWindow):
         self._requested.connect(self._worker.run)
         self._worker.finished.connect(self._on_solved)
         self._worker.failed.connect(self._on_failed)
+        self._worker.cancelled.connect(self._on_cancelled)
+        self._worker.progress.connect(self._on_progress)
         self._thread.start()
 
     # -- actions ---------------------------------------------------------
@@ -330,6 +338,7 @@ class MainWindow(QMainWindow):
         self._active_name = name
         self._parsed = geometry
         self._token += 1
+        self._cancel = threading.Event()
         self._set_running(True)
         tab.show_solving(len(geometry.wavelengths))
         # `tab` as the context object, not a bare singleShot: Qt then cancels
@@ -341,18 +350,26 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(
             _PROGRESS_DELAY_MS, tab, lambda: self._show_progress_if_still_running(tab)
         )
-        self._requested.emit(self._token, name, geometry, options)
+        self._requested.emit(self._token, name, geometry, options, self._cancel)
 
     def cancel(self) -> None:
-        """Stop waiting for the running solve.
+        """Stop the running solve.
 
-        It keeps running -- see `worker.py`. Bumping the token is what makes
-        its result stale on arrival. There is only ever one thing that could
-        be running, so it does not matter which tab's Cancel button was
-        clicked; all of them mean the same thing.
+        Setting the event is what actually stops it: the solver checks it at
+        every wavelength and raises out of its own loop (see `worker.py`).
+
+        Bumping the token as well is not redundant. The worker may already
+        have finished when Cancel is clicked, in which case a result is
+        already in flight and the event will never be read -- the token is
+        what makes that one stale on arrival. Two different situations, two
+        mechanisms.
+
+        There is only ever one thing that could be running, so it does not
+        matter which tab's Cancel button was clicked.
         """
         if not self._running:
             return
+        self._cancel.set()
         self._token += 1
         self._set_running(False)
         if self._active_name is not None:
@@ -370,6 +387,26 @@ class MainWindow(QMainWindow):
             result.scan, result.energy, self._parsed.lambda_over_period
         )
         self.solved.emit()
+
+    def _on_progress(self, token: int, done: int, total: int) -> None:
+        """Advance the originating tab's bar, and nobody else's.
+
+        A stale token means a cancelled solve is still reporting on its way
+        out of its own loop -- a few wavelengths at most, but enough to walk a
+        bar backwards over a result the window has already moved on from.
+        """
+        if token != self._token or self._active_name is None:
+            return
+        self.tabs[self._active_name].show_progress_value(done, total)
+
+    def _on_cancelled(self, token: int, method: str) -> None:
+        """The solve really stopped.
+
+        Nothing to show: `cancel()` already updated the panel and re-enabled
+        the buttons, and the previous result is still on screen. This exists
+        so the worker has somewhere to report to other than `failed` -- a stop
+        the user asked for is not an error.
+        """
 
     def _on_failed(self, token: int, method: str, message: str) -> None:
         if token != self._token:

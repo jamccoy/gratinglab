@@ -11,7 +11,8 @@ which are not wrong must not look wrong**: ``converged is None`` means "not yet
 checked", true for every solver until the convergence harness lands, and a
 coating-free run giving relative efficiency is the correct default. Both once
 rendered identically to a real problem, which is how a fully successful run
-could read as broken.
+could read as broken. The convergence harness exists now, so ``None`` means
+"this solve did not sweep" rather than "nothing can" -- still not a failure.
 """
 
 from __future__ import annotations
@@ -77,9 +78,9 @@ def provenance_lines(
     function needs nothing from the GUI and is trivial to call from a test.
 
     ``cancelled`` marks the case where the user asked to stop and the result on
-    screen is the *previous* one. The solve itself cannot be interrupted -- see
-    ``gui/qt/worker.py`` -- so saying "cancelled" without saying what is still
-    running would overstate what happened.
+    screen is the *previous* one. The solve really does stop now -- the solver
+    checks at every wavelength -- so this no longer has to hedge about work
+    continuing in the background.
     """
     provenance = scan.provenance
     lines: list[Line] = []
@@ -95,10 +96,13 @@ def provenance_lines(
     )
 
     if cancelled:
+        # It used to say the calculation was "still finishing", which was true
+        # then and would be a lie now: the solver checks for cancellation at
+        # every wavelength and raises out of its own loop.
         lines.append(
             Line(
-                "cancelled — showing the previous result; the calculation you "
-                "stopped is still finishing\n",
+                "cancelled — the calculation stopped; showing the previous "
+                "result\n",
                 "dim",
             )
         )
