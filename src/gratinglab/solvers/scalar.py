@@ -63,7 +63,7 @@ from ..geometry import cos_beta, facet_graze, is_propagating, order_range, sin_b
 from ..illumination import Illumination
 from ..problem import Problem
 from ..result import EfficiencyScan, Provenance
-from ..materials.fresnel import reflectivity
+from ..materials.fresnel import RoughnessModel, reflectivity
 from .base import Capabilities, Progress, register
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type checkers only
@@ -123,6 +123,7 @@ class ScalarSolver:
         wavelengths: ArrayLike,
         *,
         quadrature_points: int = 2048,
+        roughness_model: "RoughnessModel" = "nevot-croce",
         progress: "Progress | None" = None,
     ) -> EfficiencyScan:
         r"""Efficiency over a wavelength scan.
@@ -140,6 +141,13 @@ class ScalarSolver:
             periodic, so the rectangle rule converges spectrally and the
             default is generous. Must exceed twice the highest order to satisfy
             Nyquist; this is checked.
+        roughness_model
+            How ``Problem.roughness`` damps the reflectivity: ``"nevot-croce"``
+            (default), ``"debye-waller"``, or ``"none"``. Both are legitimate
+            and they differ, so the choice is exposed rather than buried --
+            Debye-Waller is the more pessimistic near the critical angle
+            because it knows nothing about the transmitted wave. Ignored
+            without a coating, since there is no reflectivity to damp.
         progress
             Called ``(0, n)`` before the first wavelength and ``(k, n)`` after
             each one, per the contract in
@@ -259,6 +267,12 @@ class ScalarSolver:
                 # model that already reports TE and TM as identical, which the
                 # solver warns about a few lines below.
                 polarization="unpolarized",
+                # `Problem.roughness` finally does something physical. Until
+                # now it fed only the Fraunhofer *warning* below -- the factor
+                # it was added for had never been written.
+                roughness_nm=problem.roughness,
+                wavelength_nm=wavelengths,
+                model=roughness_model,
             )[:, None]
 
         return EfficiencyScan(
@@ -275,6 +289,7 @@ class ScalarSolver:
                 propagating,
                 time.perf_counter() - started,
                 coating,
+                graze,
                 graze_basis,
             ),
         )
@@ -289,6 +304,7 @@ class ScalarSolver:
         propagating: NDArray[np.bool_],
         elapsed: float,
         coating: "OpticalConstants | None" = None,
+        graze: float = 0.0,
         graze_basis: str | None = None,
     ) -> Provenance:
         """Record the run, including every validity guard it tripped."""
@@ -304,21 +320,41 @@ class ScalarSolver:
                 f"{_LAMBDA_OVER_PERIOD_WARN}"
             )
 
-        if problem.roughness > 0 and hasattr(problem.profile, "blaze_angle"):
-            # Fraunhofer smoothness criterion, ISSI section 4.
-            from ..geometry import facet_graze
-
-            zeta = facet_graze(
-                illumination.gamma,
-                np.radians(problem.profile.blaze_angle),
-                illumination.alpha,
-            )
-            threshold = 32.0 * np.sin(zeta) * problem.roughness
+        if problem.roughness > 0:
+            # Fraunhofer smoothness criterion, ISSI section 4. Uses the same
+            # zeta the reflectivity does, rather than recomputing it for blazed
+            # profiles only -- an optically rough surface is rough whatever
+            # shape its grooves are, and this used to skip every profile
+            # without a `blaze_angle`.
+            threshold = 32.0 * np.sin(graze) * problem.roughness
             if wavelengths.min() < threshold:
                 warnings.append(
                     f"Fraunhofer smoothness criterion violated below "
                     f"{threshold:.4g} nm (32 sin(zeta) sigma); the surface is "
                     "not optically smooth there"
+                )
+
+        if coating is not None:
+            # Total external reflection, at last. `docs/theory/scalar.md`
+            # section 7 has carried this row as "needs a materials layer to
+            # evaluate" since it was written; the layer is here.
+            #
+            # Only with a coating: theta_c comes from the decrement, so without
+            # optical constants there is nothing to compare against. That is
+            # not a validity concern to warn about, it is a check that does not
+            # apply -- the M8 distinction.
+            critical = coating.critical_angle(wavelengths)
+            past = graze > critical
+            if past.any():
+                lam = wavelengths[past]
+                warnings.append(
+                    f"facet graze {np.degrees(graze):.4g} deg exceeds the "
+                    f"critical angle for {coating.name} over "
+                    f"{lam.min():.4g}-{lam.max():.4g} nm "
+                    f"(theta_c falls to {np.degrees(critical[past].min()):.4g} "
+                    "deg there); reflectivity collapses above it, so these "
+                    "wavelengths are outside the regime a grazing-incidence "
+                    "design operates in -- see docs/theory/scalar.md section 7"
                 )
 
         # No coating is the normal default mode, not a validity concern -- it
@@ -352,6 +388,13 @@ class ScalarSolver:
                 "The deviation grows with phase excursion across the groove "
                 "(depth/wavelength, hence working order), and vanishes in the "
                 "shallow-groove limit -- see docs/theory/scalar.md section 5"
+                + (
+                    ". Note this run is absolute, so part of the deficit is "
+                    "ordinary absorption in the coating rather than the "
+                    "approximation straying"
+                    if coating is not None and worst < 1.0
+                    else ""
+                )
             )
 
         return Provenance(

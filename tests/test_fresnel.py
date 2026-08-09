@@ -188,41 +188,46 @@ class TestRoughness:
             values = [self._R(s, model) for s in (0.0, 0.1, 0.3, 1.0)]
             assert values == sorted(values, reverse=True), model
 
-    def test_debye_waller_is_always_the_more_pessimistic(self):
-        """Which is the reason both are offered. Debye-Waller knows only about
-        the incident wave, so it damps the same whether the field penetrates or
-        not; Névot-Croce carries the transmitted component and damps less where
-        the transmitted wave is evanescent.
+    def test_debye_waller_over_damps_near_and_above_the_critical_angle(self):
+        """Which is the reason both are offered, and the scope of the claim.
 
-        The direction is asserted, not a magnitude: at sigma = 0.5 nm and
-        lambda = 2 nm the gap runs 0.1% at half a degree to 3% at 4 degrees --
-        real, one-signed, and small. Pinning a ratio would be pinning a guess.
+        Debye-Waller knows only about the incident wave, so it damps the same
+        whether the field penetrates or not; Névot-Croce carries the
+        transmitted component and damps less where that wave is evanescent.
+        The gap is ~1e-2 on Au, which is where the choice actually matters.
+
+        Scoped on purpose. An earlier version of this test asserted Debye-
+        Waller was *always* the more pessimistic, and passed -- because it
+        sampled one wavelength and one synthetic material, both near
+        theta_c. See the companion below for what happens far from it.
         """
-        for graze_deg in (0.5, 1.0, 2.0, 4.0):
-            graze = np.radians(graze_deg)
-            common = dict(roughness_nm=0.5, wavelength_nm=self.WAVELENGTH)
-            nc = float(reflectivity(1.0 - 1e-3 + 1e-4j, graze,
+        gold = materials.lookup("Au")
+        for lam in (1.0, 2.0, 4.0, 6.0):
+            theta_c = float(gold.critical_angle(lam))
+            for fraction in (0.8, 1.0, 1.5):
+                common = dict(roughness_nm=0.5, wavelength_nm=lam)
+                nc = float(reflectivity(gold.n(lam), fraction * theta_c,
+                                        model="nevot-croce", **common))
+                dw = float(reflectivity(gold.n(lam), fraction * theta_c,
+                                        model="debye-waller", **common))
+                assert dw < nc, f"lambda={lam}, zeta/theta_c={fraction}"
+
+    def test_but_far_below_it_the_two_models_agree(self):
+        """The other regime, and why the claim above needed scoping. Deep
+        below theta_c both factors approach 1 -- the wave barely penetrates --
+        and the residual difference is ~1e-4 with no reliable ordering. Which
+        model you pick there does not matter, and a test asserting a direction
+        would be pinning noise.
+        """
+        gold = materials.lookup("Au")
+        for lam in (1.0, 2.0, 4.0, 6.0):
+            graze = 0.15 * float(gold.critical_angle(lam))
+            common = dict(roughness_nm=0.5, wavelength_nm=lam)
+            nc = float(reflectivity(gold.n(lam), graze,
                                     model="nevot-croce", **common))
-            dw = float(reflectivity(1.0 - 1e-3 + 1e-4j, graze,
+            dw = float(reflectivity(gold.n(lam), graze,
                                     model="debye-waller", **common))
-            assert dw < nc, f"{graze_deg} deg"
-
-    def test_and_the_gap_widens_away_from_grazing(self):
-        """The mechanism, not just the sign: the two agree where the wave
-        barely penetrates and separate as it starts to."""
-        common = dict(roughness_nm=0.5, wavelength_nm=self.WAVELENGTH)
-
-        def gap(graze_deg):
-            graze = np.radians(graze_deg)
-            nc = float(reflectivity(1.0 - 1e-3 + 1e-4j, graze,
-                                    model="nevot-croce", **common))
-            dw = float(reflectivity(1.0 - 1e-3 + 1e-4j, graze,
-                                    model="debye-waller", **common))
-            return nc / dw
-
-        gaps = [gap(d) for d in (0.5, 1.0, 2.0, 4.0)]
-        assert gaps == sorted(gaps)
-        assert gaps[0] < 1.005 < gaps[-1]
+            assert abs(dw - nc) < 1e-3, f"lambda={lam}"
 
     def test_roughness_without_a_wavelength_is_refused(self):
         """Both factors compare sigma against a wavelength. Defaulting one

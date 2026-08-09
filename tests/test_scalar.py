@@ -588,3 +588,134 @@ class TestAbsoluteEfficiency:
         report = check_energy_balance(gold)
         assert report.passed
         assert report.max_deficit > check_energy_balance(bare).max_deficit
+
+
+class TestTheValidityGuardsMaterialsUnlocked:
+    """M15-E. `docs/theory/scalar.md` section 7 has listed the total-external-
+    reflection row as "needs a materials layer to evaluate" since it was
+    written, and `Problem.roughness` fed only the Fraunhofer *warning* -- the
+    factor it was added for had never been written. Both land here."""
+
+    WAVELENGTHS = np.linspace(1.0, 5.0, 9)
+    PROFILE = Blazed(blaze_angle=29.5, antiblaze_angle=70.5)
+
+    def _solve(self, *, graze=1.5, coating="Au", **problem_kwargs):
+        ill = Illumination.offplane(graze=graze, azimuth=25.0, polarization=UNPOL)
+        problem = Problem(
+            period=315.15, profile=self.PROFILE, coating=coating, **problem_kwargs
+        )
+        return scalar.solve(problem, ill, self.WAVELENGTHS)
+
+    # -- roughness now does something ------------------------------------
+
+    def test_roughness_costs_reflectivity(self):
+        smooth = self._solve()
+        rough = self._solve(roughness=0.5)
+        assert np.all(rough.efficiency <= smooth.efficiency)
+        assert rough.total[0] < smooth.total[0]
+
+    def test_and_did_nothing_before_a_coating_existed(self):
+        """Non-vacuity in the honest direction: with no coating there is no
+        reflectivity to damp, so roughness still changes no number -- and must
+        not pretend to."""
+        smooth = self._solve(coating=None)
+        rough = self._solve(coating=None, roughness=0.5)
+        assert np.array_equal(smooth.efficiency, rough.efficiency)
+
+    def test_the_model_is_the_callers_choice(self):
+        """Both are legitimate and they differ, so the choice is exposed
+        rather than buried -- see `test_fresnel.py` for where and by how much.
+        """
+        nc = self._solve(roughness=0.5)
+        dw = scalar.solve(
+            Problem(
+                period=315.15, profile=self.PROFILE, coating="Au", roughness=0.5
+            ),
+            Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL),
+            self.WAVELENGTHS,
+            roughness_model="debye-waller",
+        )
+        assert not np.array_equal(nc.efficiency, dw.efficiency)
+
+    def test_and_can_be_switched_off_without_losing_the_figure(self):
+        """`model="none"` says "I have a roughness measurement and do not want
+        it applied", rather than making the caller zero the value and discard
+        it from the record."""
+        none = scalar.solve(
+            Problem(
+                period=315.15, profile=self.PROFILE, coating="Au", roughness=0.5
+            ),
+            Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL),
+            self.WAVELENGTHS,
+            roughness_model="none",
+        )
+        assert np.array_equal(none.efficiency, self._solve().efficiency)
+
+    # -- total external reflection ---------------------------------------
+
+    def test_a_facet_past_the_critical_angle_is_reported(self):
+        """The row scalar.md section 7 could not evaluate. At 8 degrees graze
+        the facet sits well above Au's critical angle across this whole band,
+        and reflectivity collapses -- the design is outside the regime a
+        grazing-incidence instrument operates in."""
+        warnings = self._solve(graze=8.0).provenance.warnings
+        assert any("critical angle" in w for w in warnings)
+
+    def test_the_warning_names_the_material_and_where_it_happens(self):
+        warning = next(
+            w for w in self._solve(graze=8.0).provenance.warnings
+            if "critical angle" in w
+        )
+        assert "Au" in warning
+        assert "theta_c" in warning
+
+    def test_a_grazing_design_is_not_warned_about(self):
+        """Non-vacuity: the reference geometry sits at 1.5 degrees, comfortably
+        below Au's 3.1-degree critical angle at 1 nm, and must stay quiet."""
+        assert not any(
+            "critical angle" in w for w in self._solve().provenance.warnings
+        )
+
+    def test_without_a_coating_the_check_does_not_apply_and_says_nothing(self):
+        """The M8 distinction. There is no decrement to compare against, so
+        this is a check that does not apply -- not a validity concern to warn
+        about. A run with no coating is not a deficient run."""
+        assert not any(
+            "critical angle" in w
+            for w in self._solve(graze=8.0, coating=None).provenance.warnings
+        )
+
+    # -- the other two guards --------------------------------------------
+
+    def test_the_fraunhofer_check_now_covers_every_profile(self):
+        """It used to be gated on `hasattr(profile, "blaze_angle")`, so a rough
+        sinusoid was never checked. An optically rough surface is rough
+        whatever shape its grooves are, and it now uses the same zeta the
+        reflectivity does."""
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        problem = Problem(
+            period=315.15,
+            profile=Sinusoidal(depth_fraction=0.15),
+            roughness=5.0,
+        )
+        scan = scalar.solve(problem, ill, [0.5])
+        assert any("Fraunhofer" in w for w in scan.provenance.warnings)
+
+    def test_the_energy_message_distinguishes_absorption_from_the_approximation(self):
+        """M9's text explains the thin-element energy defect, which is about
+        the *model*. With a coating, part of the deficit is ordinary absorption
+        instead -- a different thing, and reporting both as the approximation
+        straying would overstate the model's error."""
+        note = next(
+            w for w in self._solve().provenance.warnings if "summed efficiency" in w
+        )
+        assert "ordinary absorption" in note
+
+    def test_and_does_not_claim_absorption_when_there_is_none(self):
+        """Non-vacuity: without a coating the deficit really is all model."""
+        note = next(
+            w
+            for w in self._solve(coating=None).provenance.warnings
+            if "summed efficiency" in w
+        )
+        assert "ordinary absorption" not in note
