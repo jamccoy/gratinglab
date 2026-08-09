@@ -59,10 +59,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from ..geometry import cos_beta, is_propagating, order_range, sin_beta
+from ..geometry import cos_beta, facet_graze, is_propagating, order_range, sin_beta
 from ..illumination import Illumination
 from ..problem import Problem
 from ..result import EfficiencyScan, Provenance
+from ..materials.fresnel import reflectivity
 from .base import Capabilities, Progress, register
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type checkers only
@@ -239,6 +240,27 @@ class ScalarSolver:
         if progress is not None:
             progress(len(wavelengths), len(wavelengths))
 
+        graze, graze_basis = _reflecting_graze(problem, illumination)
+        if coating is not None:
+            # One factor per wavelength, applied to every order alike. That is
+            # the thin-element approximation's own statement -- the groove is a
+            # phase screen and the surface reflects; scalar theory has no
+            # mechanism by which an order could reflect differently from its
+            # neighbour. `scalar.md` section 1 lists it as an assumption:
+            # "reflectivity applied separately as a scale factor".
+            efficiency = efficiency * reflectivity(
+                coating.n(wavelengths),
+                graze,
+                # Unpolarized deliberately, whatever the illumination says.
+                # These s and p are facet-local and `Illumination.polarization`
+                # is groove-referenced (conventions.md 7) -- different frames,
+                # and in a conical mount the mapping is not the identity.
+                # Resolving polarization here would be false precision on a
+                # model that already reports TE and TM as identical, which the
+                # solver warns about a few lines below.
+                polarization="unpolarized",
+            )[:, None]
+
         return EfficiencyScan(
             wavelengths=wavelengths,
             orders=all_orders,
@@ -253,6 +275,7 @@ class ScalarSolver:
                 propagating,
                 time.perf_counter() - started,
                 coating,
+                graze_basis,
             ),
         )
 
@@ -266,6 +289,7 @@ class ScalarSolver:
         propagating: NDArray[np.bool_],
         elapsed: float,
         coating: "OpticalConstants | None" = None,
+        graze_basis: str | None = None,
     ) -> Provenance:
         """Record the run, including every validity guard it tripped."""
         from .. import __version__
@@ -347,9 +371,12 @@ class ScalarSolver:
                 # number unchanged. M15-D is what makes this ever say
                 # "absolute"; until then a named coating is recorded and not
                 # yet used, which is what this reports.
-                "normalization": "absolute" if _REFLECTIVITY_APPLIED else "relative",
+                "normalization": "absolute" if coating is not None else "relative",
                 **(
-                    {"coating": f"{coating.name} ({coating.source})"}
+                    {
+                        "coating": f"{coating.name} ({coating.source})",
+                        "reflectivity_graze": graze_basis,
+                    }
                     if coating is not None
                     else {}
                 ),
@@ -359,11 +386,51 @@ class ScalarSolver:
         )
 
 
-#: Flipped by M15-D, when `solve` starts multiplying by a Fresnel factor. It
-#: exists as a named constant rather than an inline `False` so that the commit
-#: which changes efficiency values is a one-line change to a thing with a name,
-#: reviewable on its own.
-_REFLECTIVITY_APPLIED = False
+def _reflecting_graze(problem: Problem, illumination: Illumination):
+    r"""``(zeta, description)`` -- the angle the surface reflects at.
+
+    A blazed profile has one flat active facet tilted by ``blaze_angle``, and
+    :math:`\sin\zeta = \sin\gamma\,\cos(\delta - \alpha)` is exact for it.
+
+    Nothing else has a single facet angle, so the reflection is evaluated on
+    the **mean surface** -- which is `facet_graze` with a zero tilt, not a
+    separate formula:
+
+    >>> facet_graze(gamma, 0.0, alpha)          # doctest: +SKIP
+    ...                                          # == arcsin(|k_i . n|)
+
+    How good that is depends on the profile, and the description says which:
+
+    - **Lamellar** tops and bottoms genuinely *are* parallel to the mean
+      surface, so this is exact for them. What it omits is the vertical walls,
+      which at grazing incidence are nearly edge-on.
+    - **Sinusoidal** and measured profiles have a local slope that varies
+      across the groove, so the mean is an approximation and is recorded as
+      one.
+
+    The alternative -- refusing any profile without a facet angle -- would be
+    worse than approximating: a sinusoid at grazing incidence does reflect,
+    and a solver that declines to say how much has not become more honest.
+    """
+    blaze_angle = getattr(problem.profile, "blaze_angle", None)
+    if blaze_angle is not None:
+        return (
+            facet_graze(illumination.gamma, np.radians(blaze_angle), illumination.alpha),
+            f"active facet, {blaze_angle:g} deg tilt",
+        )
+
+    kind = type(problem.profile).__name__
+    exact = kind == "Lamellar"
+    return (
+        facet_graze(illumination.gamma, 0.0, illumination.alpha),
+        f"mean surface ({kind} has no single facet angle; "
+        + (
+            "exact for its flat tops and bottoms, omits the vertical walls)"
+            if exact
+            else "the local slope varies across the groove, so this is an "
+            "approximation)"
+        ),
+    )
 
 
 def _resolve_coating(problem: Problem) -> "OpticalConstants | None":

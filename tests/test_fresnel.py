@@ -282,18 +282,15 @@ class TestShape:
         assert float(reflectivity(LOSSLESS, 0.01)) <= 1.0
 
 
-class TestNothingImportsThisYet:
-    def test_the_solver_does_not_import_fresnel(self):
-        """M15-B is the pure layer. Wiring is M15-D, and it changes efficiency
-        values -- the first commit in this project to do so. Keeping the steps
-        apart is what makes that diff reviewable.
+class TestTheSolverUsesThisAndNotACopyOfIt:
+    """Until M15-D this class asserted the opposite -- that the solver did not
+    import this module -- to hold the boundary between the pure layer and the
+    commit that changes efficiency values. M15-D crossed it deliberately, so
+    the guard becomes the thing it was protecting: the solver reflects using
+    *this* code, not arithmetic of its own.
+    """
 
-        Checked against the parsed imports rather than the source text: the
-        word "reflectivity" appears in `scalar.py`'s comments explaining what
-        is *not* yet happening, and this project has deleted one
-        word-in-source test already for matching a comment
-        (`docs/findings.md`, M13). An import is behaviour; a word is not.
-        """
+    def test_the_solver_imports_fresnel(self):
         import ast
         import inspect
         import sys
@@ -301,29 +298,25 @@ class TestNothingImportsThisYet:
         import gratinglab.solvers.scalar  # noqa: F401
 
         # The module, not the registered singleton that shadows it.
-        module = sys.modules["gratinglab.solvers.scalar"]
-        imported: set[str] = set()
-        for node in ast.walk(ast.parse(inspect.getsource(module))):
-            if isinstance(node, ast.ImportFrom) and node.module:
-                imported.add(node.module)
-            elif isinstance(node, ast.Import):
-                imported.update(a.name for a in node.names)
-
-        assert not any("fresnel" in name for name in imported)
-
-    def test_but_it_does_resolve_a_coating(self):
-        """Non-vacuity, and the M15-C boundary: the materials layer is reached
-        for optical constants, just not for a reflectivity yet."""
-        import ast
-        import inspect
-        import sys
-
-        import gratinglab.solvers.scalar  # noqa: F401
-
         source = inspect.getsource(sys.modules["gratinglab.solvers.scalar"])
         imported = {
             node.module
             for node in ast.walk(ast.parse(source))
             if isinstance(node, ast.ImportFrom) and node.module
         }
-        assert any("materials" in name for name in imported)
+        assert any("fresnel" in name for name in imported)
+
+    def test_and_computes_no_fresnel_arithmetic_of_its_own(self):
+        """The property that matters. A solver that grew its own amplitude
+        coefficients could drift from this module silently -- and
+        `test_scalar.py::TestAbsoluteEfficiency` recomputes the factor from
+        here, so the two would then disagree.
+        """
+        import inspect
+        import sys
+
+        import gratinglab.solvers.scalar  # noqa: F401
+
+        source = inspect.getsource(sys.modules["gratinglab.solvers.scalar"])
+        for fingerprint in ("np.sqrt(n", "cos(graze)", "** 2 * k1"):
+            assert fingerprint not in source

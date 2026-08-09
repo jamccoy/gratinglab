@@ -357,11 +357,17 @@ class TestProvenance:
         assert scan.provenance.notes["coating"].startswith("Au")
         assert "CXRO" in scan.provenance.notes["coating"]
 
-    def test_naming_a_coating_does_not_yet_make_the_result_absolute(self):
-        """The honest intermediate state, and the property that killed the bug:
-        the label keys on whether a reflectivity was *applied*, never on
-        whether a material was *named*. Applying it is M15-D; until then a
-        named coating is resolved, recorded, and not used -- and says so."""
+    def test_the_absolute_label_and_the_numbers_move_together(self):
+        """The property that killed the M8 bug. The label used to be
+        `"absolute" if problem.coating is not None`, so any string flipped it
+        while every number stayed put. Asserting the pair is what makes the
+        label mean something: a run labelled absolute must *differ* from the
+        same run without a coating.
+
+        The other half of the guard is
+        `test_an_unknown_coating_raises_rather_than_being_ignored` -- a name
+        that resolves to nothing can no longer reach this point at all.
+        """
         ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
         profile = Blazed(blaze_angle=30.0)
         bare = scalar.solve(Problem(period=160.0, profile=profile), ill, [2.4])
@@ -370,9 +376,8 @@ class TestProvenance:
         )
 
         assert bare.provenance.notes["normalization"] == "relative"
-        assert gold.provenance.notes["normalization"] == "relative"
-        # And the numbers agree, which is what "not used" has to mean.
-        assert np.array_equal(bare.efficiency, gold.efficiency)
+        assert gold.provenance.notes["normalization"] == "absolute"
+        assert not np.array_equal(bare.efficiency, gold.efficiency)
 
     def test_warns_on_a_rough_surface_past_the_fraunhofer_criterion(self):
         problem = Problem(
@@ -453,3 +458,133 @@ class TestMeasuredProfile:
             Problem(period=1400.0, profile=sampled), ill, [700.0], quadrature_points=4096
         )
         assert np.allclose(analytic.efficiency, numeric.efficiency, atol=2e-3)
+
+class TestAbsoluteEfficiency:
+    """M15-D: the first thing in this project that changes an efficiency value.
+
+    `docs/theory/scalar.md` section 1 has always listed "reflectivity applied
+    separately as a scale factor" as an assumption, and ended the table with
+    "efficiencies are **relative**, not absolute, until a materials layer
+    supplies R_F". This is that layer arriving.
+    """
+
+    WAVELENGTHS = np.linspace(1.0, 5.0, 9)
+
+    def _pair(self, profile, **problem_kwargs):
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        bare = Problem(period=315.15, profile=profile, **problem_kwargs)
+        gold = Problem(period=315.15, profile=profile, coating="Au", **problem_kwargs)
+        return (
+            scalar.solve(bare, ill, self.WAVELENGTHS),
+            scalar.solve(gold, ill, self.WAVELENGTHS),
+            ill,
+        )
+
+    def test_the_absolute_result_is_the_relative_one_times_the_reflectivity(self):
+        """Not a second source of truth: the factor is recomputed here from the
+        materials layer directly, so if the solver ever grew its own Fresnel
+        arithmetic this would drift."""
+        from gratinglab.geometry import facet_graze
+        from gratinglab.materials import lookup
+        from gratinglab.materials.fresnel import reflectivity
+
+        profile = Blazed(blaze_angle=29.5, antiblaze_angle=70.5)
+        bare, gold, ill = self._pair(profile)
+
+        expected = reflectivity(
+            lookup("Au").n(self.WAVELENGTHS),
+            facet_graze(ill.gamma, np.radians(29.5), ill.alpha),
+            polarization="unpolarized",
+        )
+        assert gold.efficiency == pytest.approx(bare.efficiency * expected[:, None])
+
+    def test_reflection_can_only_ever_cost_efficiency(self):
+        """A passive surface cannot amplify. True order by order, not just in
+        the sum."""
+        bare, gold, _ = self._pair(Blazed(blaze_angle=29.5, antiblaze_angle=70.5))
+        assert np.all(gold.efficiency <= bare.efficiency + 1e-15)
+
+    def test_and_it_actually_costs_some(self):
+        """Non-vacuity: a reflectivity of 1.0 everywhere would satisfy the test
+        above and mean nothing happened. Au at 1.5 degrees graze keeps about
+        70% across this band."""
+        bare, gold, _ = self._pair(Blazed(blaze_angle=29.5, antiblaze_angle=70.5))
+        ratio = gold.total / bare.total
+        assert np.all(ratio < 0.8)
+        assert np.all(ratio > 0.6)
+
+    def test_the_label_finally_says_absolute(self):
+        bare, gold, _ = self._pair(Blazed(blaze_angle=29.5, antiblaze_angle=70.5))
+        assert bare.provenance.notes["normalization"] == "relative"
+        assert gold.provenance.notes["normalization"] == "absolute"
+
+    def test_a_blazed_profile_reflects_off_its_active_facet(self):
+        _, gold, _ = self._pair(Blazed(blaze_angle=29.5, antiblaze_angle=70.5))
+        assert "active facet" in gold.provenance.notes["reflectivity_graze"]
+        assert "29.5" in gold.provenance.notes["reflectivity_graze"]
+
+    @pytest.mark.parametrize(
+        "profile, wording",
+        [
+            (Lamellar(depth_fraction=0.3, duty_cycle=0.5), "exact for its flat"),
+            (Sinusoidal(depth_fraction=0.15), "approximation"),
+        ],
+    )
+    def test_a_profile_with_no_facet_angle_uses_the_mean_surface_and_says_so(
+        self, profile, wording
+    ):
+        """Refusing these would not be more honest -- a sinusoid at grazing
+        incidence does reflect. The approximation is made and recorded, and the
+        wording distinguishes the lamellar case (exact for its flat tops and
+        bottoms) from the varying-slope one."""
+        _, gold, _ = self._pair(profile)
+        note = gold.provenance.notes["reflectivity_graze"]
+        assert "mean surface" in note
+        assert wording in note
+
+    def test_the_mean_surface_graze_is_facet_graze_with_no_tilt(self):
+        """Not a separate formula. `facet_graze(gamma, 0, alpha)` is exactly
+        `arcsin(|k_i . n|)`, so the flat-facet case reuses a function that is
+        already covered rather than introducing an untested one."""
+        from gratinglab.geometry import facet_graze
+
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        from_cosines = np.arcsin(abs(ill.direction_cosines[1]))
+        assert facet_graze(ill.gamma, 0.0, ill.alpha) == pytest.approx(from_cosines)
+
+    def test_no_coating_leaves_the_numbers_exactly_alone(self):
+        """The default path must be untouched by this milestone -- bitwise, not
+        approximately."""
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        problem = Problem(
+            period=315.15, profile=Blazed(blaze_angle=29.5, antiblaze_angle=70.5)
+        )
+        again = scalar.solve(problem, ill, self.WAVELENGTHS)
+        assert np.array_equal(
+            scalar.solve(problem, ill, self.WAVELENGTHS).efficiency, again.efficiency
+        )
+        assert "reflectivity_graze" not in again.provenance.notes
+
+    def test_a_scan_outside_the_table_raises_rather_than_extrapolating(self):
+        """The range guard reaching a caller. Au is tabulated to 6.2 nm; a scan
+        to 20 nm has no optical constants behind it, and inventing some would
+        make every number in the result unfounded."""
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        problem = Problem(
+            period=315.15,
+            profile=Blazed(blaze_angle=29.5, antiblaze_angle=70.5),
+            coating="Au",
+        )
+        with pytest.raises(ValueError, match="tabulated over"):
+            scalar.solve(problem, ill, np.linspace(10.0, 20.0, 5))
+
+    def test_absorption_shows_up_as_an_energy_deficit(self):
+        """And is correctly *not* flagged as unphysical: `check_energy_balance`
+        defaults to requiring only `sum <= 1`, because a deficit is ordinary
+        and power going into the material is exactly that."""
+        from gratinglab.checks import check_energy_balance
+
+        bare, gold, _ = self._pair(Blazed(blaze_angle=29.5, antiblaze_angle=70.5))
+        report = check_energy_balance(gold)
+        assert report.passed
+        assert report.max_deficit > check_energy_balance(bare).max_deficit
