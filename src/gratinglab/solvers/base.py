@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from importlib.metadata import entry_points
-from typing import Protocol, runtime_checkable
+from typing import Callable, Protocol, runtime_checkable
 
 from numpy.typing import ArrayLike
 
@@ -28,16 +28,44 @@ from ..result import EfficiencyScan
 
 __all__ = [
     "Capabilities",
+    "Progress",
     "Solver",
+    "SolveCancelled",
     "UnsupportedConfiguration",
     "register",
     "get_solver",
     "available_solvers",
 ]
 
+#: ``(done, total)``, in units the solver chooses -- wavelengths, for every
+#: backend so far. See :class:`Solver` for the full contract.
+Progress = Callable[[int, int], None]
+
 
 class UnsupportedConfiguration(NotImplementedError):
     """A solver was asked for something outside its declared capabilities."""
+
+
+class SolveCancelled(Exception):
+    """Raised **by a caller's progress callback** to abandon a solve.
+
+    A Python thread cannot be killed and a NumPy-bound call has no check
+    point, so a caller that wants to interrupt a solve has to be given a
+    moment in which to do it. The progress callback is that moment: raise this
+    from inside it and the solver unwinds.
+
+    A solver must let it through. Wrapping the callback in ``except
+    Exception`` would swallow it and quietly restore the old behaviour, in
+    which cancelling only stops the *waiting*.
+
+    Deriving from ``Exception`` rather than ``BaseException`` is deliberate,
+    and it is the weaker of the two against accidental swallowing. The
+    alternative slips past every ordinary handler -- including the broad one
+    in ``gui/qt/worker.py`` that exists to keep a solver failure from aborting
+    the process -- and an unhandled ``BaseException`` on a worker thread is a
+    worse failure than the one being guarded against. The contract is stated
+    and tested instead.
+    """
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,6 +94,17 @@ class Capabilities:
     handles_undercut
         True only for methods that parametrise the boundary rather than
         assuming a height function -- in practice, the integral method.
+    reports_progress
+        Accepts a ``progress`` keyword and honours the contract in
+        :class:`Solver`. Declared rather than assumed because a backend that
+        has not been updated -- including a third-party one arriving through
+        the ``gratinglab.solvers`` entry point -- has an explicit signature
+        that would raise ``TypeError`` on an unexpected keyword. A caller
+        checks this before passing one.
+
+        A solver declaring ``False`` is simply not cancellable. That is a fact
+        about the backend, and a UI should say so rather than offer a Cancel
+        that does nothing.
     """
 
     name: str
@@ -74,6 +113,7 @@ class Capabilities:
     accuracy_knob: str | None = None
     rigorous: bool = True
     handles_undercut: bool = False
+    reports_progress: bool = False
 
     def check(self, problem: Problem, illumination: Illumination) -> None:
         """Raise :class:`UnsupportedConfiguration` if this case is out of scope."""
@@ -97,7 +137,24 @@ class Capabilities:
 
 @runtime_checkable
 class Solver(Protocol):
-    """What every backend provides."""
+    """What every backend provides.
+
+    **The progress contract**, for a backend declaring
+    ``Capabilities.reports_progress``. ``solve`` takes a keyword-only
+    ``progress: Progress | None = None`` and:
+
+    1. calls it once with ``(0, total)`` **before doing any work**, then once
+       after each unit completes, ending exactly at ``(total, total)``;
+    2. keeps ``done`` monotone non-decreasing and ``total`` constant;
+    3. lets any exception the callback raises **propagate unchanged** -- this
+       is what makes :class:`SolveCancelled` work, and a solver that catches
+       it silently removes the caller's only way out;
+    4. costs nothing measurable when ``progress`` is ``None``.
+
+    The leading ``(0, total)`` is not decoration. For RCWA a single wavelength
+    can take a minute, so a cancellation point *before* the first one is the
+    difference between stopping now and stopping in a minute.
+    """
 
     capabilities: Capabilities
 

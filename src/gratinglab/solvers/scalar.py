@@ -62,7 +62,7 @@ from ..geometry import cos_beta, is_propagating, order_range, sin_beta
 from ..illumination import Illumination
 from ..problem import Problem
 from ..result import EfficiencyScan, Provenance
-from .base import Capabilities, register
+from .base import Capabilities, Progress, register
 
 __all__ = ["ScalarSolver", "interference_factor", "scalar"]
 
@@ -108,6 +108,7 @@ class ScalarSolver:
         accuracy_knob="quadrature_points",
         rigorous=False,
         handles_undercut=False,
+        reports_progress=True,
     )
 
     def solve(
@@ -117,6 +118,7 @@ class ScalarSolver:
         wavelengths: ArrayLike,
         *,
         quadrature_points: int = 2048,
+        progress: "Progress | None" = None,
     ) -> EfficiencyScan:
         r"""Efficiency over a wavelength scan.
 
@@ -133,6 +135,17 @@ class ScalarSolver:
             periodic, so the rectangle rule converges spectrally and the
             default is generous. Must exceed twice the highest order to satisfy
             Nyquist; this is checked.
+        progress
+            Called ``(0, n)`` before the first wavelength and ``(k, n)`` after
+            each one, per the contract in
+            :class:`~gratinglab.solvers.base.Solver`. Exceptions from it are
+            **not** caught, which is what lets a caller raise
+            :class:`~gratinglab.solvers.base.SolveCancelled` and actually stop
+            this loop. A scan cancelled that way returns nothing at all: a
+            partially filled efficiency array with the remaining rows still
+            zero is indistinguishable from a scan whose orders all passed off,
+            and handing one back would be the silent-wrong-number failure this
+            project is arranged against.
 
         Notes
         -----
@@ -182,6 +195,14 @@ class ScalarSolver:
         propagating = np.zeros_like(efficiency, dtype=bool)
 
         for row, wavelength in enumerate(wavelengths):
+            if progress is not None:
+                # At the *top* of the row it is about to compute, so `row` is
+                # the count already finished. That makes the first call
+                # (0, n) -- before any work, as the contract requires -- and
+                # puts a cancellation point ahead of every wavelength rather
+                # than behind it. The `continue` below cannot skip it.
+                progress(row, len(wavelengths))
+
             sines = sin_beta(
                 all_orders, wavelength, problem.period, sin_alpha, sin_gamma
             )
@@ -206,6 +227,9 @@ class ScalarSolver:
 
             efficiency[row, live] = values
             propagating[row, live] = True
+
+        if progress is not None:
+            progress(len(wavelengths), len(wavelengths))
 
         return EfficiencyScan(
             wavelengths=wavelengths,
