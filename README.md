@@ -113,12 +113,25 @@ trustworthy.
 .venv/bin/python -m pytest
 ```
 
-Two practices this project relies on:
+Three practices this project relies on:
 
 - **Physics self-checks over reference data.** `checks.check_reciprocity` and
   `checks.check_energy_balance` constrain the *model* rather than comparing against a
   formula derived the same way the solver computes it. They need no reference data and
   apply to every backend.
+- **Convergence demonstrated, not assumed.** `convergence.check_convergence` sweeps
+  whatever a solver declares as its accuracy knob and reports the coarsest setting it
+  can defend — or reports that it found none, which is a result rather than a missing
+  one. It requires *three* consecutive values to agree, because quadrature error is
+  measurably non-monotone for a blazed profile and one agreement can be an accident
+  the next refinement contradicts
+  ([findings](docs/findings.md#quadrature-error-is-not-monotone-in-the-number-of-points)).
+
+  ```python
+  report = check_convergence(scalar, problem, illumination, wavelengths)
+  report.converged_at           # 4096 -- what a production run should use
+  report.scan.provenance.converged   # True, at last
+  ```
 - **Mutation testing.** Deliberately corrupting the physics and confirming the suite
   notices. It found a real gap the first time it was run — see
   [findings](docs/findings.md#mutation-testing-found-a-real-gap).

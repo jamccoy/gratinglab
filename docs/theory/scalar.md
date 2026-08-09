@@ -292,6 +292,54 @@ the model breaks down is a deliverable in its own right.
 
 ---
 
+## 8. How many quadrature points
+
+$G_m$ is evaluated as a rectangle rule on a uniform grid over one period, which
+for a *periodic* integrand is the trapezoid rule and is spectrally accurate —
+provided the integrand is smooth. Whether it is smooth depends entirely on the
+profile:
+
+`converged_at` below is what `check_convergence` reports at a $10^{-6}$
+tolerance — the *coarsest* setting it could demonstrate adequate, which is what
+a production run should use:
+
+| Profile | Convergence in $n$ | `converged_at` |
+|---|---|---:|
+| Sinusoidal | spectral — machine precision from $n = 64$ | 256 |
+| Lamellar | $O(n^{-2})$, clean 4× per doubling | 1 024 |
+| Blazed | $O(n^{-2})$ asymptotically, **non-monotone below ~8 000** | 4 096 |
+
+(256 for the sinusoid is the ladder's first rung, not a requirement — it was
+already converged before the sweep began.)
+
+The blazed case is the awkward one, and it is the primary application. The
+groove has a slope discontinuity at the apex, and the apex sits at
+
+$$t_{\text{apex}} = \frac{1}{1 + \tan\delta / \tan\delta'} = 0.8331$$
+
+for the reference geometry — not a dyadic rational, so doubling $n$ changes how
+near a node lands to the kink and the error does not fall monotonically. It can
+*grow* by a factor of 2.5 on a refinement step. See
+[`findings.md`](../findings.md#quadrature-error-is-not-monotone-in-the-number-of-points)
+for the measured ladder.
+
+Two consequences:
+
+- **The default $n = 2048$ is not a converged setting for a blazed profile.**
+  It is a reasonable starting point. `gratinglab.convergence.check_convergence`
+  finds 4 096 adequate at a $10^{-6}$ tolerance, and proves it by sweeping to
+  16 384.
+- **A single agreement between two refinements is not evidence.** The harness
+  requires three consecutive values to agree, which is what rejects the
+  spurious plateau at $n = 512$.
+
+There is also a hard floor, enforced rather than reported: $n$ must exceed
+$2\max|m|$, or the highest order is aliased. That is Nyquist on the kernel
+$e^{-2\pi i m t}$, and no accuracy argument can rescue a grid below it, so
+`solve` raises instead of returning a plausible number.
+
+---
+
 ## References
 
 - McCoy, *Scalar Treatment of Gratings*, PhD thesis Appendix D — the primary

@@ -47,10 +47,10 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | `.ggp` boundary profiles | done |
 | Comparison harness | done |
 | Physics self-checks — reciprocity, energy balance | done |
+| Convergence harness ([`convergence.py`](../src/gratinglab/convergence.py)) | done |
 | GUI (Qt/PySide6) — tabs, geometry dock, 3D conical view | done |
 | CI (Linux + macOS, py3.11/3.12) | green |
-| Convergence harness | **next** |
-| Materials layer (CXRO) | not started |
+| Materials layer (CXRO) | **next** |
 | RCWA | not started |
 | C-method | not started |
 | Integral method | not started |
@@ -63,18 +63,7 @@ Rounded on purpose: this line previously claimed 328 and was wrong by 400, so
 
 ## What is next, in order
 
-### 1. Convergence harness
-
-Every `Provenance.converged` is currently `None` — **nothing in this project has
-ever been demonstrated converged.** The harness reads
-`Capabilities.accuracy_knob`, sweeps it, detects the plateau, and records the
-evidence. It must refuse to report a value it cannot show converged.
-
-Build it against the scalar solver, whose knob (`quadrature_points`) is cheap,
-so it is proven before RCWA depends on it — and RCWA is where it matters, since
-truncation at N ≈ 200–400 is the whole ballgame in the off-plane regime.
-
-### 2. A progress hook on the `Solver` protocol
+### 1. A progress hook on the `Solver` protocol
 
 Cancelling a solve today **abandons** it; it does not interrupt it.
 `sweep` → `scalar.solve` is one NumPy-bound call with no check point, and a
@@ -89,14 +78,14 @@ genuine cancellation (raise a sentinel from the callback) at once. Cheap for
 scalar; it becomes necessary the moment a solve takes long enough that watching
 it matters, which is RCWA.
 
-### 3. Mutation testing (`mutmut`)
+### 2. Mutation testing (`mutmut`)
 
 A hand-rolled sweep of 7 mutations found a real gap (see
 [findings](findings.md#the-obliquity-factor-was-unverified)). A proper tool runs
 hundreds. Run on demand, not on every push — a surviving mutant is a missing
 test.
 
-### 4. Materials layer
+### 3. Materials layer
 
 Port `CXRO_to_n_k` from the prototype. Unlocks absolute efficiency via Fresnel
 `R_F`, the Névot–Croce and Debye–Waller roughness factors, and the
@@ -104,7 +93,7 @@ finite-conductivity comparison. Deliberately deferred: the perfect-conductivity
 reference data sums to 1.0, so it is effectively relative efficiency and the
 first scalar comparison needed no optical constants at all.
 
-### 5. RCWA
+### 4. RCWA
 
 The independent rigorous check that would validate the scalar *model* rather
 than just its quadrature. Non-negotiables:
@@ -114,7 +103,7 @@ than just its quadrature. Non-negotiables:
 - S-matrix / enhanced transmittance-matrix propagation, never plain T-matrix.
 - Full vectorial conical formulation — off-plane is not an afterthought.
 
-### 6. Native boundary format
+### 5. Native boundary format
 
 `.ggp` cannot carry the period in nm, provenance, undercut boundaries, or a
 format version. The missing period is exactly why
@@ -122,7 +111,7 @@ format version. The missing period is exactly why
 JSON, since the profile classes are already pydantic models with tested
 round-tripping.
 
-### 7. First release + JOSS
+### 6. First release + JOSS
 
 Shipping something citable and correct early is what recruits the collaborators
 who make the integral method tractable. **Do not attempt the integral method
@@ -186,6 +175,11 @@ rather than closer to unity.
 - **Report, never rescale.** Where an approximate theory violates a conservation
   law, that is information. Normalising it away destroys the validity map.
 - **Provenance is mandatory.** A result whose convergence was never demonstrated
-  reports itself as not defensible.
+  reports itself as not defensible — and `gratinglab.convergence` is how it
+  stops being that. `converged=False` is a result, not a missing one.
+- **One agreement is not a plateau.** Refinement error is not always monotone;
+  the harness requires three consecutive knob values to agree, because the
+  blazed case measurably violates the tempting one-agreement rule
+  ([findings](findings.md#quadrature-error-is-not-monotone-in-the-number-of-points)).
 - **Commit before mutating.** Mutation scripts revert with `git checkout --`,
   which silently fails on untracked files.

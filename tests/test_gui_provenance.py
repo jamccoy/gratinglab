@@ -78,15 +78,42 @@ class TestNothingCorrectLooksWrong:
     identically to a real validity breach.
     """
 
-    def test_not_yet_checked_is_not_an_alarm(self):
+    def test_not_checked_is_not_an_alarm(self):
+        """A plain solve does not sweep -- that costs several solves and is
+        the caller's call, not a hidden tax on pressing Solve. So this is the
+        ordinary state, and it points at the way out rather than sitting
+        there as a bare negative."""
         lines = lines_for(make_scan(converged=None))
-        assert "not yet checked" in "".join(l.text for l in lines)
-        assert "not yet checked" not in alarming_text(lines)
+        shown = "".join(l.text for l in lines)
+        assert "not checked" in shown
+        assert "gratinglab.convergence" in shown
+        assert "not checked" not in alarming_text(lines)
 
     def test_relative_normalization_is_not_an_alarm(self):
         lines = lines_for(make_scan(notes={"normalization": "relative"}))
         assert "normalization: " in "".join(l.text for l in lines)
         assert "coating" not in alarming_text(lines)
+
+    def test_a_verdict_carries_the_evidence_behind_it(self):
+        """A bare "yes" is a claim. `converged_at` is what a reader can check
+        -- and the actionable half, since it is usually cheaper than the value
+        it took to prove it."""
+        study = {"knob": "quadrature_points", "converged_at": 4096,
+                 "values": [256, 512, 1024, 2048, 4096, 8192, 16384]}
+        shown = "".join(
+            l.text for l in lines_for(
+                make_scan(converged=True, notes={"convergence": study})
+            )
+        )
+        assert "quadrature_points=4096 is enough" in shown
+        assert "swept to 16384" in shown
+
+    def test_and_a_verdict_without_one_says_less_rather_than_inventing_it(self):
+        """Non-vacuity for the test above, and the honest degradation: an
+        imported scan can carry `converged` with no study behind it."""
+        shown = "".join(l.text for l in lines_for(make_scan(converged=True)))
+        assert "convergence: yes" in shown
+        assert "is enough" not in shown
 
     def test_a_demonstrated_failure_to_converge_IS_an_alarm(self):
         """The other half of the rule -- the check must still be able to fail,

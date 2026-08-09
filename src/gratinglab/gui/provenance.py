@@ -104,14 +104,19 @@ def provenance_lines(
         )
 
     lines.append(Line("convergence: ", "dim"))
+    study = provenance.notes.get("convergence")
     if provenance.converged is None:
-        # Not a failure. No solver has a convergence harness yet, so this is
-        # the honest, universal state -- and must not be styled as alarming.
-        lines.append(Line("not yet checked\n", "dim"))
+        # Not a failure. `gratinglab.convergence` exists, but a plain solve
+        # does not run it -- a sweep costs several solves and is the caller's
+        # decision, not a hidden tax on pressing Solve. So this stays the
+        # ordinary state and must not be styled as alarming.
+        lines.append(Line("not checked — see gratinglab.convergence\n", "dim"))
     elif provenance.converged:
-        lines.append(Line("yes\n", "ok"))
+        lines.append(Line("yes", "ok"))
+        lines.append(Line(_evidence(study), "dim"))
     else:
-        lines.append(Line("NO\n", "bad"))
+        lines.append(Line("NO", "bad"))
+        lines.append(Line(_evidence(study), "dim"))
 
     normalization = provenance.notes.get("normalization")
     if normalization:
@@ -132,6 +137,25 @@ def provenance_lines(
         lines.append(Line(f"  ⚠ {warning}\n", "warn"))
 
     return tuple(lines)
+
+
+def _evidence(study: Any) -> str:
+    """What a convergence verdict rests on, in one dim trailing clause.
+
+    A bare "yes" is a claim; the knob value and the swept range are what let a
+    reader check it -- and `converged_at` is the actionable half, since it is
+    usually cheaper than the value it took to prove it. Degrades to a bare
+    newline for a verdict that arrived without its study, rather than
+    inventing detail for it.
+    """
+    if not isinstance(study, dict):
+        return "\n"
+    knob = study.get("knob", "accuracy")
+    at, values = study.get("converged_at"), study.get("values") or []
+    swept = f", swept to {values[-1]}" if values else ""
+    if at is None:
+        return f" — {knob} still moving{swept}\n"
+    return f" — {knob}={at} is enough{swept}\n"
 
 
 def error_lines(errors: Sequence["FieldError"]) -> tuple[Line, ...]:

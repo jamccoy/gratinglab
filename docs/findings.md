@@ -9,6 +9,57 @@ are cross-referenced.
 
 ---
 
+## Quadrature error is not monotone in the number of points
+
+**Refining a blazed-grating quadrature can make the answer worse, and a
+convergence rule that trusts a single agreement will certify a tolerance the
+next refinement violates.**
+
+Scalar solver, reference geometry (period 315.15 nm, δ = 29.5°, anti 70.5°,
+α = 25°, γ = 1.5°), λ ∈ [1, 5] nm. Largest change in efficiency per doubling of
+`quadrature_points`:
+
+| n | change vs n/2 | ratio to previous change |
+|---:|---|---:|
+| 256 | 5.613e-04 | 22.8× smaller |
+| 512 | 2.265e-04 | 2.5× smaller |
+| 1024 | 9.645e-06 | 23.5× smaller |
+| **2048** | **2.426e-05** | **2.5× LARGER** |
+| 4096 | 4.835e-06 | 5.0× smaller |
+| 8192 | 5.964e-07 | 8.1× smaller |
+| 16384 | 1.567e-07 | 3.8× smaller |
+| 32768 | 3.527e-08 | 4.4× smaller |
+
+Past ~8192 the ratio settles near 4, i.e. second-order convergence — the
+expected rate for a rule integrating a function with a slope discontinuity.
+Below that it swings between 0.4 and 23.
+
+**The cause is geometric, not numerical noise.** The blazed profile has a kink
+at `t = 1/(1 + tan δ / tan δ') = 0.8331`. That is not a dyadic rational, so
+doubling `n` changes how near the closest node falls to the kink, and the local
+error at the kink dominates. A sinusoid, being analytic, shows none of this: it
+is at machine precision (~1.7e-16) from `n = 64` upward and never moves again.
+A lamellar profile — a jump, not a kink — converges cleanly at exactly 4× per
+doubling with no excursions.
+
+**Consequence, encoded in code.** `gratinglab.convergence` requires a *plateau*:
+`DEFAULT_PLATEAU = 2` consecutive differences below tolerance, so three knob
+values in a row must agree. At a tolerance of 1e-5 the naive one-agreement rule
+stops at n = 512 on the strength of that 9.6e-6, and the next refinement then
+moves the answer by 2.4e-5. One extra solve rejects it.
+
+This is why the harness reports the whole ladder rather than a boolean, and why
+`converged_at` is the coarsest value of the plateau rather than the first value
+that happened to agree.
+
+Pinned by `tests/test_convergence.py::TestTheMeasurementBehindTheRule`, which
+fails if refinement ever becomes monotone here — at which point this entry and
+the plateau argument would both need revisiting — and by
+`TestThePlateauRule::test_and_plateau_1_would_have_stopped_at_the_dip`, which
+shows the naive rule failing on a scripted sequence with the same shape.
+
+---
+
 ## Corpus geometry recovered from the data alone
 
 **The exported efficiency tables record efficiencies but not the geometry that
