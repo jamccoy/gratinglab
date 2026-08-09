@@ -75,7 +75,7 @@ from numpy.typing import ArrayLike
 from .illumination import Illumination
 from .problem import Problem
 from .result import EfficiencyScan
-from .solvers.base import UnsupportedConfiguration
+from .solvers.base import Progress, UnsupportedConfiguration
 
 __all__ = [
     "ConvergenceReport",
@@ -221,6 +221,7 @@ def check_convergence(
     values: "tuple[int, ...] | None" = None,
     tolerance: float = DEFAULT_TOLERANCE,
     plateau: int = DEFAULT_PLATEAU,
+    progress: "Progress | None" = None,
     **options,
 ) -> ConvergenceReport:
     """Sweep a solver's accuracy knob until the answer stops moving.
@@ -240,9 +241,40 @@ def check_convergence(
     plateau
         Consecutive differences that must fall below ``tolerance``. See the
         module docstring; below 1 is refused.
+    progress
+        Called ``(rungs_done, len(ladder))``.
+
+        Two granularities, deliberately different. The callback is **invoked
+        once per wavelength**, so a
+        :class:`~gratinglab.solvers.base.SolveCancelled` raised from it lands
+        within milliseconds rather than at the end of a rung -- and a rung is
+        the expensive unit here, up to a quarter of the whole sweep. But the
+        numbers it *reports* are per rung, because they are the only ones that
+        are both monotone and meaningful: a per-wavelength counter would
+        restart on every rung and drive a bar backwards, and composing one
+        across rungs would misrepresent progress anyway, since rungs double in
+        cost and the last is half the total work.
+
+        So a bar sits still within a rung and steps once per rung. That is the
+        honest shape of this computation.
+
+        Unlike the :class:`~gratinglab.solvers.base.Solver` contract, this
+        does **not** end at ``(total, total)``: the sweep stops at the first
+        plateau, so a well-behaved case genuinely never runs the tail of the
+        ladder. Finishing early is the good outcome, and running the counter
+        up to the end to make a bar look tidy would claim work that was never
+        done. A caller learns the sweep is over by it returning.
     **options
         Passed to every solve, so a sweep runs at the same settings as the
         production run it is certifying. The knob itself may not appear here.
+
+    Raises
+    ------
+    SolveCancelled
+        Propagated untouched from ``progress``. **No partial report is
+        returned**: a sweep that was stopped has not demonstrated anything,
+        and handing back a report that implied otherwise would be the mistake
+        this module exists to prevent.
     """
     knob = _knob_of(solver)
     if plateau < 1:
@@ -268,10 +300,11 @@ def check_convergence(
     skipped: list[tuple[int, str]] = []
     converged_at: int | None = None
 
-    for value in ladder:
+    for rung, value in enumerate(ladder):
+        forwarded = _rung_progress(solver, progress, rung, len(ladder))
         try:
             scan = solver.solve(problem, illumination, wavelengths, **{knob: value},
-                                **options)
+                                **forwarded, **options)
         except (ValueError, UnsupportedConfiguration) as exc:
             # Narrow on purpose. A coarse rung below a solver's own floor
             # raises ValueError (scalar's Nyquist guard) or refuses outright;
@@ -321,6 +354,19 @@ def check_convergence(
         skipped=tuple(skipped),
     )
     return dataclasses.replace(report, scan=_stamp(scans[-1], report))
+
+
+def _rung_progress(solver, progress: "Progress | None", rung: int, rungs: int) -> dict:
+    """``{"progress": ...}`` reporting rungs while being called per wavelength.
+
+    The wavelength counter is discarded on purpose -- see
+    :func:`check_convergence`. What it buys is the call *frequency*: every
+    wavelength is a chance for the caller to raise, so cancelling a sweep does
+    not have to wait out the rung it is in.
+    """
+    if progress is None or not solver.capabilities.reports_progress:
+        return {}
+    return {"progress": lambda _done, _total: progress(rung, rungs)}
 
 
 def _knob_of(solver) -> str:

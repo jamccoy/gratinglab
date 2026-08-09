@@ -157,6 +157,84 @@ class TestConvergenceCanFail:
         assert sweep(tolerance=1e-18, values=ladder).values == ladder
 
 
+class TestProgressThroughASweep:
+    """Two granularities on purpose: called per wavelength, reporting per
+    rung. See `check_convergence`'s docstring for why."""
+
+    def _run(self, **kwargs):
+        seen = []
+        report = sweep(progress=lambda done, total: seen.append((done, total)), **kwargs)
+        return seen, report
+
+    def test_the_numbers_are_rungs_not_wavelengths(self):
+        seen, report = self._run()
+        assert {t for _, t in seen} == {len(default_ladder(scalar))}
+        assert max(d for d, _ in seen) == len(report.values) - 1
+
+    def test_they_never_go_backwards(self):
+        """The property that rules out a composed per-wavelength counter: it
+        would restart on every rung and drive a bar backwards."""
+        seen, _ = self._run()
+        dones = [d for d, _ in seen]
+        assert dones == sorted(dones)
+
+    def test_but_it_is_called_once_per_wavelength(self):
+        """The frequency is the point -- every wavelength is a chance for the
+        caller to raise, so cancelling does not have to wait out a rung, which
+        is up to a quarter of the whole sweep.
+
+        Exact rather than a threshold: rungs x the solver's own (n + 1).
+        """
+        seen, report = self._run()
+        assert len(seen) == len(report.values) * (len(WAVELENGTHS) + 1)
+        assert len(seen) > len(report.values), "and far more often than per rung"
+
+    def test_it_does_not_end_at_the_total(self):
+        """Finishing early is the *good* outcome -- the sweep stopped at the
+        first plateau. Running the counter to the end so a bar looks tidy
+        would claim rungs that were never solved."""
+        seen, report = self._run()
+        assert seen[-1][0] < seen[-1][1]
+        assert len(report.values) < len(default_ladder(scalar))
+
+    def test_a_sweep_that_uses_the_whole_ladder_reports_every_rung(self):
+        """Non-vacuity for the test above: the early stop is a property of
+        this case, not of the reporting."""
+        ladder = doubling_ladder(256, 4)
+        seen, report = self._run(tolerance=1e-18, values=ladder)
+        assert report.values == ladder
+        assert max(d for d, _ in seen) == len(ladder) - 1
+
+    def test_raising_aborts_the_sweep_mid_rung(self):
+        from gratinglab.solvers.base import SolveCancelled
+
+        calls = {"n": 0}
+
+        def stop(done, total):
+            calls["n"] += 1
+            if calls["n"] > 3:
+                raise SolveCancelled("enough")
+
+        with pytest.raises(SolveCancelled):
+            sweep(progress=stop)
+        assert calls["n"] == 4, "it stopped where it was told, not at a rung boundary"
+
+    def test_and_no_partial_report_comes_back(self):
+        """A sweep that was stopped has not demonstrated anything. Returning a
+        report implying otherwise would be the mistake this module exists to
+        prevent."""
+        from gratinglab.solvers.base import SolveCancelled
+
+        def stop(done, total):
+            raise SolveCancelled("immediately")
+
+        with pytest.raises(SolveCancelled):
+            sweep(progress=stop)
+
+    def test_not_passing_it_changes_nothing(self):
+        assert self._run()[1].converged_at == sweep().converged_at
+
+
 class TestThePlateauRule:
     """The load-bearing behaviour, tested against a scripted solver.
 
