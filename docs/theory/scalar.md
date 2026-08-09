@@ -18,7 +18,7 @@ whole point of this page is that they are stated rather than implied.
 | Structure is large compared to the wavelength, λ ≪ p | Sub-wavelength features are misrepresented; the model degrades smoothly rather than failing loudly. |
 | Kirchhoff (thin-element) boundary condition: the field just above the surface is the incident field times a local phase | No multiple scattering between groove facets, no shadowing, no field penetration into the material. |
 | Fraunhofer (far-field) observation | Valid for a telescope focal plane; not for near-field work. |
-| Perfect reflectivity, or reflectivity applied separately as a scale factor | Efficiencies are **relative**, not absolute, until a materials layer supplies R_F. |
+| Reflectivity applied separately, as one scale factor per wavelength | The groove is a phase screen; scalar theory has no mechanism by which one order could reflect differently from its neighbour. Name a `coating` and efficiencies are **absolute**; leave it unset and they are **relative**, which is a correct answer to a different question rather than a deficiency. |
 
 Because polarization is neglected, the solver advertises `rigorous=False` in
 its [`Capabilities`](../../src/gratinglab/solvers/base.py) and records a
@@ -286,8 +286,8 @@ the model breaks down is a deliverable in its own right.
 | Condition | Meaning |
 |---|---|
 | $\lambda / p \lesssim 0.1$ | Kirchhoff theory assumes structure ≫ wavelength. Soft X-ray work runs ~0.005; visible gratings ~0.4. |
-| $\zeta < \theta_c \approx \sqrt{2\delta_n}$ | Facet graze must stay below the critical angle for total external reflection, or the reflectivity assumption collapses. Needs a materials layer to evaluate. |
-| $\lambda > 32 \sin(\zeta)\,\sigma$ | Fraunhofer smoothness: below this the facet is not optically smooth and scatter dominates. |
+| $\zeta < \theta_c \approx \sqrt{2\,\text{decrement}}$ | Facet graze must stay below the critical angle for total external reflection, or reflectivity collapses. Evaluated when a `coating` is named; without optical constants there is nothing to compare against, so it is a check that does not apply rather than a warning. |
+| $\lambda > 32 \sin(\zeta)\,\sigma$ | Fraunhofer smoothness: below this the facet is not optically smooth and scatter dominates. Checked for every profile — it was once gated on having a blaze angle, so a rough sinusoid was never checked at all. |
 | $\sum_m \mathscr{E}_m \leq 1$ | Not a validity condition so much as a sanity bound; see §5. |
 
 ---
@@ -337,6 +337,52 @@ There is also a hard floor, enforced rather than reported: $n$ must exceed
 $2\max|m|$, or the highest order is aliased. That is Nyquist on the kernel
 $e^{-2\pi i m t}$, and no accuracy argument can rescue a grid below it, so
 `solve` raises instead of returning a plausible number.
+
+---
+
+## 9. Absolute efficiency: what the reflectivity factor is
+
+$$\mathscr{E}_m^{\text{abs}} = R_F(\zeta, \lambda)\left|G_m\right|^2$$
+
+One factor, per wavelength, applied to every order alike. That is the
+thin-element approximation restating itself: the groove imparts a phase, the
+surface reflects, and nothing in the model couples the two.
+
+**Which angle.** For a blazed groove, $\sin\zeta = \sin\gamma\cos(\delta -
+\alpha)$ — the active facet, exact. For a profile with no single facet angle
+the reflection is evaluated on the **mean surface**, which is not a second
+formula: `facet_graze(gamma, 0, alpha)` equals $\arcsin|\hat{k}_i\cdot\hat{n}|$
+identically. How good that is depends on the profile, and the provenance says
+which:
+
+| Profile | Basis | Quality |
+|---|---|---|
+| Blazed | active facet | exact |
+| Lamellar | mean surface | exact for the flat tops and bottoms; omits the vertical walls, which are nearly edge-on at grazing incidence |
+| Sinusoidal, measured | mean surface | approximate — the local slope varies across the groove |
+
+Refusing the last two was the alternative and would be worse: a sinusoid at
+grazing incidence does reflect, and a solver that declines to say how much has
+not become more honest.
+
+**Which polarization.** Unpolarized, always, whatever the illumination says.
+The $s$ and $p$ of a Fresnel reflection are defined against the *facet's* plane
+of incidence; `Illumination.polarization` is TE/TM defined against the
+**grooves** (`conventions.md` §7). In a conical mount those frames differ, so
+resolving polarization here would be false precision on a model that already
+reports TE and TM as identical. The size of what is being waived is measured
+rather than assumed — on Au at 1 nm, $s$ and $p$ agree to under 1% at
+$\zeta = 1.5°$ and differ by more than 50% at 45°.
+
+**Roughness.** Névot–Croce by default, Debye–Waller and `none` on request. The
+two differ by ~$10^{-2}$ near and above $\theta_c$ — Debye–Waller carries no
+information about the transmitted wave, so it damps the same whether the field
+penetrates or not — and converge far below it, where both approach 1 and the
+residual difference has no reliable sign.
+
+**Energy.** Summed efficiency now falls for two distinct reasons: the
+thin-element defect of §5, which is the model straying, and ordinary
+absorption, which is physics. The provenance separates them.
 
 ---
 

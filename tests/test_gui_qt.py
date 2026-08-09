@@ -1109,7 +1109,11 @@ class TestLiveGeometry:
 
 
 class TestSetupTab:
-    """The stub, and the guard that keeps it honest."""
+    """No longer a stub. It waited on the materials layer, which now exists --
+    but the control it was waiting for did *not* land here: `coating` and
+    `roughness` are `Problem` fields and belong in the geometry dock beside
+    the period, because one `Problem` feeds every solver tab. What this tab
+    owns is the material *library*, which duplicates no state."""
 
     def test_it_is_the_leftmost_tab(self, win):
         assert win._tab_widget.tabText(0) == "Setup"
@@ -1126,28 +1130,46 @@ class TestSetupTab:
         current = win._tab_widget.currentWidget()
         assert getattr(current, "name", None) == "scalar"
 
-    def test_it_explains_what_will_live_there(self, win):
+    def test_it_lists_the_installed_materials(self, win):
+        """Generated from `materials.available()`, not written out -- a
+        hand-maintained list is right on the day it is written."""
         text = win._setup_tab._browser.toPlainText()
-        assert "materials layer" in text
-        assert "roadmap" in text
+        assert "Au" in text
+        assert "nm" in text
 
-    def test_it_says_why_no_control_is_offered_yet(self, win):
-        """The project's own rule, stated where a user would otherwise
-        wonder why the tab is empty."""
+    def test_and_says_where_they_came_from(self, win):
         text = win._setup_tab._browser.toPlainText()
-        assert "silently does nothing" in text
+        assert "Henke" in text
+        assert "CXRO" in text
+
+    def test_it_explains_what_naming_a_coating_does(self, win):
+        """The distinction the whole milestone turns on, stated where the
+        dropdown's one-word entries cannot."""
+        text = win._setup_tab._browser.toPlainText()
+        assert "absolute" in text
         assert "relative" in text
 
-    def test_it_offers_no_input_at_all(self, win):
-        """The guard. `Problem.coating` exists and is inert; a coating field
-        here would look like a working option that changes nothing -- exactly
-        the mistake M9 named and rejected. A future 'let's just add a field'
-        fails here rather than slipping through review.
+    def test_and_that_a_table_has_edges(self, win):
+        """Out-of-range raises, which a user meets the first time they scan
+        past 6.2 nm with gold selected."""
+        assert "extrapolat" in win._setup_tab._browser.toPlainText()
+
+    def test_it_still_offers_no_input_at_all(self, win):
+        """The guard survives the tab gaining a purpose, and now protects
+        something subtler: a coating control *here* would be a second place to
+        set a `Problem` field the geometry dock already owns. Two sources of
+        truth for one value is worse than the inert field this guard was
+        originally written against.
         """
         from PySide6.QtWidgets import QComboBox, QLineEdit
 
         assert win._setup_tab.findChildren(QLineEdit) == []
         assert win._setup_tab.findChildren(QComboBox) == []
+
+    def test_and_the_dock_is_where_the_control_actually_is(self, win):
+        """Non-vacuity for the guard: the control exists, just not here."""
+        assert "coating" in win.geometry._fields
+        assert "roughness" in win.geometry._fields
 
     def test_it_is_not_in_the_solver_tab_registry(self, win):
         """Setup implements none of the solve/cancel contract, so it must

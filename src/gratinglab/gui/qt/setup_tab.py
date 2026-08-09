@@ -1,19 +1,21 @@
-"""The Setup tab: an honest stub, not a fake control.
+"""The Setup tab: what optical constants are installed, and where from.
 
-`Problem.coating` exists as a field today and is completely inert -- nothing
-reads it. The real materials layer (CXRO optical constants, Fresnel
-reflectivity, roughness factors) is deferred milestone "Materials layer" in
-`docs/roadmap.md`, not started. Putting a coating text field on this tab
-before that layer exists would be exactly the mistake the scalar formulation
-work already named and rejected once: an error or a no-op must never be
-offered as though it were a real choice (see `docs/theory/scalar.md` §5 on
-why the obliquity factor was removed rather than kept as an "opt-in
-variant"). A control that looks like it does something and does nothing is
-worse than no control at all.
+It was a stub until the materials layer existed, saying so plainly rather than
+offering a coating field that did nothing -- an error or a no-op must never be
+dressed as a real choice (`docs/theory/scalar.md` §5, on why the obliquity
+factor was removed rather than kept as an "opt-in variant").
 
-So this tab explains itself instead, reusing the exact rendering path
-:class:`~.theory_viewer.TheoryViewer` uses for an unwritten theory page --
-same typeset markdown, same "not yet" honesty, no new UI invented for it.
+The layer exists now, and the control it was waiting for did **not** land
+here. `coating` and `roughness` are :class:`~gratinglab.problem.Problem`
+fields, so they belong in the geometry dock beside the period: one `Problem`
+feeds every solver tab, and a second place to set it would be a second source
+of truth for the same value.
+
+What this tab owns instead is the *library* -- which materials are available,
+what they were derived from, and how to add one. That is genuinely tab-shaped
+(it is reference material, not an input), it duplicates no state, and it is
+the thing a user actually needs when the coating dropdown offers one entry and
+they wanted nickel.
 """
 
 from __future__ import annotations
@@ -23,33 +25,93 @@ from PySide6.QtWidgets import QTextBrowser, QVBoxLayout, QWidget
 from ..docs import TheoryPage
 from .theory_viewer import render_into
 
-__all__ = ["SetupTab"]
+__all__ = ["SetupTab", "library_page"]
 
-_TEXT = """\
-# Setup
 
-Nothing configurable lives here yet.
+def library_page() -> str:
+    """The tab's markdown, built from the installed tables.
 
-This tab will hold project-level and materials configuration once the
-**materials layer** lands (CXRO/Henke optical constants, Fresnel
-reflectivity, and the Névot–Croce and Debye–Waller roughness factors --
-see `docs/roadmap.md`). `Problem.coating` already exists as a field, but
-nothing in the solver reads it today.
+    Generated rather than written out, so it cannot drift from what
+    `materials.available()` actually returns -- the failure mode of a
+    hand-maintained list is that it is right on the day it is written.
+    """
+    from ...materials import available, data_dir, lookup
 
-No coating control is offered in the meantime. A field that looks like it
-sets something, and silently does nothing, is worse than no field at all --
-the scalar formulation work reached exactly that conclusion once already,
-about an option that turned out to be an error rather than a real choice
-(see `docs/theory/scalar.md` section 5). Every result today is **relative
-efficiency**, with no coating applied, which the provenance panel on each
-solver tab already states.
+    names = available()
+    if not names:
+        listing = (
+            "**No tables are installed.** That is a supported configuration, "
+            "not a broken one: the reader works on any CXRO/Henke export you "
+            "download, and nothing in `gratinglab` requires a bundled file.\n"
+        )
+    else:
+        rows = ["| Material | Range | Points | Source |", "|---|---|---|---|"]
+        for name in names:
+            table = lookup(name)
+            low, high = table.range_nm
+            rows.append(
+                f"| `{name}` | {low:.3g} – {high:.3g} nm | "
+                f"{len(table.wavelength_nm)} | {table.source} |"
+            )
+        listing = "\n".join(rows) + "\n"
+
+    return f"""\
+# Materials
+
+Optical constants for the **Coating** dropdown in the geometry panel. Naming
+one applies its Fresnel reflectivity and makes the result *absolute*; leaving
+it empty gives *relative* efficiency, which is a correct answer to a different
+question rather than a missing input. The provenance panel on each solver tab
+says which you got.
+
+{listing}
+Asking for a wavelength outside a table's range **raises** rather than
+extrapolating. An extrapolated optical constant is a plausible number with
+nothing behind it, and every efficiency computed from one would inherit that.
+
+## Adding a material
+
+Download an `(Energy, Delta, Beta)` table from
+[CXRO](https://henke.lbl.gov/optical_constants/) and drop it in as
+`<Element>.txt` here:
+
+    {data_dir()}
+
+The list above reads that directory, so no code changes. Or load one from
+anywhere without installing it:
+
+    from gratinglab import materials
+    nickel = materials.from_cxro_file("Ni_CXRO.txt")
+
+## Provenance
+
+These are the Henke–Gullikson–Davis compilation. Work using them should cite
+*X-ray interactions: photoabsorption, scattering, transmission, and reflection
+at E = 50–30000 eV, Z = 1–92*, Atomic Data and Nuclear Data Tables **54** (2),
+181–342 (1993).
+
+`SOURCES.md` in the directory above records per-file provenance, and states
+plainly that redistribution terms have not been formally confirmed for
+bundling inside a BSD-3 package. If they do not hold up, deleting that
+directory is the whole fix -- the reader keeps working on user-supplied files.
+
+## Surface roughness
+
+The **Roughness σ** field damps the reflectivity through the Névot–Croce
+factor. It does nothing without a coating, because there is no reflectivity to
+damp, and the solver does not pretend otherwise. Debye–Waller is available as
+a solver option; the two differ by about 1% near the critical angle and agree
+far below it.
 """
 
 
 class SetupTab(QWidget):
-    """A stub, not a form. Deliberately has no `solve_requested` or
-    `build_options` -- it is not part of the solve/cancel contract every
-    solver tab implements, and `MainWindow` never routes to it."""
+    """Reference material, not a form.
+
+    Deliberately has no ``solve_requested`` or ``build_options`` -- it is not
+    part of the solve/cancel contract every solver tab implements, and
+    ``MainWindow`` never routes to it.
+    """
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -62,8 +124,14 @@ class SetupTab(QWidget):
         layout.addWidget(self._browser)
 
         page = TheoryPage(
-            name="setup", title="Setup", available=False, path=None,
-            text=_TEXT, rigorous=True,
+            name="setup",
+            title="Setup",
+            available=True,
+            path=None,
+            text=library_page(),
+            # Not an approximate method -- suppresses the "approximate" banner,
+            # which would be nonsense on a page about where data came from.
+            rigorous=True,
         )
         render_into(
             self._browser,

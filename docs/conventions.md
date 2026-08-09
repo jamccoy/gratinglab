@@ -329,6 +329,15 @@ The two primary references use `d` to mean **opposite things**:
 | blaze / facet angle | `δ` | `δ` | `blaze_angle` |
 | facet graze angle | `ζ` | `ζ` | `facet_graze` |
 | order index | `n` | `m` | `order` |
+| index decrement | `δ` | `δ` | **`decrement`** |
+| index absorption | `β` | `β` | **`absorption`** |
+
+The last two rows are the same trap in a second place. Optics literature writes
+`n = 1 - δ + iβ`, and both letters are already spoken for here: `δ` is the blaze angle
+and `β` is the diffracted-order angle, everywhere. `fresnel.reflectivity` is called a few
+lines from `facet_graze(gamma, blaze_angle, alpha)`, and two meanings of `δ` in one call
+stack is how a sign error gets written and not noticed. So the materials layer uses
+unambiguous words.
 
 **Bare `d` never appears in the code.** Not as a variable, not as a keyword argument, not
 in a docstring formula without an accompanying definition. When transcribing an equation

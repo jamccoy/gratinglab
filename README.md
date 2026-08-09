@@ -21,7 +21,9 @@ Solver (plugin)  ->  Result (+ provenance)
 
 ## Status
 
-Pre-alpha. Scalar solver and the comparison harness work end to end; RCWA is next.
+Pre-alpha. The scalar solver, the comparison harness, the convergence harness and the
+materials layer work end to end — efficiencies are absolute when a coating is named. RCWA
+is contributed and not yet integrated.
 
 ## Scope
 
@@ -35,8 +37,8 @@ Planned method backends, in order:
 
 | Method | Status |
 |---|---|
-| Scalar (Harvey parametric, Kirchhoff, X-ray blaze form) | planned |
-| RCWA (in-plane, conical, off-plane; Li factorization, S-matrix) | planned |
+| Scalar (Kirchhoff, X-ray blaze form) | **done**, validated |
+| RCWA (in-plane, conical, off-plane; Li factorization, S-matrix) | contributed, not yet integrated |
 | C-method (Chandezon) | planned |
 | Integral method | planned |
 
@@ -82,9 +84,10 @@ and the tabs are one per concern:
   reports the coarsest defensible setting, with a progress bar and a Cancel that really
   stops it — solvers report per wavelength, so cancellation is not a euphemism for
   looking away.
-- **Setup** — a stub that explains itself. Materials configuration lands here once the
-  materials layer exists; an input with nothing behind it would look like a working
-  option that silently does nothing.
+- **Setup** — the material library: which optical constants are installed, what range
+  each covers, where they came from, and how to add your own. The coating *control*
+  lives in the geometry dock, because it is a `Problem` field like the period and one
+  `Problem` feeds every tab.
 
 Help carries the theory pages, rendered with typeset math and real tables.
 

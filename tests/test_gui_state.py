@@ -254,3 +254,41 @@ class TestNoWidgetDependency:
             build(FormState(period="bad"))
         assert excinfo.value.errors[0].field == "period"
         assert "period" in str(excinfo.value)
+
+
+class TestTheSurfaceFields:
+    """M15-F. `coating` and `roughness` are `Problem` fields, so they parse
+    here with the period rather than living on a tab -- one `Problem` feeds
+    every solver, and two places to set one value would be two sources of
+    truth."""
+
+    def test_the_default_names_no_coating(self):
+        """Relative efficiency is the ordinary default, and a correct answer to
+        a different question rather than a missing input."""
+        parsed = build(FormState())
+        assert parsed.problem.coating is None
+        assert parsed.problem.roughness == 0.0
+
+    def test_a_known_material_reaches_the_problem(self):
+        parsed = build(FormState(coating="Au", roughness="0.5"))
+        assert parsed.problem.coating == "Au"
+        assert parsed.problem.roughness == 0.5
+
+    def test_an_unknown_one_is_a_field_error_not_a_traceback(self):
+        """The GUI has to be able to mark the field. A raise from deep inside
+        `materials.lookup` would surface as a solver failure instead."""
+        errors = validate(FormState(coating="unobtanium"))
+        assert [e.field for e in errors] == ["coating"]
+        assert "Au" in errors[0].message
+
+    def test_negative_roughness_is_refused(self):
+        assert [e.field for e in validate(FormState(roughness="-1"))] == ["roughness"]
+
+    def test_surface_errors_arrive_with_the_geometry_ones(self):
+        """`build` exists to carry *every* problem found so the UI can mark all
+        the bad fields at once. Parsing these after the first raise would
+        report them a refresh later."""
+        fields = {e.field for e in validate(
+            FormState(period="x", coating="zz", roughness="-1")
+        )}
+        assert fields == {"period", "coating", "roughness"}

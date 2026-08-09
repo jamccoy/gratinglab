@@ -122,6 +122,16 @@ class FormState:
     wavelength_stop: str = "5.0"
     wavelength_count: str = "200"
 
+    #: Material name, or empty for none. A `Problem` field like any other --
+    #: it belongs beside the period rather than on a tab, because one
+    #: `Problem` feeds every solver and two places to set it would be two
+    #: sources of truth. Empty means relative efficiency, which is a correct
+    #: answer to a different question rather than a missing input.
+    coating: str = ""
+    #: RMS surface roughness in nm. Damps the reflectivity, so it does nothing
+    #: without a coating -- and the solver does not pretend otherwise.
+    roughness: str = "0.0"
+
     def with_field(self, name: str, value: Any) -> "FormState":
         """Return a copy with one field changed."""
         return replace(self, **{name: value})
@@ -324,16 +334,42 @@ def build(form: FormState) -> Parsed:
             FieldError("wavelength_stop", f"must exceed the start ({start:g} nm)")
         )
 
+    # With the rest, not after the raise below: `build` exists to carry *every*
+    # problem found so the UI can mark all the bad fields at once.
+    roughness = _number(form.roughness, "roughness", errors, minimum=0.0)
+    coating = form.coating.strip() or None
+    if coating is not None and coating not in _material_names():
+        known = ", ".join(_material_names()) or "none installed"
+        errors.append(
+            FieldError("coating", f"unknown material {coating!r}; available: {known}")
+        )
+
     if errors:
         raise FormErrors(tuple(errors))
 
     assert period is not None and profile is not None and illumination is not None
     assert start is not None and stop is not None and count is not None
+    assert roughness is not None
 
-    problem = Problem(period=period, profile=profile)
+    problem = Problem(
+        period=period, profile=profile, coating=coating, roughness=roughness
+    )
     wavelengths = np.linspace(start, stop, int(count))
 
     return Parsed(problem=problem, illumination=illumination, wavelengths=wavelengths)
+
+
+def _material_names() -> tuple[str, ...]:
+    """Vendored material names, for validating the coating field.
+
+    Imported inside the function so that importing `state` -- which the
+    headless tests do constantly -- does not go near the data directory, and
+    so that a trimmed `materials/data/` degrades to "none installed" rather
+    than an import error.
+    """
+    from ..materials import available
+
+    return available()
 
 
 def validate(form: FormState) -> tuple[FieldError, ...]:

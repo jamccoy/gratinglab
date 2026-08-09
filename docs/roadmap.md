@@ -50,14 +50,14 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | Convergence harness ([`convergence.py`](../src/gratinglab/convergence.py)) | done |
 | Progress + cancellation on the `Solver` protocol | done |
 | Mutation testing ([`mutation-testing.md`](mutation-testing.md)) | done, on demand |
+| Materials — CXRO constants, Fresnel, roughness, absolute efficiency | done |
 | GUI (Qt/PySide6) — tabs, geometry dock, 3D conical view | done |
 | CI (Linux + macOS, py3.11/3.12) | green |
-| Materials layer (CXRO) | **next** |
-| RCWA | not started |
+| RCWA | **contributed, not yet integrated** |
 | C-method | not started |
 | Integral method | not started |
 
-Roughly 830 tests, 11 skipped (the skips need the private reference corpus).
+Roughly 930 tests, 11 skipped (the skips need the private reference corpus).
 Rounded on purpose: this line previously claimed 328 and was wrong by 400, so
 `pytest -q` is the authority and this is only the order of magnitude.
 
@@ -75,25 +75,42 @@ validated thing in it. Three specific gaps are named in
 strongest-orders selection strategy, two boundary comparisons, and the
 no-pairs early return.
 
-### 2. Materials layer
+### 2. RCWA — integrating a contributed backend
 
-Port `CXRO_to_n_k` from the prototype. Unlocks absolute efficiency via Fresnel
-`R_F`, the Névot–Croce and Debye–Waller roughness factors, and the
-finite-conductivity comparison. Deliberately deferred: the perfect-conductivity
-reference data sums to 1.0, so it is effectively relative efficiency and the
-first scalar comparison needed no optical constants at all.
+**Not ours to write.** `fgrise` has RCWA code. The physics list below is
+therefore a set of requirements to *state to a contributor* rather than a plan
+of work, and the more useful half of this section is what any backend has to
+satisfy to register at all.
 
-### 3. RCWA
-
-The independent rigorous check that would validate the scalar *model* rather
-than just its quadrature. Non-negotiables:
+Physics, unchanged and non-negotiable:
 
 - Li's Fourier factorization rules from day one, or TM metallic cases converge
   badly and the comparison plots will misrepresent the method.
 - S-matrix / enhanced transmittance-matrix propagation, never plain T-matrix.
 - Full vectorial conical formulation — off-plane is not an afterthought.
 
-### 4. Native boundary format
+What the framework asks:
+
+| Requirement | Why, and what reads it |
+|---|---|
+| A `Capabilities` declaration | `conical`, `polarizations`, `handles_undercut`. `Capabilities.check` refuses an out-of-scope case *before* solving rather than approximating it |
+| `accuracy_knob` naming the truncation parameter | `convergence.check_convergence` sweeps it. Without one, a result can never report `converged=True` |
+| `reports_progress`, if `solve` takes a `progress` keyword | Opt-in, so a backend predating the hook is never handed a keyword its signature cannot take. It also makes the solver **cancellable** — that callback is the only check point a NumPy-bound solve has |
+| `UnsupportedConfiguration` rather than a quiet approximation | The rule the whole comparison rests on: a method silently smoothing a vertical facet returns a plausible, wrong number |
+| One entry in `_TAB_FACTORIES` | Tabs are generated from `available_solvers()`; the GUI needs nothing else |
+
+**Worth saying plainly, because the first contributor is the one who finds
+out:** none of those seams has met a second implementation. Each was designed
+against exactly one solver, and that solver is fast, closed-form and
+single-polarization — about as unlike RCWA as a backend can be. Expect the
+protocol to be wrong somewhere, and read the first integration as evidence
+about the protocol, not only about the contribution.
+
+A conformance test every registered solver must pass is the natural follow-up.
+It belongs *with* that work rather than before it: there is nothing to run it
+against until a second solver exists.
+
+### 3. Native boundary format
 
 `.ggp` cannot carry the period in nm, provenance, undercut boundaries, or a
 format version. The missing period is exactly why
@@ -101,7 +118,7 @@ format version. The missing period is exactly why
 JSON, since the profile classes are already pydantic models with tested
 round-tripping.
 
-### 5. First release + JOSS
+### 4. First release + JOSS
 
 Shipping something citable and correct early is what recruits the collaborators
 who make the integral method tractable. **Do not attempt the integral method

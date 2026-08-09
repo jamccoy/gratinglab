@@ -130,13 +130,38 @@ class GeometryPanel(QWidget):
             mount_form.addRow(label, widget)
             self._angle_labels[key] = label
 
+        surface = QGroupBox("Surface")
+        surface_form = QFormLayout(surface)
+        # A dropdown, not a text field: the set of materials is finite and
+        # known, and a free-form string is what let `coating` mean nothing for
+        # four milestones. Empty entry first, because no coating is the
+        # ordinary default and gives relative efficiency -- a correct answer to
+        # a different question, not a missing input.
+        from ...materials import available
+
+        coating = QComboBox()
+        coating.addItem("(none)", userData="")
+        coating.setToolTip(
+            "No coating gives relative efficiency -- a correct answer to a "
+            "different question, not a missing input. Naming a material "
+            "applies its Fresnel reflectivity and makes the result absolute; "
+            "the provenance panel says which you got."
+        )
+        for name in available():
+            coating.addItem(name, userData=name)
+        coating.activated.connect(lambda _i: self.changed.emit())
+        self._fields["coating"] = coating
+        surface_form.addRow("Coating", coating)
+
+        entry(surface_form, "Roughness σ (nm)", "roughness")
+
         scan = QGroupBox("Wavelengths (nm)")
         scan_form = QFormLayout(scan)
         entry(scan_form, "Start", "wavelength_start")
         entry(scan_form, "Stop", "wavelength_stop")
         entry(scan_form, "Points", "wavelength_count")
 
-        for group in (grating, mount, scan):
+        for group in (grating, mount, surface, scan):
             column.addWidget(group)
         column.addStretch(1)
 
@@ -199,7 +224,14 @@ class GeometryPanel(QWidget):
 
 
 def _value(widget: QWidget) -> str:
-    """The text of an input, whichever kind it is."""
+    """The *value* of an input, whichever kind it is.
+
+    A combo's value is its `userData` when it has one, not its label. The
+    coating combo shows "(none — relative efficiency)" for the empty choice,
+    and `FormState` wants "" -- putting the label in would make the empty
+    coating an unknown material name.
+    """
     if isinstance(widget, QComboBox):
-        return widget.currentText()
+        data = widget.currentData()
+        return widget.currentText() if data is None else str(data)
     return widget.text()
