@@ -54,6 +54,7 @@ not with lambda/period or the number of propagating orders.
 from __future__ import annotations
 
 import time
+from typing import TYPE_CHECKING
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
@@ -63,6 +64,9 @@ from ..illumination import Illumination
 from ..problem import Problem
 from ..result import EfficiencyScan, Provenance
 from .base import Capabilities, Progress, register
+
+if TYPE_CHECKING:  # pragma: no cover - imports for type checkers only
+    from ..materials import OpticalConstants
 
 __all__ = ["ScalarSolver", "interference_factor", "scalar"]
 
@@ -157,6 +161,10 @@ class ScalarSolver:
         from its regime.
         """
         self.capabilities.check(problem, illumination)
+        # Before any work. An unknown material must fail loudly rather than
+        # produce a scan that quietly means something else -- see
+        # `_resolve_coating`.
+        coating = _resolve_coating(problem)
 
         wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=np.float64))
         if wavelengths.ndim != 1:
@@ -244,6 +252,7 @@ class ScalarSolver:
                 efficiency,
                 propagating,
                 time.perf_counter() - started,
+                coating,
             ),
         )
 
@@ -256,6 +265,7 @@ class ScalarSolver:
         efficiency: NDArray[np.float64],
         propagating: NDArray[np.bool_],
         elapsed: float,
+        coating: "OpticalConstants | None" = None,
     ) -> Provenance:
         """Record the run, including every validity guard it tripped."""
         from .. import __version__
@@ -330,11 +340,51 @@ class ScalarSolver:
             wall_time_s=elapsed,
             warnings=tuple(warnings),
             notes={
-                "normalization": "relative" if problem.coating is None else "absolute",
+                # Keyed on whether a reflectivity was actually applied, never
+                # on whether a coating was *named*. `Problem.coating` used to
+                # be a free-form string nothing read, so setting it to anything
+                # at all relabelled a result as "absolute" while leaving every
+                # number unchanged. M15-D is what makes this ever say
+                # "absolute"; until then a named coating is recorded and not
+                # yet used, which is what this reports.
+                "normalization": "absolute" if _REFLECTIVITY_APPLIED else "relative",
+                **(
+                    {"coating": f"{coating.name} ({coating.source})"}
+                    if coating is not None
+                    else {}
+                ),
                 "alpha_deg": illumination.alpha_deg,
                 "gamma_deg": illumination.gamma_deg,
             },
         )
+
+
+#: Flipped by M15-D, when `solve` starts multiplying by a Fresnel factor. It
+#: exists as a named constant rather than an inline `False` so that the commit
+#: which changes efficiency values is a one-line change to a thing with a name,
+#: reviewable on its own.
+_REFLECTIVITY_APPLIED = False
+
+
+def _resolve_coating(problem: Problem) -> "OpticalConstants | None":
+    """Turn ``Problem.coating`` into optical constants, or refuse.
+
+    ``coating`` is a material *name*, so that a benchmark case stays a small
+    serialisable file rather than embedding a 500-row table. Resolving it here
+    rather than in ``Problem.__init__`` keeps a saved case loadable on a
+    machine whose vendored tables have been trimmed -- it only has to resolve
+    when someone actually solves.
+
+    An unknown name **raises**. It is the whole point: the string used to be
+    read by nothing, so ``coating="unobtanium"`` silently relabelled a result
+    as absolute. A name that cannot be resolved is a question this solver
+    cannot answer, not a default to fall back on.
+    """
+    if problem.coating is None:
+        return None
+    from ..materials import lookup
+
+    return lookup(problem.coating)
 
 
 def _spanning_orders(

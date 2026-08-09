@@ -94,6 +94,27 @@ class TestNothingCorrectLooksWrong:
         assert "normalization: " in "".join(l.text for l in lines)
         assert "coating" not in alarming_text(lines)
 
+    def test_a_resolved_but_unapplied_coating_is_named_not_denied(self):
+        """"relative (Au ...)" is a real state: the material is known and its
+        reflectivity has not been applied. Wording taken from `normalization`
+        alone would report "no coating" for it, which is false."""
+        lines = lines_for(
+            make_scan(
+                notes={"normalization": "relative", "coating": "Au (CXRO export)"}
+            )
+        )
+        shown = "".join(l.text for l in lines)
+        assert "relative (Au (CXRO export))" in shown
+        assert "no coating" not in shown
+
+    def test_and_a_bare_run_still_says_so(self):
+        """Non-vacuity: the "no coating" wording has to survive for the case it
+        was written for."""
+        shown = "".join(
+            l.text for l in lines_for(make_scan(notes={"normalization": "relative"}))
+        )
+        assert "relative (no coating)" in shown
+
     def test_a_verdict_carries_the_evidence_behind_it(self):
         """A bare "yes" is a claim. `converged_at` is what a reader can check
         -- and the actionable half, since it is usually cheaper than the value

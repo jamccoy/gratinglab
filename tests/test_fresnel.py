@@ -283,16 +283,47 @@ class TestShape:
 
 
 class TestNothingImportsThisYet:
-    def test_the_solver_does_not_reference_reflectivity(self):
+    def test_the_solver_does_not_import_fresnel(self):
         """M15-B is the pure layer. Wiring is M15-D, and it changes efficiency
         values -- the first commit in this project to do so. Keeping the steps
-        apart is what makes that diff reviewable."""
+        apart is what makes that diff reviewable.
+
+        Checked against the parsed imports rather than the source text: the
+        word "reflectivity" appears in `scalar.py`'s comments explaining what
+        is *not* yet happening, and this project has deleted one
+        word-in-source test already for matching a comment
+        (`docs/findings.md`, M13). An import is behaviour; a word is not.
+        """
+        import ast
         import inspect
         import sys
 
         import gratinglab.solvers.scalar  # noqa: F401
 
-        # The *module*, not the registered singleton `solvers.scalar`, which
-        # shadows it on the package.
+        # The module, not the registered singleton that shadows it.
         module = sys.modules["gratinglab.solvers.scalar"]
-        assert "reflectivity" not in inspect.getsource(module)
+        imported: set[str] = set()
+        for node in ast.walk(ast.parse(inspect.getsource(module))):
+            if isinstance(node, ast.ImportFrom) and node.module:
+                imported.add(node.module)
+            elif isinstance(node, ast.Import):
+                imported.update(a.name for a in node.names)
+
+        assert not any("fresnel" in name for name in imported)
+
+    def test_but_it_does_resolve_a_coating(self):
+        """Non-vacuity, and the M15-C boundary: the materials layer is reached
+        for optical constants, just not for a reflectivity yet."""
+        import ast
+        import inspect
+        import sys
+
+        import gratinglab.solvers.scalar  # noqa: F401
+
+        source = inspect.getsource(sys.modules["gratinglab.solvers.scalar"])
+        imported = {
+            node.module
+            for node in ast.walk(ast.parse(source))
+            if isinstance(node, ast.ImportFrom) and node.module
+        }
+        assert any("materials" in name for name in imported)

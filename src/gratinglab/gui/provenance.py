@@ -124,7 +124,13 @@ def provenance_lines(
 
     normalization = provenance.notes.get("normalization")
     if normalization:
-        detail = "no coating" if normalization == "relative" else "coating set"
+        # The detail comes from whether a coating was *resolved*, which is a
+        # different question from whether its reflectivity was applied -- so
+        # "relative (Au ...)" is a real and honest state, meaning the material
+        # is known and not yet used. Deriving the wording from `normalization`
+        # alone would report "no coating" for it.
+        coating = provenance.notes.get("coating")
+        detail = coating if coating else "no coating"
         lines.append(Line("normalization: ", "dim"))
         lines.append(Line(f"{normalization} ({detail})\n", "dim"))
 

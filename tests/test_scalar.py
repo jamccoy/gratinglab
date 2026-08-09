@@ -331,6 +331,49 @@ class TestProvenance:
         assert scan.provenance.notes["normalization"] == "relative"
         assert not any("coating" in w for w in scan.provenance.warnings)
 
+    def test_an_unknown_coating_raises_rather_than_being_ignored(self):
+        """The M8 bug at its source. `Problem.coating` was a free-form string
+        that nothing read, so `coating="unobtanium"` relabelled the result
+        "absolute" while leaving every number unchanged -- a scan that lied
+        about what it was. A name that cannot be resolved is a question this
+        solver cannot answer, not a default to fall back on."""
+        from gratinglab.materials import UnknownMaterial
+
+        problem = Problem(
+            period=160.0, profile=Blazed(blaze_angle=30.0), coating="unobtanium"
+        )
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        with pytest.raises(UnknownMaterial, match="Au"):
+            scalar.solve(problem, ill, [2.4])
+
+    def test_a_known_coating_is_recorded_with_its_source(self):
+        """Non-vacuity for the raise, and what makes a result able to say where
+        its optical constants came from."""
+        problem = Problem(
+            period=160.0, profile=Blazed(blaze_angle=30.0), coating="Au"
+        )
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        scan = scalar.solve(problem, ill, [2.4])
+        assert scan.provenance.notes["coating"].startswith("Au")
+        assert "CXRO" in scan.provenance.notes["coating"]
+
+    def test_naming_a_coating_does_not_yet_make_the_result_absolute(self):
+        """The honest intermediate state, and the property that killed the bug:
+        the label keys on whether a reflectivity was *applied*, never on
+        whether a material was *named*. Applying it is M15-D; until then a
+        named coating is resolved, recorded, and not used -- and says so."""
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        profile = Blazed(blaze_angle=30.0)
+        bare = scalar.solve(Problem(period=160.0, profile=profile), ill, [2.4])
+        gold = scalar.solve(
+            Problem(period=160.0, profile=profile, coating="Au"), ill, [2.4]
+        )
+
+        assert bare.provenance.notes["normalization"] == "relative"
+        assert gold.provenance.notes["normalization"] == "relative"
+        # And the numbers agree, which is what "not used" has to mean.
+        assert np.array_equal(bare.efficiency, gold.efficiency)
+
     def test_warns_on_a_rough_surface_past_the_fraunhofer_criterion(self):
         problem = Problem(
             period=160.0, profile=Blazed(blaze_angle=30.0), roughness=5.0
