@@ -82,6 +82,16 @@ at least the `x86_64-darwin` architecture"). 3.2.3 uses `parso` and is pure
 Python. Lift the pin when either libcst ships the wheel or the machine grows a
 Rust toolchain; nothing else depends on it.
 
+## Where it stands
+
+796 mutants across the physics core, 763 killed — **95.9%**. The per-module
+breakdown, and the reason `check_reciprocity` accounts for 18 of the 33
+survivors on its own, are in
+[`findings.md`](findings.md#the-full-sweep-959-and-where-the-4-is).
+
+A full sweep takes roughly half an hour on this machine (~6 mutants/second),
+which is why it is a deliberate act rather than a CI step.
+
 ## Reading a survivor
 
 Not every survivor is a missing test. An **equivalent mutant** changes the source

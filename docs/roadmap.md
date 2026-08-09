@@ -65,7 +65,17 @@ Rounded on purpose: this line previously claimed 328 and was wrong by 400, so
 
 ## What is next, in order
 
-### 1. Materials layer
+### 1. Close the `check_reciprocity` gaps
+
+The full mutation sweep scores 95.9% across the physics core, and **18 of the
+33 survivors are in `check_reciprocity` alone** — 81% against 98–100%
+everywhere else. The check this project leans on hardest is the least
+validated thing in it. Three specific gaps are named in
+[findings](findings.md#the-full-sweep-959-and-where-the-4-is): the
+strongest-orders selection strategy, two boundary comparisons, and the
+no-pairs early return.
+
+### 2. Materials layer
 
 Port `CXRO_to_n_k` from the prototype. Unlocks absolute efficiency via Fresnel
 `R_F`, the Névot–Croce and Debye–Waller roughness factors, and the
@@ -73,7 +83,7 @@ finite-conductivity comparison. Deliberately deferred: the perfect-conductivity
 reference data sums to 1.0, so it is effectively relative efficiency and the
 first scalar comparison needed no optical constants at all.
 
-### 2. RCWA
+### 3. RCWA
 
 The independent rigorous check that would validate the scalar *model* rather
 than just its quadrature. Non-negotiables:
@@ -83,7 +93,7 @@ than just its quadrature. Non-negotiables:
 - S-matrix / enhanced transmittance-matrix propagation, never plain T-matrix.
 - Full vectorial conical formulation — off-plane is not an afterthought.
 
-### 3. Native boundary format
+### 4. Native boundary format
 
 `.ggp` cannot carry the period in nm, provenance, undercut boundaries, or a
 format version. The missing period is exactly why
@@ -91,7 +101,7 @@ format version. The missing period is exactly why
 JSON, since the profile classes are already pydantic models with tested
 round-tripping.
 
-### 4. First release + JOSS
+### 5. First release + JOSS
 
 Shipping something citable and correct early is what recruits the collaborators
 who make the integral method tractable. **Do not attempt the integral method

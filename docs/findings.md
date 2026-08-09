@@ -253,6 +253,47 @@ test at all is invisible to code coverage when another function exercises the
 same line*. `cos_beta(0.5, transmitted=True)` covered the concept; nothing
 covered `beta`'s version of it.
 
+### The full sweep: 95.9%, and where the 4% is
+
+796 mutants across the physics core, 763 killed:
+
+| Module | Mutants | Survivors |
+|---|---:|---:|
+| `solvers/scalar.py` | 228 | 3 |
+| `convergence.py` | 182 | 1 |
+| `compare.py` | 136 | 7 |
+| `geometry.py` | 128 | 2 (both equivalent) |
+| `checks.py` | 96 | **18** |
+| `solvers/base.py` | 18 | 2 |
+| `result.py` | 8 | 0 |
+
+**Every survivor in `checks.py` is in `check_reciprocity`** — 18 of the 33
+total, from a function that is 12% of the mutated surface. Its own score is
+81%, against 98–100% everywhere else.
+
+That is worth stating plainly, because this project calls reciprocity *"the
+sharpest available check"* and leans on it hard: it is the reason M9 could
+choose reciprocity over energy conservation with confidence, and it is the
+check that constrains the model rather than the arithmetic. **The check that
+validates everything else is the least validated thing here.**
+
+Three kinds of gap, from reading the diffs:
+
+- **The order-selection strategy is unverified.** `np.argsort(strength)` →
+  `np.argsort(None)` survives. The function deliberately tests the *strongest*
+  orders; nothing asserts that it does, so the selection could be arbitrary and
+  every test would still pass — reciprocity holds for whichever orders get
+  picked.
+- **Boundaries again**, the same shape as the `beta` finding: `>` → `>=` on
+  both the order cap and the grazing margin.
+- **The no-pairs branch returns a report nobody checks.** `max_violation=0.0`
+  → `1.0` survives, so the early return for "nothing could be tested" is
+  untested. A report claiming a measurement it never made is exactly what
+  `Provenance` exists to prevent elsewhere.
+
+Not fixed here — closing them is its own piece of work, tracked on the
+roadmap, and worth doing deliberately rather than by chasing a number.
+
 ---
 
 ## Reciprocity is the sharpest available check
