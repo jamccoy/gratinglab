@@ -209,6 +209,35 @@ class GeometryTab(QWidget):
         self.profile_panel.draw(parsed)
         self._redraw()
 
+    def show_pending(self, errors) -> None:
+        """The form does not parse yet. Keep the last good drawing.
+
+        A form mid-edit is not a form with an error: ``"2."`` and ``"-"`` each
+        fail to parse for exactly one keystroke, and blanking the canvas or
+        reddening a label for them would style ordinary typing as a problem.
+        So the picture stays, and a `dim` line says plainly that it is one
+        edit behind -- never `warn`, never `bad`, which are what the panel
+        reserves for something actually wrong.
+
+        Errors are counted, not listed: naming a half-typed field would be the
+        same accusation in smaller type.
+        """
+        if self._parsed is None:
+            return  # nothing good to keep; the tab has never drawn
+        count = len(errors)
+        note = provenance.Line(
+            # Trailing newline: `to_html` concatenates runs, so a line that
+            # does not end one runs into the caption beneath it.
+            f"waiting for {count} field{'' if count == 1 else 's'} to finish — "
+            "the drawing below is from the last complete geometry\n",
+            "dim",
+        )
+        self._captions.setHtml(
+            provenance.to_html(
+                (note,) + self._scene.captions + self._diagram.captions
+            )
+        )
+
     # -- reactions ----------------------------------------------------
 
     def _on_slider_moved(self, _value: int) -> None:

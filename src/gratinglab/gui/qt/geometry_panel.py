@@ -45,6 +45,17 @@ class GeometryPanel(QWidget):
     #: enough that one might be wanted; `MainWindow` connects it to `solve()`.
     solve_requested = Signal()
 
+    #: The form was edited *by a user*. Deliberately distinct from
+    #: `solve_requested`: Enter still means solve, and this means only that
+    #: the geometry drawing is now stale. `MainWindow` debounces it and
+    #: redraws; nothing here reaches a solver.
+    #:
+    #: Wired to `textEdited`/`activated`, never `textChanged`/
+    #: `currentTextChanged`, because those also fire on programmatic
+    #: `setText`/`setCurrentText` -- which is how every test and
+    #: `_on_mount_change` set fields. Only a real edit should schedule work.
+    changed = Signal()
+
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._fields: dict[str, QWidget] = {}
@@ -61,6 +72,7 @@ class GeometryPanel(QWidget):
         def entry(form: QFormLayout, label: str, key: str) -> QLineEdit:
             widget = QLineEdit(getattr(defaults, key))
             widget.returnPressed.connect(self.solve_requested)
+            widget.textEdited.connect(self.changed)
             self._fields[key] = widget
             form.addRow(label, widget)
             return widget
@@ -70,6 +82,7 @@ class GeometryPanel(QWidget):
             widget.addItems(list(values))
             widget.setCurrentText(getattr(defaults, key))
             widget.currentTextChanged.connect(lambda _t: on_change())
+            widget.activated.connect(lambda _i: self.changed.emit())
             self._fields[key] = widget
             form.addRow(label, widget)
             return widget
@@ -111,6 +124,7 @@ class GeometryPanel(QWidget):
         for key in ("alpha", "gamma"):
             widget = QLineEdit(getattr(defaults, key))
             widget.returnPressed.connect(self.solve_requested)
+            widget.textEdited.connect(self.changed)
             self._fields[key] = widget
             label = QLabel("")
             mount_form.addRow(label, widget)
@@ -180,6 +194,7 @@ class GeometryPanel(QWidget):
         if path:
             self._fields["profile_path"].setText(path)
             self._path_label.setText(Path(path).name)
+            self.changed.emit()
             self.solve_requested.emit()
 
 

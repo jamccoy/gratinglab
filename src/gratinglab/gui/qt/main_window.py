@@ -35,7 +35,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import provenance
-from ..state import FormErrors, build
+from ..state import FormErrors, build, validate
 from .geometry_panel import GeometryPanel
 from .geometry_tab import GeometryTab
 from .scalar_tab import ScalarTab
@@ -48,6 +48,11 @@ __all__ = ["MainWindow"]
 #: about 70 ms, and flashing a bar on and off within one frame reads as a
 #: glitch rather than as feedback.
 _PROGRESS_DELAY_MS = 150
+
+#: How long typing must pause before the geometry redraws. Long enough that a
+#: burst of keystrokes costs one redraw rather than six, short enough that the
+#: picture feels attached to the field you are editing.
+_REDRAW_DEBOUNCE_MS = 120
 
 #: How a registered solver name finds a tab class. A future RCWA backend adds
 #: its own entry here and nothing else about this dispatch changes -- tabs are
@@ -88,6 +93,15 @@ class MainWindow(QMainWindow):
         self._running = False
         self._active_name: str | None = None
 
+        # Coalesces a burst of keystrokes into one redraw. Restartable and
+        # single-shot, parented to the window so it dies with it -- a bare
+        # `QTimer.singleShot` cannot be restarted, so every keystroke would
+        # queue its own redraw and typing "315.15" would draw six times.
+        self._redraw_timer = QTimer(self)
+        self._redraw_timer.setSingleShot(True)
+        self._redraw_timer.setInterval(_REDRAW_DEBOUNCE_MS)
+        self._redraw_timer.timeout.connect(self._refresh_geometry_tab)
+
         # Layout first: `_build_menu` puts the dock's own toggleViewAction in
         # the View menu, so the dock has to exist by then.
         self._build_layout()
@@ -117,6 +131,7 @@ class MainWindow(QMainWindow):
         """
         self.geometry = GeometryPanel()
         self.geometry.solve_requested.connect(self._solve_active_tab)
+        self.geometry.changed.connect(self._geometry_edited)
 
         scroller = QScrollArea()
         scroller.setWidget(self.geometry)
@@ -251,21 +266,34 @@ class MainWindow(QMainWindow):
 
     # -- actions ---------------------------------------------------------
 
+    def _geometry_edited(self) -> None:
+        """A field was edited. Schedule a redraw; solve nothing.
+
+        Restarting the timer is the debounce: only a pause in typing reaches
+        `_refresh_geometry_tab`.
+        """
+        self._redraw_timer.start()
+
     def _refresh_geometry_tab(self) -> None:
         """Redraw the geometry tab from the form as it stands.
 
         Deliberately not driven off `_on_solved`: the tab holds no solver
         output, so waiting for a solve to redraw a picture no solver
-        contributed to would be a false dependency. M12-D makes this live on
-        every keystroke; for now it runs at construction and after each solve.
+        contributed to would be a false dependency. It runs at construction,
+        after each solve, and -- debounced -- on every edit.
+
+        This is **not** the live re-solve ruled out of scope. Nothing here
+        reaches a worker or a solver: `state.build` is microseconds of parsing
+        and the redraw is matplotlib, which the tab defers anyway when it is
+        hidden.
         """
-        try:
-            self.geometry_tab.show_geometry(build(self.geometry.read_form()))
-        except FormErrors:
-            # A form that does not parse has no geometry to draw. Leaving the
-            # last good drawing up is handled properly in M12-D; here the tab
-            # simply keeps whatever it had.
-            pass
+        errors = validate(self.geometry.read_form())
+        if errors:
+            # A form mid-edit is not a form with an error. The tab keeps its
+            # last good drawing and says, dimly, that it is one edit behind.
+            self.geometry_tab.show_pending(errors)
+            return
+        self.geometry_tab.show_geometry(build(self.geometry.read_form()))
 
     def _solve_active_tab(self) -> None:
         """Enter in a geometry field solves whichever tab is showing.
@@ -388,6 +416,7 @@ class MainWindow(QMainWindow):
         running" and aborts intermittently -- most visibly in the offscreen
         CI runs, where windows are created and destroyed back to back.
         """
+        self._redraw_timer.stop()  # a redraw firing into a closing window
         self._thread.quit()
         self._thread.wait(5000)
         super().closeEvent(event)

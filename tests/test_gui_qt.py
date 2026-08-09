@@ -798,7 +798,114 @@ class TestRimFocusAndPresets:
         assert not panel._focus_button.isEnabled()
         assert panel._focus_button.toolTip()
 
-        panel.show_scene(tab._scene)  # leave the fixture as we found it
+        # Back to the real scene, so a failure above is reported against the
+        # geometry the rest of this class assumes rather than against a
+        # leftover in-plane one.
+        panel.show_scene(tab._scene)
+        assert panel._focus_button.isEnabled()
+
+
+class TestLiveGeometry:
+    """M13-H. The picture follows the form without a solve.
+
+    Nothing here reaches a worker: `state.build` is microseconds of parsing
+    and the redraw is matplotlib. The token is the proof -- it never moves.
+    """
+
+    def _edit(self, qtbot, win, key, text):
+        """Type into a field the way a user does.
+
+        `setText` fires `textChanged`, not `textEdited`, and the panel
+        deliberately listens to the latter -- so this drives the real path
+        rather than the one tests happen to find convenient.
+        """
+        field = win.geometry._fields[key]
+        field.setText(text)
+        field.textEdited.emit(text)
+        qtbot.wait(250)  # past the 120 ms debounce
+
+    def test_editing_a_field_redraws_the_geometry(self, qtbot, win):
+        before = win.geometry_tab._parsed.problem.period
+        self._edit(qtbot, win, "period", "500")
+        assert win.geometry_tab._parsed.problem.period == pytest.approx(500.0)
+        assert before != pytest.approx(500.0)
+
+    def test_and_does_not_solve(self, qtbot, win):
+        """The distinction the whole step rests on. A redraw that quietly
+        started a solve would be the live re-solve ruled out of scope."""
+        token = win._token
+        self._edit(qtbot, win, "period", "480")
+        assert win._token == token
+        assert not win._running
+
+    def test_the_3d_scene_follows_too(self, qtbot, win):
+        """Non-vacuity in the other direction: `_parsed` moving proves the
+        parse ran, not that anything was drawn from it."""
+        self._edit(qtbot, win, "gamma", "12")
+        assert win.geometry_tab._scene.gamma == pytest.approx(np.radians(12.0))
+
+    def test_a_burst_of_keystrokes_costs_one_redraw(self, qtbot, win):
+        """What the debounce is for. Without it, typing "315.15" draws six
+        times -- each ~50 ms of matplotlib, while the user is still typing."""
+        redraws = []
+        original = win.geometry_tab.show_geometry
+
+        def counted(parsed):
+            redraws.append(parsed)
+            original(parsed)
+
+        win.geometry_tab.show_geometry = counted
+        try:
+            field = win.geometry._fields["period"]
+            for text in ("3", "31", "315", "315.", "315.1", "315.15"):
+                field.setText(text)
+                field.textEdited.emit(text)
+                qtbot.wait(10)
+            qtbot.wait(250)
+        finally:
+            win.geometry_tab.show_geometry = original
+        assert len(redraws) == 1
+
+    def test_a_half_typed_field_keeps_the_last_good_drawing(self, qtbot, win):
+        """`"-"` fails to parse for exactly one keystroke. Blanking the canvas
+        for it would style ordinary typing as a problem."""
+        self._edit(qtbot, win, "period", "420")
+        good = win.geometry_tab._scene
+
+        self._edit(qtbot, win, "period", "-")
+        assert win.geometry_tab._scene is good
+        assert win.geometry_tab._parsed.problem.period == pytest.approx(420.0)
+
+    def test_and_is_not_styled_as_an_error(self, qtbot, win):
+        """The absent-assertion: `warn` and `bad` are reserved for something
+        actually wrong. A form mid-edit is not that."""
+        from gratinglab.gui.provenance import TAG_COLORS
+
+        self._edit(qtbot, win, "period", "-")
+        html = win.geometry_tab._captions.toHtml()
+        assert TAG_COLORS["warn"] not in html
+        assert TAG_COLORS["bad"] not in html
+        assert "waiting" in win.geometry_tab._captions.toPlainText()
+        # Its own line: `to_html` concatenates runs, so a missing newline
+        # would run the note straight into the caption beneath it.
+        assert win.geometry_tab._captions.toPlainText().splitlines()[0].endswith(
+            "the drawing below is from the last complete geometry"
+        )
+
+    def test_and_the_captions_come_back_when_it_parses(self, qtbot, win):
+        """Non-vacuity for the pending line: it has to clear."""
+        self._edit(qtbot, win, "period", "-")
+        assert "waiting" in win.geometry_tab._captions.toPlainText()
+        self._edit(qtbot, win, "period", "315.15")
+        assert "waiting" not in win.geometry_tab._captions.toPlainText()
+
+    def test_programmatic_setText_schedules_nothing(self, qtbot, win):
+        """Why the panel listens to `textEdited` rather than `textChanged`:
+        six existing tests set fields programmatically, and every one of them
+        would otherwise start a debounce timer."""
+        win.geometry._fields["period"].setText("999")
+        assert not win._redraw_timer.isActive()
+        win.geometry._fields["period"].setText("315.15")
 
 
 class TestSetupTab:
