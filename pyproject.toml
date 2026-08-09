@@ -58,6 +58,16 @@ Homepage = "https://github.com/jamccoy/gratinglab"
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# Vendored optical constants ship with the wheel. Without this they exist in a
+# checkout and vanish on install, so `materials.lookup("Au")` would work for
+# every developer and fail for every user -- the worst version of the bug.
+# `docs/theory/` is deliberately *not* handled this way: it is genuinely
+# dev-checkout-only and `gui/docs.py` degrades to an explanatory entry when it
+# is absent. Optical constants cannot degrade like that; a missing table has to
+# raise.
+[tool.setuptools.package-data]
+"gratinglab.materials" = ["data/*.txt", "data/SOURCES.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 # Relative to rootdir, so a run driven from a copied tree imports *that*

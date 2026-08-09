@@ -60,6 +60,43 @@ shows the naive rule failing on a scripted sequence with the same shape.
 
 ---
 
+## The prototype's CXRO reader drops a row
+
+**`CXRO_to_n_k` in `panter1.py` hardcodes `skip_header=3` against a file with
+two header lines, so it silently discards the first data row.**
+
+    [0] ' Au Density=19.32'
+    [1] ' Energy(eV), Delta, Beta'
+    [2] '  200.  0.0112813823  0.00951793324'     <- dropped
+    [3] '  200.925018  0.0111386664  0.00957826339'
+
+The lost row is the lowest energy, which is the **longest wavelength** — the
+end of the range a grazing-incidence soft X-ray scan is most likely to want.
+For the Au table it truncates 6.199 nm to 6.171 nm, a 0.029 nm shortfall, and
+the `.ari` files in the corpus carry it because that code wrote them.
+
+Nothing downstream ever noticed, for the same reason nothing noticed `t̂ = −d̂`:
+no consumer looked at the endpoint. PCGrate was handed the table and
+interpolated inside it.
+
+**Consequence.** `materials.optical.read_cxro` detects the header instead of
+counting it — a line is data when its first three whitespace-separated fields
+all parse as floats. That is robust to the two- and three-header-line variants
+both, and to an export that grows a line, and it cannot drop a row for being at
+an end of the table, which is exactly where the range guard is most sensitive.
+
+Pinned by `tests/test_materials.py::TestTheCxroReader::test_the_longest_wavelength_row_survives`,
+with a companion measuring the size of the truncation so "a real amount, not
+rounding" is a number rather than a claim.
+
+**The general lesson**, and the reason this is written down: *porting faithfully
+is not the same as porting correctly*. The plan for this milestone called the
+reader "a port, not new code", which was right about the effort and wrong about
+the care — a port inherits the bugs unless someone checks the input against the
+assumption. The check took one command.
+
+---
+
 ## Corpus geometry recovered from the data alone
 
 **The exported efficiency tables record efficiencies but not the geometry that
