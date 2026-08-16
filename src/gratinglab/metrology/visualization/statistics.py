@@ -223,10 +223,7 @@ def plot_multi_file_comparison(results, labels=None, temperatures=None):
         # IMPORTANT CHANGE: Use per-groove angles (same as bar chart)
         # This makes histograms and bar chart statistically consistent
         angles = r['all_angles']  # These are the per-groove measurements
-        
-        # But we can show local angles as well if desired (see below)
-        has_local = 'all_local_angles' in r and len(r['all_local_angles']) > 0
-        
+
         # Create histogram of per-groove angles
         n_bins = min(30, max(8, len(angles) // 3))
         ax_hist.hist(angles, bins=n_bins, edgecolor='black', alpha=0.7, 
@@ -297,8 +294,7 @@ def plot_multi_file_comparison_with_local_angles(results, labels=None, temperatu
         labels = [os.path.basename(r['filename']) for r in results]
     
     means = [r['mean_angle'] for r in results]
-    stds = [r['std_angle'] for r in results]
-    
+
     # Calculate SEM for error bars
     sems = []
     for r in results:
@@ -376,7 +372,6 @@ def plot_multi_file_comparison_with_local_angles(results, labels=None, temperatu
         # Per-groove histogram
         angles = r['all_angles']
         mean_val = np.mean(angles)
-        std_val = np.std(angles)
         sem_val = sems[i]
         
         n_bins = min(20, max(8, len(angles) // 3))

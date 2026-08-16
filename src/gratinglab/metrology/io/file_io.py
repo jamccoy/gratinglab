@@ -78,29 +78,29 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
                 n_eff = r.get('n_effective', float('nan'))
                 sem = r.get('sem', float('nan'))
                 sem_corr = r.get('sem_corrected', float('nan'))
-                f.write(f"\n  Correlation-corrected uncertainty:\n")
+                f.write("\n  Correlation-corrected uncertainty:\n")
                 f.write(f"    Intraclass correlation: {icc:.3f}\n")
                 f.write(f"    Effective sample size: {n_eff:.1f} of {r['n_grooves']} "
                         f"measurements\n")
                 f.write(f"    SEM: {sem_corr:.3f}° (uncorrected {sem:.3f}°, "
                         f"x{sem_corr / sem:.2f})\n")
                 f.write(f"    95% CI on the mean: ±{1.96 * sem_corr:.3f}°\n")
-                f.write(f"    Row groups re-measure the same grooves, so the raw\n")
-                f.write(f"    count overstates the independent information.\n")
+                f.write("    Row groups re-measure the same grooves, so the raw\n")
+                f.write("    count overstates the independent information.\n")
             f.write(f"  Mean slope (dy/dx): {r['mean_slope']:.6f}\n")
             if r['mean_steep'] is not None:
                 f.write(f"  Mean steep facet angle: {r['mean_steep']:.3f}°\n")
-            f.write(f"\n  Groove geometry:\n")
+            f.write("\n  Groove geometry:\n")
             f.write(f"    Measured period: {r['period_nm']:.3f} nm ± {r.get('period_std', 0):.3f} nm\n")
             f.write(f"    Mean groove depth: {np.mean([q['groove_depth_nm'] for q in r['quality']]):.3f} nm\n")
             f.write(f"    Mean blaze facet width: {np.mean([q['blaze_width_nm'] for q in r['quality']]):.3f} nm\n")
-            f.write(f"\n  Within-facet variation (camber/curvature):\n")
+            f.write("\n  Within-facet variation (camber/curvature):\n")
             f.write(f"    Local angle std: {r.get('local_angle_std', 0):.3f}°\n")
             f.write(f"    Local angle range: {r.get('local_angle_range', 0):.3f}°\n")
             
             # Individual groove periods if available
             if 'groove_periods' in r and len(r['groove_periods']) > 0:
-                f.write(f"\n  Individual groove spacings (nm):\n")
+                f.write("\n  Individual groove spacings (nm):\n")
                 for i, period in enumerate(r['groove_periods']):
                     f.write(f"    Groove {i+1}-{i+2}: {period:.3f} nm\n")
             

@@ -32,7 +32,7 @@ def print_comparison_summary(results, labels):
         labels: list of sample labels
     """
     print(f"\n{'='*80}")
-    print(f"COMPARISON SUMMARY")
+    print("COMPARISON SUMMARY")
     print(f"{'='*80}")
     
     # Determine if we have combined scans
@@ -76,8 +76,8 @@ def print_comparison_summary(results, labels):
                   f"{total_std:<10.2f} "
                   f"{r['period_nm']:<10.2f} nm")
     
-    print(f"\nNote: SEM = Standard Error of Mean (uncertainty in mean estimate)")
-    print(f"      σ_total = Total standard deviation (includes measurement + physical variation)")
+    print("\nNote: SEM = Standard Error of Mean (uncertainty in mean estimate)")
+    print("      σ_total = Total standard deviation (includes measurement + physical variation)")
 
 
 def print_pairwise_comparisons(results):
@@ -89,10 +89,10 @@ def print_pairwise_comparisons(results):
         results: list of result dictionaries
     """
     print(f"\n{'='*80}")
-    print(f"STATISTICAL COMPARISONS")
+    print("STATISTICAL COMPARISONS")
     print(f"{'='*80}")
-    print(f"Using proper uncertainty propagation (measurement + physical variation)")
-    print(f"")
+    print("Using proper uncertainty propagation (measurement + physical variation)")
+    print("")
     
     for i, r1 in enumerate(results):
         for j, r2 in enumerate(results):
@@ -173,7 +173,7 @@ def print_temperature_analysis(results, labels, temperatures):
     
     if len(temp_samples) >= 2:
         print(f"\n{'='*80}")
-        print(f"TEMPERATURE-DEPENDENT CHANGES")
+        print("TEMPERATURE-DEPENDENT CHANGES")
         print(f"{'='*80}")
         
         # Sort by temperature
@@ -219,7 +219,7 @@ def print_temperature_analysis(results, labels, temperatures):
     # Master vs treated comparisons
     if len(master_samples) > 0 and len(temp_samples) > 0:
         print(f"\n{'='*80}")
-        print(f"MASTER vs TREATED COMPARISONS")
+        print("MASTER vs TREATED COMPARISONS")
         print(f"{'='*80}\n")
         
         for i, label_i, result_i in master_samples:
@@ -280,9 +280,9 @@ def print_uncertainty_breakdown(results, labels):
     - Within-image variation (between row groups, if applicable)
     """
     print(f"\n{'='*80}")
-    print(f"UNCERTAINTY BREAKDOWN")
+    print("UNCERTAINTY BREAKDOWN")
     print(f"{'='*80}")
-    print(f"Understanding your error sources:\n")
+    print("Understanding your error sources:\n")
     
     for r, label in zip(results, labels):
         print(f"{label}:")

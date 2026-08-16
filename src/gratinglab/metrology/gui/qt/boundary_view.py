@@ -18,7 +18,6 @@ import os
 
 from . import *  # noqa: F401,F403 - sets QT_API before matplotlib's shim loads
 
-import numpy as np
 from PySide6.QtWidgets import (
     QCheckBox, QFileDialog, QFrame, QGroupBox, QHBoxLayout, QLabel,
     QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
