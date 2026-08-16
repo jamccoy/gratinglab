@@ -19,7 +19,9 @@ __all__ = [
     "cos_beta",
     "order_range",
     "is_propagating",
+    "flux_obliquity",
     "facet_graze",
+    "sin_facet_graze",
     "blaze_direction",
     "blaze_wavelength",
 ]
@@ -129,6 +131,73 @@ def order_range(
     return np.arange(lo, hi + 1, dtype=np.int64)
 
 
+def flux_obliquity(cos_alpha: ArrayLike, cos_beta_m: ArrayLike) -> NDArray[np.float64]:
+    r"""Flux projection factor for a diffracted order.
+
+    .. math::
+        O_m = \frac{4\cos\alpha\,\cos\beta_m}{(\cos\alpha + \cos\beta_m)^2}
+
+    Multiplying :math:`|G_m|^2` by this is what makes scalar theory agree with
+    **first-order Rayleigh perturbation theory** in the shallow-groove limit,
+    where both are valid and must therefore give the same answer. Perturbation
+    theory says :math:`\eta_m = 4k_{z,0}k_{z,m}|\hat{g}_m|^2`; the bare Fourier
+    coefficient gives :math:`k_{z,0}` and :math:`k_{z,m}` only through their
+    *sum*, and this is exactly the ratio between the two. See
+    ``tests/test_perturbation.py``, which derives it from two closed forms with
+    no solver in the loop.
+
+    Three properties, all load-bearing:
+
+    - **Symmetric** under :math:`\alpha \leftrightarrow \beta_m`, so Lorentz
+      reciprocity survives it untouched. That is what makes it admissible at
+      all: the obliquity factor of thesis Appendix D,
+      :math:`\cos\beta_m/\cos\alpha`, is the *asymmetric* one and breaks
+      reciprocity, which is why ``docs/theory/scalar.md`` rejected it. The
+      rejection was right; the conclusion that no flux factor belongs was not.
+    - **At most 1**, by AM-GM, with equality exactly when
+      :math:`\cos\alpha = \cos\beta_m` -- Littrow, specular, and every
+      :math:`m = 0` (where :math:`\beta_0 = -\alpha`). So it can only reduce an
+      efficiency, and it leaves the shallow-groove energy identity alone.
+    - **Vanishes at grazing exit**, :math:`\cos\beta_m \to 0`. An order about to
+      pass off carries no flux through a plane parallel to the surface, and the
+      unfactored :math:`|G_m|^2` claimed it did.
+
+    Both arguments are cosines, not angles -- the callers already have them from
+    :func:`cos_beta` and :attr:`Illumination.cos_alpha`, and converting to
+    angles and back would be a chance to lose a sign.
+    """
+    cos_alpha = np.asarray(cos_alpha, dtype=np.float64)
+    cos_beta_m = np.asarray(cos_beta_m, dtype=np.float64)
+    return 4.0 * cos_alpha * cos_beta_m / (cos_alpha + cos_beta_m) ** 2
+
+
+def sin_facet_graze(
+    gamma: float, tilt: ArrayLike, angle: ArrayLike
+) -> NDArray[np.float64]:
+    r"""":math:`\sin\zeta = \sin\gamma\,\cos(\text{tilt} - \text{angle})`, unclipped.
+
+    The vector form of :func:`facet_graze`, and deliberately **not** wrapped in
+    ``arcsin``. Two reasons:
+
+    - A **negative** value is the meaningful signal that the facet is turned
+      away from the direction in question -- back-facing, and contributing
+      nothing. ``arcsin`` of a negative number is a perfectly good angle and
+      would hide that; clipping to zero would hide it too. A caller resolving
+      reflectivity across a groove tests this sign to build its visibility mask.
+    - ``tilt`` varies point by point along a groove, so this is called on whole
+      arrays where :func:`facet_graze` takes scalars.
+
+    ``angle`` is :math:`\alpha` for the incident direction and :math:`\beta_m`
+    for a diffracted one. It is spelled generically because the two uses are the
+    same formula: reflection off a tilted facet does not care which way the
+    light is going, which is the symmetry that keeps a groove-resolved
+    reflectivity model reciprocal.
+    """
+    tilt = np.asarray(tilt, dtype=np.float64)
+    angle = np.asarray(angle, dtype=np.float64)
+    return np.sin(gamma) * np.cos(tilt - angle)
+
+
 def facet_graze(gamma: float, blaze_angle: float, alpha: float) -> float:
     r"""Graze angle onto a sawtooth groove facet, in radians.
 
@@ -137,8 +206,11 @@ def facet_graze(gamma: float, blaze_angle: float, alpha: float) -> float:
 
     This is the angle that must stay below the critical angle for total
     external reflection, :math:`\theta_c \approx \sqrt{2\delta_n}`.
+
+    The scalar case of :func:`sin_facet_graze`, and defined in terms of it so
+    there is one formula rather than two that have to be kept agreeing.
     """
-    return float(np.arcsin(np.sin(gamma) * np.cos(blaze_angle - alpha)))
+    return float(np.arcsin(sin_facet_graze(gamma, blaze_angle, alpha)))
 
 
 def blaze_direction(blaze_angle: float, alpha: float) -> float:

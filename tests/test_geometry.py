@@ -9,6 +9,7 @@ from gratinglab.geometry import (
     blaze_wavelength,
     cos_beta,
     facet_graze,
+    flux_obliquity,
     is_propagating,
     order_range,
     sin_beta,
@@ -209,6 +210,66 @@ def _projected_incident(alpha):
     :math:`\sin\gamma` scale and the out-of-plane :math:`\cos\gamma\,\hat{z}`.
     """
     return np.array([-np.sin(alpha), -np.cos(alpha)])
+
+
+class TestFluxObliquity:
+    r"""The three properties that make ``4 c_a c_b / (c_a + c_b)^2`` admissible.
+
+    Whether it is the *correct* factor is settled in ``test_perturbation.py``,
+    against a theory derived from a different starting point. What is checked
+    here is the structural half: that it cannot break the invariant the scalar
+    solver is built around, and that it does something.
+    """
+
+    COSINES = [(1.0, 1.0), (0.9, 0.4), (0.5, 0.99), (0.1, 0.8), (0.98, 0.02)]
+
+    @pytest.mark.parametrize("c_a,c_b", COSINES)
+    def test_it_is_symmetric_in_the_two_directions(self, c_a, c_b):
+        """Why reciprocity survives it.
+
+        `check_reciprocity` compares E_m(alpha) against E_m(beta_m). A factor
+        that is unchanged when those two swap places cannot affect the
+        comparison -- which is precisely what the obliquity factor of thesis
+        Appendix D, ``cos(beta_m)/cos(alpha)``, fails to be.
+        """
+        assert flux_obliquity(c_a, c_b) == pytest.approx(flux_obliquity(c_b, c_a))
+
+    @pytest.mark.parametrize("c_a,c_b", COSINES)
+    def test_it_never_exceeds_one(self, c_a, c_b):
+        """AM-GM. So it can only ever cost efficiency, never manufacture it --
+        which is what lets it improve the summed-energy bound rather than
+        threaten it."""
+        assert flux_obliquity(c_a, c_b) <= 1.0
+
+    def test_it_is_exactly_one_when_the_two_directions_agree(self):
+        """Littrow, specular, and every zeroth order (beta_0 = -alpha, so the
+        cosines are equal whatever alpha is). Exactly, not nearly: this is why
+        the shallow-groove energy identity is untouched, and why the perfect
+        blaze test at Littrow still reaches unity."""
+        for cosine in (1.0, 0.9, 0.5, 0.01):
+            assert flux_obliquity(cosine, cosine) == 1.0
+
+    def test_it_vanishes_as_an_order_passes_off(self):
+        """cos(beta_m) -> 0 is an order leaving along the surface, carrying no
+        flux through a plane parallel to it. The unfactored |G_m|^2 claimed
+        such an order was as bright as any other."""
+        assert flux_obliquity(0.7, 1e-9) < 1e-8
+        assert flux_obliquity(0.7, 0.0) == 0.0
+
+    def test_it_is_not_vacuous_away_from_littrow(self):
+        """Non-vacuity: the factor has to actually depart from 1 somewhere, or
+        applying it would be a no-op dressed up as physics. At the geometry
+        `test_perturbation.py` uses in-plane it is 0.61."""
+        assert flux_obliquity(np.cos(np.radians(10.0)), np.cos(np.radians(76.82))) == (
+            pytest.approx(0.611, rel=1e-2)
+        )
+
+    def test_it_broadcasts_over_an_array_of_orders(self):
+        """The solver hands it one cos(alpha) and a vector of cos(beta_m)."""
+        cosines = np.array([0.2, 0.5, 0.9])
+        got = flux_obliquity(0.5, cosines)
+        assert got.shape == (3,)
+        assert got[1] == 1.0
 
 
 class TestFacetHandedness:
