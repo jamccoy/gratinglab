@@ -56,6 +56,32 @@ def phase_amplitude(problem, illumination, wavelength, orders):
     return live, phi
 
 
+def obliquity(problem, illumination, wavelength, orders):
+    r"""``4 c_a c_b / (c_a + c_b)^2`` per propagating order.
+
+    The closed forms below are expressions for :math:`|G_m|^2` -- the bare
+    Fourier coefficient -- and the solver returns that times the flux
+    projection, so every prediction here has to carry the factor too.
+
+    Written out longhand rather than importing
+    :func:`gratinglab.geometry.flux_obliquity`, deliberately. These are the
+    project's strongest quadrature checks, and routing them through the same
+    function the solver calls would make a mutation of it invisible to all
+    sixteen of them. ``test_perturbation.py`` is what says the factor is the
+    *right* one; this only says the solver applies the one it claims to.
+    """
+    sines = sin_beta(
+        orders,
+        wavelength,
+        problem.period,
+        illumination.sin_alpha,
+        illumination.sin_gamma,
+    )
+    cosines = cos_beta(sines[is_propagating(sines)])
+    c_a = illumination.cos_alpha
+    return 4.0 * c_a * cosines / (c_a + cosines) ** 2
+
+
 class TestSawtoothAgainstClosedForm:
     r"""Appendix D / ISSI eq. (15): :math:`E_m = \mathrm{sinc}^2(\phi/2 - m\pi)`."""
 
@@ -78,6 +104,7 @@ class TestSawtoothAgainstClosedForm:
         for row, wavelength in enumerate(wavelengths):
             live, phi = phase_amplitude(problem, ill, wavelength, scan.orders)
             expected = np.sinc(phi / (2 * np.pi) - scan.orders[live]) ** 2
+            expected = expected * obliquity(problem, ill, wavelength, scan.orders)
             assert np.allclose(scan.efficiency[row][live], expected, atol=1e-8), (
                 f"lambda={wavelength}, period={period}"
             )
@@ -116,6 +143,9 @@ class TestBinaryPhaseGratingAgainstClosedForm:
                 * duty**2
                 * np.sinc(orders[nonzero] * duty) ** 2
             )
+            expected = (
+                expected * obliquity(problem, ill, wavelength, scan.orders)[nonzero]
+            )
             got = scan.efficiency[row][live][nonzero]
             assert np.allclose(got, expected, atol=2e-4), f"lambda={wavelength}"
 
@@ -150,6 +180,7 @@ class TestSinusoidAgainstBesselForm:
         for row, wavelength in enumerate(wavelengths):
             live, phi = phase_amplitude(problem, ill, wavelength, scan.orders)
             expected = jv(scan.orders[live], phi / 2.0) ** 2
+            expected = expected * obliquity(problem, ill, wavelength, scan.orders)
             assert np.allclose(scan.efficiency[row][live], expected, atol=1e-8)
 
 
@@ -178,12 +209,55 @@ class TestBlazeBehaviour:
             found = window[int(np.argmax(scan.order(order)))]
             assert found == pytest.approx(predicted, rel=0.02), f"order {order}"
 
-    def test_efficiency_reaches_unity_at_perfect_blaze(self):
-        """An ideal sawtooth at its blaze condition puts everything in one order."""
+    def test_efficiency_reaches_unity_at_perfect_blaze_in_littrow(self):
+        """An ideal sawtooth at its blaze condition puts everything in one order.
+
+        **In Littrow.** ``alpha = blaze_angle`` puts the blaze direction back
+        along the incidence direction, so ``cos(beta_2) == cos(alpha)``, the
+        flux obliquity is exactly 1, and unity is reachable. The companion
+        below is what happens when it is not -- which is the general case, and
+        is why this test grew a qualifier in M16-C.
+        """
         problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
         ill = Illumination.classical(alpha=30.0, polarization=UNPOL)
         peak = scalar.solve(problem, ill, [700.0], quadrature_points=8192).at(700.0)
         assert peak[2] == pytest.approx(1.0, abs=1e-6)
+
+    def test_but_away_from_littrow_it_reaches_the_obliquity_ceiling_instead(self):
+        """Off Littrow the blaze order lands somewhere else, and cannot be 1.
+
+        A perfectly blazed facet still directs everything into one order, but
+        that order leaves along a different direction from the one the light
+        arrived on, and the flux through a plane parallel to the surface is
+        smaller by ``4 c_a c_b / (c_a + c_b)^2``.
+
+        Unity-at-blaze was never a physical result -- a rigorous calculation
+        does not give exactly 1 there either, and gives different answers for
+        TE and TM. It was a property of the unfactored ``|G_m|^2``, and it is
+        the one place the flux factor is visible without going to shallow
+        grooves, so it is worth pinning to the number rather than loosening
+        the tolerance.
+        """
+        period, blaze_deg, alpha_deg, order = 315.15, 29.5, 19.99, 2
+        problem = Problem(period=period, profile=Blazed(blaze_angle=blaze_deg))
+        ill = Illumination(alpha_deg=alpha_deg, gamma_deg=1.25, polarization=UNPOL)
+
+        at_blaze = float(
+            blaze_wavelength(
+                order,
+                period,
+                np.radians(blaze_deg),
+                np.radians(alpha_deg),
+                np.radians(1.25),
+            )
+        )
+        peak = scalar.solve(problem, ill, [at_blaze], quadrature_points=16384)
+        ceiling = obliquity(problem, ill, at_blaze, peak.orders)
+        expected = float(ceiling[list(peak.orders).index(order)])
+
+        assert peak.at(at_blaze)[order] == pytest.approx(expected, abs=1e-6)
+        # And the ceiling is genuinely below 1, or this asserts nothing.
+        assert 0.98 < expected < 0.999
 
 
 class TestNumerics:
@@ -466,17 +540,22 @@ class TestAbsoluteEfficiency:
     separately as a scale factor" as an assumption, and ended the table with
     "efficiencies are **relative**, not absolute, until a materials layer
     supplies R_F". This is that layer arriving.
+
+    **These pin ``reflectivity_model="facet"`` specifically.** M16-D made the
+    groove-resolved model the default and kept this one so a prior result stays
+    reproducible; this class is what says it really is unchanged. The new
+    default has its own class below.
     """
 
     WAVELENGTHS = np.linspace(1.0, 5.0, 9)
 
-    def _pair(self, profile, **problem_kwargs):
+    def _pair(self, profile, model="facet", **problem_kwargs):
         ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
         bare = Problem(period=315.15, profile=profile, **problem_kwargs)
         gold = Problem(period=315.15, profile=profile, coating="Au", **problem_kwargs)
         return (
-            scalar.solve(bare, ill, self.WAVELENGTHS),
-            scalar.solve(gold, ill, self.WAVELENGTHS),
+            scalar.solve(bare, ill, self.WAVELENGTHS, reflectivity_model=model),
+            scalar.solve(gold, ill, self.WAVELENGTHS, reflectivity_model=model),
             ill,
         )
 
@@ -542,6 +621,32 @@ class TestAbsoluteEfficiency:
         assert "mean surface" in note
         assert wording in note
 
+    def test_the_facet_model_breaks_reciprocity_which_is_why_it_is_not_default(self):
+        """The defect M16-D was written to repair, pinned so it stays visible.
+
+        `facet` evaluates R at a graze computed from alpha alone, so swapping
+        alpha and beta_m changes the factor and E_m(alpha) != E_m(beta_m). The
+        violation reaches 3e-2 -- against 1e-16 for the same run with no
+        coating, which is how it went unnoticed: `check_reciprocity` had only
+        ever been pointed at bare problems.
+
+        Kept as an assertion rather than a note because "the old model is
+        available for reproducibility" has to include reproducing what was
+        wrong with it.
+        """
+        from gratinglab.checks import check_reciprocity
+
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        problem = Problem(
+            period=315.15, profile=Sinusoidal(depth_fraction=0.15), coating="Au"
+        )
+        report = check_reciprocity(
+            scalar, problem, ill, [2.0, 4.0], quadrature_points=8192,
+            reflectivity_model="facet",
+        )
+        assert not report.passed
+        assert report.max_violation > 1e-3
+
     def test_the_mean_surface_graze_is_facet_graze_with_no_tilt(self):
         """Not a separate formula. `facet_graze(gamma, 0, alpha)` is exactly
         `arcsin(|k_i . n|)`, so the flat-facet case reuses a function that is
@@ -588,6 +693,307 @@ class TestAbsoluteEfficiency:
         report = check_energy_balance(gold)
         assert report.passed
         assert report.max_deficit > check_energy_balance(bare).max_deficit
+
+
+class TestGrooveCycleResolvedReflectivity:
+    r"""M16-D: reflectivity stops being one number for the whole period.
+
+    The M15 model evaluated :math:`R` once, at the active-facet angle, and
+    applied it to every order alike -- justified in `docs/theory/scalar.md` on
+    the grounds that "scalar theory has no mechanism by which one order could
+    reflect differently from its neighbour". There is such a mechanism. A groove
+    whose reflectivity varies across the cycle is an **amplitude** grating as
+    well as a phase grating, and the two transform together.
+    """
+
+    ILL = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+    PERIOD = 315.15
+    TASTE = Blazed(blaze_angle=29.5, antiblaze_angle=70.5)
+
+    def _solve(self, profile, model, wavelengths, coating="Au", n=16384):
+        problem = Problem(period=self.PERIOD, profile=profile, coating=coating)
+        return scalar.solve(
+            problem, self.ILL, wavelengths,
+            quadrature_points=n, reflectivity_model=model,
+        )
+
+    def test_it_is_the_default(self):
+        scan = self._solve(self.TASTE, "local", [3.0])
+        default = scalar.solve(
+            Problem(period=self.PERIOD, profile=self.TASTE, coating="Au"),
+            self.ILL, [3.0], quadrature_points=16384,
+        )
+        assert default.provenance.notes["reflectivity_model"] == "local"
+        assert default.efficiency == pytest.approx(scan.efficiency)
+
+    def test_an_unknown_model_is_refused(self):
+        with pytest.raises(ValueError, match="reflectivity_model must be"):
+            self._solve(self.TASTE, "mean-surface", [3.0])
+
+    def test_the_local_weight_is_the_geometric_mean_of_the_two_directions(self):
+        r"""The exact prediction, on the profile where it can be written down.
+
+        An ideal sawtooth has one facet angle, so :math:`\zeta_i` and
+        :math:`\zeta_{d,m}` are each a single number per order and the whole
+        groove-resolved integral collapses to
+
+        .. math:: \mathscr{E}_m = \sqrt{R(\zeta_i)R(\zeta_{d,m})}\;
+                  \mathscr{E}_m^{\text{bare}}
+
+        Recomputed here from the materials layer, so this is a closed-form check
+        on the machinery rather than a restatement of it -- and it is what shows
+        the reflectivity has genuinely become order-dependent, since
+        :math:`\zeta_{d,m}` carries the order and :math:`\zeta_i` does not.
+        """
+        from gratinglab.geometry import beta, facet_graze, sin_beta
+        from gratinglab.materials import lookup
+        from gratinglab.materials.fresnel import reflectivity
+
+        wavelength, tilt = 3.0, np.radians(29.5)
+        profile = Blazed(blaze_angle=29.5)
+        bare = scalar.solve(
+            Problem(period=self.PERIOD, profile=profile),
+            self.ILL, [wavelength], quadrature_points=32768,
+        )
+        local = self._solve(profile, "local", [wavelength], n=32768)
+
+        gold = lookup("Au").n(wavelength)
+        graze_in = facet_graze(self.ILL.gamma, tilt, self.ILL.alpha)
+        r_in = float(reflectivity(gold, graze_in))
+
+        ratios = []
+        for column, order in enumerate(local.orders):
+            # Orders below 1e-3 are excluded, and the reason is specific rather
+            # than tolerance-shopping. The collapse above is exact only where
+            # the tilt is genuinely constant, and an ideal sawtooth's vertical
+            # facet has no analytic slope, so `_facet_tilt` falls back to a
+            # finite difference that smears the two samples either side of the
+            # drop. That perturbs the integral by a fixed small amount, which is
+            # a larger *fraction* of a weak order than a strong one: at 1e-3 the
+            # agreement is 2e-3, at 3.5e-4 it degrades to 6e-3.
+            if bare.efficiency[0, column] < 1e-3:
+                continue
+            sine = float(sin_beta(order, wavelength, self.PERIOD,
+                                  self.ILL.sin_alpha, self.ILL.sin_gamma))
+            graze_out = float(
+                np.arcsin(np.sin(self.ILL.gamma) * np.cos(tilt - float(beta(sine))))
+            )
+            expected = np.sqrt(r_in * float(reflectivity(gold, graze_out)))
+            got = local.efficiency[0, column] / bare.efficiency[0, column]
+            assert got == pytest.approx(expected, rel=2e-3), f"order {order}"
+            ratios.append(got)
+
+        # Non-vacuity: if the factor were order-independent this would be flat,
+        # and the whole change would be a rename. It spans 0.72 to 0.82.
+        assert max(ratios) - min(ratios) > 0.05
+
+    def test_the_facet_model_applies_one_flat_factor_and_the_local_one_does_not(self):
+        """The same statement from the other side: `facet` really is flat."""
+        wavelength = 3.0
+        bare = scalar.solve(
+            Problem(period=self.PERIOD, profile=self.TASTE),
+            self.ILL, [wavelength], quadrature_points=16384,
+        )
+        live = bare.efficiency[0] > 1e-4
+        flat = self._solve(self.TASTE, "facet", [wavelength]).efficiency[0][live]
+        resolved = self._solve(self.TASTE, "local", [wavelength]).efficiency[0][live]
+
+        assert np.ptp(flat / bare.efficiency[0][live]) < 1e-12
+        assert np.ptp(resolved / bare.efficiency[0][live]) > 0.2
+
+    def test_the_antiblaze_facet_is_shadowed_and_the_provenance_says_how_much(self):
+        """The concrete thing the M15 model was getting wrong.
+
+        On the reference geometry the anti-blaze facet is 16.7% of the period
+        and faces away from the beam entirely, yet `facet` applies the active
+        facet's reflectivity across the whole period.
+        """
+        scan = self._solve(self.TASTE, "local", [3.0])
+        assert scan.provenance.notes["shadowed_fraction"] == pytest.approx(
+            1.0 - self.TASTE.apex, abs=1e-3
+        )
+        assert scan.provenance.notes["shadowed_fraction"] == pytest.approx(0.167, abs=0.01)
+        assert "83.3% of the period" in scan.provenance.notes["reflectivity_graze"]
+
+    def test_an_order_no_facet_can_radiate_into_is_named_not_silently_zeroed(self):
+        """Zero and passed-off are different states and must not look alike."""
+        scan = self._solve(self.TASTE, "local", np.linspace(1.0, 5.0, 9))
+        suppressed = [w for w in scan.provenance.warnings if "faces both" in w]
+        assert len(suppressed) == 1
+        assert "not passing-off" in suppressed[0]
+        # The orders it names really are zero, and really do still propagate.
+        zeroed = scan.efficiency == 0.0
+        assert (zeroed & scan.propagating).any()
+
+    def test_a_flat_profile_has_nothing_to_resolve_and_all_models_agree(self):
+        """Reduction check. A groove with no slope anywhere presents one angle,
+        so the three models cannot differ -- if they do, the machinery is
+        inventing structure that is not in the profile."""
+        flat = Lamellar(depth_fraction=1e-9, duty_cycle=0.5)
+        wavelengths = [2.0, 4.0]
+        got = [self._solve(flat, m, wavelengths).efficiency
+               for m in ("facet", "average", "local")]
+        assert got[1] == pytest.approx(got[0], rel=1e-6)
+        assert got[2] == pytest.approx(got[0], rel=1e-6)
+
+    def test_no_coating_means_no_model_and_the_numbers_are_untouched(self):
+        """`reflectivity_model` must not perturb a relative run by any route."""
+        reference = None
+        for model in ("facet", "average", "local"):
+            scan = self._solve(self.TASTE, model, [2.0, 4.0], coating=None)
+            assert "reflectivity_model" not in scan.provenance.notes
+            if reference is None:
+                reference = scan.efficiency
+            else:
+                assert (scan.efficiency == reference).all()
+
+    @pytest.mark.parametrize("model", ["facet", "average", "local"])
+    def test_the_total_can_never_exceed_the_perfectly_reflecting_one(self, model):
+        """The conservation statement that survives. A passive surface cannot
+        add power to the scan."""
+        wavelengths = np.linspace(1.0, 5.0, 9)
+        bare = scalar.solve(
+            Problem(period=self.PERIOD, profile=Sinusoidal(depth_fraction=0.15)),
+            self.ILL, wavelengths, quadrature_points=16384,
+        )
+        coated = self._solve(Sinusoidal(depth_fraction=0.15), model, wavelengths)
+        assert np.all(coated.efficiency.sum(axis=1) <= bare.efficiency.sum(axis=1) + 1e-12)
+
+    def test_but_an_individual_order_can_gain(self):
+        """And this is not a defect, which is why it is asserted rather than
+        guarded against.
+
+        `TestAbsoluteEfficiency.test_reflection_can_only_ever_cost_efficiency`
+        holds for `facet`, where reflection is a scalar multiplier below 1. It
+        is **false** for a resolved groove: varying reflectivity across the
+        cycle is an amplitude grating, and an amplitude grating diffracts into
+        directions where a pure phase grating cancels. Order by order the
+        result can exceed the perfectly-reflecting one; the sum, above, cannot.
+        """
+        wavelengths = np.linspace(1.0, 5.0, 17)
+        profile = Sinusoidal(depth_fraction=0.15)
+        bare = scalar.solve(
+            Problem(period=self.PERIOD, profile=profile),
+            self.ILL, wavelengths, quadrature_points=16384,
+        )
+        local = self._solve(profile, "local", wavelengths)
+        live = bare.efficiency > 1e-6
+        assert (local.efficiency[live] / bare.efficiency[live]).max() > 1.0
+
+    def test_only_the_symmetrised_model_is_reciprocal(self):
+        """The property that actually distinguishes the three, and the reason
+        `local` is the default.
+
+        It is tempting to read this change as "resolving the groove fixes
+        reciprocity". It does not. `average` resolves the groove just as fully
+        as `local` and still violates reciprocity by 1.5e-2, because its
+        zeta(t) is built from alpha alone. What repairs the invariant is
+        symmetrising in the *exit* direction, which only `local` does.
+
+        Parametrising this would hide the point; the contrast is the test.
+        """
+        from gratinglab.checks import check_reciprocity
+
+        problem = Problem(
+            period=self.PERIOD, profile=self.TASTE, coating="Au"
+        )
+        violations = {
+            model: check_reciprocity(
+                scalar, problem, self.ILL, [2.0, 4.0],
+                quadrature_points=8192, reflectivity_model=model,
+            ).max_violation
+            for model in ("facet", "average", "local")
+        }
+        assert violations["local"] < 1e-12
+        assert violations["facet"] > 1e-4
+        assert violations["average"] > 1e-4
+
+    def test_and_no_model_disturbs_reciprocity_without_a_coating(self):
+        """Non-vacuity for the above: the violations are the reflectivity's,
+        not something the option plumbing introduced."""
+        from gratinglab.checks import check_reciprocity
+
+        problem = Problem(period=self.PERIOD, profile=self.TASTE)
+        for model in ("facet", "average", "local"):
+            report = check_reciprocity(
+                scalar, problem, self.ILL, [2.0, 4.0],
+                quadrature_points=8192, reflectivity_model=model,
+            )
+            assert report.passed, model
+
+    def test_the_average_is_taken_over_the_whole_period_not_just_the_lit_part(self):
+        r"""A shadowed facet reflects nothing, and must be averaged in as zero.
+
+        On an ideal sawtooth the lit facet is flat, so :math:`R(\zeta(t))` is a
+        single value across all of it and the groove-cycle mean reduces to
+
+        .. math:: \langle R\rangle = (1 - f_{\text{shadow}})\,R(\zeta_i)
+
+        exactly. That makes `average` / `facet` equal to the lit fraction and
+        nothing else -- a closed form, on the one profile where it can be
+        written down.
+
+        Averaging over the lit part alone would give :math:`R(\zeta_i)` and
+        delete the shadowing this model exists to see. The two differ by 17% on
+        the reference geometry, and nothing else in the suite tells them apart.
+        """
+        wavelengths = np.linspace(1.0, 5.0, 5)
+        facet = self._solve(self.TASTE, "facet", wavelengths)
+        average = self._solve(self.TASTE, "average", wavelengths)
+        lit = 1.0 - average.provenance.notes["shadowed_fraction"]
+
+        live = facet.efficiency > 1e-5
+        assert np.allclose(
+            average.efficiency[live] / facet.efficiency[live], lit, rtol=1e-6
+        )
+        assert lit == pytest.approx(self.TASTE.apex, abs=1e-3)
+
+    def test_the_two_square_roots_are_taken_separately(self):
+        r"""Pins the branch convention, and how little it is worth.
+
+        :math:`\sqrt{r_i}\sqrt{r_d}` and :math:`\sqrt{r_i r_d}` differ by a
+        global sign wherever the product's argument wraps uniformly across the
+        groove -- and a global sign cancels out of the norm-squared integral. At
+        grazing incidence :math:`\arg r` is nearly constant over the groove, so
+        that is exactly the situation and the two agree to machine precision.
+
+        Asserted rather than left implicit because the reasoning is easy to get
+        backwards: an earlier draft of `_local_reflected_efficiency`'s docstring
+        claimed the product wrapped destructively in this regime and that the
+        separate roots were load-bearing here. They are not. Where they *do*
+        matter -- non-uniform wrapping at Brewster -- the solver already warns.
+        """
+        from gratinglab.materials import lookup
+        from gratinglab.materials.fresnel import amplitude
+        from gratinglab.geometry import sin_facet_graze
+        from gratinglab.solvers.scalar import _facet_tilt
+
+        t = np.linspace(0.0, 1.0, 4096, endpoint=False)
+        tilt = _facet_tilt(self.TASTE, t)
+        gold = lookup("Au").n(3.0)
+        sin_in = sin_facet_graze(self.ILL.gamma, tilt, self.ILL.alpha)
+        lit = sin_in > 0
+        r_s, _ = amplitude(gold, np.arcsin(np.clip(sin_in, -1.0, 1.0)))
+
+        # The wrap is uniform here: arg(r) spans well under a radian.
+        span = np.ptp(np.angle(r_s[lit]))
+        assert span < 1.0, f"arg(r) spans {span:.3f} rad; the premise fails"
+
+        separate = np.sqrt(r_s[lit]) * np.sqrt(r_s[lit])
+        product = np.sqrt(r_s[lit] * r_s[lit])
+        # Equal up to one overall sign, which the norm-squared integral drops.
+        ratio = separate / product
+        assert np.allclose(ratio, ratio[0], atol=1e-12)
+        assert abs(abs(ratio[0]) - 1.0) < 1e-12
+
+    @pytest.mark.parametrize("model", ["average", "local"])
+    def test_the_groove_average_sees_the_shadowing(self, model):
+        """Both resolved models must count a shadowed facet as reflecting
+        nothing. Averaging only over the lit part would delete the effect."""
+        lit = self._solve(Blazed(blaze_angle=29.5), model, [3.0])
+        shadowed = self._solve(self.TASTE, model, [3.0])
+        assert lit.provenance.notes["shadowed_fraction"] < 0.01
+        assert shadowed.provenance.notes["shadowed_fraction"] > 0.15
 
 
 class TestTheValidityGuardsMaterialsUnlocked:

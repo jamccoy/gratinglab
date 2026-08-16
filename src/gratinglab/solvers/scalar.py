@@ -28,7 +28,7 @@ scalar formulation can satisfy all three of the following at once:
 ==================  ==================================  =========================
 Property            order-dependent (this)              beta-free alternative
 ==================  ==================================  =========================
-Energy, sum <= 1    violated, up to 1.71 measured       exact (Parseval)
+Energy, sum <= 1    violated, up to 1.61 measured       exact (Parseval)
 Reciprocity         exact, 1e-17                        violated, 0.44 measured
 Blaze direction     exact at every alpha                exact at Littrow only
 ==================  ==================================  =========================
@@ -43,7 +43,7 @@ transmittance-function picture is the reverse.
 therefore expected, is reported rather than hidden, and is never renormalised
 away. It is not an implementation defect: in the shallow-groove limit the sum
 is 1.00000 exactly, degrading smoothly as groove depth grows (0.0001 -> 1.00000,
-0.10 -> 0.90472). The deviation scales with **phase excursion across the
+0.10 -> 0.92902). The deviation scales with **phase excursion across the
 groove** -- depth relative to wavelength, hence working diffraction order --
 not with lambda/period or the number of propagating orders.
 
@@ -54,22 +54,36 @@ not with lambda/period or the number of propagating orders.
 from __future__ import annotations
 
 import time
-from typing import TYPE_CHECKING
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Literal
 
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
-from ..geometry import cos_beta, facet_graze, is_propagating, order_range, sin_beta
+from ..geometry import (
+    beta,
+    cos_beta,
+    facet_graze,
+    flux_obliquity,
+    is_propagating,
+    order_range,
+    sin_beta,
+    sin_facet_graze,
+)
 from ..illumination import Illumination
 from ..problem import Problem
 from ..result import EfficiencyScan, Provenance
-from ..materials.fresnel import RoughnessModel, reflectivity
+from ..materials.fresnel import RoughnessModel, amplitude, reflectivity
 from .base import Capabilities, Progress, register
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type checkers only
     from ..materials import OpticalConstants
 
-__all__ = ["ScalarSolver", "interference_factor", "scalar"]
+__all__ = ["ReflectivityModel", "ScalarSolver", "interference_factor", "scalar"]
+
+#: How reflectivity is resolved across the groove cycle. See
+#: :class:`ScalarSolver.solve` and ``docs/theory/scalar.md`` section 9.
+ReflectivityModel = Literal["local", "average", "facet"]
 
 #: Above this ratio of wavelength to period, scalar theory is losing validity.
 #: Soft X-ray work runs ~0.005; visible gratings run ~0.4.
@@ -124,15 +138,21 @@ class ScalarSolver:
         *,
         quadrature_points: int = 2048,
         roughness_model: "RoughnessModel" = "nevot-croce",
+        reflectivity_model: "ReflectivityModel" = "local",
         progress: "Progress | None" = None,
     ) -> EfficiencyScan:
         r"""Efficiency over a wavelength scan.
 
-        Efficiency is :math:`\mathscr{E}_m = |G_m|^2` -- the norm-squared
-        Fourier coefficient, with **no obliquity factor and no
-        renormalisation**. Both appear in thesis Appendix D and both are
-        incorrect: for an effectively infinite number of grooves the efficiency
-        is the coefficient's norm squared and nothing else.
+        Efficiency is :math:`\mathscr{E}_m = O_m |G_m|^2` -- the norm-squared
+        Fourier coefficient times the **symmetric** flux obliquity
+        :math:`4\cos\alpha\cos\beta_m/(\cos\alpha+\cos\beta_m)^2`, and **no
+        renormalisation**. Thesis Appendix D carries the *asymmetric* obliquity
+        :math:`\cos\beta_m/\cos\alpha`, which breaks reciprocity, and a
+        renormalisation to :math:`\sum_m \mathscr{E}_m = 1`, which destroys the
+        model's own error signal; both of those are removed. See
+        :func:`~gratinglab.geometry.flux_obliquity` for why a flux factor
+        nonetheless belongs, and ``tests/test_perturbation.py`` for the
+        independent theory that fixes which one.
 
         Parameters
         ----------
@@ -148,6 +168,39 @@ class ScalarSolver:
             Debye-Waller is the more pessimistic near the critical angle
             because it knows nothing about the transmitted wave. Ignored
             without a coating, since there is no reflectivity to damp.
+        reflectivity_model
+            How reflectivity is resolved **across the groove cycle**. Ignored
+            without a coating.
+
+            ``"local"`` (default) evaluates the complex Fresnel amplitude at
+            every quadrature point, from the local facet tilt, and carries it
+            *inside* the diffraction integral. A groove whose reflectivity
+            varies across the cycle is an amplitude grating as well as a phase
+            grating, so this makes reflectivity **order-dependent** -- see the
+            note below, which corrects the module docstring's earlier claim
+            that no such mechanism exists.
+
+            ``"average"`` takes the groove-cycle mean of the *intensity*,
+            :math:`\langle R(\zeta(t))\rangle`, and applies it as one factor
+            per wavelength. It sees the shadowing and the varying local angle
+            but not the interference between them, so it stays
+            order-independent -- and, like ``"facet"``, it **breaks
+            reciprocity**, because its :math:`\zeta(t)` is built from
+            :math:`\alpha` alone. Resolving the groove is not what repairs
+            reciprocity; symmetrising in the exit direction is, and only
+            ``"local"`` does that. Offered as the diagnostic that separates
+            shadowing from interference, not as a physical model.
+
+            ``"facet"`` is the M15 treatment: one :math:`R` per wavelength at
+            the active-facet angle, applied to every order alike. Kept so a
+            prior result can be reproduced exactly, and so the size of the
+            change is measurable rather than asserted.
+
+            Both resolved models zero the reflection where a facet is
+            back-facing, in either direction. That is honest geometry and it
+            can drive a weak order to exactly zero; when it does, the order is
+            named in a provenance warning rather than left to look like a
+            passing-off.
         progress
             Called ``(0, n)`` before the first wavelength and ``(k, n)`` after
             each one, per the contract in
@@ -208,8 +261,15 @@ class ScalarSolver:
         # exp(-2*pi*i*m*t) for every order, reused at every wavelength.
         kernel = np.exp(-2j * np.pi * all_orders[:, None] * t[None, :])
 
+        reflection = _build_reflection(
+            problem, illumination, coating, reflectivity_model, t
+        )
+        resolved = coating is not None and reflection.model != "facet"
+
         efficiency = np.zeros((len(wavelengths), len(all_orders)))
         propagating = np.zeros_like(efficiency, dtype=bool)
+        # One scale factor per wavelength for the two order-independent models.
+        scale = np.ones(len(wavelengths))
 
         for row, wavelength in enumerate(wavelengths):
             if progress is not None:
@@ -237,10 +297,40 @@ class ScalarSolver:
             phase = (2.0 * np.pi / wavelength) * height * sin_gamma
             phi = phase[None, :] * (cos_alpha + cosines)[:, None]
 
-            coefficients = np.mean(np.exp(1j * phi) * kernel[live], axis=1)
-            # Efficiency is the norm squared of the coefficient. Nothing else:
-            # no obliquity factor, no renormalisation by the sum.
-            values = np.abs(coefficients) ** 2
+            integrand = np.exp(1j * phi) * kernel[live]
+            # Norm squared of the coefficient, times the flux projection.
+            # Still no renormalisation by the sum -- that remains an error.
+            #
+            # The obliquity factor is *symmetric*, 4 c_a c_b / (c_a + c_b)^2,
+            # not the c_b / c_a of thesis Appendix D. That distinction is the
+            # whole point: the asymmetric form breaks reciprocity, the
+            # symmetric one does not, and only the symmetric one reproduces
+            # first-order perturbation theory in the shallow limit. See
+            # `geometry.flux_obliquity` and `tests/test_perturbation.py`.
+            obliquity = flux_obliquity(cos_alpha, cosines)
+
+            if resolved and reflection.model == "local":
+                values = obliquity * _local_reflected_efficiency(
+                    integrand,
+                    reflection,
+                    coating,
+                    wavelength,
+                    beta(sines[live]),
+                    all_orders[live],
+                    illumination,
+                    problem.roughness,
+                    roughness_model,
+                )
+            else:
+                values = obliquity * np.abs(np.mean(integrand, axis=1)) ** 2
+                if resolved:  # "average"
+                    scale[row] = _groove_average_reflectivity(
+                        reflection,
+                        coating,
+                        wavelength,
+                        problem.roughness,
+                        roughness_model,
+                    )
 
             efficiency[row, live] = values
             propagating[row, live] = True
@@ -248,17 +338,14 @@ class ScalarSolver:
         if progress is not None:
             progress(len(wavelengths), len(wavelengths))
 
-        graze, graze_basis = _reflecting_graze(problem, illumination)
-        if coating is not None:
-            # One factor per wavelength, applied to every order alike. That is
-            # the thin-element approximation's own statement -- the groove is a
-            # phase screen and the surface reflects; scalar theory has no
-            # mechanism by which an order could reflect differently from its
-            # neighbour. `scalar.md` section 1 lists it as an assumption:
-            # "reflectivity applied separately as a scale factor".
-            efficiency = efficiency * reflectivity(
+        if coating is not None and reflection.model == "facet":
+            # The M15 treatment, kept verbatim: one factor per wavelength,
+            # applied to every order alike. It is an approximation whose size is
+            # now measurable rather than assumed -- `reflectivity_model="local"`
+            # is the same run with the groove resolved.
+            scale = reflectivity(
                 coating.n(wavelengths),
-                graze,
+                reflection.graze,
                 # Unpolarized deliberately, whatever the illumination says.
                 # These s and p are facet-local and `Illumination.polarization`
                 # is groove-referenced (conventions.md 7) -- different frames,
@@ -267,13 +354,11 @@ class ScalarSolver:
                 # model that already reports TE and TM as identical, which the
                 # solver warns about a few lines below.
                 polarization="unpolarized",
-                # `Problem.roughness` finally does something physical. Until
-                # now it fed only the Fraunhofer *warning* below -- the factor
-                # it was added for had never been written.
                 roughness_nm=problem.roughness,
                 wavelength_nm=wavelengths,
                 model=roughness_model,
-            )[:, None]
+            )
+        efficiency = efficiency * np.asarray(scale)[:, None]
 
         return EfficiencyScan(
             wavelengths=wavelengths,
@@ -289,8 +374,7 @@ class ScalarSolver:
                 propagating,
                 time.perf_counter() - started,
                 coating,
-                graze,
-                graze_basis,
+                reflection,
             ),
         )
 
@@ -304,12 +388,14 @@ class ScalarSolver:
         propagating: NDArray[np.bool_],
         elapsed: float,
         coating: "OpticalConstants | None" = None,
-        graze: float = 0.0,
-        graze_basis: str | None = None,
+        reflection: "_Reflection | None" = None,
     ) -> Provenance:
         """Record the run, including every validity guard it tripped."""
         from .. import __version__
 
+        if reflection is None:  # pragma: no cover - defensive
+            reflection = _Reflection(model="facet", graze=0.0, basis="none")
+        graze = reflection.guard_graze
         warnings: list[str] = []
 
         ratio = float(wavelengths.max() / problem.period)
@@ -355,6 +441,33 @@ class ScalarSolver:
                     "deg there); reflectivity collapses above it, so these "
                     "wavelengths are outside the regime a grazing-incidence "
                     "design operates in -- see docs/theory/scalar.md section 7"
+                )
+
+            if reflection.suppressed:
+                # An order at exactly zero must never be mistaken for one that
+                # passed off. Naming it is the whole difference between a
+                # modelled result and a silent one.
+                named = ", ".join(str(m) for m in sorted(reflection.suppressed))
+                warnings.append(
+                    f"order(s) {named} are zero at one or more wavelengths in "
+                    f"this scan because no part of the groove faces both the "
+                    f"incident and the diffracted direction; "
+                    f"{100 * reflection.shadowed_fraction:.3g}% of the period "
+                    "is shadowed from the beam to begin with. This is geometric "
+                    "shadowing by the local facet normal, not passing-off -- "
+                    "`propagating` still marks these orders live. Scalar theory "
+                    "has no diffraction into a shadowed direction, so zero is "
+                    "the model's answer rather than the physical one"
+                )
+
+            if reflection.brewster:
+                warnings.append(
+                    "the p-polarized amplitude passes through zero somewhere on "
+                    "the lit groove (Brewster), where its phase jumps by pi; the "
+                    "groove-resolved reflectivity model symmetrises with a "
+                    "geometric mean and does not carry that jump cleanly. Use "
+                    "reflectivity_model='average' or 'facet' here, or read this "
+                    "result as indicative -- see docs/theory/scalar.md section 9"
                 )
 
         # No coating is the normal default mode, not a validity concern -- it
@@ -418,7 +531,9 @@ class ScalarSolver:
                 **(
                     {
                         "coating": f"{coating.name} ({coating.source})",
-                        "reflectivity_graze": graze_basis,
+                        "reflectivity_model": reflection.model,
+                        "reflectivity_graze": reflection.basis,
+                        "shadowed_fraction": reflection.shadowed_fraction,
                     }
                     if coating is not None
                     else {}
@@ -427,6 +542,254 @@ class ScalarSolver:
                 "gamma_deg": illumination.gamma_deg,
             },
         )
+
+
+@dataclass
+class _Reflection:
+    r"""Everything the reflectivity treatment knows about one solve.
+
+    Built once, before the wavelength loop, because the geometry it holds --
+    which parts of the groove face the light, and at what local angle -- depends
+    on :math:`\alpha` and the profile but not on wavelength or order. Only the
+    optical constants vary down the scan.
+
+    Carries the provenance material too, so the reporting and the arithmetic
+    cannot drift apart: ``shadowed_fraction`` and ``suppressed`` are what the
+    solve actually did, not a second estimate of it.
+    """
+
+    model: ReflectivityModel
+    #: Representative graze for the validity guards, radians.
+    graze: float
+    basis: str
+    #: Local graze across the visible groove, radians. Empty when unused.
+    local_graze: NDArray[np.float64] = field(default_factory=lambda: np.array([]))
+    #: sin(zeta) toward the incident direction, per quadrature point, unclipped.
+    sin_graze_in: NDArray[np.float64] = field(default_factory=lambda: np.array([]))
+    tilt: NDArray[np.float64] = field(default_factory=lambda: np.array([]))
+    shadowed_fraction: float = 0.0
+    #: Orders driven to zero purely by the exit-direction visibility mask.
+    suppressed: set[int] = field(default_factory=set)
+    brewster: bool = False
+
+    @property
+    def visible_in(self) -> NDArray[np.bool_]:
+        return self.sin_graze_in > 0.0
+
+    @property
+    def guard_graze(self) -> float:
+        """The angle the validity guards should be measured against.
+
+        The **worst** local graze when the model resolves the groove, because
+        total external reflection fails first wherever the surface is steepest
+        toward the beam; the single facet angle when the model only knows one.
+        A guard should describe the model that ran.
+        """
+        if self.model == "facet" or self.local_graze.size == 0:
+            return self.graze
+        return float(self.local_graze.max())
+
+
+def _facet_tilt(profile, t: NDArray[np.float64]) -> NDArray[np.float64]:
+    r"""Local facet tilt :math:`\delta(t)`, radians, from the groove slope.
+
+    :math:`\tan\delta = +\,dy/dt` in normalised units. **The sign is the whole
+    content of this function.** ``docs/findings.md`` records that the profile
+    parameter runs against the periodicity direction, which makes the opposite
+    sign look equally plausible; it is wrong. The check that settles it is that
+    an ideal sawtooth must come back with :math:`\delta` equal to its own blaze
+    angle everywhere, so that ``sin_facet_graze`` reproduces
+    :func:`~gratinglab.geometry.facet_graze` exactly. At
+    :math:`\gamma = 1.25°,\ \alpha = 19.99°` on a 29.5° blaze the right sign
+    gives 1.2328° and the wrong one gives 0.8119°, and both look like angles.
+
+    Uses the profile's analytic slope where it has one. ``Blazed`` with a
+    vertical anti-blaze facet and ``Lamellar`` both *refuse* to supply one --
+    correctly, since the C-method cannot represent a discontinuity -- so this
+    falls back to a periodic central difference on ``height``. That is
+    legitimate here in a way it would not be there: a vertical wall has zero
+    horizontal extent, so it carries zero weight in an integral over ``dt``, and
+    the finite-difference smear touches the two samples either side of the
+    discontinuity and shrinks with the grid.
+    """
+    from ..profiles import ProfileRepresentationError
+
+    try:
+        slope = np.asarray(profile.slope(t), dtype=np.float64)
+    except ProfileRepresentationError:
+        # Requires the uniform periodic grid `solve` builds; it is the only
+        # caller, and a non-uniform grid would silently mis-scale the result.
+        step = 1.0 / len(t)
+        heights = np.asarray(profile.height(t), dtype=np.float64)
+        slope = (np.roll(heights, -1) - np.roll(heights, 1)) / (2.0 * step)
+    return np.arctan(slope)
+
+
+def _build_reflection(
+    problem: Problem,
+    illumination: Illumination,
+    coating: "OpticalConstants | None",
+    model: "ReflectivityModel",
+    t: NDArray[np.float64],
+) -> _Reflection:
+    """Resolve the groove geometry the reflectivity treatment will use."""
+    if model not in ("local", "average", "facet"):
+        raise ValueError(
+            f"reflectivity_model must be 'local', 'average' or 'facet', got "
+            f"{model!r}"
+        )
+
+    graze, basis = _reflecting_graze(problem, illumination)
+    reflection = _Reflection(model=model, graze=graze, basis=basis)
+    if coating is None or model == "facet":
+        # Nothing to resolve. Without a coating there is no reflectivity at all,
+        # and `facet` is the model that deliberately declines to look.
+        return reflection
+
+    tilt = _facet_tilt(problem.profile, t)
+    sin_in = sin_facet_graze(illumination.gamma, tilt, illumination.alpha)
+    visible = sin_in > 0.0
+
+    reflection.tilt = tilt
+    reflection.sin_graze_in = sin_in
+    reflection.shadowed_fraction = float(1.0 - visible.mean())
+    reflection.local_graze = np.arcsin(np.clip(sin_in[visible], -1.0, 1.0))
+    reflection.basis = (
+        f"groove cycle resolved, {np.degrees(reflection.local_graze.min()):.4g}"
+        f"-{np.degrees(reflection.local_graze.max()):.4g} deg over the "
+        f"{100 * (1 - reflection.shadowed_fraction):.3g}% of the period that "
+        "faces the beam"
+    )
+    return reflection
+
+
+def _groove_average_reflectivity(
+    reflection: _Reflection,
+    coating: "OpticalConstants",
+    wavelength: float,
+    roughness_nm: float,
+    roughness_model: "RoughnessModel",
+) -> float:
+    r""":math:`\langle R(\zeta(t))\rangle` over the whole period.
+
+    Over the **whole** period, not just the lit part: a shadowed facet reflects
+    nothing, and averaging only over what is visible would quietly delete the
+    shadowing this model exists to see.
+    """
+    visible = reflection.visible_in
+    graze = np.arcsin(np.clip(reflection.sin_graze_in, -1.0, 1.0))
+    local = reflectivity(
+        coating.n(wavelength),
+        graze,
+        polarization="unpolarized",
+        roughness_nm=roughness_nm,
+        wavelength_nm=wavelength,
+        model=roughness_model,
+    )
+    return float(np.mean(np.where(visible, local, 0.0)))
+
+
+def _local_reflected_efficiency(
+    integrand: NDArray[np.complex128],
+    reflection: _Reflection,
+    coating: "OpticalConstants",
+    wavelength: float,
+    betas: NDArray[np.float64],
+    orders: NDArray[np.int64],
+    illumination: Illumination,
+    roughness_nm: float,
+    roughness_model: "RoughnessModel",
+) -> NDArray[np.float64]:
+    r"""Reflection resolved across the groove, carried inside the integral.
+
+    .. math::
+        \mathscr{E}_m = \tfrac{1}{2}\left(
+            \left|\int r_s(t)\,e^{i\Phi_m(t)}e^{-2\pi i m t}dt\right|^2 +
+            \left|\int r_p(t)\,\cdots\right|^2\right)
+
+    **Why a geometric mean.** The obvious local coefficient,
+    :math:`r(\zeta_i(t))`, depends on :math:`\alpha` alone, which destroys the
+    :math:`\alpha\leftrightarrow\beta_m` symmetry and breaks Lorentz
+    reciprocity -- by 82% on the reference geometry, measured. Weighting a facet
+    by both the angle it receives at and the angle it emits at,
+
+    .. math:: r^{\text{gm}}(t) = \sqrt{r(\zeta_i(t))}\,\sqrt{r(\zeta_{d,m}(t))}
+
+    is symmetric by construction, holds reciprocity to :math:`6\times10^{-15}`,
+    and collapses to plain :math:`r(\zeta)` wherever the facet is at specular --
+    so a perfectly blazed groove is unaffected by the change.
+
+    **The square roots are taken separately**, rather than as
+    :math:`\sqrt{r_i r_d}`, so that the only discontinuities left in the weight
+    are the ones :math:`r` itself has.
+
+    How much that is worth was measured rather than assumed, and it is less than
+    it first appears. Where the product's argument wraps *uniformly* across the
+    groove -- which is the grazing case, since :math:`\arg r` is then nearly the
+    same at every :math:`t` -- the two forms differ by a **global** sign, and a
+    global sign cancels out of :math:`|\int\cdots|^2`. On Au at 1-6 nm they
+    agree to :math:`10^{-15}`.
+
+    They part company only where the wrap is *non-uniform*: near normal
+    incidence on a deep groove, where :math:`\arg r_p` sweeps through the
+    Brewster jump and different parts of the same groove land on opposite sides
+    of the cut. There the difference reaches 12% -- on orders carrying
+    :math:`10^{-9}`, and in a regime `_brewster_crossing` already reports as
+    outside what this symmetrisation can carry.
+
+    So this is the cheap defensive choice, not a load-bearing one. Stated that
+    way because the first draft of this docstring claimed the product wrapped in
+    the grazing regime and that the separate roots were therefore essential;
+    the measurement says otherwise.
+    """
+    n_c = coating.n(wavelength)
+    common = dict(
+        roughness_nm=roughness_nm, wavelength_nm=wavelength, model=roughness_model
+    )
+
+    graze_in = np.arcsin(np.clip(reflection.sin_graze_in, -1.0, 1.0))
+    r_s_in, r_p_in = amplitude(n_c, graze_in, **common)
+
+    sin_out = sin_facet_graze(
+        illumination.gamma, reflection.tilt[None, :], betas[:, None]
+    )
+    visible = reflection.visible_in[None, :] & (sin_out > 0.0)
+    graze_out = np.arcsin(np.clip(sin_out, -1.0, 1.0))
+    r_s_out, r_p_out = amplitude(n_c, graze_out, **common)
+
+    zero = np.zeros((), dtype=np.complex128)
+    w_s = np.where(visible, np.sqrt(r_s_in)[None, :] * np.sqrt(r_s_out), zero)
+    w_p = np.where(visible, np.sqrt(r_p_in)[None, :] * np.sqrt(r_p_out), zero)
+
+    # An order no facet can radiate into is zero for a geometric reason, not
+    # because it passed off. Record it so the provenance can say which.
+    reflection.suppressed.update(
+        int(m) for m, lit in zip(orders, visible.any(axis=1)) if not lit
+    )
+    reflection.brewster |= _brewster_crossing(r_p_in[reflection.visible_in])
+
+    return 0.5 * (
+        np.abs(np.mean(w_s * integrand, axis=1)) ** 2
+        + np.abs(np.mean(w_p * integrand, axis=1)) ** 2
+    )
+
+
+def _brewster_crossing(r_p: NDArray[np.complex128]) -> bool:
+    r"""Does :math:`r_p` pass through zero somewhere on the lit groove?
+
+    At Brewster's angle the p amplitude changes sign, so its phase jumps by
+    :math:`\pi` and the half-phase the geometric mean takes jumps by
+    :math:`\pi/2`. The jump is real physics, but the geometric-mean
+    symmetrisation is not built to carry it, so the result is reported as
+    suspect rather than quietly returned.
+
+    Only reachable with steep grooves near normal incidence -- at the grazing
+    angles this project is aimed at, :math:`r_p` stays well away from zero.
+    """
+    if r_p.size == 0:
+        return False
+    magnitude = np.abs(r_p)
+    return bool(magnitude.min() < 0.05 * magnitude.max())
 
 
 def _reflecting_graze(problem: Problem, illumination: Illumination):
