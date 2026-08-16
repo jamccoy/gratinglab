@@ -99,9 +99,30 @@ directory is the whole fix -- the reader keeps working on user-supplied files.
 
 The **Roughness σ** field damps the reflectivity through the Névot–Croce
 factor. It does nothing without a coating, because there is no reflectivity to
-damp, and the solver does not pretend otherwise. Debye–Waller is available as
-a solver option; the two differ by about 1% near the critical angle and agree
-far below it.
+damp, and the solver does not pretend otherwise. Debye–Waller is offered
+alongside it in the **Roughness** selector on the Scalar tab; the two differ by
+about 1% near the critical angle, reverse order well below it, and converge far
+above it.
+
+## Reflectivity across the groove
+
+The **Reflectivity** selector on the Scalar tab chooses how much of the groove
+the reflection calculation looks at, and also does nothing without a coating.
+
+- **local** (default) evaluates the Fresnel amplitude at every quadrature point
+  from the local facet tilt and carries it inside the diffraction integral. A
+  groove whose reflectivity varies across the cycle is an amplitude grating as
+  well as a phase grating, so reflectivity becomes order-dependent.
+- **average** takes the groove-cycle mean of the intensity — one factor per
+  wavelength, but one that sees the shadowing.
+- **facet** is the older treatment: a single reflectivity at the active-facet
+  angle. Kept so an earlier run can be reproduced; it breaks reciprocity, so it
+  is not the default.
+
+A facet turned away from the beam contributes nothing under the two resolved
+models. On a blazed groove that can be a sixth of the period, and it can drive
+a weak order to exactly zero — which the provenance panel names, so it is never
+mistaken for an order passing off.
 """
 
 

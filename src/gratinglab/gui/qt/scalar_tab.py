@@ -21,6 +21,7 @@ from typing import Sequence
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QFileDialog,
     QFormLayout,
     QGroupBox,
@@ -41,7 +42,11 @@ from PySide6.QtWidgets import (
 
 from .. import orders as orders_module
 from .. import provenance
-from ..scalar_options import ScalarOptionsState
+from ..scalar_options import (
+    REFLECTIVITY_MODELS,
+    ROUGHNESS_MODELS,
+    ScalarOptionsState,
+)
 from ..scalar_options import build_options as build_scalar_options
 from .sizing import fit_width_to_contents
 
@@ -131,6 +136,37 @@ class ScalarTab(QWidget):
         quadrature.returnPressed.connect(self.solve_requested)
         self._fields["quadrature_points"] = quadrature
         form.addRow("Quadrature pts", quadrature)
+
+        # Both only bite with a coating named on the Setup tab, which the
+        # tooltips say rather than the form guessing and disabling itself --
+        # a control that greys out for reasons the user cannot see is worse
+        # than one that is honestly inert.
+        reflectivity = QComboBox()
+        reflectivity.addItems(REFLECTIVITY_MODELS)
+        reflectivity.setToolTip(
+            "How reflectivity is resolved across the groove cycle.\n"
+            "local: Fresnel amplitude at every quadrature point, carried\n"
+            "  inside the integral, so reflectivity is order-dependent.\n"
+            "average: groove-cycle mean of the intensity, one factor per\n"
+            "  wavelength.\n"
+            "facet: one R at the active-facet angle (the pre-M16 model,\n"
+            "  kept for reproducing earlier runs).\n"
+            "Only has an effect when a coating is set."
+        )
+        self._fields["reflectivity_model"] = reflectivity
+        form.addRow("Reflectivity", reflectivity)
+
+        roughness = QComboBox()
+        roughness.addItems(ROUGHNESS_MODELS)
+        roughness.setToolTip(
+            "How the surface roughness damps reflectivity.\n"
+            "Nevot-Croce carries the transmitted wave and is the right one\n"
+            "near the critical angle; Debye-Waller is the common\n"
+            "approximation. Only has an effect with a coating and a\n"
+            "non-zero roughness."
+        )
+        self._fields["roughness_model"] = roughness
+        form.addRow("Roughness", roughness)
         return group
 
     def _build_orders_group(self) -> QWidget:
@@ -250,7 +286,9 @@ class ScalarTab(QWidget):
         geometry. Raises `FormErrors` -- caught by `MainWindow` before
         anything reaches the worker, same as a geometry error would be."""
         options = ScalarOptionsState(
-            quadrature_points=_value(self._fields["quadrature_points"])
+            quadrature_points=_value(self._fields["quadrature_points"]),
+            reflectivity_model=_value(self._fields["reflectivity_model"]),
+            roughness_model=_value(self._fields["roughness_model"]),
         )
         return build_scalar_options(problem, illumination, wavelengths, options)
 
@@ -439,4 +477,6 @@ class ScalarTab(QWidget):
 
 def _value(widget: QWidget) -> str:
     """The text of an input, whichever kind it is."""
+    if isinstance(widget, QComboBox):
+        return widget.currentText()
     return widget.text()

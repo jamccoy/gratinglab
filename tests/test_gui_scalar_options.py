@@ -63,7 +63,36 @@ class TestOptions:
             parsed.problem, parsed.illumination, parsed.wavelengths,
             ScalarOptionsState(quadrature_points="4096"),
         )
-        assert options == {"quadrature_points": 4096}
+        assert options == {
+            "quadrature_points": 4096,
+            "reflectivity_model": "local",
+            "roughness_model": "nevot-croce",
+        }
+
+    @pytest.mark.parametrize(
+        "field,value",
+        [("reflectivity_model", "mean-surface"), ("roughness_model", "gaussian")],
+    )
+    def test_a_model_the_solver_does_not_know_is_a_form_error(self, field, value):
+        """Caught on the field that produced it, alongside every other form
+        error, rather than surfacing later as a ValueError from the worker."""
+        parsed = build(FormState())
+        with pytest.raises(FormErrors) as excinfo:
+            build_options(
+                parsed.problem, parsed.illumination, parsed.wavelengths,
+                ScalarOptionsState(**{field: value}),
+            )
+        assert excinfo.value.errors[0].field == field
+
+    def test_the_defaults_are_the_solvers_own(self):
+        """A freshly opened window and a bare `scalar.solve` must agree, or the
+        GUI quietly answers a different question from the API."""
+        import inspect
+
+        signature = inspect.signature(scalar.solve)
+        defaults = ScalarOptionsState()
+        for name in ("reflectivity_model", "roughness_model"):
+            assert getattr(defaults, name) == signature.parameters[name].default
 
     def test_options_are_exactly_what_the_solver_accepts(self):
         """A renamed solver keyword would break the GUI silently otherwise."""

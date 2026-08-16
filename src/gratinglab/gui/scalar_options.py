@@ -27,7 +27,19 @@ from ..illumination import Illumination
 from ..problem import Problem
 from .state import FieldError, FormErrors, _number
 
-__all__ = ["ScalarOptionsState", "build_options"]
+__all__ = [
+    "REFLECTIVITY_MODELS",
+    "ROUGHNESS_MODELS",
+    "ScalarOptionsState",
+    "build_options",
+]
+
+
+#: Selectable values, in the order a form should offer them. The first is the
+#: solver's own default in each case, so a freshly opened window and a bare
+#: ``scalar.solve`` call agree.
+REFLECTIVITY_MODELS = ("local", "average", "facet")
+ROUGHNESS_MODELS = ("nevot-croce", "debye-waller", "none")
 
 
 @dataclass(frozen=True, slots=True)
@@ -35,6 +47,8 @@ class ScalarOptionsState:
     """Scalar's own form fields, exactly as typed."""
 
     quadrature_points: str = "2048"
+    reflectivity_model: str = REFLECTIVITY_MODELS[0]
+    roughness_model: str = ROUGHNESS_MODELS[0]
 
     def with_field(self, name: str, value: Any) -> "ScalarOptionsState":
         """Return a copy with one field changed."""
@@ -65,6 +79,17 @@ def build_options(
     quadrature = _number(
         form.quadrature_points, "quadrature_points", errors, minimum=16, integer=True
     )
+    # Validated here rather than left to the solver so a bad value surfaces on
+    # the field that produced it, alongside every other form error, instead of
+    # as a ValueError from a worker thread.
+    for name, allowed in (
+        ("reflectivity_model", REFLECTIVITY_MODELS),
+        ("roughness_model", ROUGHNESS_MODELS),
+    ):
+        if getattr(form, name) not in allowed:
+            errors.append(
+                FieldError(name, f"must be one of {', '.join(allowed)}")
+            )
     if errors:
         raise FormErrors(tuple(errors))
     assert quadrature is not None
@@ -85,4 +110,8 @@ def build_options(
             )
         )
 
-    return {"quadrature_points": int(quadrature)}
+    return {
+        "quadrature_points": int(quadrature),
+        "reflectivity_model": form.reflectivity_model,
+        "roughness_model": form.roughness_model,
+    }
