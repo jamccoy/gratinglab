@@ -33,7 +33,7 @@ matplotlib.use('Agg')
 
 from afm_analysis.analyzer import (                                     # noqa: E402
     _analyze_single_file_traditional, _calculate_local_periods,
-    _calculate_local_periods_for_grooves, _calculate_periods,
+    _calculate_periods,
     _calculate_statistics, _calculate_statistics_row_groups,
     _load_and_validate, _package_results, _package_results_row_groups,
     analyze_single_file, analyze_single_file_with_row_groups)
@@ -194,18 +194,6 @@ def test_local_periods_in_the_middle_average_both_neighbours():
     spacings = [100.0, 200.0, 300.0]
     local = _calculate_local_periods([1, 2, 3, 4], spacings, 250.0)
     assert local == [100.0, 150.0, 250.0, 300.0], local
-
-
-def test_the_row_group_local_period_helper_is_the_same_function():
-    """
-    _calculate_local_periods_for_grooves is currently a pure passthrough.
-
-    Pinned rather than removed: the two analysis paths keep parallel copies of
-    several helpers, and this records that these two have not diverged.
-    """
-    spacings = [100.0, 200.0, 300.0]
-    assert (_calculate_local_periods_for_grooves([1, 2, 3, 4], spacings, 250.0) ==
-            _calculate_local_periods([1, 2, 3, 4], spacings, 250.0))
 
 
 # ── Variance decomposition ───────────────────────────────────────────────────

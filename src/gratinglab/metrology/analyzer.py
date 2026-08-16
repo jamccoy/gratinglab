@@ -144,7 +144,7 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
             groove_periods_this_group = []
         
         # Calculate local periods for each groove
-        local_periods = _calculate_local_periods_for_grooves(
+        local_periods = _calculate_local_periods(
             groove_centers, groove_periods_this_group, local_period_nm
         )
         
@@ -479,11 +479,6 @@ def _calculate_local_periods(groove_centers, groove_periods, period_nm):
     return local_periods
 
 
-def _calculate_local_periods_for_grooves(groove_centers, groove_periods, period_nm):
-    """Helper for row-group analysis: calculate local periods"""
-    return _calculate_local_periods(groove_centers, groove_periods, period_nm)
-
-
 def _plot_full_profile(raw_x, flat_y, groove_centers, filename):
     """Plot the full profile with detected grooves"""
     plt.figure(figsize=(12, 4))
@@ -628,10 +623,11 @@ def _calculate_statistics_row_groups(blaze_angles, quality, all_local_angles,
     # plain SEM above divides by sqrt(N) over all of them, which is only valid at
     # ICC = 0. Measured ICC on this project's samples is 0.10-0.43.
     #
-    # stats/icc.py is the single source of this arithmetic. improved_statistics.py
-    # in experimental/ computes its own ICC with a size-weighted within-group
-    # variance; keeping two implementations is exactly the duplication that let
-    # the scan-edge bug survive in one code path and not another.
+    # stats/icc.py is the single source of this arithmetic. An earlier prototype
+    # (improved_statistics.py, removed 2026-08-09) computed its own ICC with a
+    # size-weighted within-group variance; keeping two implementations was
+    # exactly the duplication that let the scan-edge bug survive in one code
+    # path and not another.
     icc_stats = compute_icc(angles, labels)
     stats['icc'] = icc_stats['icc']
     stats['design_effect'] = float('nan')
