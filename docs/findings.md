@@ -176,7 +176,7 @@ that cannot contain $\beta_m$.
 
 | Property | order-dependent $\varphi = kg\sin\gamma(\cos\alpha + \cos\beta_m)$ | $\beta$-free $\varphi = 2kg\sin\gamma\cos\alpha$ |
 |---|---|---|
-| Energy, $\Sigma \leq 1$ | ✗ up to 1.71 | ✓ 1.0000 exactly (Parseval) |
+| Energy, $\Sigma \leq 1$ | ✗ up to 1.61 | ✓ 1.0000 exactly (Parseval) |
 | Reciprocity $E_m(\alpha) = E_m(\beta_m)$ | ✓ $1\times10^{-17}$ | ✗ 0.44 violation |
 | Blaze direction | ✓ exact at all $\alpha$ | ✓ at Littrow only; 7.6° off at 10°, evanescent past ~15° |
 
@@ -198,21 +198,37 @@ depth:
 | depth / period | $\Sigma_m E_m$ |
 |---|---|
 | 0.0001 | 1.00000 |
-| 0.10 | 0.90472 |
+| 0.10 | 0.92902 |
 
 The deviation scales with **phase excursion across the groove** — depth relative
 to wavelength, hence working order — not with $\lambda/p$ or the number of
 propagating orders. That is why $\Sigma$ looked stubbornly constant (~0.9065)
 across wildly different geometries at fixed profile.
 
-### Appendix D's two extra factors are both superseded
+> **Both numbers were remeasured in M16-C**, after the symmetric flux obliquity
+> landed. It is exactly 1 at $m=0$, where all the power sits in the shallow
+> limit, so the top row is unchanged — which is the point of the check.
+
+### Appendix D's two extra factors, and what replaced one of them
 
 The thesis carries $\mathcal{E}_n \propto [\cos\beta_n/\cos\alpha]\|G_n\|^2$ and
 then renormalises so $\sum_n \mathcal{E}_n = 1$. Both are **removed**, not made
-optional. For $N \to \infty$ grooves the efficiency is the norm-squared Fourier
-coefficient and nothing else; ISSI §2.1's groove function
-$f(x) = \exp\{ik[n(k)-1]y(x/p)\}$ carries neither factor. The renormalisation is
-the more damaging of the two — forcing $\Sigma$ to unity would erase exactly the
+optional — the first because it is asymmetric under $\alpha\leftrightarrow\beta$
+and so breaks reciprocity, the second because it destroys the model's own error
+signal.
+
+> **The conclusion originally drawn here went one step too far.** This section
+> used to continue: "for $N \to \infty$ grooves the efficiency is the
+> norm-squared Fourier coefficient and nothing else". That is wrong by up to
+> 64% away from Littrow, and the *symmetric* obliquity
+> $4\cos\alpha\cos\beta_m/(\cos\alpha+\cos\beta_m)^2$ is what repairs it without
+> touching reciprocity. See "The scalar solver was never checked against a
+> theory it did not share", below. ISSI §2.1's groove function
+> $f(x) = \exp\{ik[n(k)-1]y(x/p)\}$ carries no flux factor either, and is the
+> one place this project's normative reference is the one in error.
+
+The renormalisation has no such rehabilitation — forcing $\Sigma$ to unity would
+erase exactly the
 validity signal described above.
 
 Full derivation: [theory/scalar.md §5](theory/scalar.md).
@@ -375,6 +391,214 @@ Sixteen orders of magnitude, requiring **no reference data and no closed form**.
 This matters because the closed-form tests cannot do it. They compare the solver
 against a formula derived the same way the solver computes it, so they validate
 the *quadrature*. Reciprocity constrains the *structure* of the phase function.
+
+**But it is blind to normalisation**, and that blindness cost something — see
+the next two findings. Any factor symmetric in $\alpha \leftrightarrow \beta_m$
+passes reciprocity unchanged, so the check cannot tell a correct absolute scale
+from a wrong one. And it was never run against a *coated* problem, which is how
+a straightforward reciprocity violation sat in the absolute-efficiency path from
+M15-D until M16-D.
+
+---
+
+## The scalar solver was never checked against a theory it did not share
+
+Every analytic check in the suite until M16 — sawtooth `sinc²`, the binary
+grating, the sinusoid's `J_m²` — descends from the same transmittance-function
+picture the solver evaluates. They are strong tests of the quadrature and
+structurally incapable of testing the model. Reciprocity constrains the phase
+but not the scale (above). Nothing pinned the **absolute normalisation**.
+
+First-order Rayleigh perturbation theory does. It comes from expanding the field
+in plane waves and imposing the boundary condition on the corrugated surface —
+no Kirchhoff assumption anywhere. Kirchhoff needs gentle slopes, perturbation
+theory needs shallow grooves, and a grating that is both must be described
+correctly by both. In that overlap, $\mathscr{E}_m = |G_m|^2$ was wrong:
+
+| Mount | $\lambda/p$ | $m$ | $\beta_m$ | scalar / exact |
+|---|---|---|---|---|
+| in-plane, α=10° | 0.80 | +1 | 38.8° | 1.0137 |
+| in-plane, α=10° | 0.80 | −1 | −76.8° | **1.6375** |
+| off-plane, α=20°, γ=1.25° | 0.0127 | +1 | 13.9° | 1.0003 |
+| off-plane, α=20°, γ=1.25° | 0.0127 | −1 | −67.5° | **1.2156** |
+
+The discrepancy is exactly $(\cos\alpha+\cos\beta_m)^2/(4\cos\alpha\cos\beta_m)$
+— to five significant figures, at every geometry tried. It vanishes at Littrow,
+which is why forty tests and a thousand runs never saw it, and reaches 22% in
+this project's own grazing-incidence regime.
+
+The repair, `geometry.flux_obliquity`, is *symmetric*, so reciprocity survives;
+$\leq 1$ by AM–GM, so the energy bound improves rather than degrades (worst-case
+sum 1.71 → 1.61); and exactly 1 at $m=0$, so the shallow-limit energy identity
+is untouched. Thesis Appendix D's $\cos\beta_m/\cos\alpha$ is the *asymmetric*
+form and genuinely does break reciprocity: rejecting it was right, concluding
+that no flux factor belonged was not.
+
+Encoded as [`tests/test_perturbation.py`](../tests/test_perturbation.py). Two
+traps found while writing it, both worth remembering:
+
+- **`np.allclose` has `atol=1e-8`.** A shallow grating's first-order efficiency
+  is ~1e-9, so the default tolerance passed the comparison against *anything*,
+  including zero. The first draft of the file passed cleanly against the bug it
+  was written to find. `atol=0` is load-bearing.
+- **A near-Littrow mount tests nothing.** The first draft also used α=10° at
+  λ/p=0.36 and α=25° at λ/p=0.01, where the factor is 0.2% from unity.
+  `test_the_mounts_actually_discriminate` now asserts each mount reaches an
+  order where the two theories are ≥15% apart.
+
+---
+
+## Naming a coating silently broke reciprocity
+
+`check_reciprocity` was only ever pointed at bare problems. Pointed at a coated
+one, on master before M16:
+
+| | max violation |
+|---|---|
+| no coating, Blazed / Sinusoidal | 1 × 10⁻¹⁶ / 2 × 10⁻¹⁷ |
+| `coating="Au"`, Blazed | 1.6 × 10⁻³ |
+| `coating="Au"`, Sinusoidal | **3.5 × 10⁻²** |
+
+The cause is plain once looked at: M15-D evaluated $R$ at a graze built from
+$\alpha$ alone, so swapping $\alpha$ and $\beta_m$ changed the factor. Every
+absolute-efficiency result since M15-D violated the invariant this solver is
+built around, and the project's own sharpest check would have caught it on the
+first run against a coated problem.
+
+The fix is not to drop the reflectivity but to make it symmetric — weighting
+each facet by both the angle it receives at and the angle it emits at,
+$\sqrt{r(\zeta_i)\,r(\zeta_{d,m})}$. That restores $1.7\times10^{-16}$.
+Pinned as `test_the_facet_model_breaks_reciprocity_which_is_why_it_is_not_default`,
+because "the old model is kept for reproducibility" has to include reproducing
+what was wrong with it.
+
+---
+
+## Reflectivity is not one number for the whole groove
+
+`docs/theory/scalar.md` justified a single per-wavelength $R$ on the grounds
+that "scalar theory has no mechanism by which one order could reflect
+differently from its neighbour". There is one. A groove whose reflectivity
+varies across the cycle is an **amplitude** grating as well as a phase grating,
+and the two Fourier-transform together.
+
+On the project's own reference geometry — Blazed 29.5°/70.5°, γ=1.25°,
+α=19.99°, Au — the anti-blaze facet is **16.68% of the period** and its local
+graze is negative: it faces away from the beam entirely. The M15 model applied
+the active facet's $R(1.2328°)$ across 100% of the period regardless. Resolving
+the cycle moves individual orders by **−51% to +12%**, and the movement is
+order-dependent where the old factor was flat by construction.
+
+Three details that had to be right:
+
+- **The sign of the facet tilt.** $\tan\delta = +dy/dt$. The opposite sign gives
+  0.8119° where the right one gives 1.2328°, and both look like angles. The
+  check that settles it is that an ideal sawtooth must return $\delta$ equal to
+  its own blaze angle, reproducing `facet_graze` exactly. See also
+  "The profile parameter runs backwards", which is what makes the wrong sign
+  tempting.
+- **Two square roots, not one.** $\sqrt{r_i r_d}$ takes a principal branch of
+  the *product* and adds a discontinuity of its own; on Au at 4 nm $\arg r_s$
+  reaches −3.124, within 0.017 of the cut. $\sqrt{r_i}\sqrt{r_d}$ leaves only
+  the discontinuities $r$ actually has.
+- **Brewster is the one that remains.** Where $r_p$ passes through zero its
+  phase jumps by π and the geometric mean cannot carry it. Reachable only with
+  steep grooves near normal incidence; reported as a provenance warning rather
+  than silently returned.
+
+**What it costs.** The visibility mask puts a jump in the integrand at the
+shadow boundary, so convergence drops from $O(n^{-2})$ to $O(n^{-1})$ and the
+default 2048 points buys ~1e-4 rather than 1e-6 on a blazed profile. A smooth
+profile is unaffected. Numbers in `theory/scalar.md` §8.
+
+**Still unvalidated against a rigorous method** — and the corpus cannot fix
+that; see below.
+
+---
+
+## The corpus can test the diffraction but not the reflectivity
+
+Run against `OGRE/tastetest_perf_wavescan.txt` (TASTE, period 315.15 nm,
+γ=1.25°, α=19.99°), comparing **relative** scalar against PCGrate:
+
+| Profile | Σ, M16 | Σ, pre-M16 | per-order RMS, M16 / pre-M16 |
+|---|---|---|---|
+| Blazed 29.5°/70.5° | 0.5431 | 0.5514 | 0.11661 / 0.11671 |
+| Blazed 29.5° ideal | 0.6301 | 0.6380 | 0.13634 / 0.13704 |
+| `AFM_real_echelle.ggp` | 0.6138 | 0.6427 | 0.19639 / 0.19921 |
+
+The flux obliquity improves agreement in every case, and only slightly. That is
+consistent rather than disappointing: at this mount the blaze order leaves near
+39° against a 19.99° incidence, so $O_m \approx 0.99$ for the orders carrying
+the power, and §"the scalar solver was never checked" predicts a small change
+exactly here. The residual RMS of ~0.12 is dominated by profile mismatch — which
+`.ggp` this run used is still unconfirmed, and `corpus.toml` marks the entry
+`confirmed = false`. It is not evidence about the normalisation either way.
+
+**The corpus says nothing at all about M16-D.** Every usable reference run is
+**perfect conductivity** — the TASTE table sums to 1.0005, i.e. R ≡ 1, so there
+is no reflectivity in it to compare a reflectivity model against. The one
+finite-conductivity run in the collection is `panter1_finite`, already marked
+`usable = false` for summing to 3.6 at the Rayleigh anomalies.
+
+So the groove-resolved reflectivity model rests on: reciprocity (which it
+restores and the alternative breaks), an exact closed-form reduction on a
+single-facet profile, and correct limiting behaviour. It has **no external
+validation**, and acquiring some needs either a finite-conductivity PCGrate run
+or the RCWA backend. Worth stating plainly, because the model changes individual
+orders by up to 51% and is now the default.
+
+---
+
+## Two ways to write a test that cannot fail
+
+Both found while building `test_perturbation.py`, both applicable well beyond it.
+
+**`np.allclose` carries `atol=1e-8`.** A shallow grating's first-order
+efficiency is ~1e-9, three orders of magnitude below that floor, so the default
+tolerance passed the comparison against *anything* — including a solver
+returning zero. The first draft of the file passed cleanly against the very bug
+it was written to find. Any comparison of small absolute quantities needs
+`atol=0` and a relative tolerance.
+
+**A test geometry can be degenerate without looking it.** The same first draft
+used α=10° at λ/p=0.36 and α=25° at λ/p=0.013 — respectable-looking mounts where
+the quantity under test sits 0.2% from unity, so agreement was guaranteed
+whatever the solver did. The fix is an assertion about the *test setup* rather
+than the result: `test_the_mounts_actually_discriminate` requires each mount to
+reach an order where the two theories are at least 15% apart.
+
+The pattern behind both: a passing test is evidence only if it could have
+failed, and neither of these could. Non-vacuity assertions are cheap and the
+suite already uses them elsewhere — these are two more places they were needed.
+
+---
+
+## Névot–Croce was returning an amplitude factor into an intensity
+
+`fresnel.reflectivity` multiplied $|e^{-2k_{iz}k_{tz}\sigma^2}|$ into $|r|^2$.
+The factor is the *amplitude* form; the intensity needs its square.
+
+Nothing in the suite could see it. Bounded by 1, monotone in σ, exactly 1 at
+σ=0, "Debye–Waller over-damps near θ_c" — every property tested was satisfied by
+both forms. The limit that separates them is $n \to 1$, where the interface
+disappears, $k_{tz} \to k_{iz}$, and the two models become the same expression:
+
+| graze | NC (before) | DW | NC² |
+|---|---|---|---|
+| 5° | 0.963213 | 0.927771 | 0.927780 |
+| 30° | 0.291214 | 0.084805 | 0.084806 |
+| 85° | 0.007467 | 0.000056 | 0.000056 |
+
+Roughened reflectivities were therefore too high — 0.732 where 0.536 was right,
+at 15° graze with σ=0.5 nm at λ=2 nm, a 37% error in the factor.
+
+It also falsifies a claim recorded in M15-E. "Debye–Waller over-damps by ~1e-2
+near/above θ_c, with no reliable sign far below" was measuring this bug. With
+the intensity form the picture is coherent and the sign is reliable in both
+regimes: DW over-damps near and above θ_c, under-damps deep below it by ~2e-3,
+and the two converge to 1e-5 *far above* θ_c — not below, which is where the old
+test looked.
 
 ---
 

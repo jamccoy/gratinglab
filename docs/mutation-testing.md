@@ -113,3 +113,24 @@ by assuming:
 So the workflow is: read the diff, work out whether the change is observable at
 all, and only then decide whether it is a missing test. Record the equivalent
 ones — in `findings.md` — so the next reader does not re-derive them.
+
+### A third category: observable, but only where the model is already void
+
+M16-D left one survivor that is neither a missing test nor strictly equivalent.
+In `_local_reflected_efficiency`, replacing $\sqrt{r_i}\sqrt{r_d}$ with
+$\sqrt{r_i r_d}$ *does* change the output — but only where the branch wrap is
+non-uniform across the groove, which is the Brewster region near normal
+incidence on a deep groove. Everywhere else the two differ by a global sign
+that cancels out of $|\int\cdots|^2$, and on Au at 1–6 nm they agree to
+$10^{-15}$.
+
+Killing it would mean asserting on orders carrying $10^{-9}$, in a regime the
+solver already reports as outside what the model can carry. That is pinning
+noise to make a counter go up. It is left alive deliberately, and the reasoning
+lives in the `_local_reflected_efficiency` docstring and in
+`test_the_two_square_roots_are_taken_separately`, which asserts the *property*
+that makes it harmless rather than the arbitrary choice between the two forms.
+
+Worth naming as its own category, because "survivor ⇒ missing test" would have
+produced a bad test here, and "survivor ⇒ equivalent mutant" would have been a
+false claim.

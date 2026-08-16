@@ -150,9 +150,27 @@ something else, and knowing what would help read the other legacy scripts.
 ### Which `.ggp` goes with which run
 
 `AFM_TASTE_test.ggp` and `TASTE_a205_TiPt.ggp` are both candidates for the TASTE
-efficiency run. Until this is settled the comparison uses an idealised
-`Blazed(29.5°, 70.5°)`, which is probably why scalar's total sits near 0.55
-rather than closer to unity.
+efficiency run — and **neither is present in the corpus directory**, which holds
+`AFM_test.ggp`, `AFM_real_echelle.ggp` and `PCGrateProjects/panter1.ggp`. The
+filename in `corpus.toml` therefore does not resolve, which is itself a thing to
+settle. Until it is, the comparison uses an idealised `Blazed(29.5°, 70.5°)`,
+which is probably why scalar's total sits near 0.55 rather than closer to unity.
+
+M16 remeasured this: the total is 0.5431 for the idealised sawtooth and 0.6138
+for `AFM_real_echelle.ggp`, against a PCGrate total of 1.0005. The flux
+obliquity of M16-C moved it in the right direction but only slightly, because
+this mount is near enough to Littrow that the factor is ~0.99 on the orders
+carrying the power. The residual is profile mismatch, not normalisation — see
+`findings.md`, "The corpus can test the diffraction but not the reflectivity".
+
+### A finite-conductivity reference run
+
+The corpus has no usable one. Every perfect-conductivity table has R ≡ 1 by
+construction, so nothing in it can validate the reflectivity model that M16-D
+made the default, and `panter1_finite` is already marked `usable = false`.
+Either a fresh finite-conductivity PCGrate run or the RCWA backend would close
+the gap; until one of them lands, the groove-resolved reflectivity rests on
+internal consistency alone.
 
 ### Smaller ones
 

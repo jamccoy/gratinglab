@@ -236,7 +236,7 @@ Two rules, and they point in different directions:
 **Scalar theory as normally written does not conserve energy**, and that is a deliberate
 trade rather than a defect to fix. With the order-dependent phase of ISSI eq. (15) and
 thesis Appendix-D.tex:651, summed efficiency deviates from unity in both directions —
-measured up to 1.71 across a broad parameter sweep.
+measured up to 1.61 across a broad parameter sweep.
 
 The alternative is available and rejected: dropping `cos β_m` from the phase restores a
 genuine Fourier pair and conserves energy to 1e-10, but **violates Lorentz reciprocity**
@@ -245,7 +245,7 @@ the phase to be symmetric under `α ↔ β_m`; Parseval requires a single fixed 
 forbids `β_m`. They cannot both hold. **Reciprocity is the invariant kept.**
 
 The implementation is not at fault: in the shallow-groove limit the sum is 1.00000
-exactly, degrading smoothly with depth (0.0001 → 1.00000; 0.10 → 0.90472). The deviation
+exactly, degrading smoothly with depth (0.0001 → 1.00000; 0.10 → 0.92902). The deviation
 scales with phase excursion across the groove — depth relative to wavelength, hence
 working order — not with λ/p or propagating-order count.
 
@@ -255,24 +255,33 @@ The deviation is **reported, never rescaled** — recorded as a `Provenance` war
 far an approximate theory strays from a conservation law is exactly what a scalar
 validity map should show, and normalising it away would destroy that information.
 
-### The obliquity factor and the renormalization — both removed
+### The obliquity factor — the symmetric one, and only that one
 
-Thesis Appendix D carries two extra factors that ISSI §2.1 does not, and **both are
-errors, not alternative conventions**:
+Thesis Appendix D carries two extra factors that ISSI §2.1 does not. One of them has a
+correct counterpart; the other does not:
 
 | Form | Source | Status |
 |---|---|---|
-| `E_m = ‖G_m‖²` | ISSI §2.1, eq. groove_func | **correct — what the code does** |
-| `E_m ∝ [cos β_m / cos α] ‖G_m‖²` | thesis Appendix-D.tex:418 | removed |
-| renormalise so `Σ_m E_m = 1` | thesis Appendix-D.tex:420 | removed |
+| `E_m = O_m ‖G_m‖²`, `O_m = 4 cos α cos β_m / (cos α + cos β_m)²` | first-order Rayleigh perturbation theory | **correct — what the code does** |
+| `E_m = ‖G_m‖²` | ISSI §2.1, eq. groove_func | wrong by `1/O_m`; up to 64% off |
+| `E_m ∝ [cos β_m / cos α] ‖G_m‖²` | thesis Appendix-D.tex:418 | removed — asymmetric, breaks reciprocity |
+| renormalise so `Σ_m E_m = 1` | thesis Appendix-D.tex:420 | removed — an error |
 
-For a grating with `N → ∞` grooves the efficiency is the norm-squared Fourier coefficient
-and nothing else. ISSI §2.1's groove function `f(x) = exp{ik[n(k)−1]y(x/p)}` carries no
-such factor.
+**The distinction is symmetry.** Appendix D's `cos β_m / cos α` is asymmetric under
+`α ↔ β_m` and genuinely does violate Lorentz reciprocity, which is why it was rejected.
+The conclusion drawn from that — that the efficiency is the norm-squared Fourier
+coefficient and nothing else — went one step too far. `O_m` is symmetric, so reciprocity
+survives it untouched, and it is the factor that makes the shallow-groove limit agree
+with a theory derived from the boundary condition rather than from a transmittance
+function. See [`theory/scalar.md`](theory/scalar.md) §3 and
+[`tests/test_perturbation.py`](../tests/test_perturbation.py).
 
-The renormalization is the more damaging: forcing the sum to unity would erase exactly
-the signal described above. Neither is offered as an option, because offering an error as
-a choice is a footgun, not a service.
+`O_m ≤ 1` by AM–GM and equals 1 exactly at Littrow, at specular, and for every `m = 0`,
+so it can only reduce an efficiency and leaves the shallow-limit energy identity alone.
+
+The renormalization has no such rehabilitation: forcing the sum to unity would erase
+exactly the signal described above. It is not offered as an option, because offering an
+error as a choice is a footgun, not a service.
 
 ---
 
@@ -354,7 +363,8 @@ For an ideal sawtooth (blazed) reflection grating:
 | Facet depth | `depth = period · tan(blaze_angle)` |
 | Facet graze angle | `sin ζ = sin γ · cos(blaze_angle − α)` |
 | Sawtooth phase shift | `φ = k · depth · sin γ · [cos α + cos β_m]` |
-| Scalar DE | `E_m = sinc²(φ/2 − mπ)`, `sinc(x) ≡ sin(x)/x` |
+| Flux obliquity | `O_m = 4 cos α cos β_m / (cos α + cos β_m)²` |
+| Scalar DE | `E_m = O_m · sinc²(φ/2 − mπ)`, `sinc(x) ≡ sin(x)/x` |
 | Blaze direction | `β_b = 2·blaze_angle − α` |
 | Blaze wavelength | `m·λ_b = 2·period·sin ζ·sin(blaze_angle)` |
 | Finite-N interference | `[sin(Ns)/(N sin s)]²`, `s ≡ [sin α + sin β_m]·sin γ·period·π/λ` |
@@ -388,7 +398,8 @@ Recorded so nobody "fixes" a deliberate choice back to a source that is wrong.
 | # | Source | Issue | Our choice |
 |---|---|---|---|
 | 1 | thesis Appendix-D.tex:651 | `Φ_g` missing `sin γ` | ISSI eq. (15) form |
-| 2 | thesis Appendix-D.tex:418, 420 | obliquity factor `cos β/cos α`, plus renormalization so `Σ E = 1` | both **removed**, not optional — see §5 |
+| 2 | thesis Appendix-D.tex:418, 420 | obliquity factor `cos β/cos α`, plus renormalization so `Σ E = 1` | renormalization **removed**, not optional. The obliquity factor is removed *in that form* — asymmetric, so it breaks reciprocity — and replaced by the symmetric `O_m` of §5, which perturbation theory requires |
+| 2a | ISSI §2.1, groove function | `E_m = ‖G_m‖²` with no flux factor at all | wrong by `1/O_m`, up to 64% away from Littrow. The one place this project's normative reference is the one in error — see `theory/scalar.md` §3 for the evidence, which is independent of both sources |
 | 3 | thesis Appendix-D.tex:699 | `∂Φ_b/∂α` missing factor `period` (dimensionally required) | corrected |
 | 4 | thesis Appendix-D.tex:462, 622 | `for n = 0, ±1, …` on expressions singular at `n = 0` | `G₀` stated separately: `A₀·𝒲/period` (square), `A₀/2` (sawtooth) |
 | 5 | thesis Chapter-2.tex:1016, 1045 | claims PCGrate *internally multiplies* by Fresnel reflectivity in perfect-conductivity mode — contradicts the `ΣE = 1` result proved just above | Treat `ΣE ≈ R_F(ζ)` as an emergent result of an impedance-type (Leontovich) boundary condition. Follow Goray & Schmidt (2010) for the rigorous finite-conductivity case |

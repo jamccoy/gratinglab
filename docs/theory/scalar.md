@@ -16,9 +16,18 @@ whole point of this page is that they are stated rather than implied.
 |---|---|
 | The field is scalar — polarization is neglected | TE and TM come out identical. Real gratings separate them, sometimes by a lot. |
 | Structure is large compared to the wavelength, λ ≪ p | Sub-wavelength features are misrepresented; the model degrades smoothly rather than failing loudly. |
-| Kirchhoff (thin-element) boundary condition: the field just above the surface is the incident field times a local phase | No multiple scattering between groove facets, no shadowing, no field penetration into the material. |
+| Kirchhoff (thin-element) boundary condition: the field just above the surface is the incident field times a local phase | No multiple scattering between groove facets, no field penetration into the material. Geometric self-shadowing by the local facet normal *is* modelled (§9); shadowing of one facet by another along the ray is not. |
 | Fraunhofer (far-field) observation | Valid for a telescope focal plane; not for near-field work. |
-| Reflectivity applied separately, as one scale factor per wavelength | The groove is a phase screen; scalar theory has no mechanism by which one order could reflect differently from its neighbour. Name a `coating` and efficiencies are **absolute**; leave it unset and they are **relative**, which is a correct answer to a different question rather than a deficiency. |
+| Reflectivity is resolved **across the groove cycle** and carried inside the diffraction integral | Name a `coating` and efficiencies are **absolute**; leave it unset and they are **relative**, which is a correct answer to a different question rather than a deficiency. §9 has the three models and what each costs. |
+
+> **This table used to say something else.** Until M16 the fifth row read
+> "reflectivity applied separately, as one scale factor per wavelength", on the
+> grounds that "scalar theory has no mechanism by which one order could reflect
+> differently from its neighbour". There is such a mechanism, and the row was
+> wrong. A groove whose reflectivity varies across the cycle is an **amplitude**
+> grating as well as a phase grating; the two Fourier-transform together, and
+> the result is order-dependent. On the reference geometry that is worth −51% to
+> +12% order by order. See §9.
 
 Because polarization is neglected, the solver advertises `rigorous=False` in
 its [`Capabilities`](../../src/gratinglab/solvers/base.py) and records a
@@ -99,7 +108,9 @@ code evaluates:
 
 $$\boxed{\;G_m = \int_0^1 e^{i\Phi_m(t)}\, e^{-2\pi i m t}\,dt\;}
 \qquad
-\boxed{\;\mathscr{E}_m = \left|G_m\right|^2\;}$$
+\boxed{\;\mathscr{E}_m = O_m\left|G_m\right|^2\;}
+\qquad
+O_m = \frac{4\cos\alpha\cos\beta_m}{(\cos\alpha + \cos\beta_m)^2}$$
 
 Two implementation notes follow directly:
 
@@ -109,22 +120,65 @@ Two implementation notes follow directly:
   is why `quadrature_points` reaches machine precision at modest values, and why
   it must still exceed $2|m|_{\max}$ to satisfy Nyquist.
 
-### Two factors that are *not* here, and why
+### The obliquity factor: which one, and how we know
 
-Thesis Appendix D carries an obliquity factor,
+Thesis Appendix D carries an obliquity factor $\cos\beta_m/\cos\alpha$, from
+projecting the Poynting flux onto a plane parallel to the surface, and then
+renormalises so that $\sum_m \mathscr{E}_m = 1$.
 
-$$\mathscr{E}_m \propto \frac{\cos\beta_m}{\cos\alpha}\left|G_m\right|^2$$
+**The renormalisation is simply an error** and is not offered as an option:
+forcing the sum to unity erases the model's own signal about how far it has
+strayed from its regime (§5).
 
-from projecting the Poynting flux onto a plane parallel to the surface, and then
-renormalises so that $\sum_m \mathscr{E}_m = 1$. **Both are removed.** For a
-grating with $N \to \infty$ grooves the efficiency is the norm-squared Fourier
-coefficient and nothing else — ISSI §2.1 is explicit about this, and its groove
-function `f(x) = exp{ik[n(k)−1]y(x/p)}` carries no extra factor.
+**The obliquity factor was rejected too, and that went one step too far.** The
+Appendix D form is *asymmetric* under $\alpha \leftrightarrow \beta_m$, so it
+breaks Lorentz reciprocity — which is why this page rejected it, correctly. The
+conclusion drawn from that, that no flux factor belongs at all, does not follow.
 
-The renormalisation is the more damaging of the two: forcing the sum to unity
-would erase the model's own signal about how far it has strayed from its regime
-(§5). Neither is offered as an option, because neither is an alternative
-convention — they are errors.
+The factor that does belong is the **symmetric** one, $O_m$ above, and it is
+settled by a theory derived from a different starting point. Expand the field in
+Rayleigh plane waves, impose the boundary condition on the corrugated surface,
+keep first order in groove height; for a Dirichlet (perfectly conducting, TE)
+surface that gives
+
+$$\eta_m = 4\,k_{z,0}\,k_{z,m}\left|\hat{g}_m\right|^2, \qquad
+k_z = k\cos\theta\sin\gamma$$
+
+Kirchhoff theory needs gentle slopes, perturbation theory needs shallow grooves,
+and a grating that is both must be described correctly by both. In that overlap
+the bare $|G_m|^2$ is wrong by exactly $1/O_m$ — verified to five significant
+figures across in-plane and conical mounts in
+[`test_perturbation.py`](../../tests/test_perturbation.py):
+
+| Mount | $\lambda/p$ | $m$ | $\beta_m$ | $\vert G_m\vert^2$ / exact | $O_m$ |
+|---|---|---|---|---|---|
+| in-plane, $\alpha=10°$ | 0.80 | $+1$ | $38.8°$ | 1.0137 | 0.9865 |
+| in-plane, $\alpha=10°$ | 0.80 | $-1$ | $-76.8°$ | **1.6375** | 0.6107 |
+| off-plane, $\alpha=20°$, $\gamma=1.25°$ | 0.0127 | $+1$ | $13.9°$ | 1.0003 | 0.9997 |
+| off-plane, $\alpha=20°$, $\gamma=1.25°$ | 0.0127 | $-1$ | $-67.5°$ | **1.2156** | 0.8227 |
+
+Negligible near Littrow, 22% in this project's own grazing-incidence regime, 64%
+at high dispersion. Three properties make $O_m$ admissible where the Appendix D
+form was not:
+
+- **Symmetric** in $\alpha \leftrightarrow \beta_m$, so reciprocity (§6) is
+  untouched — still $10^{-16}$.
+- **$\leq 1$**, by AM–GM, so it can only reduce an efficiency. It helps the
+  energy bound rather than threatening it.
+- **Exactly 1** when $\cos\alpha = \cos\beta_m$: Littrow, specular, and every
+  $m=0$. The shallow-groove energy identity is therefore unchanged, and a
+  perfect blaze *in Littrow* still reaches exactly unity.
+
+Away from Littrow a perfect blaze now reaches $O_m$ rather than 1. That is a
+correction, not a loss: unity-at-blaze was a property of the unfactored
+$|G_m|^2$, and a rigorous calculation does not give exactly 1 there either.
+
+> **Which polarization this matches.** The Neumann (TM) first-order result is
+> $4k^2|\hat{g}_m|^2(1+\sin\alpha\sin\beta_m)^2/(\cos\alpha\cos\beta_m)$, which
+> departs from the Dirichlet one away from Littrow — by a factor of 14 at the
+> in-plane geometry above. A polarization-blind model cannot match both. TE is
+> the conventional scalar correspondence, and the size of the TE/TM spread is a
+> usable measure of where scalar theory stops meaning anything at all.
 
 ---
 
@@ -205,7 +259,7 @@ reason is a three-way tension no scalar formulation escapes.
 
 | Property | order-dependent $\cos\alpha + \cos\beta_m$ (this solver) | β-free $2\cos\alpha$ |
 |---|---|---|
-| Energy, $\sum_m \mathscr{E}_m \leq 1$ | ✗ violated, up to 1.71 | ✓ exact (Parseval) |
+| Energy, $\sum_m \mathscr{E}_m \leq 1$ | ✗ violated, up to 1.61 | ✓ exact (Parseval) |
 | Reciprocity, $\mathscr{E}_m(\alpha) = \mathscr{E}_m(\beta_m)$ | ✓ exact, $10^{-17}$ | ✗ violated, 0.44 |
 | Blaze direction $\beta_b = 2\delta - \alpha$ | ✓ exact at every $\alpha$ | ✓ at Littrow only; 7.6° off at 10° from Littrow, and past ~15° the envelope peak goes evanescent |
 
@@ -233,10 +287,16 @@ order 0, and the sum must tend to 1 for any formulation. It does, exactly:
 | depth / period | $\sum_m \mathscr{E}_m$ |
 |---|---|
 | 0.0001 | 1.00000 |
-| 0.0010 | 0.99999 |
-| 0.0200 | 0.99592 |
-| 0.0500 | 0.97483 |
-| 0.1000 | 0.90472 |
+| 0.0010 | 0.99997 |
+| 0.0200 | 0.98836 |
+| 0.0500 | 0.94603 |
+| 0.1000 | 0.92902 |
+
+(Remeasured in M16-C. The obliquity factor of §3 is exactly 1 at $m=0$, where
+all the power sits in the shallow limit, so the top row is still exactly 1 —
+which is the point of the check. The worst-case excursion over a wide mount
+sweep fell from 1.71 to 1.61, since $O_m \leq 1$ can only ever pull the sum
+down.)
 
 That is the check which would catch a genuine coding error, as distinct from the
 formulation's known defect. The deviation scales with **phase excursion across
@@ -288,7 +348,13 @@ the model breaks down is a deliverable in its own right.
 | $\lambda / p \lesssim 0.1$ | Kirchhoff theory assumes structure ≫ wavelength. Soft X-ray work runs ~0.005; visible gratings ~0.4. |
 | $\zeta < \theta_c \approx \sqrt{2\,\text{decrement}}$ | Facet graze must stay below the critical angle for total external reflection, or reflectivity collapses. Evaluated when a `coating` is named; without optical constants there is nothing to compare against, so it is a check that does not apply rather than a warning. |
 | $\lambda > 32 \sin(\zeta)\,\sigma$ | Fraunhofer smoothness: below this the facet is not optically smooth and scatter dominates. Checked for every profile — it was once gated on having a blaze angle, so a rough sinusoid was never checked at all. |
+| No order fully shadowed | With reflectivity resolved across the groove (§9), an order into which no lit facet can radiate comes out at exactly zero. That is the model's answer, not the physical one, and it is reported by name so it is never mistaken for passing-off. |
+| $r_p$ stays away from zero on the lit groove | At Brewster the p amplitude changes sign and its phase jumps by $\pi$; the geometric-mean symmetrisation of §9 does not carry that cleanly. Only reachable with steep grooves near normal incidence. |
 | $\sum_m \mathscr{E}_m \leq 1$ | Not a validity condition so much as a sanity bound; see §5. |
+
+Both $\zeta$-based conditions are evaluated at the **worst local graze** across
+the groove when the reflectivity model resolves it, and at the single facet
+angle when it does not. A guard should describe the model that actually ran.
 
 ---
 
@@ -308,6 +374,28 @@ a production run should use:
 | Sinusoidal | spectral — machine precision from $n = 64$ | 256 |
 | Lamellar | $O(n^{-2})$, clean 4× per doubling | 1 024 |
 | Blazed | $O(n^{-2})$ asymptotically, **non-monotone below ~8 000** | 4 096 |
+
+### Resolving reflectivity across the groove costs quadrature
+
+The visibility mask of §9 puts a **jump** in the integrand at the shadow
+boundary, where a pure phase grating had at worst a slope kink. A jump converges
+at $O(n^{-1})$, not $O(n^{-2})$, and on a blazed profile the shadow boundary
+sits at the apex — $t = 0.8331$, not a dyadic rational — so the error is
+non-monotone on top of being slower. Measured on the reference geometry
+(Blazed 29.5°/70.5°, Au, $\gamma = 1.25°$):
+
+| `reflectivity_model` | `converged_at`, $10^{-4}$ | $10^{-5}$ | $10^{-6}$ |
+|---|---:|---:|---:|
+| `facet` | 256 | 512 | 4 096 |
+| `average` | 2 048 | 8 192 | not reached by 131 072 |
+| `local` | 2 048 | 32 768 | not reached by 131 072 |
+
+**The default $n = 2048$ buys about $10^{-4}$ with a resolved model, not
+$10^{-6}$.** A smooth profile is unaffected — a coated sinusoid still converges
+at 256, because it has no shadow boundary to resolve. This is a real cost of the
+change and the honest way to spend it is on the convergence harness rather than
+on a larger default: `check_convergence` reports what a given case actually
+needs, and a case that never plateaus says so.
 
 (256 for the sinusoid is the ladder's first rung, not a requirement — it was
 already converged before the sweep began.)
@@ -340,30 +428,108 @@ $e^{-2\pi i m t}$, and no accuracy argument can rescue a grid below it, so
 
 ---
 
-## 9. Absolute efficiency: what the reflectivity factor is
+## 9. Absolute efficiency: reflectivity across the groove cycle
 
-$$\mathscr{E}_m^{\text{abs}} = R_F(\zeta, \lambda)\left|G_m\right|^2$$
+A groove does not present one angle to the beam. Its local facet tilt
+$\delta(t)$ varies across the period, so the local graze does too:
 
-One factor, per wavelength, applied to every order alike. That is the
-thin-element approximation restating itself: the groove imparts a phase, the
-surface reflects, and nothing in the model couples the two.
+$$\sin\zeta(t) = \sin\gamma\,\cos(\delta(t) - \alpha), \qquad
+\tan\delta(t) = +\frac{dy}{dt}$$
 
-**Which angle.** For a blazed groove, $\sin\zeta = \sin\gamma\cos(\delta -
-\alpha)$ — the active facet, exact. For a profile with no single facet angle
-the reflection is evaluated on the **mean surface**, which is not a second
-formula: `facet_graze(gamma, 0, alpha)` equals $\arcsin|\hat{k}_i\cdot\hat{n}|$
-identically. How good that is depends on the profile, and the provenance says
-which:
+Three models are offered, selected with `reflectivity_model`.
 
-| Profile | Basis | Quality |
-|---|---|---|
-| Blazed | active facet | exact |
-| Lamellar | mean surface | exact for the flat tops and bottoms; omits the vertical walls, which are nearly edge-on at grazing incidence |
-| Sinusoidal, measured | mean surface | approximate — the local slope varies across the groove |
+### `"local"` — the default
 
-Refusing the last two was the alternative and would be worse: a sinusoid at
-grazing incidence does reflect, and a solver that declines to say how much has
-not become more honest.
+$$\mathscr{E}_m = \frac{O_m}{2}\left(
+\left|\int_0^1 r_s^{\text{gm}}(t)\,e^{i\Phi_m(t)}e^{-2\pi imt}\,dt\right|^2 +
+\left|\int_0^1 r_p^{\text{gm}}(t)\,e^{i\Phi_m(t)}e^{-2\pi imt}\,dt\right|^2
+\right)$$
+
+with the complex Fresnel amplitude carried **inside** the integral. Because
+$r(t)$ varies, the groove is an amplitude grating as well as a phase grating,
+and the reflectivity becomes **order-dependent** — the thing §1 used to say was
+impossible.
+
+**Why a geometric mean.** The obvious weight $r(\zeta_i(t))$ depends on $\alpha$
+alone, which destroys the $\alpha \leftrightarrow \beta_m$ symmetry and breaks
+reciprocity — by 82%, measured. Weighting each facet by both the angle it
+receives at and the angle it emits at,
+
+$$r^{\text{gm}}(t) = \sqrt{r(\zeta_i(t))}\;\sqrt{r(\zeta_{d,m}(t))},
+\qquad \sin\zeta_{d,m}(t) = \sin\gamma\,\cos(\delta(t) - \beta_m)$$
+
+is symmetric by construction, holds reciprocity to $6\times10^{-15}$, and
+collapses to plain $r(\zeta)$ wherever the facet is at specular — so a perfectly
+blazed groove is left alone by the change.
+
+**The two roots are taken separately**, not as $\sqrt{r_i r_d}$, so the only
+discontinuities in the weight are the ones $r$ itself has. Measured, this is a
+cheap defensive choice rather than a load-bearing one: where the product's
+argument wraps *uniformly* across the groove — the grazing case — the two forms
+differ by a global sign that cancels out of $|\int\cdots|^2$, and on Au at
+1–6 nm they agree to $10^{-15}$. They diverge only where the wrap is
+non-uniform, near normal incidence on a deep groove, where $\arg r_p$ sweeps
+through Brewster; there the gap reaches 12%, on orders carrying $10^{-9}$, in a
+regime already flagged below.
+
+**Visibility.** Where $\sin\zeta \leq 0$ in either direction the facet is turned
+away and contributes nothing. This is self-shadowing by the local normal; it is
+*not* full ray shadowing, where an upstream facet occludes a downstream one, and
+that remains unmodelled.
+
+**Per-order gain is expected.** Since $|r^{\text{gm}}| \leq 1$ pointwise but the
+bare integral can cancel, an individual order can come out *above* its
+perfectly-reflecting value — an amplitude grating diffracts into directions
+where a pure phase grating cancels. The summed efficiency cannot, and that is
+the conservation statement worth testing.
+
+### `"average"` — the groove-cycle mean
+
+$\langle R(\zeta(t))\rangle$ over the **whole** period, shadowed parts counted as
+zero, applied as one factor per wavelength. It sees the shadowing and the
+varying local angle but not the interference between them, so it stays
+order-independent. The useful halfway diagnostic: the gap between `average` and
+`local` *is* the amplitude-grating term.
+
+**It breaks reciprocity too**, by up to $1.5\times10^{-2}$, and for exactly the
+same reason `facet` does: $\zeta(t)$ is built from $\alpha$ alone. Resolving the
+groove is not what repairs reciprocity — *symmetrising in the exit direction*
+is, and only `local` does that. Use `average` to see how much of the change is
+shadowing rather than interference, not as a physical model in its own right.
+
+### `"facet"` — the M15 model, kept for reproducibility
+
+One $R$ per wavelength at the active-facet angle
+($\sin\zeta = \sin\gamma\cos(\delta-\alpha)$), or at the mean surface for a
+profile with no single facet angle. **It breaks reciprocity**, by up to
+$3\times10^{-2}$, because that $\zeta$ is built from $\alpha$ alone — a defect
+that went unnoticed because `check_reciprocity` had only ever been pointed at
+uncoated problems. Kept so an earlier run can be reproduced exactly and so the
+size of the change is measurable rather than asserted.
+
+### What it is worth
+
+Reference geometry — Blazed 29.5°/70.5°, $\gamma=1.25°$, $\alpha=19.99°$, Au,
+$\lambda = 3$ nm. The anti-blaze facet is **16.7% of the period and entirely
+self-shadowed**, and `facet` applies the active facet's reflectivity across all
+of it:
+
+| $m$ | bare | `facet`/bare | `average`/bare | `local`/bare |
+|---:|---:|---:|---:|---:|
+| $-1$ | 0.00473 | 0.7146 | 0.5954 | 0.4790 |
+| $0$ | 0.01454 | 0.7146 | 0.5954 | 0.5327 |
+| $+1$ | 0.02750 | 0.7146 | 0.5954 | 0.5807 |
+| $+2$ | 0.07385 | 0.7146 | 0.5954 | 0.6448 |
+| $+3$ | 0.41571 | 0.7146 | 0.5954 | 0.7581 |
+
+The `facet` column is flat by construction. The `local` column is not, and the
+blaze order moves least — which is what "collapses to $r(\zeta)$ at specular"
+looks like from the outside.
+
+**This is not yet validated against a rigorous method.** The geometric mean is a
+symmetrisation chosen because it preserves the invariant this solver is built
+around, not because a vector calculation confirmed it. The corpus A/B in
+[`findings.md`](../findings.md) is how that gets judged.
 
 **Which polarization.** Unpolarized, always, whatever the illumination says.
 The $s$ and $p$ of a Fresnel reflection are defined against the *facet's* plane
@@ -372,17 +538,21 @@ of incidence; `Illumination.polarization` is TE/TM defined against the
 resolving polarization here would be false precision on a model that already
 reports TE and TM as identical. The size of what is being waived is measured
 rather than assumed — on Au at 1 nm, $s$ and $p$ agree to under 1% at
-$\zeta = 1.5°$ and differ by more than 50% at 45°.
+$\zeta = 1.5°$ and differ by more than 50% at 45°. Under `"local"` the two are
+combined at *amplitude* level per order, which is the more defensible place.
 
-**Roughness.** Névot–Croce by default, Debye–Waller and `none` on request. The
-two differ by ~$10^{-2}$ near and above $\theta_c$ — Debye–Waller carries no
-information about the transmitted wave, so it damps the same whether the field
-penetrates or not — and converge far below it, where both approach 1 and the
-residual difference has no reliable sign.
+**Roughness.** Névot–Croce by default, Debye–Waller and `none` on request, and
+both are **intensity** factors — M16-B fixed a Névot–Croce that returned the
+amplitude form and was being multiplied into a reflectivity. The limit that
+pins it is $n \to 1$, where $k_{tz} \to k_{iz}$ and the two models must become
+the same expression. Near and above $\theta_c$ Debye–Waller over-damps by
+$\sim10^{-2}$; deep below it the ordering reverses and Debye–Waller retains
+marginally more; far above $\theta_c$ they converge to $10^{-5}$.
 
-**Energy.** Summed efficiency now falls for two distinct reasons: the
-thin-element defect of §5, which is the model straying, and ordinary
-absorption, which is physics. The provenance separates them.
+**Energy.** Summed efficiency falls for three distinct reasons now: the
+thin-element defect of §5, which is the model straying; ordinary absorption,
+which is physics; and geometric shadowing, which is also physics. The provenance
+separates the first from the other two.
 
 ---
 
