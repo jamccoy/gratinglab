@@ -188,6 +188,29 @@ class TestRoughness:
             values = [self._R(s, model) for s in (0.0, 0.1, 0.3, 1.0)]
             assert values == sorted(values, reverse=True), model
 
+    def test_nevot_croce_reduces_to_debye_waller_when_there_is_no_material(self):
+        r"""The limit that fixes the normalisation, and nothing else does.
+
+        As :math:`n \to 1` the interface disappears: the transmitted wave *is*
+        the incident wave, :math:`k_{tz} \to k_{iz}`, and the two roughness
+        models become the same expression. Every other property either function
+        has -- bounded by 1, monotone in sigma, exactly 1 at sigma = 0 -- is
+        satisfied by both the amplitude form and the intensity form, so this is
+        the only check in the suite that can tell them apart.
+
+        It failed before M16-B by a factor of the exponent: the code returned
+        :math:`|e^{-2k_{iz}k_{tz}\sigma^2}|` where the intensity needs its
+        square. The residual 1e-5 here is the 1e-6 left in ``n``, not slack.
+        """
+        vacuum = 1.0 - 1e-6 + 0j
+        wavelength, sigma = 2.0, 0.5
+        for degrees in (5.0, 15.0, 30.0, 60.0, 85.0):
+            graze = np.radians(degrees)
+            common = dict(roughness_nm=sigma, wavelength_nm=wavelength)
+            nc = float(reflectivity(vacuum, graze, model="nevot-croce", **common))
+            dw = float(reflectivity(vacuum, graze, model="debye-waller", **common))
+            assert nc == pytest.approx(dw, rel=1e-4), f"graze={degrees} deg"
+
     def test_debye_waller_over_damps_near_and_above_the_critical_angle(self):
         """Which is the reason both are offered, and the scope of the claim.
 
@@ -212,12 +235,43 @@ class TestRoughness:
                                         model="debye-waller", **common))
                 assert dw < nc, f"lambda={lam}, zeta/theta_c={fraction}"
 
-    def test_but_far_below_it_the_two_models_agree(self):
-        """The other regime, and why the claim above needed scoping. Deep
-        below theta_c both factors approach 1 -- the wave barely penetrates --
-        and the residual difference is ~1e-4 with no reliable ordering. Which
-        model you pick there does not matter, and a test asserting a direction
-        would be pinning noise.
+    def test_and_far_above_it_the_two_models_converge(self):
+        """The other regime -- and M16-B moved it.
+
+        The models agree where :math:`k_{tz} \\to k_{iz}`, which is *well above*
+        theta_c, not below: that is the same limit as
+        ``test_nevot_croce_reduces_to_debye_waller_when_there_is_no_material``,
+        reached by opening the angle instead of by removing the material. At
+        3x theta_c on Au they differ by ~1e-5.
+
+        This test used to assert convergence *below* theta_c, at 1e-3 with "no
+        reliable ordering". That was reading the un-squared Névot-Croce of
+        M15-B. With the intensity form the ordering below theta_c is perfectly
+        reliable, and it runs the other way -- see the companion below.
+        """
+        gold = materials.lookup("Au")
+        for lam in (1.0, 2.0, 4.0, 6.0):
+            graze = 3.0 * float(gold.critical_angle(lam))
+            common = dict(roughness_nm=0.5, wavelength_nm=lam)
+            nc = float(reflectivity(gold.n(lam), graze,
+                                    model="nevot-croce", **common))
+            dw = float(reflectivity(gold.n(lam), graze,
+                                    model="debye-waller", **common))
+            assert abs(dw - nc) < 1e-4, f"lambda={lam}"
+
+    def test_while_deep_below_it_debye_waller_damps_slightly_less(self):
+        """The third regime, and the direction reverses.
+
+        Deep under theta_c the transmitted wave is strongly evanescent,
+        ``k_tz`` is nearly pure imaginary, and the Névot-Croce product
+        ``k_iz k_tz`` picks up a real part that Debye-Waller has no term for.
+        The result is a *small* gap, ~2e-3, in the opposite direction to the
+        near-theta_c case -- Debye-Waller now retains marginally more
+        reflectivity.
+
+        Worth pinning precisely because it is counterintuitive next to the
+        "Debye-Waller over-damps" test above. Both are true; they describe
+        different angles, and the sign of the gap is what tells them apart.
         """
         gold = materials.lookup("Au")
         for lam in (1.0, 2.0, 4.0, 6.0):
@@ -227,7 +281,7 @@ class TestRoughness:
                                     model="nevot-croce", **common))
             dw = float(reflectivity(gold.n(lam), graze,
                                     model="debye-waller", **common))
-            assert abs(dw - nc) < 1e-3, f"lambda={lam}"
+            assert 0.0 < dw - nc < 3e-3, f"lambda={lam}: dw-nc={dw - nc:.2e}"
 
     def test_roughness_without_a_wavelength_is_refused(self):
         """Both factors compare sigma against a wavelength. Defaulting one
