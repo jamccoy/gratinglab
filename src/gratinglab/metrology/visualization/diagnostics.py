@@ -2,7 +2,6 @@
 Diagnostic plotting functions
 Shows analysis details like flattening and analyzed regions
 """
-import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks
 from matplotlib.lines import Line2D

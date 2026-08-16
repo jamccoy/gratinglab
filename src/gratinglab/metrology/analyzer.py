@@ -201,7 +201,7 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
         return None
     
     print(f"\n{'='*60}")
-    print(f"ROW-GROUP ANALYSIS SUMMARY")
+    print("ROW-GROUP ANALYSIS SUMMARY")
     print(f"{'='*60}")
     print(f"Total measurements: {len(all_blaze_angles)}")
     print(f"  (compared to ~{len(group_results) * 4} with traditional averaging)")
@@ -281,7 +281,7 @@ def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
 
     print(f"\n{'='*60}")
     print(f"Analyzing: {filename}")
-    print(f"Mode: TRADITIONAL (single averaged profile)")
+    print("Mode: TRADITIONAL (single averaged profile)")
     print(f"{'='*60}")
     
     # Load and validate data
@@ -718,13 +718,13 @@ def _print_summary(filename, blaze_angles, stats, period_nm, period_std, quality
     print(f"{'='*60}")
     print(f"Analysis side: {settings.blaze_side}")
     print(f"Grooves analyzed: {len(blaze_angles)}")
-    print(f"\nPer-groove statistics (groove-to-groove variation):")
+    print("\nPer-groove statistics (groove-to-groove variation):")
     print(f"  Mean blaze angle: {stats['mean_angle']:.2f} deg ± {stats['std_angle']:.2f} deg (physical variation)")
     print(f"  Min/Max blaze angle: {np.min(blaze_angles):.2f} deg / {np.max(blaze_angles):.2f} deg")
     print(f"  Mean slope (dy/dx): {stats['mean_slope']:.4f}")
     
     # Report uncertainty decomposition
-    print(f"\nUncertainty analysis:")
+    print("\nUncertainty analysis:")
     print(f"  Average measurement uncertainty per groove: {stats['mean_measurement_uncertainty']:.3f} deg")
     print(f"  Physical variation (groove-to-groove): {stats['std_angle']:.3f} deg")
     print(f"  Total uncertainty (combined): {stats['total_std']:.3f} deg")
@@ -732,12 +732,12 @@ def _print_summary(filename, blaze_angles, stats, period_nm, period_std, quality
     print(f"  95% confidence interval on mean: ±{1.96 * stats['sem']:.3f} deg")
     
     if stats['local_angle_std'] > 0:
-        print(f"\nWithin-facet statistics (camber/curvature):")
+        print("\nWithin-facet statistics (camber/curvature):")
         print(f"  Local angle std: {stats['local_angle_std']:.2f} deg")
         print(f"  Local angle range: {stats['local_angle_range']:.2f} deg")
         print(f"  Mean within-facet variation: {np.mean([q.get('angle_std', 0) for q in quality]):.2f} deg")
     
-    print(f"\nGroove geometry:")
+    print("\nGroove geometry:")
     print(f"  Measured groove spacing: {period_nm:.2f} nm ± {period_std:.2f} nm")
     print(f"  Mean groove depth: {np.mean([q['groove_depth_nm'] for q in quality]):.2f} nm")
     print(f"  Mean blaze facet width: {np.mean([q['blaze_width_nm'] for q in quality]):.2f} nm")
@@ -749,18 +749,18 @@ def _print_summary_row_groups(filename, blaze_angles, stats, period_nm,
     print(f"\n{'='*60}")
     print(f"RESULTS FOR {os.path.basename(filename)}")
     print(f"{'='*60}")
-    print(f"Analysis mode: ROW-GROUP ANALYSIS")
+    print("Analysis mode: ROW-GROUP ANALYSIS")
     print(f"Analysis side: {settings.blaze_side}")
     print(f"Row groups: {stats.get('n_groups', group_info['n_groups'])}")
     print(f"Total measurements: {len(blaze_angles)}")
     
-    print(f"\nOverall statistics:")
+    print("\nOverall statistics:")
     print(f"  Mean blaze angle: {stats['mean_angle']:.2f} deg")
     print(f"  Min/Max blaze angle: {np.min(blaze_angles):.2f} deg / {np.max(blaze_angles):.2f} deg")
     print(f"  Mean slope (dy/dx): {stats['mean_slope']:.4f}")
     
     # Three-way uncertainty decomposition
-    print(f"\nUncertainty analysis (with row-group decomposition):")
+    print("\nUncertainty analysis (with row-group decomposition):")
     print(f"  Average measurement uncertainty per groove: {stats['mean_measurement_uncertainty']:.3f} deg")
     
     if stats.get('within_image_std', 0) > 0:
@@ -772,11 +772,11 @@ def _print_summary_row_groups(filename, blaze_angles, stats, period_nm,
     print(f"  95% confidence interval on mean: ±{1.96 * stats['sem']:.3f} deg")
     
     if stats['local_angle_std'] > 0:
-        print(f"\nWithin-facet statistics (camber/curvature):")
+        print("\nWithin-facet statistics (camber/curvature):")
         print(f"  Local angle std: {stats['local_angle_std']:.2f} deg")
         print(f"  Local angle range: {stats['local_angle_range']:.2f} deg")
     
-    print(f"\nGroove geometry:")
+    print("\nGroove geometry:")
     print(f"  Measured groove spacing: {period_nm:.2f} nm ± {period_std:.2f} nm")
     print(f"  Mean groove depth: {np.mean([q['groove_depth_nm'] for q in quality]):.2f} nm")
     print(f"  Mean blaze facet width: {np.mean([q['blaze_width_nm'] for q in quality]):.2f} nm")

@@ -81,7 +81,7 @@ def _load_text(filename, default_scan_size=2.0):
                         scan_x_size = float(match.group(1))
                         print(f"  Detected scan size from header: {scan_x_size} µm")
                         break
-    except:
+    except Exception:
         pass
     
     # Load the data

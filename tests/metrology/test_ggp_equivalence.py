@@ -25,7 +25,7 @@ sys.path.insert(0, os.path.join(
 from afm_analysis.config import PROJECT_ROOT
 from afm_analysis.core.processing import load_afm_data, raw_data, find_groove_positions
 from afm_analysis.boundary import (flatten_endpoints, average_grooves,
-                                   normalize_profile, profile_metrics)
+                                   normalize_profile)
 
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        'fixtures', 'rev3_reference.ggp')

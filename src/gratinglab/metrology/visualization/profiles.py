@@ -2,7 +2,6 @@
 AFM profile plotting functions
 Complex multi-panel layouts organized by temperature
 """
-import numpy as np
 import matplotlib.pyplot as plt
 import os
 

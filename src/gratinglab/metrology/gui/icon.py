@@ -54,7 +54,6 @@ def render(path: str | Path, size: int = 1024) -> Path:
     import matplotlib
 
     matplotlib.use("Agg")
-    import numpy as np
     from matplotlib.figure import Figure
     from matplotlib.patches import FancyBboxPatch, Polygon
 

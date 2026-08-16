@@ -9,7 +9,6 @@ module that was pure, and the headless tests quietly becoming un-runnable.
 Needs no Qt installed: it reads source, it does not import widgets.
 """
 import ast
-import os
 import pathlib
 
 GUI_ROOT = pathlib.Path(__file__).parent.parent / 'src' / 'afm_analysis' / 'gui'
