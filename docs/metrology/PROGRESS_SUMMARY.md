@@ -17,8 +17,8 @@
 > | Paths made working-directory independent | Done — Jul 2026 |
 > | Scan-edge groove rejection | Done — Jul 2026, see below |
 > | PCGrate `.ggp` export folded into the package | Done — Jul 2026 |
-> | 2023 GEBL/PANTER work | Frozen in `legacy/` |
-> | **Row-group independence / hierarchical stats** | **Open — the main remaining correctness item** |
+> | 2023 GEBL/PANTER work | Removed (was frozen in `legacy/`, deleted 2026-08) |
+> | Row-group independence / hierarchical stats | Done — ICC correction applied 2026-08-06 in `stats/icc.py` |
 > | Blaze-angle test suite | Open — none exists; see `docs/BASELINES.md` |
 > | GUI beyond viewing | Open — `afm_gui.py` is still v0.1 |
 >
@@ -27,12 +27,11 @@
 > returning 2.4–3.6° for a ~30° facet. Effect: N 843 → 734, minimum angle
 > 2.40° → 25.58°, no fit below R² 0.95, and 280°C σ falling 3.04 → 1.65.
 >
-> **Still open, and the largest item:** row-group analysis yields ~100 measurements
-> per image that re-measure the *same* physical grooves, but the statistics divide
-> by `sqrt(N)` as though they were independent, so SEMs and p-values are optimistic.
-> Mean angles are unaffected. The half-finished fix is in
-> `experimental/hierarchical_stats/` — run its ICC check first to size the problem
-> before integrating anything.
+> **Resolved 2026-08-06:** row-group analysis yields ~100 measurements per image
+> that re-measure the *same* physical grooves, so the naive `sqrt(N)` standard
+> error was optimistic. `stats/icc.py` now measures the intraclass correlation and
+> `analyzer.py` reports a corrected `sem_corrected`/`n_effective`/`design_effect`
+> alongside the uncorrected `sem`. Mean angles are unaffected.
 
 ## Overview
 

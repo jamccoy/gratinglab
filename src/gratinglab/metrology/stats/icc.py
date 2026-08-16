@@ -16,14 +16,14 @@ them.
                carry no new information, and the effective sample size is closer
                to the number of groups than the number of measurements
 
-This module only measures. It changes nothing about how SEMs or p-values are
-currently computed - see experimental/hierarchical_stats/ for the correction that
-this measurement is meant to size.
+This module only measures. The correction that this measurement sizes is applied
+in analyzer.py, which uses effective_sample_size() below to compute a
+row-group-corrected SEM.
 """
 import numpy as np
 
-# Interpretation thresholds, carried over from
-# experimental/hierarchical_stats/correlation_source_analysis.py
+# Interpretation thresholds, carried over from an earlier prototype
+# (correlation_source_analysis.py, see git history prior to 2026-08-09).
 ICC_NEGLIGIBLE = 0.1
 ICC_MODERATE = 0.2
 
