@@ -62,7 +62,7 @@ def demonstrate_uncertainty_decomposition():
     sem_correct = total_std / np.sqrt(n_grooves)
     
     print(f"\nMean angle: {mean_angle:.3f}°")
-    print(f"\nUncertainty Decomposition:")
+    print("\nUncertainty Decomposition:")
     print(f"  1. Measurement uncertainty (avg per groove): {mean_meas_unc:.3f}°")
     print(f"     └─ Variance contribution: {measurement_variance:.6f}°²")
     print(f"  2. Physical variation (groove-to-groove):   {physical_std:.3f}°")
@@ -92,7 +92,7 @@ def demonstrate_uncertainty_decomposition():
     print("\nIn this example:")
     print(f"  • Each groove can be measured to ±{mean_meas_unc:.3f}° precision")
     print(f"  • Grooves vary by ±{physical_std:.3f}° due to real physical differences")
-    print(f"  • The physical variation dominates (physical >> measurement)")
+    print("  • The physical variation dominates (physical >> measurement)")
     print(f"  • But ignoring measurement uncertainty underestimates total uncertainty by {percent_increase:.0f}%")
     print("\nWith better AFM data (sharper features, less noise):")
     print("  • Measurement uncertainty would be even smaller")

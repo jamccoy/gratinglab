@@ -12,8 +12,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from ..settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES,
-                        VALID_SPM_DIRECTIONS)
+from ..settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES)
 
 
 @dataclass(frozen=True, slots=True)
@@ -141,8 +140,6 @@ def summarize_result(result) -> str:
     """
     if result is None:
         return "No measurements."
-
-    import numpy as np
 
     r2 = [q.get('blaze_r2') for q in result.get('quality', [])]
     r2 = [v for v in r2 if v is not None]

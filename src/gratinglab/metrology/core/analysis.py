@@ -164,8 +164,7 @@ def extract_blaze_angle(x, y, groove_center, period_nm, trim_fraction=0.2,
     # Get fit coefficients AND covariance matrix for uncertainty estimation
     blaze_coeffs, blaze_cov = np.polyfit(blaze_x_trim, blaze_y_trim, 1, cov=True)
     blaze_slope = blaze_coeffs[0]
-    blaze_intercept = blaze_coeffs[1]
-    
+
     # Calculate uncertainty in slope from covariance matrix
     # Diagonal element [0,0] is variance of slope parameter
     blaze_slope_stderr = np.sqrt(blaze_cov[0, 0])
@@ -266,7 +265,7 @@ def extract_blaze_angle(x, y, groove_center, period_nm, trim_fraction=0.2,
     
     # Individual groove plot if requested
     if show_plot:
-        fig = plt.figure(figsize=(14, 4))
+        plt.figure(figsize=(14, 4))
         
         ax1 = plt.subplot(1, 3, 1)
         ax1.plot(x_nm, y_nm, 'k-', linewidth=2, alpha=0.5, label='Full groove')

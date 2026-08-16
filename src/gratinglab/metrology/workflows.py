@@ -6,13 +6,9 @@ import glob
 import os
 from datetime import datetime
 
-import numpy as np
-
 from .config import (
     SINGLE_FILE, FILE_PATTERN, SAMPLES_TO_COMPARE, DATA_DIR, RESULTS_DIR,
-    resolve_path, SCAN_X_SIZE, PERIOD_EST, PROMINENCE_FACTOR, DISTANCE_FACTOR,
-    EDGE_EXCLUSION_PERIODS, GGP_SOURCE_FILE, GGP_N_POINTS, GGP_APPLY_SMOOTHING,
-    GGP_SMOOTHING_WINDOW, GGP_MIN_HALF_WIDTH,
+    resolve_path, GGP_SOURCE_FILE,
 )
 from .analyzer import analyze_single_file
 from .io.file_io import save_results_to_file
@@ -29,7 +25,7 @@ def run_single_file_analysis():
     """
     Analyze a single AFM file with full diagnostic plots
     """
-    print(f"Mode: Single file analysis")
+    print("Mode: Single file analysis")
     result = analyze_single_file(resolve_path(SINGLE_FILE), show_plots=True)
     
     if result is not None:
@@ -42,7 +38,7 @@ def run_multiple_file_analysis():
     """
     Analyze multiple files matching a pattern
     """
-    print(f"Mode: Multiple file analysis (pattern matching)")
+    print("Mode: Multiple file analysis (pattern matching)")
     # Patterns are matched inside the data directory, not the working directory
     files = sorted(glob.glob(os.path.join(DATA_DIR, FILE_PATTERN)))
 
@@ -78,7 +74,7 @@ def run_comparison_analysis():
     """
     Compare specific samples with optional temperature grouping
     """
-    print(f"Mode: Compare specific samples")
+    print("Mode: Compare specific samples")
     print(f"Number of sample entries: {len(SAMPLES_TO_COMPARE)}")
     
     # Parse sample information and analyze files
@@ -137,7 +133,7 @@ def run_boundary_profile_export(settings=None, filename=None):
         settings = AnalysisSettings.from_config()
     filename = resolve_path(filename or GGP_SOURCE_FILE)
 
-    print(f"Mode: PCGrate boundary profile export")
+    print("Mode: PCGrate boundary profile export")
     print(f"Source: {filename}")
 
     data, scan_x_size = load_afm_data(filename,
@@ -190,9 +186,9 @@ def run_icc_report():
     which the current SEMs are understated.
     """
     from .stats.icc import (compute_icc, effective_sample_size,
-                            sem_inflation_factor, interpret_icc)
+                            sem_inflation_factor)
 
-    print(f"Mode: ICC diagnostic (row-group correlation)")
+    print("Mode: ICC diagnostic (row-group correlation)")
     print(f"Scans to check: {len(SAMPLES_TO_COMPARE)}\n")
 
     rows = []
@@ -330,7 +326,7 @@ def _analyze_comparison_samples():
 def _print_multiple_file_summary(results):
     """Print summary table for multiple file analysis"""
     print(f"\n{'='*80}")
-    print(f"SUMMARY TABLE")
+    print("SUMMARY TABLE")
     print(f"{'='*80}")
     print(f"{'File':<40} {'N':<5} {'Mean':<10} {'Std':<10} {'Period(nm)':<12}")
     print(f"{'-'*80}")

@@ -16,16 +16,14 @@ from . import *  # noqa: F401,F403 - sets QT_API before matplotlib's shim loads
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QApplication, QCheckBox, QComboBox, QDoubleSpinBox, QFileDialog, QFrame,
+    QCheckBox, QComboBox, QDoubleSpinBox, QFrame,
     QGroupBox, QHBoxLayout, QLabel, QMainWindow, QPushButton, QScrollArea,
     QSpinBox, QStatusBar, QTabWidget, QVBoxLayout, QWidget,
 )
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 
-from ...config import PROJECT_ROOT
-from ...core.processing import load_afm_data, raw_data, raw_data_multi_group
-from ...settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES,
-                         VALID_SPM_DIRECTIONS)
+from ...core.processing import raw_data, raw_data_multi_group
+from ...settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES)
 from ..state import FormState, build, summarize_result
 from .canvas import PlotCanvas
 from .boundary_view import BoundaryView

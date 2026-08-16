@@ -4,9 +4,8 @@ The pure half of the GUI: form validation and result formatting.
 No Qt import anywhere in this file, deliberately - these rules are the ones worth
 testing, and they should be testable without a display.
 """
-import math
 
-from afm_analysis.gui.state import (FormState, build, validate, summarize_result)
+from afm_analysis.gui.state import (FormState, build, summarize_result)
 from afm_analysis.settings import AnalysisSettings, MAX_FACET_TRIM
 
 
