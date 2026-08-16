@@ -314,7 +314,7 @@ effective sample size and the SEM inflation factor, saving it to
 `results/icc_report_<timestamp>.txt`.
 
 **Output on the bundled sample data**: ICC 0.097–0.429, median 0.244; SEM understated
-by 1.17–1.65×. See `experimental/hierarchical_stats/README.md`.
+by 1.17–1.65×.
 
 ### PCGrate Boundary Profile Export
 
@@ -577,7 +577,7 @@ afm_blaze_meas/
 │   ├── PROGRESS_SUMMARY.md        # Status and open work
 │   └── history/                   # Superseded guides (reference only)
 ├── tests/                         # pytest; GUI tests skip without PySide6
-├── examples/  experimental/  legacy/
+├── examples/
 └── src/afm_analysis/
     ├── wiki/                      # In-app documentation (Wiki tab, package data)
     ├── config.py                  # ⚙️ CONFIGURE HERE
@@ -625,9 +625,11 @@ This has now been **measured** rather than merely suspected. Run
 correlation is 0.097–0.429 (median 0.244), meaning reported standard errors are
 understated by **1.17× to 1.65×** and effective sample sizes are 37–70 rather than
 78–102. Large effects survive this comfortably; differences below a few tenths of a
-degree do not. See `experimental/hierarchical_stats/README.md` for the full table.
+degree do not.
 
-The correction itself is not yet applied.
+The correction is applied: `stats/icc.py` computes the ICC and effective sample
+size, and row-group results carry `icc`, `n_effective`, `design_effect`, and
+`sem_corrected` alongside the uncorrected `sem`.
 
 ---
 

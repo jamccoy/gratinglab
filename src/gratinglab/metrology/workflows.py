@@ -284,7 +284,7 @@ def _format_icc_report(rows):
                  f"(driven by {worst['label']} / {worst['file']}).")
     lines.append("")
     lines.append("This report changes nothing. It sizes the correction that")
-    lines.append("experimental/hierarchical_stats/ would apply.")
+    lines.append("row-group analysis applies via stats/icc.py.")
     lines.append("=" * 100)
     return "\n".join(lines)
 
