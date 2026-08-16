@@ -131,9 +131,10 @@ Verified against numpy 2.5.1 / scipy 1.18.0 / matplotlib 3.11.1 — see
    .venv/bin/python main.py     # or: afm-analysis
    ```
 
-   The Qt window is `afm-gui`. It has two tabs: **Analysis**, and a **Wiki**
-   explaining how the statistics work — the correlation correction, why edge
-   grooves are rejected, what each output column means.
+   The Qt window is `afm-gui`. It has four tabs: **Import** (load and flatten a
+   scan), **Analysis** (the blaze-angle results), **Boundary** (PCGrate `.ggp`
+   export), and a **Wiki** explaining how the statistics work — the correlation
+   correction, why edge grooves are rejected, what each output column means.
 
    Paths in `config.py` resolve against the project root, so this works from any
    working directory.
@@ -604,15 +605,23 @@ first run.
 ### Running the tests
 
 ```bash
-.venv/bin/python tests/test_ggp_equivalence.py
+.venv/bin/python -m pytest tests/ -v
 ```
 
-This is the only test suite in the project. It pins the boundary-profile port to
-the output of the standalone script it replaced, so a refactor cannot silently
-change the exported profile.
+135 tests, including the blaze-angle pipeline (`tests/test_analyzer.py`), the
+ICC correction's wiring (`tests/test_icc_correction.py`), the boundary/PCGrate
+export, and the Qt GUI (skipped automatically if PySide6 isn't installed). CI
+runs the same suite plus `ruff check .` on every push and PR.
 
-For the blaze path there is no test suite; the regression check is a diff of
-`results/analysis_data_*.csv` against a known-good run. See `docs/BASELINES.md`.
+`tests/test_ggp_equivalence.py` is the oldest of these: it pins the
+boundary-profile port to the output of the standalone script it replaced, so a
+refactor cannot silently change the exported profile.
+
+The blaze-angle path also has a manual baseline-diffing procedure
+(`docs/BASELINES.md`) predating the test suite above. It's still useful for
+proving a refactor changed *nothing* — a diff against a stored CSV is a
+stronger guarantee than any set of assertions — but it's no longer the only
+regression check on that path.
 
 ### Known limitation
 

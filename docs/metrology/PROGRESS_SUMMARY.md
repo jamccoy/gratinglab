@@ -19,8 +19,9 @@
 > | PCGrate `.ggp` export folded into the package | Done — Jul 2026 |
 > | 2023 GEBL/PANTER work | Removed (was frozen in `legacy/`, deleted 2026-08) |
 > | Row-group independence / hierarchical stats | Done — ICC correction applied 2026-08-06 in `stats/icc.py` |
-> | Blaze-angle test suite | Open — none exists; see `docs/BASELINES.md` |
-> | GUI beyond viewing | Open — `afm_gui.py` is still v0.1 |
+> | Blaze-angle test suite | Done — `tests/test_analyzer.py`, added Aug 2026; `docs/BASELINES.md`'s diffing is now a complement, not a substitute |
+> | GUI beyond viewing | Done — Import and Boundary tabs added Jul-Aug 2026, alongside Analysis and Wiki |
+> | CI (lint + tests on push/PR) | Done — Aug 2026, `.github/workflows/ci.yml` |
 >
 > **The scan-edge fix (Jul 2026)** removed grooves clipped by the edge of a scan,
 > where the facet is only partly present in the data. Four measurements had been

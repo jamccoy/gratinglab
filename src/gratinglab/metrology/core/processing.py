@@ -88,7 +88,7 @@ def _load_text(filename, default_scan_size=2.0):
     try:
         data = np.genfromtxt(filename, skip_header=4, skip_footer=0)
     except Exception as e:
-        raise Exception(f"Error loading {filename}: {e}")
+        raise Exception(f"Error loading {filename}: {e}") from e
     
     if scan_x_size == default_scan_size:
         print(f"  Using default scan size: {scan_x_size} µm")

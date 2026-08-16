@@ -1,8 +1,11 @@
 # Verification baselines
 
-There is no test suite for the blaze-angle path. The way to prove a change did
-what you intended — and nothing else — is to diff its output against a stored
-reference run. This file records which reference to use and what each one means.
+`tests/test_analyzer.py` now covers the blaze-angle path's arithmetic. This
+file's diffing procedure predates that suite and remains useful alongside it:
+a diff against a stored reference run proves a change altered *nothing* it
+shouldn't have, which is a stronger guarantee than any set of assertions can
+give for a refactor with no intended behavior change. This file records which
+reference to use and what each one means.
 
 `results/` is git-ignored, so **these files exist only on disk. Don't delete them.**
 
