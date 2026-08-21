@@ -137,6 +137,17 @@ class BoundaryView(QWidget):
         self.export_btn.setEnabled(False)
         self.export_btn.clicked.connect(self.export)
         layout.addWidget(self.export_btn)
+
+        # The same profile, handed to a solver instead of to a file. Enabled on
+        # the same condition, because both need exactly one thing: a profile.
+        self.efficiency_btn = QPushButton("Efficiency…")
+        self.efficiency_btn.setEnabled(False)
+        self.efficiency_btn.setToolTip(
+            "Diffraction efficiency of this groove, with the period this scan\n"
+            "measured. Exporting a .ggp and loading it elsewhere loses that\n"
+            "number -- the file format cannot carry it.")
+        self.efficiency_btn.clicked.connect(self.show_efficiency)
+        layout.addWidget(self.efficiency_btn)
         return group
 
     def _build_metrics_group(self):
@@ -183,7 +194,7 @@ class BoundaryView(QWidget):
         """
         if self._data is None or self._settings is None:
             self._profile = None
-            self.export_btn.setEnabled(False)
+            self._set_actions_enabled(False)
             self._show_placeholder()
             return
 
@@ -193,12 +204,12 @@ class BoundaryView(QWidget):
                 self._data, self._scan_size, settings)
         except Exception as exc:
             self._profile = None
-            self.export_btn.setEnabled(False)
+            self._set_actions_enabled(False)
             self.metrics_label.setText(f"Could not build a profile:\n{exc}")
             self._show_placeholder("No boundary profile")
             return
 
-        self.export_btn.setEnabled(True)
+        self._set_actions_enabled(True)
         self._update_metrics()
         self._draw()
 
@@ -257,6 +268,29 @@ class BoundaryView(QWidget):
         norm_ax.grid(True, alpha=0.3)
 
         self.canvas.draw()
+
+    def _set_actions_enabled(self, enabled: bool) -> None:
+        """Both actions need one thing -- a profile -- so they move together."""
+        self.export_btn.setEnabled(enabled)
+        self.efficiency_btn.setEnabled(enabled)
+
+    # ── Out to a solver ──────────────────────────────────────────────────────
+
+    def show_efficiency(self):
+        """Hand the previewed profile straight to the scalar solver.
+
+        No file in between. That is the whole point: a .ggp round trip keeps
+        the shape and drops the period, which then has to be retyped from the
+        metrics panel above.
+        """
+        if self._profile is None:
+            return
+        # Imported here rather than at module scope so that a Boundary tab that
+        # is only ever used to export keeps loading the solver stack off its
+        # start-up path.
+        from .efficiency_dialog import EfficiencyDialog
+
+        EfficiencyDialog(self._profile, self).exec()
 
     # ── Export ───────────────────────────────────────────────────────────────
 
