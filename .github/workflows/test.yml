@@ -49,12 +49,18 @@ jobs:
             libegl1 libglib2.0-0t64 libdbus-1-3 libfontconfig1 \
             libfreetype6 libxkbcommon0
 
-      # The `gui` extra, not a second copy of its contents in `dev`, so the
-      # toolkit dependency is declared in exactly one place.
+      # Every extra by name, not a subset that happens to pull the rest in.
+      # `metrology` needs only matplotlib, which `dev` already carries -- so
+      # omitting it here still produced a green run while never once resolving
+      # the extra the package declares. That is the kind of break that surfaces
+      # first for a user rather than for CI.
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,gui]"
+          python -m pip install -e ".[dev,gui,metrology]"
+
+      - name: Lint with ruff
+        run: ruff check .
 
       # The Qt tests guard themselves with importorskip, which would hide a
       # broken toolkit install as a quietly shrinking suite. This makes it loud,
@@ -75,20 +81,48 @@ jobs:
           print('PySide6', PySide6.__version__, '| matplotlib', matplotlib.__version__)
           "
 
-      # CI has no PCGrate reference corpus, so this run also exercises the
-      # skip path that every contributor without the research data will hit.
-      # If those tests ever error instead of skipping, that is a real bug.
+      # Metrology imports through its own guard rather than through whatever
+      # `dev` happens to install, for the same reason the Qt check above exists:
+      # an extra that silently resolves via another extra is a latent break, and
+      # this fails next to the install step that would be at fault.
+      - name: Confirm the metrology extra installed
+        run: |
+          python -W error -c "
+          from gratinglab.metrology import require_matplotlib
+          require_matplotlib()
+          from gratinglab.metrology.boundary import build_boundary_profile
+          print('metrology ok')
+          "
+
+      # CI has neither the PCGrate reference corpus nor the AFM scans, so this
+      # run also exercises the skip path that every contributor without the
+      # research data will hit. If those tests ever error instead of skipping,
+      # that is a real bug.
       - name: Run tests
         run: python -m pytest -v --durations=10
 
-      - name: Confirm corpus tests skipped rather than failed
+      - name: Confirm reference-data tests skipped rather than failed
         run: |
           python -m pytest -q -rs 2>&1 | tee result.txt
-          if grep -qi "reference corpus" result.txt; then
-            echo "corpus tests skipped cleanly, as expected on CI"
-          else
-            echo "::warning::expected corpus-dependent tests to report as skipped"
-          fi
+          for marker in "reference corpus" "GRATINGLAB_AFM_DIR"; do
+            if grep -qi "$marker" result.txt; then
+              echo "$marker tests skipped cleanly, as expected on CI"
+            else
+              echo "::warning::expected $marker tests to report as skipped"
+            fi
+          done
+          # The synthetic scan is committed precisely so metrology is *not*
+          # reduced to skips here. If it ever stops carrying the suite, the run
+          # would go quietly green while testing almost nothing.
+          python - <<'EOF'
+          import re, sys
+          text = open("result.txt").read()
+          m = re.search(r"(\d+) passed", text)
+          passed = int(m.group(1)) if m else 0
+          print(f"{passed} passed")
+          if passed < 1000:
+              sys.exit(f"only {passed} tests passed; expected >1000 on CI")
+          EOF
 
       - name: Check the public API imports
         run: |
