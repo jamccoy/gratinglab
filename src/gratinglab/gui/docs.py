@@ -49,6 +49,11 @@ _TITLES = {
 #: Non-solver reference pages: (key, title, filename relative to docs/).
 _GENERAL_PAGES = (
     ("conventions", "Grating Geometry & Conventions", "conventions.md"),
+    # Not a solver page -- nothing here approximates a wave equation -- but an
+    # efficiency computed from a measured profile inherits every assumption
+    # made while producing that profile, and those are invisible in the curve.
+    # It belongs beside the conventions for the same reason they do.
+    ("metrology", "Groove Metrology", "theory/metrology.md"),
 )
 
 #: How many parent directories to search before giving up. gui/docs.py sits at
