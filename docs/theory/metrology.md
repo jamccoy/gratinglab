@@ -19,10 +19,26 @@ should be able to find them written down.
 | Every groove in the scan is a sample of *the same* groove | Real variation across the scan is averaged into a shape that no individual groove has |
 | Row-averaging the 2-D image to 1-D loses nothing that matters | True only if the grooves run parallel to the image rows. A rotated scan smears the facet |
 | The averaged groove tiles seamlessly into a periodic boundary | Enforced rather than assumed — see §2 — but enforcement is itself an operation on the data |
-| The AFM tip is small compared to the features | The steep facet is the tip shape, not the grating. A blazed groove's anti-blaze facet is the usual casualty |
+| The AFM tip is small compared to the features | The steep facet is the tip shape, not the grating, and the apex and trough are rounded off — which removes depth while leaving the mid-facet slope a line fit lands on intact |
+| The groove is faceted, so a fitted facet angle and the groove depth describe the same shape | False on a rounded groove, and then the two disagree. The solver uses the **depth** |
 
-The last one is not mitigated anywhere in this package and has no diagnostic.
-It is the assumption most likely to be silently false on a real echelle.
+The last two are not mitigated anywhere in this package and have no diagnostic.
+On the one measured grating in this repo they are both false: see `findings.md`,
+"The measured groove is rounded, not faceted", where the fitted facet angle
+(27.91° ± 2.13°) and the angle implied by the depth (20.33°) differ by 3.6σ.
+
+**The cheapest available diagnostic does not exist yet**, and would be: compute
+the blaze angle the measured depth implies, and compare it with the fitted one.
+They agree on a sharp groove and diverge on a rounded one, and the divergence is
+precisely the error that reaches the efficiency. Two numbers the pipeline
+already has.
+
+Note what the diagnostic would *not* say. A rounded groove and a blunt tip
+produce the same profile, so a divergence flags "this is not a sharp sawtooth"
+rather than "your tip is bad". A **flat land** — a genuinely unfaceted flat
+within the period, common on real blazed gratings — produces a depth deficit
+too, and is the first alternative to exclude: it shows as a spike at zero in the
+local-slope distribution, which rounding does not.
 
 ---
 
