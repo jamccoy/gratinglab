@@ -270,6 +270,34 @@ class TestFromProfileData:
         assert np.allclose(sampled.height(query), exact.height(query), atol=1e-5)
 
 
+class TestMeasuredBlazeAngle:
+    """A measured profile may carry the facet angle somebody fitted to it."""
+
+    def test_defaults_to_absent(self):
+        t = np.linspace(0.0, 1.0, 16, endpoint=False)
+        assert FromProfileData(t=tuple(t), y=tuple(0.3 * t)).blaze_angle is None
+
+    def test_from_measurements_carries_it_through(self):
+        x = np.linspace(0.0, 300.0, 32)
+        profile = FromProfileData.from_measurements(
+            x, 0.3 * x, period_nm=300.0, blaze_angle=16.7
+        )
+        assert profile.blaze_angle == pytest.approx(16.7)
+
+    @pytest.mark.parametrize("angle", [0.0, 90.0, -5.0, 91.0])
+    def test_refuses_an_angle_outside_the_open_interval(self, angle):
+        """A fit landing outside (0, 90) found the wrong facet, not a shallow one."""
+        t = np.linspace(0.0, 1.0, 16, endpoint=False)
+        with pytest.raises(ValidationError, match="blaze_angle"):
+            FromProfileData(t=tuple(t), y=tuple(0.3 * t), blaze_angle=angle)
+
+    def test_survives_a_round_trip(self):
+        t = np.linspace(0.0, 1.0, 16, endpoint=False)
+        original = FromProfileData(t=tuple(t), y=tuple(0.3 * t), blaze_angle=29.5)
+        restored = FromProfileData(**original.model_dump())
+        assert restored == original
+
+
 class TestSerialization:
     @pytest.mark.parametrize("profile", ALL, ids=lambda p: type(p).__name__)
     def test_json_round_trip(self, profile):

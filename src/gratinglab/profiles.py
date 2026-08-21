@@ -371,10 +371,25 @@ class FromProfileData(_BaseProfile):
     than assuming a height function. That asymmetry is real physics, not a
     limitation of this class: RCWA and scalar theory genuinely cannot represent
     an undercut, and the integral method genuinely can.
+
+    ``blaze_angle`` is optional and means something different here than it does
+    on :class:`Blazed`. There it is a *definition* -- the facet is that angle
+    because it was specified so. Here it is a *measurement*: somebody fitted a
+    line to a real facet and got a number with an uncertainty. Both feed
+    ``solvers.scalar._reflecting_graze`` identically, and the provenance string
+    says which one it had, because a reader deciding whether to trust an
+    absolute efficiency needs to know.
+
+    Leaving it ``None`` is not neutral. The reflection then falls back to the
+    mean surface -- a zero-tilt facet -- which for a sawtooth measured at
+    grazing incidence is the wrong plane by the whole blaze angle. The default
+    is ``None`` because most measured profiles genuinely arrive without a fit,
+    not because ``None`` is the better answer.
     """
 
     t: tuple[float, ...]
     y: tuple[float, ...]
+    blaze_angle: float | None = None
 
     @model_validator(mode="after")
     def _check_points(self) -> "FromProfileData":
@@ -385,13 +400,30 @@ class FromProfileData(_BaseProfile):
         t = np.asarray(self.t)
         if t.min() < 0.0 or t.max() > 1.0:
             raise ValueError(f"t must lie in [0, 1], got [{t.min()}, {t.max()}]")
+        if self.blaze_angle is not None and not 0.0 < self.blaze_angle < 90.0:
+            # The same open interval `Blazed` enforces. A fit that lands outside
+            # it is not a shallow facet, it is a fit that found the wrong facet
+            # or the wrong sign convention, and passing it on as geometry would
+            # produce a confident, wrong reflectivity.
+            raise ValueError(
+                f"blaze_angle must lie in (0, 90) degrees, got {self.blaze_angle}"
+            )
         return self
 
     @classmethod
     def from_measurements(
-        cls, x_nm: ArrayLike, y_nm: ArrayLike, period_nm: float
+        cls,
+        x_nm: ArrayLike,
+        y_nm: ArrayLike,
+        period_nm: float,
+        *,
+        blaze_angle: float | None = None,
     ) -> "FromProfileData":
-        """Normalise a measured profile in nm, referencing its minimum to zero."""
+        """Normalise a measured profile in nm, referencing its minimum to zero.
+
+        Pass ``blaze_angle`` when the same measurement also produced a facet
+        fit; see the class docstring for why it is worth carrying.
+        """
         x = np.asarray(x_nm, dtype=np.float64)
         y = np.asarray(y_nm, dtype=np.float64)
         if period_nm <= 0:
@@ -399,6 +431,7 @@ class FromProfileData(_BaseProfile):
         return cls(
             t=tuple((x - x.min()) / period_nm),
             y=tuple((y - y.min()) / period_nm),
+            blaze_angle=blaze_angle,
         )
 
     @property

@@ -13,6 +13,7 @@ import sys
 import tempfile
 
 import numpy as np
+import pytest
 
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
@@ -210,3 +211,69 @@ if __name__ == '__main__':
             print(f"FAIL  {name}: {exc}")
     print(f"\n{'all tests passed' if not failures else f'{failures} failure(s)'}")
     sys.exit(1 if failures else 0)
+
+
+# ── The handoff to the solvers ───────────────────────────────────────────────
+#
+# The point of these living in one package. A .ggp round trip preserves the
+# shape and loses the scale; to_problem() keeps the period this scan measured.
+
+def test_to_problem_carries_the_measured_period():
+    """The number a .ggp cannot hold, and that corpus.toml exists to restore."""
+    p = _profile()
+    problem = p.to_problem()
+    assert problem.period == p.period_nm
+    assert problem.period > 0
+
+
+def test_to_problem_scales_the_depth_by_that_period():
+    """y_norm is a fraction of the period, so the period is inside the physics."""
+    p = _profile()
+    problem = p.to_problem()
+    assert problem.depth == pytest.approx(
+        p.metrics['peak_to_valley'] * p.period_nm, rel=1e-9)
+
+
+def test_to_problem_produces_the_same_shape_as_the_ggp_export():
+    """Whichever route a profile takes, it must be the same groove."""
+    p = _profile()
+    profile = p.to_problem().profile
+    assert np.allclose(profile.t, p.x_norm)
+    assert np.allclose(profile.y, p.y_norm)
+
+
+def test_to_problem_carries_a_fitted_blaze_angle_when_given_one():
+    p = _profile()
+    assert p.to_problem().profile.blaze_angle is None
+    assert p.to_problem(blaze_angle=29.5).profile.blaze_angle == pytest.approx(29.5)
+
+
+def test_to_problem_reports_the_grooves_actually_averaged():
+    p = _profile()
+    assert p.to_problem().n_grooves == p.n_used
+
+
+def test_to_problem_does_not_invent_a_roughness():
+    """y_std_nm is groove-to-groove form spread, not surface microroughness.
+
+    Wiring one into the other would produce a confident wrong efficiency
+    instead of an obviously missing one. 0.0 here means "not supplied".
+    """
+    p = _profile()
+    assert p.to_problem().roughness == 0.0
+    assert np.any(p.y_std_nm > 0), "the sample does have groove-to-groove spread"
+
+
+def test_the_measured_groove_solves():
+    """End to end: an AFM scan reaches an efficiency without touching disk."""
+    from gratinglab.illumination import Illumination
+    from gratinglab.solvers import get_solver
+
+    problem = _profile().to_problem(coating='Au', blaze_angle=29.5)
+    scan = get_solver('scalar').solve(
+        problem,
+        Illumination.offplane(graze=1.5, azimuth=25.0),
+        np.linspace(1.0, 5.0, 5),
+        quadrature_points=1024)
+    assert np.all(np.isfinite(scan.efficiency))
+    assert scan.efficiency.max() > 0
