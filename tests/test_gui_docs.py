@@ -95,20 +95,34 @@ class TestTheoryPages:
 
 
 class TestGeneralPages:
+    @staticmethod
+    def _page(name):
+        """By name rather than by index -- the tuple has grown once already."""
+        return next(p for p in general_pages() if p.name == name)
+
     def test_conventions_page_is_available_with_real_content(self):
-        pages = general_pages()
-        assert len(pages) == 1
-        page = pages[0]
-        assert page.name == "conventions"
+        page = self._page("conventions")
         assert page.title == "Grating Geometry & Conventions"
         assert page.available
         assert page.path is not None and page.path.name == "conventions.md"
 
     def test_conventions_page_contains_the_grating_equation(self):
         """The whole point of adding this page."""
-        page = general_pages()[0]
+        page = self._page("conventions")
         assert "generalized (conical) grating equation" in page.text
         assert "sin\\gamma" in page.text or "sin\\,\\gamma" in page.text
+
+    def test_metrology_page_is_available_with_real_content(self):
+        page = self._page("metrology")
+        assert page.title == "Groove Metrology"
+        assert page.available
+        assert page.path is not None and page.path.name == "metrology.md"
+
+    def test_metrology_page_states_that_roughness_is_not_measured(self):
+        """The assumption most likely to be silently assumed away."""
+        page = self._page("metrology")
+        assert "RMS surface roughness" in page.text
+        assert "not yet computed" in page.text
 
     def test_general_pages_are_never_banner_flagged(self):
         """These are geometry references, not a solver's approximation --

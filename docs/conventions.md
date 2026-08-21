@@ -31,6 +31,29 @@ and to type.
 Angles are degrees at the API and **radians internally**. Conversion happens once, at
 construction. No function takes an angle whose unit is ambiguous from its name.
 
+### Inside the metrology package
+
+`gratinglab.metrology` reads instruments, and an instrument does not use nanometres.
+Four unit regimes therefore coexist, each confined to its own layer:
+
+| Where | Unit | Set by |
+|---|---|---|
+| `core.processing.load_afm_data` returns heights | **metres** | the file formats — Nanoscope and Gwyddion both write SI |
+| lateral axis, scan width | **µm** | the same, and how an AFM operator thinks |
+| `raw_data` onward, profile heights | **nm** | the project convention above |
+| `BoundaryProfile.x_norm` / `y_norm`, and `.ggp` | **dimensionless**, fraction of the period | PCGrate's polygonal border |
+
+Exactly two places convert: `raw_data` (metres → nm) and `normalize_profile`
+(nm → fraction of period). No function accepts a length whose regime is ambiguous
+from its name — hence `y_avg_nm`, `x_avg_um` and `y_norm` rather than three fields
+called `y`.
+
+**The normalised layer is why the period must travel separately.** `y_norm` is a
+fraction of the period, so physical depth is `y_norm × period`: a wrong period is a
+wrong groove depth, and groove depth sits inside the scalar phase term rather than
+being a label on the result. `BoundaryProfile.to_problem` carries the measured
+period for exactly this reason. A `.ggp` cannot.
+
 ---
 
 ## 2. Time convention and the sign of the extinction coefficient
@@ -421,6 +444,9 @@ convention may appear.
 | PCGrate-SX `.txt` efficiency tables | import | 7 header lines; tab-separated; quoted `"Eff.TE(m,R)"` headers carry the order index and R/T flag; `--` marks missing/evanescent. Order mapping comes from the headers, never from a column offset |
 | CXRO / Henke optical constants | import | `(energy_eV, δ, β)` → `n = 1 − δ + iβ` on a wavelength grid |
 | PCGrate `.ari` refractive index | export | `wavelength_nm  δ  β`, space-delimited |
+| PCGrate `.ggp` polygonal border | import + export | Normalised: `t` on [0,1], `y` as a fraction of the period. **Carries no period, no provenance, no version.** Three header variants exist on disk; all are read, only the canonical one is written. A measured profile should reach a solver through `BoundaryProfile.to_problem` instead, which keeps the period |
+| Nanoscope `.spm` (AFM) | import | Binary. Heights in metres. The `Sens. Zsens` / `Sens. ZsensSens` distinction is load-bearing — the wrong one gives heights 5.13× too small |
+| Gwyddion text export (AFM) | import | 4 header lines, tab-separated, heights in metres, scan width scraped from the header comments |
 | GSolver, RETICOLO | planned | |
 
 Round-tripping a `Problem` through an adapter and back must leave it unchanged. That is

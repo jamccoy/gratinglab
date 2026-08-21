@@ -6,13 +6,18 @@ Where this project is, where it is going, and why. Start here.
 
 ## The goal
 
-An open comparison platform for grating efficiency analysis. Not "another RCWA" —
-open RCWA is a crowded field (S4, grcwa, nannos, torcwa, inkstone, RETICOLO).
-What does *not* exist openly is:
+An open platform for grating groove metrology and efficiency analysis. Not
+"another RCWA" — open RCWA is a crowded field (S4, grcwa, nannos, torcwa,
+inkstone, RETICOLO). What does *not* exist openly is:
 
 1. A neutral cross-method harness with one problem spec and rigorous conventions.
 2. An open C-method (Chandezon) solver.
 3. An open integral-method solver.
+4. **A path from a measured surface to a rigorous efficiency, open end to end.**
+
+The fourth arrived with M17, and is the one with no open equivalent at all. It
+also immediately earned its keep by falsifying something — see the TASTE entry
+under Open questions.
 
 The organising idea: **the physical problem and the numerical method are
 separate, and the problem spec is serializable.** One `Problem` reaches every
@@ -44,7 +49,9 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | `Problem`, `Solver` protocol, registry | done |
 | **Scalar solver** ([theory](theory/scalar.md)) | done, validated |
 | Efficiency-table importer (external codes) | done |
-| `.ggp` boundary profiles | done |
+| `.ggp` boundary profiles | done, and now a single implementation |
+| **Groove metrology** ([theory](theory/metrology.md)) — AFM scans, blaze angles, boundary profiles | done, absorbed M17 |
+| Measured groove → solver, in-process | done, `BoundaryProfile.to_problem` |
 | Comparison harness | done |
 | Physics self-checks — reciprocity, energy balance | done |
 | Convergence harness ([`convergence.py`](../src/gratinglab/convergence.py)) | done |
@@ -57,9 +64,10 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | C-method | not started |
 | Integral method | not started |
 
-Roughly 945 tests, 11 skipped (the skips need the private reference corpus).
+Roughly 1150 tests, 11 skipped (the skips need the private reference corpus).
 Rounded on purpose: this line previously claimed 328 and was wrong by 400, so
-`pytest -q` is the authority and this is only the order of magnitude.
+`pytest -q` is the authority and this is only the order of magnitude. The jump
+from ~945 is the metrology suite arriving with its package, not new coverage.
 
 ---
 
@@ -107,6 +115,15 @@ format version. The missing period is exactly why
 [`benchmarks/corpus.toml`](../benchmarks/corpus.toml) has to exist as a sidecar.
 JSON, since the profile classes are already pydantic models with tested
 round-tripping.
+
+**M17 changed the urgency, not the need.** With metrology in the package, a
+measured groove reaches a solver through `BoundaryProfile.to_problem` without
+touching disk, carrying its measured period and optionally a fitted facet
+angle. That is the whole gap closed — *for profiles that never leave the
+process*. Everything that has to be saved, sent, archived or diffed still goes
+through a format that drops the period on the way out and cannot say where the
+profile came from. Undercut boundaries remain unrepresentable in either
+direction.
 
 ### 3. First release + JOSS
 
@@ -162,6 +179,19 @@ obliquity of M16-C moved it in the right direction but only slightly, because
 this mount is near enough to Littrow that the factor is ~0.99 on the orders
 carrying the power. The residual is profile mismatch, not normalisation — see
 `findings.md`, "The corpus can test the diffraction but not the reflectivity".
+
+**M17 tested that and it failed.** The metrology merge brought an AFM scan of
+what is plausibly the same grating into the repo
+(`data/TASTE_ALS_A205_Ti_Pt_flatten.txt`), so the idealised sawtooth could be
+swapped for a measured groove. The total moved the *wrong* way: 0.5420 idealised
+to 0.3362 measured, against PCGrate's 1.0005. The groove's facet fit (27.91° ±
+2.13°) and its depth (implying 20.33°) disagree by 3.6σ, which is tip
+convolution — and the solver reads the depth, not the facet. Full evidence in
+`findings.md`, "The AFM profile disagrees with its own facet fit".
+
+So the open question is no longer only "which `.ggp`". Even the right AFM
+profile would need tip deconvolution before it could settle this, and nothing in
+the pipeline does that or warns that it is missing.
 
 ### A finite-conductivity reference run
 
