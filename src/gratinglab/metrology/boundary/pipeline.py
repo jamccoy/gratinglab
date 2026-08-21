@@ -61,6 +61,67 @@ class BoundaryProfile:
                 f"period {self.period_nm:.2f} nm, "
                 f"depth {self.metrics['groove_depth']:.4f} of period")
 
+    def to_problem(self, *, coating=None, substrate=None, roughness=0.0,
+                   blaze_angle=None):
+        """This measured groove as an efficiency problem.
+
+        The in-process handoff to the rest of gratinglab, and the reason the
+        two halves are one package. Writing a .ggp and reading it back gets
+        the same *shape* but loses the scale: the file format is normalised
+        and carries no period, so the period has to be supplied again from
+        somewhere -- which is what `benchmarks/corpus.toml` is, a sidecar of
+        periods recovered by hand after the fact. Here `period_nm` is the one
+        this scan measured, from the spacing of the grooves it detected.
+
+        That matters beyond bookkeeping. `y_norm` is a fraction of the period,
+        so the solver's phase term is `(2*pi/lambda) * y_norm * period * ...`
+        and an error in the period scales the groove depth with it. The period
+        is not a label on the result; it is inside the physics.
+
+        Parameters:
+            coating, substrate: material names, resolved by
+                `gratinglab.materials` at solve time.
+            roughness: RMS surface roughness in nm. See the note below --
+                this class does not measure it, and 0.0 means "not supplied",
+                not "smooth".
+            blaze_angle: fitted facet angle in degrees, if the same scan was
+                also run through `core.analysis.extract_blaze_angle`. Without
+                it the scalar solver evaluates reflection on the mean surface,
+                which for a sawtooth at grazing incidence is off by the whole
+                blaze angle.
+
+        **On roughness.** `Problem.roughness` means high-spatial-frequency
+        surface roughness, the quantity Nevot-Croce damps a Fresnel
+        coefficient with. This class computes no such number. `y_std_nm` is
+        the groove-to-groove *form* spread and `metrics['rms_slope']` is a
+        slope statistic; neither is surface microroughness, and passing either
+        one in here would produce a confident, wrong efficiency rather than an
+        obviously missing one. The honest quantity -- the RMS residual of each
+        groove about this average -- is not computed yet.
+        """
+        # Imported here rather than at module scope: `boundary` is reachable
+        # from the GUI preview, which has no reason to pull the solver stack in
+        # just to draw a curve.
+        from ...problem import Problem
+        from ...profiles import FromProfileData
+
+        return Problem(
+            period=self.period_nm,
+            profile=FromProfileData(
+                t=tuple(float(v) for v in self.x_norm),
+                y=tuple(float(v) for v in self.y_norm),
+                blaze_angle=blaze_angle,
+            ),
+            coating=coating,
+            substrate=substrate,
+            roughness=roughness,
+            # Measured, and free to carry. The scalar solver deliberately does
+            # not apply an interference factor to order efficiencies, so this
+            # is metadata rather than an input -- but it is the real count, and
+            # a later method that wants it should not have to guess.
+            n_grooves=self.n_used,
+        )
+
 
 def build_boundary_profile(data, scan_x_size, settings) -> BoundaryProfile:
     """

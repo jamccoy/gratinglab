@@ -15,7 +15,7 @@ from gratinglab.illumination import Illumination
 from gratinglab.problem import Problem
 from gratinglab.profiles import Blazed, FromProfileData, Lamellar, Sinusoidal
 from gratinglab.solvers import UnsupportedConfiguration, get_solver, scalar
-from gratinglab.solvers.scalar import interference_factor
+from gratinglab.solvers.scalar import _reflecting_graze, interference_factor
 
 UNPOL = "unpolarized"
 
@@ -532,6 +532,78 @@ class TestMeasuredProfile:
             Problem(period=1400.0, profile=sampled), ill, [700.0], quadrature_points=4096
         )
         assert np.allclose(analytic.efficiency, numeric.efficiency, atol=2e-3)
+
+class TestFittedFacetAngle:
+    """A measured profile that arrived with a facet fit stops guessing.
+
+    Without one, `_reflecting_graze` falls back to the mean surface -- which
+    for a sawtooth at grazing incidence is the wrong plane by the whole blaze
+    angle. The fit is the number the metrology half already computes.
+    """
+
+    @staticmethod
+    def _ramp(blaze_angle=None):
+        t = np.linspace(0.0, 1.0, 256, endpoint=False)
+        return FromProfileData(
+            t=tuple(t), y=tuple(0.5 * t), blaze_angle=blaze_angle
+        )
+
+    def test_a_fit_reaches_the_exact_facet_branch(self):
+        """Same geometry as a declared Blazed gives the same graze angle."""
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        declared, _ = _reflecting_graze(
+            Problem(period=315.15, profile=Blazed(blaze_angle=29.5)), ill
+        )
+        fitted, _ = _reflecting_graze(
+            Problem(period=315.15, profile=self._ramp(29.5)), ill
+        )
+        assert fitted == pytest.approx(declared)
+
+    def test_the_description_says_fitted_not_declared(self):
+        """Only one of the two has an uncertainty attached to it."""
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        _, declared = _reflecting_graze(
+            Problem(period=315.15, profile=Blazed(blaze_angle=29.5)), ill
+        )
+        _, fitted = _reflecting_graze(
+            Problem(period=315.15, profile=self._ramp(29.5)), ill
+        )
+        assert "declared" in declared and "fitted" not in declared
+        assert "fitted" in fitted and "declared" not in fitted
+
+    def test_without_a_fit_it_still_falls_back_to_the_mean_surface(self):
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        zeta, description = _reflecting_graze(
+            Problem(period=315.15, profile=self._ramp()), ill
+        )
+        assert "mean surface" in description
+        assert zeta != pytest.approx(
+            _reflecting_graze(Problem(period=315.15, profile=self._ramp(29.5)), ill)[0]
+        )
+
+    def test_it_changes_the_facet_model_but_not_the_local_one(self):
+        """The default model already resolves slope across the groove cycle.
+
+        `local` reads the profile directly and never consults the facet angle,
+        so carrying a fit must move `facet` and leave `local` alone. Asserting
+        both directions is what keeps the claim about this honest.
+        """
+        ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
+        wavelengths = [2.0, 3.0]
+
+        def totals(profile, model):
+            return scalar.solve(
+                Problem(period=315.15, profile=profile, coating="Au"),
+                ill, wavelengths, quadrature_points=2048, reflectivity_model=model,
+            ).total
+
+        assert not np.allclose(
+            totals(self._ramp(), "facet"), totals(self._ramp(29.5), "facet")
+        )
+        assert np.allclose(
+            totals(self._ramp(), "local"), totals(self._ramp(29.5), "local")
+        )
+
 
 class TestAbsoluteEfficiency:
     """M15-D: the first thing in this project that changes an efficiency value.
