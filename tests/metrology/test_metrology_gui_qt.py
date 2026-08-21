@@ -209,6 +209,14 @@ class TestBoundaryTab:
         assert lines[1] == "Period: 1 PSC: 1"
         assert os.path.exists(str(tmp_path / "out_metrics.txt"))
 
+    def test_efficiency_button_tracks_the_export_button(self, qtbot, window):
+        """Both need one thing -- a profile -- so they must not drift apart."""
+        assert not window.boundary.export_btn.isEnabled()
+        assert not window.boundary.efficiency_btn.isEnabled()
+        window.load(SAMPLE)
+        assert window.boundary.export_btn.isEnabled()
+        assert window.boundary.efficiency_btn.isEnabled()
+
     def test_panel_matches_a_direct_build(self, qtbot, window):
         """The window must show what the pipeline computes"""
         import numpy as np
@@ -257,3 +265,60 @@ class TestInvalidInput:
         window.run_analysis()                     # must not reach the worker
         assert window._result is None
         assert 'facet_trim' in window.results_label.text()
+
+
+class TestEfficiencyDialog:
+    """The handoff that makes the two halves one package."""
+
+    def _dialog(self, qtbot, window):
+        from gratinglab.metrology.gui.qt.efficiency_dialog import EfficiencyDialog
+        window.load(SAMPLE)
+        dialog = EfficiencyDialog(window.boundary.profile)
+        qtbot.addWidget(dialog)
+        return dialog
+
+    def test_it_uses_the_measured_period_without_being_told(self, qtbot, window):
+        """The number a .ggp cannot carry, and would otherwise be retyped."""
+        dialog = self._dialog(qtbot, window)
+        assert dialog._to_problem().period == window.boundary.profile.period_nm
+
+    def test_computing_produces_a_finite_scan(self, qtbot, window):
+        import numpy as np
+        dialog = self._dialog(qtbot, window)
+        dialog.count_spin.setValue(12)
+        dialog.compute()
+        assert dialog._scan is not None
+        assert np.all(np.isfinite(dialog._scan.efficiency))
+
+    def test_the_facet_angle_reaches_the_problem_only_when_enabled(self, qtbot, window):
+        dialog = self._dialog(qtbot, window)
+        assert dialog._to_problem().profile.blaze_angle is None
+        dialog.blaze_check.setChecked(True)
+        dialog.blaze_spin.setValue(29.5)
+        assert dialog._to_problem().profile.blaze_angle == pytest.approx(29.5)
+
+    def test_it_says_the_result_is_not_defensible(self, qtbot, window):
+        """No convergence check runs here, and the panel must not imply one."""
+        dialog = self._dialog(qtbot, window)
+        dialog.count_spin.setValue(8)
+        dialog.compute()
+        assert "not convergence-checked" in dialog.status.text()
+
+    def test_a_backwards_wavelength_range_is_refused_not_raised(self, qtbot, window):
+        dialog = self._dialog(qtbot, window)
+        dialog.start_spin.setValue(5.0)
+        dialog.stop_spin.setValue(1.0)
+        dialog.compute()
+        assert dialog._scan is None
+        assert "must increase" in dialog.status.text()
+
+    def test_optical_constants_that_do_not_cover_the_range_are_reported(
+            self, qtbot, window):
+        """Au is tabulated 0.62-6.2 nm; asking outside it must not traceback."""
+        dialog = self._dialog(qtbot, window)
+        dialog.start_spin.setValue(400.0)
+        dialog.stop_spin.setValue(700.0)
+        dialog.count_spin.setValue(8)
+        dialog.compute()
+        assert dialog._scan is None
+        assert dialog.status.text()
