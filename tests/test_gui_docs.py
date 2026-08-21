@@ -4,9 +4,7 @@ Headless, no tkinter -- this module's whole purpose is to be the testable part
 of "which page goes with which solver."
 """
 
-from pathlib import Path
 
-import pytest
 
 from gratinglab.gui.docs import find_theory_root, general_pages, theory_pages
 from gratinglab.solvers.base import Capabilities, available_solvers, register

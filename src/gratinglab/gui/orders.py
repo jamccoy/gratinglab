@@ -21,7 +21,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Iterable, Sequence
 
-import numpy as np
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type checkers only
     from ..result import EfficiencyScan

@@ -84,14 +84,14 @@ class TestNothingCorrectLooksWrong:
         ordinary state, and it points at the way out rather than sitting
         there as a bare negative."""
         lines = lines_for(make_scan(converged=None))
-        shown = "".join(l.text for l in lines)
+        shown = "".join(line.text for line in lines)
         assert "not checked" in shown
         assert "gratinglab.convergence" in shown
         assert "not checked" not in alarming_text(lines)
 
     def test_relative_normalization_is_not_an_alarm(self):
         lines = lines_for(make_scan(notes={"normalization": "relative"}))
-        assert "normalization: " in "".join(l.text for l in lines)
+        assert "normalization: " in "".join(line.text for line in lines)
         assert "coating" not in alarming_text(lines)
 
     def test_a_resolved_but_unapplied_coating_is_named_not_denied(self):
@@ -103,7 +103,7 @@ class TestNothingCorrectLooksWrong:
                 notes={"normalization": "relative", "coating": "Au (CXRO export)"}
             )
         )
-        shown = "".join(l.text for l in lines)
+        shown = "".join(line.text for line in lines)
         assert "relative (Au (CXRO export))" in shown
         assert "no coating" not in shown
 
@@ -111,7 +111,7 @@ class TestNothingCorrectLooksWrong:
         """Non-vacuity: the "no coating" wording has to survive for the case it
         was written for."""
         shown = "".join(
-            l.text for l in lines_for(make_scan(notes={"normalization": "relative"}))
+            line.text for line in lines_for(make_scan(notes={"normalization": "relative"}))
         )
         assert "relative (no coating)" in shown
 
@@ -122,7 +122,7 @@ class TestNothingCorrectLooksWrong:
         study = {"knob": "quadrature_points", "converged_at": 4096,
                  "values": [256, 512, 1024, 2048, 4096, 8192, 16384]}
         shown = "".join(
-            l.text for l in lines_for(
+            line.text for line in lines_for(
                 make_scan(converged=True, notes={"convergence": study})
             )
         )
@@ -132,7 +132,7 @@ class TestNothingCorrectLooksWrong:
     def test_and_a_verdict_without_one_says_less_rather_than_inventing_it(self):
         """Non-vacuity for the test above, and the honest degradation: an
         imported scan can carry `converged` with no study behind it."""
-        shown = "".join(l.text for l in lines_for(make_scan(converged=True)))
+        shown = "".join(line.text for line in lines_for(make_scan(converged=True)))
         assert "convergence: yes" in shown
         assert "is enough" not in shown
 
@@ -144,7 +144,7 @@ class TestNothingCorrectLooksWrong:
 
     def test_convergence_success_reads_as_success(self):
         lines = lines_for(make_scan(converged=True))
-        assert any(l.tag == "ok" and l.text.strip() == "yes" for l in lines)
+        assert any(line.tag == "ok" and line.text.strip() == "yes" for line in lines)
 
 
 class TestWarnings:
@@ -157,7 +157,7 @@ class TestWarnings:
 
     def test_warnings_keep_their_order(self):
         lines = lines_for(make_scan(warnings=["first", "second", "third"]))
-        text = "".join(l.text for l in lines)
+        text = "".join(line.text for line in lines)
         assert text.index("first") < text.index("second") < text.index("third")
 
     def test_the_scalar_energy_warning_reaches_the_panel(self, default_run):
@@ -171,20 +171,20 @@ class TestWarnings:
 class TestEnergyLine:
     def test_a_deficit_reads_as_a_pass(self):
         lines = lines_for(make_scan(totals=(0.4, 0.7)))
-        energy = next(l for l in lines if "Σ ∈" in l.text)
+        energy = next(line for line in lines if "Σ ∈" in line.text)
         assert energy.tag == "ok"
         assert "EXCEEDS UNITY" not in energy.text
 
     def test_an_excess_reads_as_a_failure(self):
         lines = lines_for(make_scan(totals=(0.9, 1.5)))
-        energy = next(l for l in lines if "Σ ∈" in l.text)
+        energy = next(line for line in lines if "Σ ∈" in line.text)
         assert energy.tag == "bad"
         assert "EXCEEDS UNITY" in energy.text
 
     def test_the_range_is_reported_not_a_single_number(self):
         """Σ varies across the scan; one number would hide that."""
         lines = lines_for(make_scan(totals=(0.4, 0.9)))
-        assert "Σ ∈ [0.4000, 0.9000]" in "".join(l.text for l in lines)
+        assert "Σ ∈ [0.4000, 0.9000]" in "".join(line.text for line in lines)
 
 
 class TestHeader:
@@ -217,7 +217,7 @@ class TestCancellation:
         """Cancel abandons the result; it cannot stop the CPU. Saying
         'cancelled' alone would overstate it."""
         lines = lines_for(make_scan(), cancelled=True)
-        text = "".join(l.text for l in lines)
+        text = "".join(line.text for line in lines)
         assert "previous result" in text
         assert "the calculation stopped" in text
 
@@ -226,7 +226,7 @@ class TestCancellation:
         assert "cancelled" not in alarming_text(lines)
 
     def test_absent_unless_asked_for(self):
-        assert "cancelled" not in "".join(l.text for l in lines_for(make_scan()))
+        assert "cancelled" not in "".join(line.text for line in lines_for(make_scan()))
 
 
 class TestErrors:
@@ -234,7 +234,7 @@ class TestErrors:
         lines = error_lines(
             (FieldError("period", "must be positive"), FieldError("alpha", "too big"))
         )
-        text = "".join(l.text for l in lines)
+        text = "".join(line.text for line in lines)
         assert "2 field(s) need attention" in text
         assert "period: must be positive" in text
         assert "alpha: too big" in text
@@ -248,7 +248,7 @@ class TestErrors:
 
 class TestSolvingLines:
     def test_states_what_is_running(self):
-        text = "".join(l.text for l in solving_lines("scalar", 200))
+        text = "".join(line.text for line in solving_lines("scalar", 200))
         assert "scalar" in text and "200" in text
 
     def test_is_not_an_alarm(self):
@@ -324,7 +324,7 @@ class TestAgainstARealSolve:
             quadrature_points=2048,
         )
         text = "".join(
-            l.text for l in provenance_lines(scan, check_energy_balance(scan), 0.0159)
+            line.text for line in provenance_lines(scan, check_energy_balance(scan), 0.0159)
         )
         for expected in ("scalar", "convergence:", "normalization:", "energy balance:"):
             assert expected in text
