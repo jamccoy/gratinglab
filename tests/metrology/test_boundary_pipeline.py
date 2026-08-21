@@ -26,7 +26,7 @@ from gratinglab.metrology.boundary import build_boundary_profile                
 from gratinglab.metrology.config import PROJECT_ROOT                            # noqa: E402
 from gratinglab.metrology.core.image_flatten import flatten_image               # noqa: E402
 from gratinglab.metrology.core.processing import load_afm_data                  # noqa: E402
-from gratinglab.metrology.io.ggp import GGP_HEADER, write_ggp                   # noqa: E402
+from gratinglab.io.ggp import GGP_HEADER, write_ggp                             # noqa: E402
 from gratinglab.metrology.settings import AnalysisSettings                      # noqa: E402
 
 SOURCE = os.path.join(PROJECT_ROOT, 'data', 'TASTE_ALS_A205_Ti_Pt_flatten.txt')
@@ -187,7 +187,7 @@ def test_written_file_has_the_uncommented_two_line_header():
     p = _profile(ggp_n_points=100)
     with tempfile.TemporaryDirectory() as scratch:
         path = os.path.join(scratch, 'out.ggp')
-        write_ggp(path, p.x_norm, p.y_norm)
+        write_ggp(path, t=p.x_norm, y=p.y_norm)
         with open(path) as handle:
             lines = handle.read().splitlines()
 

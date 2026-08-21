@@ -126,7 +126,9 @@ def run_boundary_profile_export(settings=None, filename=None):
     from .core.processing import load_afm_data
     from .core.image_flatten import flatten_image
     from .boundary import build_boundary_profile
-    from .io.ggp import write_ggp, write_profile_metrics
+    from gratinglab.io.ggp import write_ggp
+
+    from .io.metrics import write_profile_metrics
     from .settings import AnalysisSettings
 
     if settings is None:
@@ -162,7 +164,7 @@ def run_boundary_profile_export(settings=None, filename=None):
     stem = os.path.splitext(os.path.basename(filename))[0]
     ggp_path = os.path.join(RESULTS_DIR, f'averaged_groove_profile_{stem}.ggp')
     met_path = os.path.join(RESULTS_DIR, f'groove_analysis_metrics_{stem}.txt')
-    write_ggp(ggp_path, profile.x_norm, profile.y_norm)
+    write_ggp(ggp_path, t=profile.x_norm, y=profile.y_norm)
     write_profile_metrics(met_path, profile.metrics)
 
     print(f"\n  Groove depth: {profile.metrics['groove_depth']:.4f} of period")

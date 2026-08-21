@@ -124,8 +124,15 @@ class TestWriting:
         with pytest.raises(ValueError, match="differ in length"):
             write_ggp(tmp_path / "x.ggp", t=[0, 1], y=[0, 1, 2])
 
-    def test_matches_afm_blaze_meas_line_format(self, tmp_path):
-        """Byte compatibility with the upstream producer of these files."""
+    def test_writes_the_exact_pcgrate_line_format(self, tmp_path):
+        """Six decimals, one space, newline -- the form PCGrate accepts.
+
+        This began as a byte-compatibility check against `afm_blaze_meas`,
+        which shipped a second `write_ggp`. That copy is gone and this module
+        is now the only implementation, so there is no longer another writer
+        to agree with. The assertion outlives the reason for it: the format
+        is still a fact about PCGrate, and still worth pinning.
+        """
         path = write_ggp(tmp_path / "fmt.ggp", t=[0.0, 0.5], y=[0.0, 0.25])
         assert path.read_text() == GGP_HEADER + "\n0.000000 0.000000\n0.500000 0.250000\n"
 

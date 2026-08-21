@@ -30,8 +30,19 @@ We **read all three** -- they are real files someone needs to load -- and
 **write only the canonical form**. ``np.savetxt(header=...)`` is what produces
 the hashed variants; it must not be used here.
 
-The upstream producer of these files is ``afm_blaze_meas``
-(``afm_analysis/io/ggp.py``). This module stays byte-compatible with it.
+This is the only ``.ggp`` writer in the project. It was not always: the
+metrology package shipped a second copy, and the two were kept in agreement by
+a comment and a byte-compatibility test. :mod:`gratinglab.metrology` now calls
+this one.
+
+Worth stating plainly, because the format is the reason the sidecar exists: a
+``.ggp`` **cannot carry the period in nm**. It holds a shape, not a grating.
+Anything downstream needs the period from somewhere else --
+``benchmarks/corpus.toml`` is exactly that "somewhere else", recovered by hand.
+Code holding a measured profile should reach for
+:meth:`gratinglab.metrology.boundary.BoundaryProfile.to_problem` instead, which
+carries the period it measured. See ``docs/roadmap.md`` on the native boundary
+format for the file-based version of the same fix.
 """
 
 from __future__ import annotations
@@ -187,8 +198,8 @@ def write_ggp(
 
     Pass either a ``profile`` or explicit ``t``/``y`` arrays.
 
-    Byte-compatible with ``afm_blaze_meas``'s ``write_ggp``: same header, same
-    ``"%f %f\\n"`` line format, so files from either project are interchangeable.
+    Six decimals, single-space separated, newline terminated. The format is
+    pinned by ``tests/test_ggp.py``; PCGrate rejects variations on it.
     """
     if (profile is None) == (t is None):
         raise ValueError("pass either a profile or both t and y, not both or neither")
