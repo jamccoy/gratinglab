@@ -550,7 +550,7 @@ orders by up to 51% and is now the default.
 
 ---
 
-## The AFM profile disagrees with its own facet fit, and the depth is what the solver sees
+## The measured groove is rounded, not faceted, and the solver reads the depth
 
 The first thing the metrology merge (M17) made testable, and it went the
 opposite way to the prediction.
@@ -578,54 +578,93 @@ conductivity, 8192 quadrature points), mean total over the reference grid:
 idealised geometry moved the total *away* from unity. The period makes almost no
 difference — 315.15 and 314.09 nm agree to 0.2% — so this is shape, not scale.
 
-### Why: the groove is internally inconsistent
+### The groove is inconsistent with itself
 
 | Quantity | Value |
 |---|---|
 | Blaze angle from the **facet fit** (`extract_blaze_angle`, 100 grooves) | 27.91° ± 2.13° |
-| Blaze angle implied by the measured **depth**, at the same 70.5° anti-blaze | **20.33°** |
-| Max local sidewall angle anywhere in the profile | 67.45° |
+| Blaze angle implied by the measured **depth**, at a 70.5° anti-blaze | **20.33°** |
 | depth/period, measured | 0.3275 |
-| depth/period, idealised `Blazed(29.5°, 70.5°)` | 0.4713 |
+| depth/period, sharp `Blazed(27.91°, 70.5°)` | 0.4460 |
 
-On a true sawtooth these two blaze angles are the same number — depth and facet
-angle are locked together by the geometry. Here they differ by 7.6°, which is
-**3.6σ on the fit's own uncertainty**. The profile has facets as steep as the fit
-says while being far too shallow for them.
+On a *sharp* two-facet sawtooth these blaze angles are the same number: depth and
+facet angle are locked together. Here they differ by 7.6°, which is 3.6σ on the
+fit's own uncertainty. Something is taking depth out of the groove while leaving
+the mid-facet slope intact.
 
-That is the signature of **tip convolution**: the AFM tip cannot reach the bottom
-of the trough or resolve the apex, so both extremes are truncated while the
-mid-facet slope — which is what a line fit lands on, after trimming — survives
-intact. The rounded shape in the Boundary tab preview is the same fact seen by
-eye.
+### Three mechanisms could do that. Two are ruled out.
+
+**A flat land.** Real blazed gratings frequently have an unfaceted flat within
+the period, and a land of fraction *f* gives
+`depth = (1 − f)/(cot δ + cot δ′)` — a depth deficit with no metrology artefact
+required. This is the conventional explanation and has to be excluded first.
+
+Excluded. The observed depth needs **f ≈ 25–30%** of the period flat:
+
+| Facet angles assumed | sharp depth | implied land |
+|---|---|---|
+| 27.91° / 70.5° | 0.4460 | 26.6% |
+| 29.5° / 70.5° | 0.4713 | 30.5% |
+| 27.91° / 67.45° | 0.4342 | 24.6% |
+
+The profile does not have one. Only **2.9%** of the period lies within 2° of
+flat, 7.2% within 5°, and 12.2% within 10° — well short of 25% at any reasonable
+threshold. A land of that size would also put a sharp spike at 0° in the slope
+distribution, and there is none: the histogram is broad and continuous, spreading
+from −50° to 0° on the blaze side and 0° to +70° on the anti-blaze side, with no
+mode at zero. A sharp faceted groove with a land would be *tri-modal*. This one
+has no modes at all.
+
+**Averaging across grooves.** The pipeline averages 5 grooves whose periods
+differ by ±2.7% (314.33 ± 8.50 nm) and whose facet angles differ by ±2.13°, which
+would blur an apex all by itself — a defect of the measurement pipeline rather
+than of the grating or the tip.
+
+Excluded. The individual grooves are 0.3304, 0.3274, 0.3268, 0.3289, 0.3312 —
+mean 0.3289 ± 0.0017. Averaging costs **0.4%** of the depth. Every groove is
+individually shallow; the average is not hiding sharp ones.
+
+**Rounding.** What remains, and what the slope histogram positively supports: the
+groove has no facets in the sense the fit assumes. The line fit lands on the
+steepest part of a continuously curving flank and reports it as "the facet
+angle", while the apex and trough are rounded off, removing depth.
+
+### What rounding does *not* tell us
+
+**Whether the grating is rounded or the tip rounded it is not determinable from
+this scan.** A tip too blunt to reach the trough produces this signature; so does
+a genuinely rounded groove from fabrication. Distinguishing them needs either a
+tip characterisation, a scan of the same grating with a sharper tip, or a
+cross-section. Nothing here settles it, and the earlier version of this finding
+asserted tip convolution without excluding either alternative above.
 
 ### Why it matters more than it looks
 
 The scalar phase term is `(2π/λ)·height·sinγ`. It depends on **depth**, not on
-facet angle. So a tip-rounded groove diffracts like the shallower blaze its depth
-implies — about 20° here — regardless of the 27.9° its facets report. The facet
-fit is the more accurate measurement of the grating; the depth is the one the
-solver uses.
+facet angle. So this groove diffracts like the shallower blaze its depth implies —
+about 20° — regardless of the 27.9° its facets report. Whichever mechanism is
+responsible, the facet fit is the number a person would quote for this grating
+and the depth is the number the solver uses, and they disagree by 3.6σ.
 
-### What this does and does not establish
+### What this establishes
 
 - It **falsifies**, for this profile, the claim that swapping in a measured
   groove would close the TASTE gap. It does the reverse.
-- It does **not** show the roadmap's profile-mismatch hypothesis is wrong in
-  general — an uncorrected AFM profile is not the true grating either, and this
-  finding is the reason why.
+- It does **not** show the profile-mismatch hypothesis is wrong in general — a
+  rounded AFM boundary is not the true grating either, if the rounding is the
+  tip's.
 - It does **not** confirm this scan is the TASTE reference grating. The evidence
   is a name match, a period agreeing within uncertainty (314.33 ± 8.50 nm
   measured against 315.15 nm known independently from `OGRE/pcgratewavscan.py`),
-  and a facet angle consistent with 29.5°. That is suggestive, not decisive.
-- Scalar theory does not conserve energy by construction
-  (`theory/scalar.md` §5), so *part* of the gap to 1.0005 was never
-  attributable to the profile at all.
+  and a facet angle consistent with 29.5°. Suggestive, not decisive.
+- Scalar theory does not conserve energy by construction (`theory/scalar.md` §5),
+  so *part* of the gap to 1.0005 was never attributable to the profile at all.
 
-**Consequence: tip deconvolution is a prerequisite, not a refinement.** Feeding
-raw AFM boundaries to a solver and reading the absolute efficiency is not
-currently defensible, and nothing in the pipeline warns about it. Recorded in
-`theory/metrology.md` §1 as the assumption with no mitigation and no diagnostic.
+**Consequence: an absolute efficiency from a raw AFM boundary is not currently
+defensible**, and nothing in the pipeline says so. The cheapest available warning
+is a diagnostic comparing the depth-implied blaze angle against the fitted one —
+they agree on a sharp groove and diverge here, and the divergence is exactly the
+quantity that matters. Recorded in `theory/metrology.md` §1.
 
 ---
 
