@@ -18,10 +18,10 @@ pytest.importorskip(
     "PySide6", reason='Qt not installed; pip install -e ".[dev,gui]"')
 
 from gratinglab.metrology.analyzer import analyze_single_file          # noqa: E402
-from gratinglab.metrology.config import PROJECT_ROOT                   # noqa: E402
 from gratinglab.metrology.gui.qt.main_window import MainWindow         # noqa: E402
+from scans import SYNTHETIC, real_scan                                 # noqa: E402
 
-SAMPLE = os.path.join(PROJECT_ROOT, 'data', 'ALD_master_1p5um_flatten.txt')
+SAMPLE = str(SYNTHETIC)
 
 
 @pytest.fixture
@@ -137,8 +137,14 @@ class TestImportTab:
         """
         The knob that matters. Roughly 0.5 degrees between methods, so a control
         that leaves the answer alone is not wired up.
+
+        Needs a real scan. The methods differ in how they estimate a background
+        to subtract, and on the synthetic fixture -- whose background is one
+        exact plane -- they agree to 0.04 deg, which cannot distinguish "wired
+        up" from "ignored". That agreement is a fact about ideal data, not
+        evidence about the control.
         """
-        window.load(SAMPLE)
+        window.load(str(real_scan('ALD_master_1p5um_flatten.txt')))
         _run_and_wait(qtbot, window)
         before = window._result['mean_angle']
 

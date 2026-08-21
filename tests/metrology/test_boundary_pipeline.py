@@ -13,6 +13,8 @@ import sys
 import tempfile
 
 import numpy as np
+
+from scans import SYNTHETIC, SYNTHETIC_ANTIBLAZE_DEG, SYNTHETIC_BLAZE_DEG, SYNTHETIC_PERIOD_NM
 import pytest
 
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
@@ -24,13 +26,12 @@ import matplotlib
 matplotlib.use('Agg')
 
 from gratinglab.metrology.boundary import build_boundary_profile                # noqa: E402
-from gratinglab.metrology.config import PROJECT_ROOT                            # noqa: E402
 from gratinglab.metrology.core.image_flatten import flatten_image               # noqa: E402
 from gratinglab.metrology.core.processing import load_afm_data                  # noqa: E402
 from gratinglab.io.ggp import GGP_HEADER, write_ggp                             # noqa: E402
 from gratinglab.metrology.settings import AnalysisSettings                      # noqa: E402
 
-SOURCE = os.path.join(PROJECT_ROOT, 'data', 'TASTE_ALS_A205_Ti_Pt_flatten.txt')
+SOURCE = str(SYNTHETIC)
 
 _cache = {}
 
@@ -121,15 +122,21 @@ def test_minimum_half_width_excludes_grooves_once_it_exceeds_their_extent():
     On this scan the exclusion is all-or-nothing, which is worth knowing.
 
     Every surviving groove sits far enough from both edges to get the full
-    half-width, about 39 samples for a 314 nm period at 3.9 nm per sample, so
-    they share one extent: 38 keeps all five, 40 keeps none. The control is a
-    guard against clipped grooves, not a gradual filter.
+    half-width, so they share one extent and cross the threshold together. On
+    the synthetic scan that extent is about 30 samples -- a 315 nm period at
+    5.21 nm per sample, 384 columns over 2 um -- so 29 keeps all five and 30
+    keeps none. The control is a guard against clipped grooves, not a gradual
+    filter.
+
+    The numbers are sampling-dependent and would change if the fixture were
+    regenerated at a different width; the all-or-nothing *behaviour* is the
+    claim, and the constants only pin where the step falls.
     """
     assert _profile(ggp_min_half_width=10).n_used == 5
-    assert _profile(ggp_min_half_width=38).n_used == 5
+    assert _profile(ggp_min_half_width=29).n_used == 5
 
     try:
-        _profile(ggp_min_half_width=45)
+        _profile(ggp_min_half_width=31)
     except ValueError as exc:
         assert 'extracted' in str(exc).lower()
         return
@@ -168,8 +175,11 @@ def test_the_panel_and_the_cli_compute_the_same_profile():
     """
     from gratinglab.metrology.workflows import run_boundary_profile_export
 
+    # Named explicitly rather than leaning on config.GGP_SOURCE_FILE, which
+    # points at a real scan this machine may not have. The claim is that the two
+    # paths agree on one input, not which input config happens to name.
     with contextlib.redirect_stdout(io.StringIO()):
-        via_cli = run_boundary_profile_export()
+        via_cli = run_boundary_profile_export(filename=SOURCE)
     via_panel = _profile()
 
     assert np.array_equal(via_cli['x'], via_panel.x_norm)
@@ -277,3 +287,67 @@ def test_the_measured_groove_solves():
         quadrature_points=1024)
     assert np.all(np.isfinite(scan.efficiency))
     assert scan.efficiency.max() > 0
+
+
+# ── The synthetic fixture as a control ───────────────────────────────────────
+#
+# These are the tests a real scan cannot support, because on a real scan nobody
+# knows the true answer. The fixture is an ideal sawtooth of stated period and
+# blaze angle, so the pipeline can be asked to recover them.
+
+def test_the_measured_period_matches_the_one_that_was_built_in():
+    p = _profile()
+    assert p.period_nm == pytest.approx(SYNTHETIC_PERIOD_NM, rel=0.01), \
+        "period is measured from groove spacing; it must recover what was drawn"
+
+
+def test_the_depth_matches_the_blaze_geometry_that_was_built_in():
+    """Depth and facet angle are locked together on a sharp groove."""
+    from gratinglab.profiles import Blazed
+
+    ideal = Blazed(blaze_angle=SYNTHETIC_BLAZE_DEG,
+                   antiblaze_angle=SYNTHETIC_ANTIBLAZE_DEG)
+    p = _profile()
+    # A few percent low: the apex falls between samples at 384 columns, so
+    # discretisation clips it. Real scans lose far more, and for a reason that
+    # is not discretisation -- see findings.md, "The measured groove is rounded".
+    assert p.metrics['peak_to_valley'] == pytest.approx(ideal.depth, rel=0.03)
+
+
+def test_depth_and_facet_fit_agree_on_a_sharp_groove():
+    """The control the TASTE finding lacked.
+
+    On a sharp sawtooth the blaze angle implied by the depth and the blaze
+    angle from a facet fit are the same number by construction. They disagree
+    by 7.6 deg on the one real scan in evidence, and the whole weight of that
+    finding rests on this case behaving differently. Without this test, a
+    reader has only the assertion that a sharp groove would agree.
+
+    Note what the tolerance is *not* expressed in. The fitted angle here has a
+    scatter of ~0.1 deg, so even this 0.3 deg discretisation gap is several
+    sigma -- the same "3.6 sigma" the real scan shows. Sigma counts the noise,
+    not the disagreement. The absolute gap is what separates the two cases:
+    0.3 deg here against 7.6 deg there.
+    """
+    import contextlib
+    import io
+
+    from scipy.optimize import brentq
+
+    from gratinglab.metrology.analyzer import analyze_single_file
+    from gratinglab.profiles import Blazed
+
+    p = _profile()
+    with contextlib.redirect_stdout(io.StringIO()):
+        fit = analyze_single_file(SOURCE, settings=AnalysisSettings.from_config())
+
+    implied = brentq(
+        lambda a: Blazed(blaze_angle=a,
+                         antiblaze_angle=SYNTHETIC_ANTIBLAZE_DEG).depth
+        - p.metrics['peak_to_valley'],
+        0.5, 89.0)
+
+    assert fit['mean_angle'] == pytest.approx(SYNTHETIC_BLAZE_DEG, abs=0.5)
+    assert abs(fit['mean_angle'] - implied) < 1.0, (
+        f"a sharp groove must agree with itself: fitted {fit['mean_angle']:.2f} "
+        f"deg against {implied:.2f} deg implied by the depth")

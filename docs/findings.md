@@ -559,10 +559,16 @@ opposite way to the prediction.
 0.55 against a PCGrate total of 1.0005 — is dominated by **profile mismatch**,
 because the comparison runs on an idealised `Blazed(29.5°, 70.5°)` while the
 `.ggp` the reference run actually used cannot be found. With the metrology
-package absorbed, the repo now contains an AFM scan of what is plausibly that
-grating (`data/TASTE_ALS_A205_Ti_Pt_flatten.txt` — A205, Ti/Pt), so the
-idealised sawtooth can be replaced with a measured groove and the hypothesis
-tested directly.
+package absorbed, an AFM scan of what is plausibly that grating became
+available to the same code (`TASTE_ALS_A205_Ti_Pt_flatten.txt` — A205, Ti/Pt),
+so the idealised sawtooth can be replaced with a measured groove and the
+hypothesis tested directly.
+
+The scan is **not in the repository** — it is the group's measurement data, held
+under `GRATINGLAB_AFM_DIR` (default `~/Documents/afm_scans/`) like the PCGrate
+corpus. Everything below is reproducible from it; nothing below is reproducible
+from a bare clone, which is the cost of not committing measurements and is
+stated here rather than discovered.
 
 Run at the corpus geometry (period 315.15 nm, γ=1.25°, α=19.99°, perfect
 conductivity, 8192 quadrature points), mean total over the reference grid:
@@ -588,9 +594,17 @@ difference — 315.15 and 314.09 nm agree to 0.2% — so this is shape, not scal
 | depth/period, sharp `Blazed(27.91°, 70.5°)` | 0.4460 |
 
 On a *sharp* two-facet sawtooth these blaze angles are the same number: depth and
-facet angle are locked together. Here they differ by 7.6°, which is 3.6σ on the
-fit's own uncertainty. Something is taking depth out of the groove while leaving
-the mid-facet slope intact.
+facet angle are locked together. Here they differ by **7.6°**. Something is
+taking depth out of the groove while leaving the mid-facet slope intact.
+
+> **Do not read that as 3.6σ.** An earlier version of this finding quoted the
+> disagreement in units of the fit's own scatter, which sounds decisive and is
+> not. The synthetic control (`tests/metrology/fixtures/synthetic_blazed_scan.txt`,
+> an ideal 30° sawtooth) recovers 29.90° ± 0.09° fitted against 29.56° implied —
+> a 0.33° gap that is pure discretisation, and **3.8σ**, because the scatter on
+> ideal data is tiny. Sigma measures the noise, not the disagreement. The
+> quantity that separates the two cases is the absolute gap: 0.33° on a sharp
+> groove against 7.6° here, more than twenty times larger.
 
 ### Three mechanisms could do that. Two are ruled out.
 
@@ -664,7 +678,12 @@ and the depth is the number the solver uses, and they disagree by 3.6σ.
 defensible**, and nothing in the pipeline says so. The cheapest available warning
 is a diagnostic comparing the depth-implied blaze angle against the fitted one —
 they agree on a sharp groove and diverge here, and the divergence is exactly the
-quantity that matters. Recorded in `theory/metrology.md` §1.
+quantity that matters. It must be thresholded in **degrees, not sigma**, for the
+reason above. Recorded in `theory/metrology.md` §1.
+
+The control now exists as a committed fixture, so the "they agree on a sharp
+groove" half is a test rather than an assertion:
+`test_depth_and_facet_fit_agree_on_a_sharp_groove`.
 
 ---
 

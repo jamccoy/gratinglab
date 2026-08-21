@@ -32,13 +32,31 @@ def _find_project_root(start):
 
 
 PROJECT_ROOT = _find_project_root(__file__)
-DATA_DIR = os.path.join(PROJECT_ROOT, 'data')
 RESULTS_DIR = os.path.join(PROJECT_ROOT, 'results')
+
+# Scans live *outside* the checkout, and are not committed.
+#
+# They are the research group's measurement data, and the same rule already
+# applies to the PCGrate reference corpus (see tests/corpus.py and
+# GRATINGLAB_REF_DIR). The metrology package arrived from a repository that
+# committed its scans instead; keeping both conventions in one project would
+# have meant the answer to "is measurement data in the repo?" depended on which
+# half you were standing in.
+#
+# Point GRATINGLAB_AFM_DIR somewhere else to override.
+DEFAULT_AFM_DIR = os.path.join(os.path.expanduser('~'), 'Documents', 'afm_scans')
+DATA_DIR = os.environ.get('GRATINGLAB_AFM_DIR') or DEFAULT_AFM_DIR
 
 
 def resolve_path(name):
-    """Resolve a configured path against the project root, leaving absolute paths alone"""
-    return name if os.path.isabs(name) else os.path.join(PROJECT_ROOT, name)
+    """Resolve a configured scan name against DATA_DIR, leaving absolute paths alone.
+
+    Every caller passes a scan filename, and scans no longer live in the
+    checkout, so this resolves against DATA_DIR rather than PROJECT_ROOT. An
+    absolute path is still honoured untouched, which is how the GUI passes a
+    file the user picked from anywhere.
+    """
+    return name if os.path.isabs(name) else os.path.join(DATA_DIR, name)
 
 
 # ============ SCAN PARAMETERS ============
@@ -102,7 +120,7 @@ SPM_DIRECTION = 'Retrace'       # 'Retrace' or 'Trace'. Retrace matches the
 # ============ PCGRATE BOUNDARY PROFILE EXPORT ============
 # Used by ANALYSIS_MODE = 'ggp'. Averages the grooves of one scan into a single
 # representative groove and writes it as a PCGrate .ggp boundary profile.
-GGP_SOURCE_FILE = 'data/TASTE_ALS_A205_Ti_Pt_flatten.txt'
+GGP_SOURCE_FILE = 'TASTE_ALS_A205_Ti_Pt_flatten.txt'
 GGP_N_POINTS = 2000          # Points in the exported profile
 GGP_APPLY_SMOOTHING = True   # Light smoothing to remove interpolation kinks
 GGP_SMOOTHING_WINDOW = 5     # Larger = smoother
@@ -116,7 +134,7 @@ ANALYSIS_MODE = 'compare'  # 'single' for one file, 'multiple' for pattern match
                            # profile, 'icc' for the row-group correlation diagnostic
 
 # Single file mode
-SINGLE_FILE = 'data/150C_2um_flatten.txt'
+SINGLE_FILE = '150C_2um_flatten.txt'
 
 # Multiple file mode (pattern matching)
 FILE_PATTERN = 'TASTE_*.txt'
@@ -124,16 +142,16 @@ FILE_PATTERN = 'TASTE_*.txt'
 # Compare mode - define your samples here
 # Each entry: (filename, label for plots, temperature)
 SAMPLES_TO_COMPARE = [
-    ('data/ALD_master_1p5um_flatten.txt', 'Master', None),
-    #('data/20250820_150C_00002.txt', '150°C', 150), #only a partial scan, same as below
-    ('data/20250820_150C_00003.txt', '150°C', 150),
-    ('data/20250820_215C_00001.txt', '215°C', 215),
-    ('data/20250820_280C_00004.txt', '280°C', 280),
-    ('data/20250905_280C_00005.txt', '280°C', 280),
-    ('data/20250905_280C_00004.txt', '280°C', 280),
-    #('data/20250905_280C_00003.txt', '280°C', 280), #accidentally measuring some of the groove bottom
-    ('data/20250905_280C_00000.txt', '280°C', 280),
-    ('data/500C_N2_flatten.txt', '500°C', 500)
+    ('ALD_master_1p5um_flatten.txt', 'Master', None),
+    #('20250820_150C_00002.txt', '150°C', 150), #only a partial scan, same as below
+    ('20250820_150C_00003.txt', '150°C', 150),
+    ('20250820_215C_00001.txt', '215°C', 215),
+    ('20250820_280C_00004.txt', '280°C', 280),
+    ('20250905_280C_00005.txt', '280°C', 280),
+    ('20250905_280C_00004.txt', '280°C', 280),
+    #('20250905_280C_00003.txt', '280°C', 280), #accidentally measuring some of the groove bottom
+    ('20250905_280C_00000.txt', '280°C', 280),
+    ('500C_N2_flatten.txt', '500°C', 500)
     # Add more samples as needed:
     # ('file3.txt', '200°C'),
     # ('file4.txt', '225°C'),

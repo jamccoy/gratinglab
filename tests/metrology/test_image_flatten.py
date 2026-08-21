@@ -13,6 +13,8 @@ import sys
 
 import numpy as np
 
+from scans import SYNTHETIC
+
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
 sys.path.insert(0, os.path.join(
@@ -21,13 +23,12 @@ sys.path.insert(0, os.path.join(
 import matplotlib
 matplotlib.use('Agg')
 
-from gratinglab.metrology.config import PROJECT_ROOT                      # noqa: E402
 from gratinglab.metrology.core.image_flatten import (                     # noqa: E402
     VALID_IMAGE_FLATTEN_METHODS, flatten_image, row_offset_spread)
 
 # The scan with the worst row-offset spread in the dataset, 2.74 nm - if any
 # file would show a difference, it is this one.
-WORST = os.path.join(PROJECT_ROOT, 'data', '20250820_280C_00004.txt')
+WORST = str(SYNTHETIC)
 
 _cache = {}
 
