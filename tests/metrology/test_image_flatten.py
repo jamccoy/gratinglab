@@ -16,13 +16,13 @@ import numpy as np
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
 sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src'))
 
 import matplotlib
 matplotlib.use('Agg')
 
-from afm_analysis.config import PROJECT_ROOT                      # noqa: E402
-from afm_analysis.core.image_flatten import (                     # noqa: E402
+from gratinglab.metrology.config import PROJECT_ROOT                      # noqa: E402
+from gratinglab.metrology.core.image_flatten import (                     # noqa: E402
     VALID_IMAGE_FLATTEN_METHODS, flatten_image, row_offset_spread)
 
 # The scan with the worst row-offset spread in the dataset, 2.74 nm - if any
@@ -34,7 +34,7 @@ _cache = {}
 
 def _image():
     if 'image' not in _cache:
-        from afm_analysis.core.processing import load_afm_data
+        from gratinglab.metrology.core.processing import load_afm_data
         with contextlib.redirect_stdout(io.StringIO()):
             _cache['image'] = load_afm_data(WORST, default_scan_size=2.0)
     return _cache['image']
@@ -128,8 +128,8 @@ def test_affine_methods_give_identical_blaze_angles():
     flattening was disabled or moved - and the defaults need revisiting rather
     than the test relaxing.
     """
-    from afm_analysis.analyzer import analyze_single_file
-    from afm_analysis.settings import AnalysisSettings
+    from gratinglab.metrology.analyzer import analyze_single_file
+    from gratinglab.metrology.settings import AnalysisSettings
 
     base = AnalysisSettings.from_config()
     angles = {}
@@ -154,8 +154,8 @@ def test_profile_flattening_does_change_the_answer():
     across the four methods on this scan - comparable to the differences between
     samples this software exists to detect.
     """
-    from afm_analysis.analyzer import analyze_single_file
-    from afm_analysis.settings import AnalysisSettings
+    from gratinglab.metrology.analyzer import analyze_single_file
+    from gratinglab.metrology.settings import AnalysisSettings
 
     base = AnalysisSettings.from_config()
     angles = {}
@@ -174,7 +174,7 @@ def test_profile_flattening_does_change_the_answer():
 
 def test_default_is_align_rows_and_costs_nothing():
     """The default in config.py, and the reason it was safe to change"""
-    from afm_analysis.settings import AnalysisSettings
+    from gratinglab.metrology.settings import AnalysisSettings
     assert AnalysisSettings.from_config().image_flatten_method == 'align_rows'
 
 

@@ -22,9 +22,9 @@ import subprocess
 import sys
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parent.parent.parent
 ICON = REPO / "resources" / "afm_blaze_meas.icns"
-LAUNCHER = REPO / ".venv" / "bin" / "afm-gui"
+LAUNCHER = REPO / ".venv" / "bin" / "gratinglab-metrology-gui"
 BUNDLE_ID = "org.jamccoy.afmblazemeas"
 APP_NAME = "AFM Blaze Meas"
 #: No spaces: this is the executable and icon filename inside the bundle.
@@ -81,7 +81,7 @@ def build(destination: Path) -> Path:
 def _version() -> str:
     sys.path.insert(0, str(REPO / "src"))
     try:
-        from afm_analysis import __version__
+        from gratinglab.metrology import __version__
 
         return __version__
     except Exception:

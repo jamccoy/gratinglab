@@ -3,7 +3,7 @@ Groove averaging and normalisation for PCGrate boundary profiles
 
 Ported from afm_scan_avg_profile_rev3.py. The arithmetic is unchanged - the
 port is verified by reproducing that script's output byte-for-byte - but the
-profile front-end now comes from afm_analysis.core instead of a private copy.
+profile front-end now comes from gratinglab.metrology.core instead of a private copy.
 """
 import numpy as np
 from scipy.interpolate import interp1d

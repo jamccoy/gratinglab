@@ -26,6 +26,21 @@ import pytest
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 os.environ.setdefault("QT_API", "PySide6")
 
+# Matplotlib gets the same treatment, and it has to happen *here* rather than in
+# `tests/metrology/conftest.py` where it arrived: `use()` binds the backend at
+# first pyplot import, and the root conftest loads first. Left further down the
+# tree, whichever suite ran first would decide the backend for both.
+#
+# Guarded because matplotlib is an extra, not a core dependency: the solver
+# tests must still run in an environment that has never installed it. Same
+# convention as the `importorskip` guarding the Qt tests.
+try:
+    import matplotlib
+except ModuleNotFoundError:
+    pass
+else:
+    matplotlib.use("Agg")
+
 # Re-exported so existing fixtures keep working. The definitions live in
 # `corpus.py` because a module-level `from .conftest import ...` breaks under
 # a tool that drives pytest in-process from a copied tree -- see that file.

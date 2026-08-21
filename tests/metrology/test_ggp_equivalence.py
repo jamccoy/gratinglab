@@ -20,11 +20,11 @@ import numpy as np
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
 sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src'))
 
-from afm_analysis.config import PROJECT_ROOT
-from afm_analysis.core.processing import load_afm_data, raw_data, find_groove_positions
-from afm_analysis.boundary import (flatten_endpoints, average_grooves,
+from gratinglab.metrology.config import PROJECT_ROOT
+from gratinglab.metrology.core.processing import load_afm_data, raw_data, find_groove_positions
+from gratinglab.metrology.boundary import (flatten_endpoints, average_grooves,
                                    normalize_profile)
 
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)),

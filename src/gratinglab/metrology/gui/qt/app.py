@@ -1,7 +1,7 @@
 """
 Application entry point for the Qt front-end.
 
-Reached via ``afm-gui`` or ``python -m afm_analysis.gui.qt.app``.
+Reached via ``gratinglab-metrology-gui`` or ``python -m gratinglab.metrology.gui.qt.app``.
 """
 from __future__ import annotations
 

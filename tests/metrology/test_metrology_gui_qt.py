@@ -17,9 +17,9 @@ import pytest
 pytest.importorskip(
     "PySide6", reason='Qt not installed; pip install -e ".[dev,gui]"')
 
-from afm_analysis.analyzer import analyze_single_file          # noqa: E402
-from afm_analysis.config import PROJECT_ROOT                   # noqa: E402
-from afm_analysis.gui.qt.main_window import MainWindow         # noqa: E402
+from gratinglab.metrology.analyzer import analyze_single_file          # noqa: E402
+from gratinglab.metrology.config import PROJECT_ROOT                   # noqa: E402
+from gratinglab.metrology.gui.qt.main_window import MainWindow         # noqa: E402
 
 SAMPLE = os.path.join(PROJECT_ROOT, 'data', 'ALD_master_1p5um_flatten.txt')
 
@@ -53,7 +53,7 @@ def test_qt_api_is_pinned_to_pyside6():
     This project shipped PyQt5 until recently, so a stray install is realistic
     and would otherwise produce a canvas that cannot parent into the window.
     """
-    import afm_analysis.gui.qt  # noqa: F401
+    import gratinglab.metrology.gui.qt  # noqa: F401
     assert os.environ.get("QT_API") == "PySide6"
 
 
@@ -198,12 +198,13 @@ class TestBoundaryTab:
         target = str(tmp_path / "out.ggp")
         monkeypatch.setattr(QFileDialog, "getSaveFileName",
                             staticmethod(lambda *a, **k: (target, "")))
-        monkeypatch.setattr("afm_analysis.gui.qt.boundary_view.QMessageBox",
+        monkeypatch.setattr("gratinglab.metrology.gui.qt.boundary_view.QMessageBox",
                             type("Stub", (), {"information": staticmethod(lambda *a: None),
                                               "warning": staticmethod(lambda *a: None)}))
         window.boundary.export()
 
-        lines = open(target).read().splitlines()
+        with open(target) as handle:
+            lines = handle.read().splitlines()
         assert lines[0] == "3 0 - Polygonal type"
         assert lines[1] == "Period: 1 PSC: 1"
         assert os.path.exists(str(tmp_path / "out_metrics.txt"))
@@ -211,7 +212,7 @@ class TestBoundaryTab:
     def test_panel_matches_a_direct_build(self, qtbot, window):
         """The window must show what the pipeline computes"""
         import numpy as np
-        from afm_analysis.boundary import build_boundary_profile
+        from gratinglab.metrology.boundary import build_boundary_profile
         window.load(SAMPLE)
         direct = build_boundary_profile(
             window._data, window._scan_size,

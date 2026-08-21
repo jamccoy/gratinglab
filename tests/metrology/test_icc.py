@@ -18,12 +18,12 @@ import numpy as np
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
 sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src'))
 
 import matplotlib
 matplotlib.use('Agg')
 
-from afm_analysis.stats.icc import (
+from gratinglab.metrology.stats.icc import (
     compute_icc, effective_sample_size, sem_inflation_factor, interpret_icc)
 
 
@@ -111,8 +111,8 @@ def _analyze(path, trim):
     restore it in a finally block, which worked only because the module bound its
     configuration at import - the same coupling that made a CLI impossible.
     """
-    from afm_analysis.analyzer import analyze_single_file
-    from afm_analysis.settings import AnalysisSettings
+    from gratinglab.metrology.analyzer import analyze_single_file
+    from gratinglab.metrology.settings import AnalysisSettings
 
     settings = AnalysisSettings.from_config().with_(facet_trim=trim)
     with contextlib.redirect_stdout(io.StringIO()):
@@ -121,7 +121,7 @@ def _analyze(path, trim):
 
 def test_row_group_labels_align_with_angles():
     """Every measurement carries a label, at the default settings"""
-    from afm_analysis.config import PROJECT_ROOT
+    from gratinglab.metrology.config import PROJECT_ROOT
     path = os.path.join(PROJECT_ROOT, 'data', '20250820_280C_00004.txt')
     r = _analyze(path, 0.10)
     assert len(r['groove_row_groups']) == len(r['all_angles'])
@@ -137,7 +137,7 @@ def test_labels_stay_aligned_when_fits_fail():
     file detects 102 centres but only ~70 fits succeed - exactly the case the old
     code got wrong.
     """
-    from afm_analysis.config import PROJECT_ROOT
+    from gratinglab.metrology.config import PROJECT_ROOT
     path = os.path.join(PROJECT_ROOT, 'data', '20250820_280C_00004.txt')
     r = _analyze(path, 0.28)
     assert r is not None, "expected some measurements to survive at trim 0.28"

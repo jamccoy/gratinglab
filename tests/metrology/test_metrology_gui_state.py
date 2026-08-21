@@ -5,8 +5,8 @@ No Qt import anywhere in this file, deliberately - these rules are the ones wort
 testing, and they should be testable without a display.
 """
 
-from afm_analysis.gui.state import (FormState, build, summarize_result)
-from afm_analysis.settings import AnalysisSettings, MAX_FACET_TRIM
+from gratinglab.metrology.gui.state import (FormState, build, summarize_result)
+from gratinglab.metrology.settings import AnalysisSettings, MAX_FACET_TRIM
 
 
 def test_defaults_are_valid():

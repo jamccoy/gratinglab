@@ -34,7 +34,7 @@ variance that sits *between* row groups rather than *within* them:
   carry no new information; the effective sample size is the number of *groups*,
   not the number of measurements.
 
-Computed in `afm_analysis/stats/icc.py`. Run `ANALYSIS_MODE = 'icc'` to produce a
+Computed in `gratinglab/metrology/stats/icc.py`. Run `ANALYSIS_MODE = 'icc'` to produce a
 per-scan report.
 
 ## What was measured

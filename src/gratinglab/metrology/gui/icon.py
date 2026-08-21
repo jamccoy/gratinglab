@@ -14,7 +14,7 @@ a Dock at small sizes: this one measures the groove, that one models what the
 groove does to light.
 
 matplotlib is imported inside ``render`` rather than at module level: importing
-``afm_analysis.gui`` must stay cheap, since that is what raises the friendly
+``gratinglab.metrology.gui`` must stay cheap, since that is what raises the friendly
 "PySide6 is an optional extra" message. ``tests/test_gui_boundary.py`` checks it.
 
 ``tools/make_icon.py`` turns this into a macOS ``.icns``.
