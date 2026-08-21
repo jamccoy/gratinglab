@@ -814,18 +814,30 @@ def _reflecting_graze(problem: Problem, illumination: Illumination):
       across the groove, so the mean is an approximation and is recorded as
       one.
 
+    A measured profile is the one case that can escape this. If it arrived from
+    metrology with a fitted ``blaze_angle`` it takes the exact facet branch
+    above, marked ``fitted`` rather than ``declared``. Without one it falls back
+    to the mean surface -- which for a sawtooth at grazing incidence is wrong by
+    the whole blaze angle, so the fallback is a real loss and not a formality.
+
     The alternative -- refusing any profile without a facet angle -- would be
     worse than approximating: a sinusoid at grazing incidence does reflect,
     and a solver that declines to say how much has not become more honest.
     """
+    kind = type(problem.profile).__name__
+
     blaze_angle = getattr(problem.profile, "blaze_angle", None)
     if blaze_angle is not None:
+        # A measured profile may carry a fitted facet angle. The geometry is
+        # used identically either way -- but the reader is entitled to know
+        # whether the tilt was specified or estimated, because only one of
+        # those has an uncertainty attached to it.
+        origin = "fitted" if kind == "FromProfileData" else "declared"
         return (
             facet_graze(illumination.gamma, np.radians(blaze_angle), illumination.alpha),
-            f"active facet, {blaze_angle:g} deg tilt",
+            f"active facet, {blaze_angle:g} deg tilt ({origin})",
         )
 
-    kind = type(problem.profile).__name__
     exact = kind == "Lamellar"
     return (
         facet_graze(illumination.gamma, 0.0, illumination.alpha),
