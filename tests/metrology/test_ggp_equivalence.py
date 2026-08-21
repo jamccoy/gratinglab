@@ -17,24 +17,27 @@ import sys
 
 import numpy as np
 
+from scans import real_scan
+
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
 sys.path.insert(0, os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src'))
 
-from gratinglab.metrology.config import PROJECT_ROOT
 from gratinglab.metrology.core.processing import load_afm_data, raw_data, find_groove_positions
 from gratinglab.metrology.boundary import (flatten_endpoints, average_grooves,
                                    normalize_profile)
 
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)),
                        'fixtures', 'rev3_reference.ggp')
-SOURCE = os.path.join(PROJECT_ROOT, 'data', 'TASTE_ALS_A205_Ti_Pt_flatten.txt')
+# The reference .ggp was produced from this exact scan by the retired
+# rev3 script, so the pin only means anything against that same input.
+SOURCE_NAME = 'TASTE_ALS_A205_Ti_Pt_flatten.txt'
 
 
 def build_profile(edge_exclusion):
     """Reproduce the original script's pipeline at a given edge-exclusion setting"""
-    data, scan_x_size = load_afm_data(SOURCE, default_scan_size=2.0)
+    data, scan_x_size = load_afm_data(real_scan(SOURCE_NAME), default_scan_size=2.0)
     raw_x, raw_y = raw_data(data, scan_x_size)
 
     flat_y = flatten_endpoints(raw_x, raw_y)
@@ -91,7 +94,7 @@ def test_edge_rule_reduces_x_stretch():
     back in line with the true period.
     """
     def stretch(edge_exclusion):
-        data, scan_x_size = load_afm_data(SOURCE, default_scan_size=2.0)
+        data, scan_x_size = load_afm_data(real_scan(SOURCE_NAME), default_scan_size=2.0)
         raw_x, raw_y = raw_data(data, scan_x_size)
         flat_y = flatten_endpoints(raw_x, raw_y)
         flat_y = flat_y - np.polyval(np.polyfit(raw_x, flat_y, 1), raw_x)
