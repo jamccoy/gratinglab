@@ -178,8 +178,8 @@ class TestLayerSlicing:
         exact = np.trapezoid(
             profile.height(np.linspace(0.0, 1.0, 20001)), dx=1.0 / 20000
         )
-        coarse = sum(l.fill_factor * l.thickness for l in profile.slice_layers(8))
-        fine = sum(l.fill_factor * l.thickness for l in profile.slice_layers(256))
+        coarse = sum(layer.fill_factor * layer.thickness for layer in profile.slice_layers(8))
+        fine = sum(layer.fill_factor * layer.thickness for layer in profile.slice_layers(256))
         assert abs(fine - exact) < abs(coarse - exact) + 1e-9
         assert fine == pytest.approx(exact, rel=0.02)
 

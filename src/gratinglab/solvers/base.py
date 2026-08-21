@@ -16,7 +16,7 @@ Two rules make the comparison harness trustworthy:
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from importlib.metadata import entry_points
 from typing import Callable, Protocol, runtime_checkable
 

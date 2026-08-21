@@ -75,7 +75,6 @@ from .diagram import (
     OrderMark,
     direction,
     facet_normal,
-    label_orders,
     order_marks,
     strike_point,
     x_nm,
@@ -518,7 +517,6 @@ def build_scene(
     """Everything one 3D drawing consists of."""
     gamma = illumination.gamma
     marks = order_marks(problem, illumination, wavelength, pad=pad_orders)
-    labelled = label_orders(marks)
     scale_nm = periods * problem.period / PATCH_SPAN
     origin = (0.0, 0.0, 0.0)
     rim_limits, rim_magnification, rim_reason = rim_box(gamma)
