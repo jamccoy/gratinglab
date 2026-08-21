@@ -16,17 +16,17 @@ import numpy as np
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
 sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src'))
 
 import matplotlib
 matplotlib.use('Agg')
 
-from afm_analysis.analyzer import analyze_single_file          # noqa: E402
-from afm_analysis.config import PROJECT_ROOT                   # noqa: E402
-from afm_analysis.settings import AnalysisSettings             # noqa: E402
-from afm_analysis.stats.icc import (                           # noqa: E402
+from gratinglab.metrology.analyzer import analyze_single_file          # noqa: E402
+from gratinglab.metrology.config import PROJECT_ROOT                   # noqa: E402
+from gratinglab.metrology.settings import AnalysisSettings             # noqa: E402
+from gratinglab.metrology.stats.icc import (                           # noqa: E402
     effective_sample_size, sem_inflation_factor)
-from afm_analysis.stats.analysis import _effective_n           # noqa: E402
+from gratinglab.metrology.stats.analysis import _effective_n           # noqa: E402
 
 SAMPLE = os.path.join(PROJECT_ROOT, 'data', 'ALD_master_1p5um_flatten.txt')
 
@@ -133,7 +133,7 @@ def test_no_p_value_gets_smaller():
     sizes went the wrong way.
     """
     from scipy import stats as scipy_stats
-    from afm_analysis.stats.analysis import _calculate_welch_df
+    from gratinglab.metrology.stats.analysis import _calculate_welch_df
 
     a = _result(os.path.join(PROJECT_ROOT, 'data', 'ALD_master_1p5um_flatten.txt'))
     b = _result(os.path.join(PROJECT_ROOT, 'data', '500C_N2_flatten.txt'))

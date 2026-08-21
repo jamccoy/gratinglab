@@ -6,7 +6,7 @@ groove, normalises it to one period, and exports it as a PCGrate .ggp
 boundary profile.
 
 Shares the profile front-end (loading, groove detection, groove windowing)
-with the blaze-angle analysis in afm_analysis.core.
+with the blaze-angle analysis in gratinglab.metrology.core.
 """
 
 from .pipeline import BoundaryProfile, build_boundary_profile

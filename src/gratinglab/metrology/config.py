@@ -7,19 +7,19 @@ import os
 # All paths below are resolved relative to the project root, not the current
 # working directory, so the analysis runs the same from anywhere.
 #
-# The package lives at <root>/src/afm_analysis, so the root is three levels up
-# from this file. Found by looking for the marker rather than counting parents,
+# The package lives at <root>/src/gratinglab/metrology. The depth has changed
+# before and will again; found by looking for the marker rather than counting parents,
 # because counting broke silently when the package moved under src/ - data/ and
 # results/ resolved to src/data and src/results, and the failure looked like a
 # stale output file rather than a path bug.
 #
 # An installed (non-editable) copy has no project root above it; fall back to the
-# working directory so `pip install afm-blaze-meas` still runs against a user's
+# working directory so `pip install gratinglab[metrology]` still runs against a user's
 # own data and results folders.
 def _find_project_root(start):
     # pyproject.toml only. Searching for a "data" directory looked reasonable and
     # was wrong: this package contains its own data subpackage
-    # (afm_analysis/data/aggregation.py), so the walk stopped immediately and
+    # (gratinglab/metrology/data/aggregation.py), so the walk stopped immediately and
     # DATA_DIR pointed inside the source tree.
     path = os.path.dirname(os.path.abspath(start))
     while True:

@@ -12,9 +12,9 @@ import sys
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
 sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src'))
 
-from afm_analysis.wiki import PAGE_ORDER, WIKI_DIR, page, pages  # noqa: E402
+from gratinglab.metrology.wiki import PAGE_ORDER, WIKI_DIR, page, pages  # noqa: E402
 
 
 def test_every_expected_page_exists():
@@ -125,10 +125,10 @@ def test_markdown_files_are_package_data():
 
     Content outside src/ ships in a checkout but not in a wheel, which would
     leave the Wiki tab empty for anyone who pip installed. pyproject.toml
-    declares afm_analysis.wiki = ["*.md"] to match.
+    declares gratinglab.metrology.wiki = ["*.md"] to match.
     """
     assert WIKI_DIR.name == 'wiki'
-    assert WIKI_DIR.parent.name == 'afm_analysis'
+    assert WIKI_DIR.parent.name == 'metrology'
     assert list(WIKI_DIR.glob('*.md')), "no markdown found beside the module"
 
 

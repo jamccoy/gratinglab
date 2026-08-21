@@ -3,7 +3,7 @@
 
     .venv/bin/python tools/make_icon.py
 
-Renders a 1024 px master via :mod:`afm_analysis.gui.icon`, downsamples it with
+Renders a 1024 px master via :mod:`gratinglab.metrology.gui.icon`, downsamples it with
 ``sips`` into the iconset macOS expects, then packs it with ``iconutil``. Both
 tools ship with macOS, so there is nothing to install.
 
@@ -18,7 +18,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-REPO = Path(__file__).resolve().parent.parent
+REPO = Path(__file__).resolve().parent.parent.parent
 OUTPUT = REPO / "resources" / "afm_blaze_meas.icns"
 
 #: macOS expects exactly these, and iconutil is fussy about the names.
@@ -42,7 +42,7 @@ def main() -> int:
         return 0
 
     sys.path.insert(0, str(REPO / "src"))
-    from afm_analysis.gui.icon import render
+    from gratinglab.metrology.gui.icon import render
 
     with tempfile.TemporaryDirectory() as scratch:
         master = render(Path(scratch) / "master.png", size=1024)

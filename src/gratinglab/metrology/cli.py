@@ -3,7 +3,7 @@ Command-line entry point.
 
 Mode selection still comes from config.py, which is the interface this project
 has always had and which the README documents. This module exists so there is one
-dispatch shared by `python main.py` and the `afm-analysis` console script,
+dispatch shared by `python main.py` and the `gratinglab-metrology` console script,
 instead of the routing living in a root-level script that only works from a
 checkout.
 """

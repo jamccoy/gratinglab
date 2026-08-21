@@ -5,12 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "gratinglab"
 version = "0.0.1"
-description = "Open comparison platform for diffraction grating efficiency analysis"
+description = "Open platform for diffraction grating groove metrology and efficiency analysis"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "BSD-3-Clause" }
 authors = [{ name = "Jake McCoy" }]
-keywords = ["diffraction", "grating", "efficiency", "rcwa", "x-ray", "spectroscopy"]
+keywords = ["diffraction", "grating", "efficiency", "rcwa", "x-ray", "spectroscopy",
+            "afm", "metrology", "blaze", "pcgrate"]
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",
@@ -38,6 +39,12 @@ dev = ["pytest>=7", "pytest-qt>=4.5", "matplotlib>=3.8", "pandas>=2.1"]
 # PySide6 (LGPLv3) rather than PyQt6 (GPL): this package is BSD-3, and an
 # optional dynamically-linked dependency keeps it that way.
 gui = ["matplotlib>=3.8", "PySide6-Essentials>=6.7"]
+# Groove metrology: reading AFM scans and averaging them into a boundary
+# profile. An extra for the same reason the GUI is one -- `pip install
+# gratinglab` must stay numpy/scipy/pydantic, so a solver-only user never
+# installs a plotting stack. The delta is small in practice: matplotlib is
+# already in `gui`, so anyone running the window has it either way.
+metrology = ["matplotlib>=3.9"]
 # Mutation testing, run on demand rather than in CI -- a full sweep is orders
 # of magnitude slower than the suite. Deliberately *not* in `dev`: nothing in
 # CI needs it, and pinning below mutmut 3.3 keeps it installable without a Rust
@@ -48,6 +55,11 @@ mut = ["mutmut>=3.2,<3.3"]
 
 [project.scripts]
 gratinglab-gui = "gratinglab.gui.app:main"
+gratinglab-metrology-gui = "gratinglab.metrology.gui:main"
+# The metrology CLI, carried over unchanged. It still takes no arguments and
+# dispatches on `config.ANALYSIS_MODE`; reconciling that with the rest of the
+# project is real work and deliberately not part of this merge.
+gratinglab-metrology = "gratinglab.metrology.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/jamccoy/gratinglab"
@@ -67,6 +79,10 @@ where = ["src"]
 # raise.
 [tool.setuptools.package-data]
 "gratinglab.materials" = ["data/*.txt", "data/SOURCES.md"]
+# The metrology wiki ships too, for the same reason: pages that exist in a
+# checkout and vanish on install are worse than no pages. This is also the
+# model `docs/theory/` should adopt -- see docs/roadmap.md.
+"gratinglab.metrology.wiki" = ["*.md"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -99,6 +115,10 @@ paths_to_mutate = ["src/gratinglab/"]
 do_not_mutate = [
     "*/gui/*",
     "*/io/*",
+    # Metrology arrived with its own suite and has never been mutated. Left
+    # out for now so the merge is not also a coverage change; revisit once
+    # the seam in `boundary/` is settled.
+    "*/metrology/*",
     "*/__init__.py",
     # Pydantic models. mutmut's trampoline adds an un-annotated class
     # attribute holding the mutant table, and `BaseModel.__init_subclass__`

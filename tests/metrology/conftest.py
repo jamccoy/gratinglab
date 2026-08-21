@@ -1,18 +1,17 @@
 """
-Shared test setup.
+Metrology test setup.
 
-Puts src/ on the path so the suite runs from a checkout without an install.
-An editable install (`pip install -e '.[dev,gui]'`) makes this redundant but not
-harmful - the installed package resolves to the same files.
+The backend and the Qt environment are settled once, in `tests/conftest.py`, so
+that the two suites cannot disagree about them. What remains here is the `src/`
+path insert, kept only so these files still run directly as scripts -- several
+carry an `if __name__ == '__main__'` runner. Under pytest it is redundant with
+`pythonpath = ["src"]` in pyproject.toml, and harmless.
 """
 import os
 import sys
 
-import matplotlib
-
-# Every test must run without a display. Set before any pyplot import.
-matplotlib.use("Agg")
-
-SRC = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src')
+SRC = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    'src')
 if SRC not in sys.path:
     sys.path.insert(0, SRC)
