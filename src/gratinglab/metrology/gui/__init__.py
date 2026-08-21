@@ -2,7 +2,7 @@
 A PySide6 front-end for the blaze-angle analysis.
 
 **This package carries no analysis logic.** It computes nothing itself: every
-number it shows comes from :func:`afm_analysis.analyzer.analyze_single_file`,
+number it shows comes from :func:`gratinglab.metrology.analyzer.analyze_single_file`,
 which knows nothing about Qt, so behaviour stays testable without a display.
 
 Two rules make that boundary real rather than aspirational:
@@ -50,7 +50,7 @@ def require_qt() -> None:
 
 
 def main(argv=None):
-    """Launch the window. Entry point for the ``afm-gui`` console script."""
+    """Launch the window. Entry point for the ``gratinglab-metrology-gui`` console script."""
     require_qt()
     from .qt.app import main as _main
     return _main(argv)

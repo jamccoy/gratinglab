@@ -1,7 +1,7 @@
 """
 The Wiki tab: a page list beside a rendered page.
 
-Thin. `afm_analysis.wiki` owns the content and the ordering; this does nothing
+Thin. `gratinglab.metrology.wiki` owns the content and the ordering; this does nothing
 but display what it is given, so the pages stay testable without a window and a
 command-line ``--explain`` could print the same text.
 
@@ -60,7 +60,7 @@ class WikiView(QWidget):
             # presenting an empty panel that looks like a rendering bug.
             self._browser.setMarkdown(
                 "# No wiki pages found\n\n"
-                "The markdown files that ship with `afm_analysis.wiki` could not "
+                "The markdown files that ship with `gratinglab.metrology.wiki` could not "
                 "be located. In an installed copy this means the package data "
                 "was not included."
             )

@@ -13,7 +13,7 @@ token: the in-flight result still arrives, is recognised as stale, and is
 dropped. The window stops waiting; the CPU does not stop working.
 
 The worker returns plain data. It never touches a figure - see the rule in
-`afm_analysis.gui`.
+`gratinglab.metrology.gui`.
 """
 from __future__ import annotations
 

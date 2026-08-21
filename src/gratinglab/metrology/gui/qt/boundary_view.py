@@ -9,7 +9,7 @@ and the two ways it goes wrong - one groove dragging the average, or a step at
 the period boundary where the profile fails to tile - are obvious in a plot and
 invisible in the file. The numbers alone will not tell you.
 
-Computation lives in ``afm_analysis.boundary.build_boundary_profile``, which the
+Computation lives in ``gratinglab.metrology.boundary.build_boundary_profile``, which the
 CLI mode also uses, so the panel cannot drift from ``ANALYSIS_MODE = 'ggp'``.
 """
 from __future__ import annotations

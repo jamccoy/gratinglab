@@ -16,14 +16,14 @@ import numpy as np
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
 sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src'))
 
 import matplotlib
 matplotlib.use('Agg')
 
-from afm_analysis.config import PROJECT_ROOT                    # noqa: E402
-from afm_analysis.core.processing import load_afm_data          # noqa: E402
-from afm_analysis.io.spm import (                               # noqa: E402
+from gratinglab.metrology.config import PROJECT_ROOT                    # noqa: E402
+from gratinglab.metrology.core.processing import load_afm_data          # noqa: E402
+from gratinglab.metrology.io.spm import (                               # noqa: E402
     is_nanoscope_file, list_channels, read_spm)
 
 SPM = os.path.join(PROJECT_ROOT, 'data', 'TASTE_ALS_A205_Ti_Pt.0_00003.spm')
@@ -180,8 +180,8 @@ def test_both_routes_give_the_same_blaze_angle():
     but the software flattens each row group itself, which removes what Gwyddion
     removed. Measured difference is 0.002 degrees against a sigma of 2.13.
     """
-    from afm_analysis.analyzer import analyze_single_file
-    from afm_analysis.settings import AnalysisSettings
+    from gratinglab.metrology.analyzer import analyze_single_file
+    from gratinglab.metrology.settings import AnalysisSettings
 
     settings = AnalysisSettings.from_config()
     with contextlib.redirect_stdout(io.StringIO()):
@@ -198,8 +198,8 @@ def test_both_routes_give_the_same_blaze_angle():
 
 def test_direction_choice_reaches_the_analysis():
     """A setting that does not change the answer is not wired up"""
-    from afm_analysis.analyzer import analyze_single_file
-    from afm_analysis.settings import AnalysisSettings
+    from gratinglab.metrology.analyzer import analyze_single_file
+    from gratinglab.metrology.settings import AnalysisSettings
 
     base = AnalysisSettings.from_config()
     with contextlib.redirect_stdout(io.StringIO()):

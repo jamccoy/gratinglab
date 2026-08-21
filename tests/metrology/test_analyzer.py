@@ -26,18 +26,18 @@ import numpy as np
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
 sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src'))
 
 import matplotlib
 matplotlib.use('Agg')
 
-from afm_analysis.analyzer import (                                     # noqa: E402
+from gratinglab.metrology.analyzer import (                                     # noqa: E402
     _analyze_single_file_traditional, _calculate_local_periods,
     _calculate_periods,
     _calculate_statistics, _calculate_statistics_row_groups,
     _load_and_validate, _package_results, _package_results_row_groups,
     analyze_single_file, analyze_single_file_with_row_groups)
-from afm_analysis.settings import AnalysisSettings                      # noqa: E402
+from gratinglab.metrology.settings import AnalysisSettings                      # noqa: E402
 
 # Geometry of the synthetic grating. The scan is an exact whole number of
 # periods (2000 nm / 250 nm = 8) so that the linear detrend has as little

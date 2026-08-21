@@ -17,17 +17,17 @@ import numpy as np
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
 sys.path.insert(0, os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'src'))
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), 'src'))
 
 import matplotlib
 matplotlib.use('Agg')
 
-from afm_analysis.boundary import build_boundary_profile                # noqa: E402
-from afm_analysis.config import PROJECT_ROOT                            # noqa: E402
-from afm_analysis.core.image_flatten import flatten_image               # noqa: E402
-from afm_analysis.core.processing import load_afm_data                  # noqa: E402
-from afm_analysis.io.ggp import GGP_HEADER, write_ggp                   # noqa: E402
-from afm_analysis.settings import AnalysisSettings                      # noqa: E402
+from gratinglab.metrology.boundary import build_boundary_profile                # noqa: E402
+from gratinglab.metrology.config import PROJECT_ROOT                            # noqa: E402
+from gratinglab.metrology.core.image_flatten import flatten_image               # noqa: E402
+from gratinglab.metrology.core.processing import load_afm_data                  # noqa: E402
+from gratinglab.metrology.io.ggp import GGP_HEADER, write_ggp                   # noqa: E402
+from gratinglab.metrology.settings import AnalysisSettings                      # noqa: E402
 
 SOURCE = os.path.join(PROJECT_ROOT, 'data', 'TASTE_ALS_A205_Ti_Pt_flatten.txt')
 
@@ -165,7 +165,7 @@ def test_the_panel_and_the_cli_compute_the_same_profile():
     build_boundary_profile precisely so they cannot, and this is the check that
     the workflow really does use it.
     """
-    from afm_analysis.workflows import run_boundary_profile_export
+    from gratinglab.metrology.workflows import run_boundary_profile_export
 
     with contextlib.redirect_stdout(io.StringIO()):
         via_cli = run_boundary_profile_export()
@@ -188,7 +188,8 @@ def test_written_file_has_the_uncommented_two_line_header():
     with tempfile.TemporaryDirectory() as scratch:
         path = os.path.join(scratch, 'out.ggp')
         write_ggp(path, p.x_norm, p.y_norm)
-        lines = open(path).read().splitlines()
+        with open(path) as handle:
+            lines = handle.read().splitlines()
 
     assert lines[0] == GGP_HEADER.splitlines()[0] == "3 0 - Polygonal type"
     assert lines[1] == "Period: 1 PSC: 1"
