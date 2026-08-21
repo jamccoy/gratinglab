@@ -185,13 +185,16 @@ what is plausibly the same grating into the repo
 (`data/TASTE_ALS_A205_Ti_Pt_flatten.txt`), so the idealised sawtooth could be
 swapped for a measured groove. The total moved the *wrong* way: 0.5420 idealised
 to 0.3362 measured, against PCGrate's 1.0005. The groove's facet fit (27.91° ±
-2.13°) and its depth (implying 20.33°) disagree by 3.6σ, which is tip
-convolution — and the solver reads the depth, not the facet. Full evidence in
-`findings.md`, "The AFM profile disagrees with its own facet fit".
+2.13°) and its depth (implying 20.33°) disagree by 3.6σ: it is rounded rather
+than faceted, and the solver reads the depth. A flat land would explain the same
+deficit and was excluded (it would need 25–30% of the period; 2.9% is within 2°
+of flat), as was smearing from the groove averaging (0.4%). Full evidence in
+`findings.md`, "The measured groove is rounded, not faceted".
 
-So the open question is no longer only "which `.ggp`". Even the right AFM
-profile would need tip deconvolution before it could settle this, and nothing in
-the pipeline does that or warns that it is missing.
+So the open question is no longer only "which `.ggp`". Whether the rounding is
+the grating or the tip is undetermined, and either way an absolute efficiency
+from a raw AFM boundary is not defensible yet. Nothing in the pipeline warns
+about it.
 
 ### A finite-conductivity reference run
 
