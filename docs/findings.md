@@ -550,6 +550,85 @@ orders by up to 51% and is now the default.
 
 ---
 
+## The AFM profile disagrees with its own facet fit, and the depth is what the solver sees
+
+The first thing the metrology merge (M17) made testable, and it went the
+opposite way to the prediction.
+
+`docs/roadmap.md` has long held that the TASTE residual — scalar's total near
+0.55 against a PCGrate total of 1.0005 — is dominated by **profile mismatch**,
+because the comparison runs on an idealised `Blazed(29.5°, 70.5°)` while the
+`.ggp` the reference run actually used cannot be found. With the metrology
+package absorbed, the repo now contains an AFM scan of what is plausibly that
+grating (`data/TASTE_ALS_A205_Ti_Pt_flatten.txt` — A205, Ti/Pt), so the
+idealised sawtooth can be replaced with a measured groove and the hypothesis
+tested directly.
+
+Run at the corpus geometry (period 315.15 nm, γ=1.25°, α=19.99°, perfect
+conductivity, 8192 quadrature points), mean total over the reference grid:
+
+| Profile | mean Σ | vs PCGrate |
+|---|---|---|
+| PCGrate (integral method) | 1.0005 | — |
+| idealised `Blazed(29.5°, 70.5°)` | 0.5420 | 0.542 |
+| measured AFM groove, p = 315.15 nm | 0.3362 | 0.336 |
+| measured AFM groove, p = 314.09 nm (its own) | 0.3354 | 0.335 |
+
+**The measured profile is worse, by a lot.** Substituting real geometry for
+idealised geometry moved the total *away* from unity. The period makes almost no
+difference — 315.15 and 314.09 nm agree to 0.2% — so this is shape, not scale.
+
+### Why: the groove is internally inconsistent
+
+| Quantity | Value |
+|---|---|
+| Blaze angle from the **facet fit** (`extract_blaze_angle`, 100 grooves) | 27.91° ± 2.13° |
+| Blaze angle implied by the measured **depth**, at the same 70.5° anti-blaze | **20.33°** |
+| Max local sidewall angle anywhere in the profile | 67.45° |
+| depth/period, measured | 0.3275 |
+| depth/period, idealised `Blazed(29.5°, 70.5°)` | 0.4713 |
+
+On a true sawtooth these two blaze angles are the same number — depth and facet
+angle are locked together by the geometry. Here they differ by 7.6°, which is
+**3.6σ on the fit's own uncertainty**. The profile has facets as steep as the fit
+says while being far too shallow for them.
+
+That is the signature of **tip convolution**: the AFM tip cannot reach the bottom
+of the trough or resolve the apex, so both extremes are truncated while the
+mid-facet slope — which is what a line fit lands on, after trimming — survives
+intact. The rounded shape in the Boundary tab preview is the same fact seen by
+eye.
+
+### Why it matters more than it looks
+
+The scalar phase term is `(2π/λ)·height·sinγ`. It depends on **depth**, not on
+facet angle. So a tip-rounded groove diffracts like the shallower blaze its depth
+implies — about 20° here — regardless of the 27.9° its facets report. The facet
+fit is the more accurate measurement of the grating; the depth is the one the
+solver uses.
+
+### What this does and does not establish
+
+- It **falsifies**, for this profile, the claim that swapping in a measured
+  groove would close the TASTE gap. It does the reverse.
+- It does **not** show the roadmap's profile-mismatch hypothesis is wrong in
+  general — an uncorrected AFM profile is not the true grating either, and this
+  finding is the reason why.
+- It does **not** confirm this scan is the TASTE reference grating. The evidence
+  is a name match, a period agreeing within uncertainty (314.33 ± 8.50 nm
+  measured against 315.15 nm known independently from `OGRE/pcgratewavscan.py`),
+  and a facet angle consistent with 29.5°. That is suggestive, not decisive.
+- Scalar theory does not conserve energy by construction
+  (`theory/scalar.md` §5), so *part* of the gap to 1.0005 was never
+  attributable to the profile at all.
+
+**Consequence: tip deconvolution is a prerequisite, not a refinement.** Feeding
+raw AFM boundaries to a solver and reading the absolute efficiency is not
+currently defensible, and nothing in the pipeline warns about it. Recorded in
+`theory/metrology.md` §1 as the assumption with no mitigation and no diagnostic.
+
+---
+
 ## Two ways to write a test that cannot fail
 
 Both found while building `test_perturbation.py`, both applicable well beyond it.
