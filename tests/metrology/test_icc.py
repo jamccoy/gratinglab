@@ -15,6 +15,8 @@ import sys
 
 import numpy as np
 
+from scans import real_scan
+
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
 sys.path.insert(0, os.path.join(
@@ -121,8 +123,7 @@ def _analyze(path, trim):
 
 def test_row_group_labels_align_with_angles():
     """Every measurement carries a label, at the default settings"""
-    from gratinglab.metrology.config import PROJECT_ROOT
-    path = os.path.join(PROJECT_ROOT, 'data', '20250820_280C_00004.txt')
+    path = real_scan('20250820_280C_00004.txt')
     r = _analyze(path, 0.10)
     assert len(r['groove_row_groups']) == len(r['all_angles'])
 
@@ -137,8 +138,7 @@ def test_labels_stay_aligned_when_fits_fail():
     file detects 102 centres but only ~70 fits succeed - exactly the case the old
     code got wrong.
     """
-    from gratinglab.metrology.config import PROJECT_ROOT
-    path = os.path.join(PROJECT_ROOT, 'data', '20250820_280C_00004.txt')
+    path = real_scan('20250820_280C_00004.txt')
     r = _analyze(path, 0.28)
     assert r is not None, "expected some measurements to survive at trim 0.28"
     n_angles, n_labels = len(r['all_angles']), len(r['groove_row_groups'])

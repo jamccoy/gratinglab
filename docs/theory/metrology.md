@@ -33,6 +33,12 @@ They agree on a sharp groove and diverge on a rounded one, and the divergence is
 precisely the error that reaches the efficiency. Two numbers the pipeline
 already has.
 
+**Threshold it in degrees, not in sigma.** The fitted angle's scatter is small
+on clean data, so a gap of a few tenths of a degree is already several sigma on
+a groove that is perfectly sharp — the synthetic fixture shows 0.33°, which is
+3.8σ and means nothing. The real scan's gap is 7.6°. Absolute size discriminates;
+sigma does not.
+
 Note what the diagnostic would *not* say. A rounded groove and a blunt tip
 produce the same profile, so a divergence flags "this is not a sharp sawtooth"
 rather than "your tip is bad". A **flat land** — a genuinely unfaceted flat

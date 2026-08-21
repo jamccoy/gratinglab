@@ -13,6 +13,8 @@ import sys
 
 import numpy as np
 
+from scans import real_scan
+
 # src/ is placed on the path by tests/conftest.py; repeated here so the file
 # also runs directly as a script, not only under pytest.
 sys.path.insert(0, os.path.join(
@@ -22,18 +24,24 @@ import matplotlib
 matplotlib.use('Agg')
 
 from gratinglab.metrology.analyzer import analyze_single_file          # noqa: E402
-from gratinglab.metrology.config import PROJECT_ROOT                   # noqa: E402
 from gratinglab.metrology.settings import AnalysisSettings             # noqa: E402
 from gratinglab.metrology.stats.icc import (                           # noqa: E402
     effective_sample_size, sem_inflation_factor)
 from gratinglab.metrology.stats.analysis import _effective_n           # noqa: E402
 
-SAMPLE = os.path.join(PROJECT_ROOT, 'data', 'ALD_master_1p5um_flatten.txt')
+# ICC measures how correlated rows of one scan are. Synthetic rows are
+# independent by construction, so an ICC computed from them asserts
+# nothing: these need real measurements.
+SAMPLE_NAME = 'ALD_master_1p5um_flatten.txt'
 
 _cache = {}
 
 
-def _result(path=SAMPLE, **overrides):
+def _result(path=None, **overrides):
+    # Resolved inside the call, never as a default argument: `real_scan` skips
+    # when the scans are absent, and a default is evaluated at import time,
+    # where a skip takes the whole module out with a collection error.
+    path = str(path) if path is not None else str(real_scan(SAMPLE_NAME))
     key = (path, tuple(sorted(overrides.items())))
     if key not in _cache:
         settings = AnalysisSettings.from_config().with_(**overrides)
@@ -77,7 +85,7 @@ def test_correction_never_shrinks_the_error_bar():
     """ICC is non-negative here, so the corrected SEM cannot be the smaller one"""
     for path in ('ALD_master_1p5um_flatten.txt', '20250820_215C_00001.txt',
                  '500C_N2_flatten.txt'):
-        r = _result(os.path.join(PROJECT_ROOT, 'data', path))
+        r = _result(real_scan(path))
         assert r['sem_corrected'] >= r['sem'], path
 
 
@@ -135,8 +143,8 @@ def test_no_p_value_gets_smaller():
     from scipy import stats as scipy_stats
     from gratinglab.metrology.stats.analysis import _calculate_welch_df
 
-    a = _result(os.path.join(PROJECT_ROOT, 'data', 'ALD_master_1p5um_flatten.txt'))
-    b = _result(os.path.join(PROJECT_ROOT, 'data', '500C_N2_flatten.txt'))
+    a = _result(real_scan('ALD_master_1p5um_flatten.txt'))
+    b = _result(real_scan('500C_N2_flatten.txt'))
 
     def p_value(use_effective):
         s1, s2 = a['total_std'], b['total_std']
