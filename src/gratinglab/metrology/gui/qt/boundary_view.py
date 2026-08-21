@@ -27,7 +27,9 @@ from matplotlib.figure import Figure
 
 from ...boundary import build_boundary_profile
 from ...config import RESULTS_DIR
-from ...io.ggp import write_ggp, write_profile_metrics
+from gratinglab.io.ggp import write_ggp
+
+from ...io.metrics import write_profile_metrics
 from ...settings import AnalysisSettings
 
 __all__ = ["BoundaryView"]
@@ -275,7 +277,7 @@ class BoundaryView(QWidget):
             return
 
         try:
-            write_ggp(path, self._profile.x_norm, self._profile.y_norm)
+            write_ggp(path, t=self._profile.x_norm, y=self._profile.y_norm)
             metrics_path = os.path.splitext(path)[0] + '_metrics.txt'
             write_profile_metrics(metrics_path, self._profile.metrics)
         except OSError as exc:
