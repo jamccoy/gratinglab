@@ -44,6 +44,7 @@ __all__ = [
 #: before anyone remembers to add a nicer title.
 _TITLES = {
     "scalar": "Scalar (Kirchhoff)",
+    "integral": "Integral (boundary integral equation)",
 }
 
 #: Non-solver reference pages: (key, title, filename relative to docs/).
