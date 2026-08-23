@@ -49,6 +49,15 @@ jobs:
             libegl1 libglib2.0-0t64 libdbus-1-3 libfontconfig1 \
             libfreetype6 libxkbcommon0
 
+      # endstation is not published yet, so `endstation>=0.1` cannot resolve
+      # from the dependency line alone. Installing it from git first satisfies
+      # the requirement; pip then leaves it alone.
+      #
+      # Delete this step once endstation is on PyPI -- the dependency line in
+      # pyproject.toml is already correct and needs no change then.
+      - name: Install endstation from git
+        run: python -m pip install "endstation[qt] @ git+https://github.com/jamccoy/endstation.git"
+
       # Every extra by name, not a subset that happens to pull the rest in.
       # `metrology` needs only matplotlib, which `dev` already carries -- so
       # omitting it here still produced a green run while never once resolving
