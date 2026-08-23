@@ -879,3 +879,43 @@ The two that matter most:
 - The thesis carries an obliquity factor and a Σ-renormalization that ISSI does
   not. Neither is a matter of notation, and neither survived: both are errors,
   and both are gone.
+
+---
+
+## The integral solver reproduces PCGrate to 8e-4 — and identifies the TASTE profile
+
+The first rigorous-vs-rigorous comparison the project has produced: the new
+perfectly-conducting integral solver against the PCGrate TASTE wavescan
+(`OGRE/tastetest_perf_wavescan.txt`, 541 wavelengths, 0.6–6.0 nm, γ = 1.25°,
+α = +19.99°). Orderwise, across every propagating order of the full scan:
+
+| Profile fed to our solver | max abs orderwise difference |
+|---|---|
+| **`OGRE/AFM_test.ggp`** (162-point AFM groove, depth/period 0.292) | **7.8e-4** |
+| ideal `Blazed(29.5, 70.5)` design sawtooth | 0.29 |
+| `OGRE/AFM_real_echelle.ggp` | 0.65 |
+| any candidate, mirrored | worse still |
+
+Three things fall out at once:
+
+1. **The unidentified `.ggp` is identified.** The roadmap's "which `.ggp`
+   goes with which run" question is answered for TASTE: the run was made from
+   `AFM_test.ggp`, not the design sawtooth. A 5e-4 match against a 0.29
+   nearest-alternative is identification, not tolerance slack — encoded as a
+   positive test and a negative control in `tests/test_integral_corpus.py`.
+2. **The solver stack is validated end to end** — conical reduction, kernels,
+   quadrature, amplitude extraction — against an independent implementation
+   of the same method on a measured profile. Our energy balance on that scan:
+   1.1e-8; PCGrate's own totals sit at 1.0005, so a fair share of the
+   remaining 7.8e-4 is theirs.
+3. **The polarization mapping is pinned.** PCGrate's exported `Eff.TE`
+   column corresponds to this project's groove-referenced TE at this mount.
+   Each PCGrate table carries exactly one polarization — the earlier
+   scalar-era comparisons never had to notice.
+
+Two caveats for honesty: `AFM_test.ggp` still fails `read_ggp` (the
+truncated-write defect above), so the corpus test parses around the damaged
+tail with the defect documented in place; and the scalar-vs-PCGrate deficit
+reported earlier in this file ("the corpus can test the diffraction but not
+the reflectivity") was computed on the idealised sawtooth — the profile that
+this comparison now shows PCGrate never ran.
