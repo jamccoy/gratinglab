@@ -12,14 +12,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from endstation.forms import FieldError as _FieldError
+
 from ..settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES)
 
 
-@dataclass(frozen=True, slots=True)
-class FieldError:
-    """A problem with one named input"""
-    field: str
-    message: str
+#: A problem with one named input. The same type the main window uses -- this
+#: package carried an identical definition of its own until both became
+#: :class:`endstation.forms.FieldError`.
+#:
+#: The two `build()` contracts still differ, deliberately: the main window's
+#: raises, this one returns `(settings, errors)`. Only the duplicated type went.
+FieldError = _FieldError
 
 
 @dataclass(frozen=True, slots=True)

@@ -14,6 +14,8 @@ they run on every CI job rather than only on macOS.
 import numpy as np
 import pytest
 
+from endstation.testing.boundary import assert_qt_free, modules_in
+
 pytest.importorskip(
     "PySide6", reason='Qt not installed; pip install -e ".[dev,gui]"'
 )
@@ -1303,33 +1305,31 @@ class TestToolkitBoundary:
         always happens -- someone needing 'just a QColor' in a pure module --
         fails here instead of quietly spreading.
 
-        `app.py` is the one file at this level that's expected to *reach into*
-        the toolkit -- but only deferred, inside `_require_qt()`, which is
-        exactly what keeps `import gratinglab.gui.app` safe without the `gui`
-        extra. So this checks module-*level* imports only (`.body`, not a full
-        recursive walk) -- a recursive walk would flag that sanctioned
-        deferred import as if it were the unconditional kind this test exists
-        to catch.
+        This used to be an AST scan of module-*level* imports. It is now a
+        subprocess import per module, which is strictly stronger: it catches a
+        *transitive* toolkit import, where a pure module grows an innocent
+        import of something that itself pulls in Qt. A source scan cannot see
+        that, and it is the version of this bug that would actually get past
+        review.
+
+        The deferred import in `app.py`'s `_require_qt()` was the reason the
+        scan had to be shallow -- a recursive walk would flag it as if it were
+        the unconditional kind. A subprocess import has no such problem: the
+        function never runs at import time, so Qt never appears in `sys.modules`
+        and the sanctioned deferral is simply invisible here.
+
+        Modules are discovered rather than listed, so a new pure module is
+        covered the day it lands.
         """
-        import ast
-        from pathlib import Path
+        assert_qt_free(
+            modules_in("gratinglab.gui", exclude=("gratinglab.gui.qt",)),
+            reason="only gratinglab/gui/qt may import a toolkit.",
+        )
 
-        import gratinglab.gui as gui
-
-        root = Path(gui.__file__).parent
-        offenders = {}
-        for path in sorted(root.glob("*.py")):
-            imported: set[str] = set()
-            for node in ast.parse(path.read_text()).body:
-                if isinstance(node, ast.Import):
-                    imported.update(a.name.split(".")[0] for a in node.names)
-                elif isinstance(node, ast.ImportFrom) and node.module:
-                    imported.add(node.module.split(".")[0])
-            found = {"PySide6", "PyQt6", "PyQt5", "tkinter"} & imported
-            if found:
-                offenders[path.name] = found
-
-        assert offenders == {}, "only gui/qt/ may import a toolkit unconditionally"
+    def test_the_walk_finds_something(self):
+        """Guard against discovery silently emptying and passing vacuously."""
+        found = modules_in("gratinglab.gui", exclude=("gratinglab.gui.qt",))
+        assert "gratinglab.gui.state" in found
 
 
 class TestEntryPoint:

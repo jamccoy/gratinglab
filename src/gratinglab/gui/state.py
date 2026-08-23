@@ -18,6 +18,8 @@ time.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+
+from endstation.forms import FieldError as _FieldError
 from pathlib import Path
 from typing import Any
 
@@ -71,15 +73,11 @@ ANGLE_LABELS: dict[str, tuple[str, str | None]] = {
 }
 
 
-@dataclass(frozen=True, slots=True)
-class FieldError:
-    """One thing wrong with one field."""
-
-    field: str
-    message: str
-
-    def __str__(self) -> str:  # pragma: no cover - cosmetic
-        return f"{self.field}: {self.message}"
+#: One thing wrong with one field. Shared with `metrology.gui.state`, which
+#: had its own identical copy, and with the other projects here -- see
+#: :mod:`endstation.forms`. Re-exported so every call site keeps importing it
+#: from the module it is used in.
+FieldError = _FieldError
 
 
 class FormErrors(ValueError):

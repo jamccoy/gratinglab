@@ -24,6 +24,12 @@ dependencies = [
     "numpy>=1.26",
     "scipy>=1.11",
     "pydantic>=2.6",
+    # Shared scaffolding: the optional-dependency guards, the toolkit-boundary
+    # check, the layout floors and the macOS bundle builders. Its core declares
+    # `dependencies = []` and has a test that fails if that stops being true,
+    # so this line adds no transitive weight -- the Qt and matplotlib parts sit
+    # behind its own extras, which our `gui` extra asks for by name.
+    "endstation>=0.1",
 ]
 
 [project.optional-dependencies]
@@ -38,7 +44,7 @@ dev = ["pytest>=7", "pytest-qt>=4.5", "matplotlib>=3.8", "pandas>=2.1", "ruff>=0
 #
 # PySide6 (LGPLv3) rather than PyQt6 (GPL): this package is BSD-3, and an
 # optional dynamically-linked dependency keeps it that way.
-gui = ["matplotlib>=3.8", "PySide6-Essentials>=6.7"]
+gui = ["matplotlib>=3.8", "PySide6-Essentials>=6.7", "endstation[qt]>=0.1"]
 # Groove metrology: reading AFM scans and averaging them into a boundary
 # profile. An extra for the same reason the GUI is one -- `pip install
 # gratinglab` must stay numpy/scipy/pydantic, so a solver-only user never
