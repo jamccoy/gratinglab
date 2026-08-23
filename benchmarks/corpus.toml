@@ -33,17 +33,19 @@
 
 [taste]
 file = "OGRE/tastetest_perf_wavescan.txt"
-profile_file = "OGRE/AFM_TASTE_test.ggp"     # UNCONFIRMED: which .ggp this run used
+profile_file = "OGRE/AFM_test.ggp"           # identified by orderwise match, see below
 period_nm = 315.15                            # from OGRE/pcgratewavscan.py
 period_x_sin_gamma = 6.8750                   # recovered, +/-0.005 nm
 gamma_deg = 1.2500                            # = asin(6.8750 / 315.15)
 alpha_deg = 19.99                            # recovered, +/-0.1 deg
 coating = "Au"
 conductivity = "perfect"
+polarization = "TE"                           # the exported table's single column set
 orders = [-7, 15]
 wavelength_nm = [0.6, 6.0]
 confirmed = false
-notes = "Period is independent (script constant); gamma and alpha recovered. The clean gamma=1.25 deg is what validates the recovery method."
+notes = """Period is independent (script constant); gamma and alpha recovered. The clean gamma=1.25 deg is what validates the recovery method.
+Profile identified 2026-08-23: the integral solver on AFM_test.ggp matches the table orderwise to 7.8e-4 across the full scan, while the ideal Blazed(29.5, 70.5) disagrees by 0.29 and AFM_real_echelle.ggp by 0.65 (docs/findings.md; tests/test_integral_corpus.py, incl. negative control). AFM_test.ggp has a truncated-write defect after its closing '1 0' pair, so it still fails read_ggp and the corpus test parses around the tail."""
 
 [panter1_perfect]
 file = "panter1_fix_efftable_perf.txt"
