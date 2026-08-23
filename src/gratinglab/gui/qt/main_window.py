@@ -40,6 +40,7 @@ from .. import provenance
 from ..state import FormErrors, build, validate
 from .geometry_panel import GeometryPanel
 from .geometry_tab import GeometryTab
+from .integral_tab import IntegralTab
 from .scalar_tab import ScalarTab
 from .setup_tab import SetupTab
 from .worker import SolveWorker
@@ -72,7 +73,7 @@ _REDRAW_DEBOUNCE_MS = 120
 #: `show_field_errors(errors)`. Optionally a `convergence_requested` signal and
 #: `show_convergence(scan, energy, lambda_over_period, report)` -- optional
 #: because a backend with no `accuracy_knob` has nothing to sweep.
-_TAB_FACTORIES = {"scalar": ScalarTab}
+_TAB_FACTORIES = {"scalar": ScalarTab, "integral": IntegralTab}
 
 
 class MainWindow(QMainWindow):
@@ -206,8 +207,15 @@ class MainWindow(QMainWindow):
         # yet" page. `_solve_active_tab` (used for both the construction-time
         # solve and Enter-in-a-geometry-field) reads `currentWidget()`, so
         # this is also what makes the window open already solving.
+        #
+        # Scalar specifically, not the alphabetically first: the opening
+        # solve should be the ~70 ms survey, and the default geometry is a
+        # 200-wavelength scan that the integral solver takes *minutes* over.
+        # A rigorous method is one deliberate click away, behind a progress
+        # bar and a working Cancel, which is where minutes belong.
         if self.tabs:
-            self._tab_widget.setCurrentWidget(next(iter(self.tabs.values())))
+            first = self.tabs.get("scalar", next(iter(self.tabs.values())))
+            self._tab_widget.setCurrentWidget(first)
 
         return self._tab_widget
 
