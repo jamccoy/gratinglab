@@ -63,9 +63,9 @@ Planned method backends, in order:
 | Method | Status |
 |---|---|
 | Scalar (Kirchhoff, X-ray blaze form) | **done**, validated |
+| Integral method (boundary integral, conical, undercut-capable) | **done** for perfect conductivity, validated orderwise against PCGrate; finite conductivity planned |
 | RCWA (in-plane, conical, off-plane; Li factorization, S-matrix) | contributed, not yet integrated |
 | C-method (Chandezon) | planned |
-| Integral method | planned |
 
 An already-computed efficiency table from an external code is a first-class "method" in
 the comparison harness, so scalar-vs-RCWA-vs-integral plots are possible without a
