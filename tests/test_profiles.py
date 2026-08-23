@@ -206,9 +206,14 @@ class TestBoundaryCurve:
         curve = profile.boundary(64)
         assert np.allclose(np.hypot(curve.nx, curve.ny), 1.0)
 
-    def test_normals_point_into_the_incident_medium(self, profile):
-        """Outward means +y: away from the grating material."""
-        assert (profile.boundary(64).ny > 0).all()
+    def test_normals_never_point_into_the_material(self, profile):
+        """Outward means away from the grating material: +y where the boundary
+        is a height function, horizontal (ny = 0) on a vertical facet."""
+        assert (profile.boundary(64).ny > -1e-12).all()
+
+    def test_points_are_evenly_spaced_in_arc_length(self, profile):
+        ds = profile.boundary(256).ds
+        assert ds.std() / ds.mean() < 0.05
 
     def test_arc_length_is_at_least_the_period(self, profile):
         """A corrugated boundary is longer than the flat period it spans."""
@@ -217,6 +222,50 @@ class TestBoundaryCurve:
     def test_rejects_too_few_points(self, profile):
         with pytest.raises(ValueError, match="at least 3"):
             profile.boundary(2)
+
+
+class TestExactPolygonBoundaries:
+    """Blazed and Lamellar boundaries come from their vertex polygons, so
+    facet corners and vertical segments carry no sampling error."""
+
+    def test_ideal_sawtooth_arc_length_is_exact(self):
+        blaze = np.radians(30.0)
+        profile = Blazed(blaze_angle=30.0)
+        exact = 1.0 / np.cos(blaze) + np.tan(blaze)
+        assert profile.boundary(512).arc_length == pytest.approx(exact, rel=1e-3)
+
+    def test_ideal_sawtooth_samples_the_vertical_facet(self):
+        """A height function cannot express the vertical anti-blaze facet;
+        the polygon boundary gives it genuine points with horizontal normals."""
+        curve = Blazed(blaze_angle=30.0).boundary(256)
+        on_wall = np.abs(curve.ny) < 1e-9
+        assert on_wall.any()
+        # The wall's share of the boundary points matches its share of the arc.
+        expected = np.tan(np.radians(30.0)) / (
+            1.0 / np.cos(np.radians(30.0)) + np.tan(np.radians(30.0))
+        )
+        assert on_wall.mean() == pytest.approx(expected, abs=0.03)
+
+    def test_lamellar_sidewall_normals_point_into_the_groove(self):
+        curve = Lamellar(depth_fraction=0.3, duty_cycle=0.4).boundary(512)
+        on_wall = np.abs(curve.ny) < 1e-9
+        assert on_wall.any()
+        left = on_wall & (np.abs(curve.t - 0.4) < 1e-9)
+        right = on_wall & (np.abs(curve.t - 1.0) < 1e-9)
+        assert (curve.nx[left] > 0).all()  # groove lies at t > duty_cycle
+        assert (curve.nx[right] < 0).all()
+        assert left.any() and right.any()
+
+    def test_lamellar_arc_length_is_exact(self):
+        profile = Lamellar(depth_fraction=0.3, duty_cycle=0.4)
+        assert profile.boundary(512).arc_length == pytest.approx(1.6, rel=1e-3)
+
+    def test_two_facet_blazed_crest_is_not_clipped(self):
+        """The crest is a polygon vertex, so the sampled maximum misses the
+        true depth by at most one station spacing -- never systematically."""
+        profile = Blazed(blaze_angle=30.0, antiblaze_angle=80.0)
+        curve = profile.boundary(512)
+        assert profile.depth - curve.y.max() < curve.ds.max()
 
 
 class TestBoundaryAccuracy:
