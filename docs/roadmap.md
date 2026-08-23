@@ -106,8 +106,7 @@ Remaining integral milestones, in order:
   "finite-conductivity reference run" open question below.
 - **Graded corner mesh** (M&P §4.6.6) — TM on cornered profiles currently
   converges first-order; see [`theory/integral.md`](theory/integral.md) §5.
-- A solver-contract conformance test now has its second subject and should be
-  written (see the note under RCWA below).
+- ~~A solver-contract conformance test~~ — done, see the note under RCWA below.
 
 ### 1. RCWA — integrating a contributed backend
 
@@ -142,8 +141,11 @@ the window's "solve on open" needed to prefer the fast solver once a
 minutes-long one existed, and the tab layer is now two near-identical files
 — the evidence the base-class extraction was waiting for.
 
-A conformance test every registered solver must pass now has two subjects and
-should be written; parametrize it over `available_solvers()`.
+A conformance test every registered solver must pass is now
+[written](../tests/test_solver_conformance.py) and parametrised over
+`available_solvers()`, so a contributed backend is held to the declaration,
+refusal, scan and progress contracts the moment it registers — before anyone
+writes a line of test for it specifically.
 
 ### 2. Native boundary format
 
