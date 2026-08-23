@@ -62,7 +62,7 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | CI (Linux + macOS, py3.11/3.12) | green |
 | RCWA | **contributed, not yet integrated** |
 | C-method | not started |
-| Integral method | not started |
+| **Integral method** ([theory](theory/integral.md)) | **perfect-conductivity milestone done**: conical from day one, undercut-capable, GUI tab, validated against M&P Table 4.1 and orderwise against PCGrate to 8e-4 (which also identified the TASTE profile). Finite conductivity is the named successor |
 
 Roughly 1150 tests, 11 skipped (the skips need the private reference corpus).
 Rounded on purpose: this line previously claimed 328 and was wrong by 400, so
@@ -72,6 +72,42 @@ from ~945 is the metrology suite arriving with its package, not new coverage.
 ---
 
 ## What is next, in order
+
+### 0. Integral method — pulled ahead of RCWA, deliberately
+
+An earlier revision of this file said *"do not attempt the integral method
+before the first release"* and slotted it as phase 5. That ordering was
+reversed, for three reasons the earlier revision could not have known:
+
+1. **The corpus can only validate an integral solver.** The one rigorous
+   reference dataset on disk is perfect-conductivity *integral-method* output
+   (PCGrate). Scalar could never test more than the diffraction pattern
+   against it; a like-for-like comparison needed a like method.
+2. **The off-plane X-ray application is the project's point, and the integral
+   method is the method of record there.** The conical decoupling theorem
+   makes the perfectly conducting milestone *cheaper* at grazing incidence,
+   not harder — the reduced wavelength λ/sin γ is what the mesh resolves.
+3. **RCWA is contributed work, blocked on a contributor.** The
+   second-implementation stress test of the solver protocol (Capabilities,
+   progress, tabs, convergence knob) happened with this backend instead — and
+   the protocol held; see the current-state table.
+
+The gamble paid off immediately: the first rigorous-vs-rigorous comparison
+reproduced PCGrate orderwise to 8e-4 *and* identified the TASTE run's
+previously unconfirmed groove profile ([`findings.md`](findings.md)).
+
+Remaining integral milestones, in order:
+
+- **Finite conductivity** — the coupled conical system of Goray & Schmidt
+  (2010); optionally the impedance (Leontovich) boundary condition as an
+  intermediate rung, which is also what finally tests the
+  "ΣE ≈ R_F(ζ) is emergent" reading of `conventions.md` §10 item 5. This is
+  what makes soft-X-ray efficiencies *absolute*. Blocked in part on the
+  "finite-conductivity reference run" open question below.
+- **Graded corner mesh** (M&P §4.6.6) — TM on cornered profiles currently
+  converges first-order; see [`theory/integral.md`](theory/integral.md) §5.
+- A solver-contract conformance test now has its second subject and should be
+  written (see the note under RCWA below).
 
 ### 1. RCWA — integrating a contributed backend
 
@@ -97,16 +133,17 @@ What the framework asks:
 | `UnsupportedConfiguration` rather than a quiet approximation | The rule the whole comparison rests on: a method silently smoothing a vertical facet returns a plausible, wrong number |
 | One entry in `_TAB_FACTORIES` | Tabs are generated from `available_solvers()`; the GUI needs nothing else |
 
-**Worth saying plainly, because the first contributor is the one who finds
-out:** none of those seams has met a second implementation. Each was designed
-against exactly one solver, and that solver is fast, closed-form and
-single-polarization — about as unlike RCWA as a backend can be. Expect the
-protocol to be wrong somewhere, and read the first integration as evidence
-about the protocol, not only about the contribution.
+**The seams have now met their second implementation** — the integral
+backend. What the earlier warning here predicted mostly did not happen: the
+`Capabilities` declaration, the progress/cancellation contract, the
+convergence knob, and the per-solver tab pattern all took a slow, rigorous,
+polarization-resolving backend without changing shape. Two things did give:
+the window's "solve on open" needed to prefer the fast solver once a
+minutes-long one existed, and the tab layer is now two near-identical files
+— the evidence the base-class extraction was waiting for.
 
-A conformance test every registered solver must pass is the natural follow-up.
-It belongs *with* that work rather than before it: there is nothing to run it
-against until a second solver exists.
+A conformance test every registered solver must pass now has two subjects and
+should be written; parametrize it over `available_solvers()`.
 
 ### 2. Native boundary format
 
@@ -127,15 +164,16 @@ direction.
 
 ### 3. First release + JOSS
 
-Shipping something citable and correct early is what recruits the collaborators
-who make the integral method tractable. **Do not attempt the integral method
-before the first release.**
+Shipping something citable and correct early is what recruits collaborators.
+The release story is stronger now, not weaker, for the reordering above: a
+rigorous open solver validated orderwise against the commercial standard is a
+headline, and the scalar/integral comparison plots need no PCGrate licence.
 
 ### Later
 
-C-method (phase 3), measured-profile fitting (phase 4), integral method
-(phase 5), crossed/2D gratings (phase 6). See
-[`references.md`](references.md) for the literature mapped to each.
+Integral finite conductivity (see §0), C-method, measured-profile fitting,
+crossed/2D gratings. See [`references.md`](references.md) for the literature
+mapped to each.
 
 ---
 

@@ -89,10 +89,19 @@ its application to the study of ghosts.* J. Opt. Soc. Am. **72**(4), 499 (1982).
 (ed.), *Gratings: Theory and Numeric Applications*, Institut Fresnel / CNRS /
 AMU (2012). Freely available.
 
-**The implementation guide.** 59 pages, including §4.5 on conical mounting and
-§4.6 on the numerical tooling — integration schemes and the lattice-sum
-acceleration that dominates the cost. Having this makes the integral method a
-tractable project rather than a from-scratch derivation.
+**The implementation guide — now the implemented guide.** 59 pages, including
+§4.5 on conical mounting and §4.6 on the numerical tooling. The
+perfect-conductivity solver follows it directly; the anchors actually used:
+eqs. (4.31)–(4.34) TE, (4.37)–(4.42) TM, (4.65) the conical invariance
+theorem, (4.70)–(4.74) the equal-arc rectangular rule, (4.82)–(4.87) the
+Kummer kernel acceleration, (4.95)–(4.100) the log-singularity split, and
+Tables 4.1/4.2 as literature benchmarks (Table 4.1 is reproduced in
+`tests/test_integral_core.py`). Caveats worth knowing before extending:
+§4.6.5 on edges (the measured first-order TM corner convergence), §4.6.6 on
+graded meshes (the fix). One transcription warning: the printed sgn/sign
+placement in eqs. (4.33)/(4.40)/(4.41) did not survive PDF text extraction —
+the implementation derives the kernels from the spectral form and pins every
+sign with the flat-mirror and Table 4.1 tests instead.
 
 **Goray, L. I. & Schmidt, G.** *Solving conical diffraction grating problems
 with integral equations.* J. Opt. Soc. Am. A (2010).
