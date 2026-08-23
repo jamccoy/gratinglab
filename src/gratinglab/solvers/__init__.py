@@ -14,6 +14,7 @@ from .base import (
     get_solver,
     register,
 )
+from .integral import IntegralSolver, integral
 from .scalar import ScalarSolver, interference_factor, scalar
 
 __all__ = [
@@ -26,6 +27,8 @@ __all__ = [
     "get_solver",
     "register",
     "ScalarSolver",
+    "IntegralSolver",
+    "integral",
     "interference_factor",
     "scalar",
 ]
