@@ -88,10 +88,15 @@ class BoundaryCurve:
     t, y
         Points along the profile, normalised to the period.
     nx, ny
-        Outward unit normal, pointing into the incident medium (``ny > 0``).
+        Outward unit normal, pointing into the incident medium. ``ny > 0``
+        wherever the boundary is a height function; a vertical facet has a
+        horizontal normal (``ny = 0``), and an undercut portion can have
+        ``ny < 0``. Never inward.
     ds
         Arc-length weight for each point, for quadrature. Sums to the total
-        profile arc length over one period.
+        profile arc length over one period. Points are spaced at equal arc
+        length, which the integral method's rectangular quadrature rule
+        needs for its spectral accuracy.
     """
 
     t: NDArray[np.float64]
@@ -189,34 +194,70 @@ class _BaseProfile(BaseModel):
         return tuple(layers)
 
     def boundary(self, n: int) -> BoundaryCurve:
-        """Uniformly sampled boundary with outward normals and arc-length weights.
+        """Boundary resampled at equal arc length, with outward normals.
 
-        Normals point into the incident medium (``ny > 0``). Weights use the
-        trapezoidal arc length around each point, so ``ds.sum()`` is the profile
-        length over one period.
+        Samples ``height`` finely and resamples the polyline at equal arc
+        length -- the node spacing the integral method's rectangular
+        quadrature rule needs. Profiles whose geometry is an exact polygon
+        (:class:`Blazed`, :class:`Lamellar`) override with their vertices so
+        facet corners and vertical segments carry no sampling error.
         """
         if n < 3:
             raise ValueError(f"need at least 3 boundary points, got {n}")
+        fine = max(4096, 8 * n)
+        t = np.linspace(0.0, 1.0, fine, endpoint=False)
+        return _polyline_boundary(t, self.height(t), n)
 
-        t = np.linspace(0.0, 1.0, n, endpoint=False)
-        y = self.height(t)
 
-        # Periodic central differences for the tangent.
-        dt = 1.0 / n
-        dy = (np.roll(y, -1) - np.roll(y, 1)) / (2 * dt)
-        norm = np.hypot(1.0, dy)
+def _polyline_boundary(
+    x: NDArray[np.float64], y: NDArray[np.float64], n: int
+) -> BoundaryCurve:
+    """Equal-arc-length boundary samples of a polyline spanning one period.
 
-        # Tangent (1, dy)/norm rotated -90 degrees gives outward (dy, -1);
-        # flip so the normal points away from the material, into +y.
-        nx = -dy / norm
-        ny = np.ones_like(dy) / norm
+    ``x`` and ``y`` are the open polygon vertices, normalised to the period;
+    the curve is closed by continuing to ``(x[0] + 1, y[0])``, so a trailing
+    vertical segment (a lamellar sidewall, an ideal sawtooth's anti-blaze
+    facet) is genuine geometry rather than a steep approximation. Handles
+    boundaries that double back in ``x`` (undercut), which is why every
+    ``boundary()`` implementation funnels through here.
+    """
+    if n < 3:
+        raise ValueError(f"need at least 3 boundary points, got {n}")
 
-        # Trapezoidal arc length: half the chord to each neighbour.
-        forward = np.hypot(dt, np.roll(y, -1) - y)
-        backward = np.hypot(dt, y - np.roll(y, 1))
-        ds = 0.5 * (forward + backward)
+    # Close the polygon: the curve continues into the next period.
+    tx = np.append(x, x[0] + 1.0)
+    ty = np.append(y, y[0])
 
-        return BoundaryCurve(t=t, y=y, nx=nx, ny=ny, ds=ds)
+    segment = np.hypot(np.diff(tx), np.diff(ty))
+    cumulative = np.concatenate(([0.0], np.cumsum(segment)))
+    total = cumulative[-1]
+    if total <= 0:
+        raise ValueError("profile has zero arc length")
+
+    stations = np.linspace(0.0, total, n, endpoint=False)
+    xs = np.interp(stations, cumulative, tx)
+    ys = np.interp(stations, cumulative, ty)
+
+    # Periodic central differences; x wraps by exactly one period.
+    dx = np.roll(xs, -1) - np.roll(xs, 1)
+    dx[0] += 1.0
+    dx[-1] += 1.0
+    dy = np.roll(ys, -1) - np.roll(ys, 1)
+    norm = np.hypot(dx, dy)
+
+    # Tangent (dx, dy) rotated +90 deg is (-dy, dx), which points into the
+    # incident medium for a curve traversed in the +t direction.
+    forward = np.hypot(np.roll(xs, -1) - xs, np.roll(ys, -1) - ys)
+    forward[-1] = np.hypot(xs[0] + 1.0 - xs[-1], ys[0] - ys[-1])
+    backward = np.roll(forward, 1)
+
+    return BoundaryCurve(
+        t=xs,
+        y=ys,
+        nx=-dy / norm,
+        ny=dx / norm,
+        ds=0.5 * (forward + backward),
+    )
 
 
 def _runs_to_intervals(
@@ -312,6 +353,18 @@ class Blazed(_BaseProfile):
         down = -np.tan(np.radians(self.antiblaze_angle))
         return np.where(t <= self.apex, up, down)
 
+    def boundary(self, n: int) -> BoundaryCurve:
+        """Exact sawtooth polygon.
+
+        A vertical anti-blaze facet is the closing segment of the polygon --
+        genuine geometry a height function cannot express.
+        """
+        if self.has_vertical_facet:
+            x, y = np.array([0.0, 1.0]), np.array([0.0, self.depth])
+        else:
+            x, y = np.array([0.0, self.apex]), np.array([0.0, self.depth])
+        return _polyline_boundary(x, y, n)
+
 
 class Lamellar(_BaseProfile):
     """Rectangular (binary, laminar) groove."""
@@ -334,6 +387,13 @@ class Lamellar(_BaseProfile):
             "Lamellar has vertical sidewalls and no finite slope. The C-method "
             "cannot represent it; use RCWA or the integral method."
         )
+
+    def boundary(self, n: int) -> BoundaryCurve:
+        """Exact rectangular polygon; both sidewalls are genuine vertical segments."""
+        d, w = self.depth, self.duty_cycle
+        x = np.array([0.0, w, w, 1.0])
+        y = np.array([d, d, 0.0, 0.0])
+        return _polyline_boundary(x, y, n)
 
 
 class Sinusoidal(_BaseProfile):
@@ -461,44 +521,11 @@ class FromProfileData(_BaseProfile):
     def boundary(self, n: int) -> BoundaryCurve:
         """Resample the stored polygon at equal arc length.
 
-        Overrides the base implementation, which assumes a height function.
-        Working from the stored points directly is what lets this handle an
-        undercut boundary.
+        Works from the stored points directly rather than through ``height``,
+        which is what lets this handle an undercut boundary.
         """
-        if n < 3:
-            raise ValueError(f"need at least 3 boundary points, got {n}")
-
-        # Close the polygon: the curve continues into the next period.
-        tx = np.append(np.asarray(self.t, dtype=np.float64), self.t[0] + 1.0)
-        ty = np.append(np.asarray(self.y, dtype=np.float64), self.y[0])
-
-        segment = np.hypot(np.diff(tx), np.diff(ty))
-        cumulative = np.concatenate(([0.0], np.cumsum(segment)))
-        total = cumulative[-1]
-        if total <= 0:
-            raise ValueError("profile has zero arc length")
-
-        stations = np.linspace(0.0, total, n, endpoint=False)
-        x = np.interp(stations, cumulative, tx)
-        y = np.interp(stations, cumulative, ty)
-
-        # Periodic central differences; x wraps by exactly one period.
-        dx = np.roll(x, -1) - np.roll(x, 1)
-        dx[0] += 1.0
-        dx[-1] += 1.0
-        dy = np.roll(y, -1) - np.roll(y, 1)
-        norm = np.hypot(dx, dy)
-
-        # Tangent (dx, dy) rotated +90 deg is (-dy, dx), which points into the
-        # incident medium for a curve traversed in the +t direction.
-        forward = np.hypot(np.roll(x, -1) - x, np.roll(y, -1) - y)
-        forward[-1] = np.hypot(x[0] + 1.0 - x[-1], y[0] - y[-1])
-        backward = np.roll(forward, 1)
-
-        return BoundaryCurve(
-            t=x,
-            y=y,
-            nx=-dy / norm,
-            ny=dx / norm,
-            ds=0.5 * (forward + backward),
+        return _polyline_boundary(
+            np.asarray(self.t, dtype=np.float64),
+            np.asarray(self.y, dtype=np.float64),
+            n,
         )
