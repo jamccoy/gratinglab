@@ -120,8 +120,11 @@ jobs:
           m = re.search(r"(\d+) passed", text)
           passed = int(m.group(1)) if m else 0
           print(f"{passed} passed")
-          if passed < 1000:
-              sys.exit(f"only {passed} tests passed; expected >1000 on CI")
+          # Raised from 1000 when the suite reached 1254. A floor a quarter
+          # below the real count lets a quarter of the suite disappear without
+          # anyone noticing, which is the failure this step exists to catch.
+          if passed < 1240:
+              sys.exit(f"only {passed} tests passed; expected >=1240 on CI")
           EOF
 
       - name: Check the public API imports
