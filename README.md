@@ -63,7 +63,7 @@ Planned method backends, in order:
 | Method | Status |
 |---|---|
 | Scalar (Kirchhoff, X-ray blaze form) | **done**, validated |
-| Integral method (boundary integral, conical, undercut-capable) | **done** for perfect conductivity, validated orderwise against PCGrate; finite conductivity planned |
+| Integral method (boundary integral, conical, undercut-capable) | **done**: perfect conductivity validated orderwise against PCGrate, and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010) with absolute efficiencies and recorded absorption |
 | RCWA (in-plane, conical, off-plane; Li factorization, S-matrix) | contributed, not yet integrated |
 | C-method (Chandezon) | planned |
 

@@ -132,12 +132,13 @@ jobs:
           # Raised from 1000, which had drifted to a quarter below the real
           # count and would have let a quarter of the suite vanish unnoticed.
           #
-          # 1185, not 1244. CI has neither the PCGrate corpus nor the AFM
-          # scans, so ~50 tests that pass locally skip here -- a data-free run
-          # yields 1193. A floor set from a local run would fail every CI job
+          # 1275, not the local count. CI has neither the PCGrate corpus nor
+          # the AFM scans, so the tests behind them skip here -- a data-free
+          # run yields 1283 (as of M20, which brought the finite-conductivity
+          # suite). A floor set from a local run would fail every CI job
           # while looking like a tightened check.
-          if passed < 1185:
-              sys.exit(f"only {passed} tests passed; expected >=1185 on CI")
+          if passed < 1275:
+              sys.exit(f"only {passed} tests passed; expected >=1275 on CI")
           EOF
 
       - name: Check the public API imports

@@ -14,27 +14,28 @@ corrections catalogued in [`conventions.md` §10](../conventions.md).
 
 This is a **rigorous** method: Maxwell's equations are solved exactly on the
 true boundary curve, with no thin-element approximation, no staircase, no
-smoothed facet. The milestone-1 scope makes exactly one physical idealisation:
+smoothed facet. Two boundary conditions are offered through the
+`conductivity` option:
 
-| Assumption | Consequence |
-|---|---|
-| The grating is a **perfect conductor** | The field does not penetrate the surface; there is no absorption. Efficiencies are *relative to a perfect reflector* and the sum over propagating orders is **exactly 1** — a theorem (§5), not an aspiration. A named `coating` is ignored, with a provenance warning. |
-| One boundary, one period, classical periodicity | Multilayer stacks and crossed gratings are out of scope. |
+| Mode | Physics | Normalisation |
+|---|---|---|
+| `"perfect"` (default) | The grating is a **perfect conductor**: the field does not penetrate, there is no absorption, and the sum over propagating orders is **exactly 1** — a theorem (§5). A named `coating` is ignored, with a provenance warning. | Relative to a perfect reflector — matching the PC PCGrate reference tables. |
+| `"tabulated"` | One interface into a **semi-infinite material** whose complex index is read per wavelength from the named `coating` (falling back to `substrate`) via `materials.lookup` — the coupled conical system of Goray & Schmidt (2010), §8 below. Absorption is computed and recorded, and `R + A = 1` is the theorem (§5). | **Absolute.** |
+
+Common to both: one boundary, one period, classical periodicity — multilayer
+stacks and crossed gratings are out of scope. Asking for anything else (an
+impedance/Leontovich rung, say) raises `UnsupportedConfiguration`: that
+approximation requires |n| ≫ 1 and is invalid in the soft-X-ray regime this
+solver targets. Folding a Fresnel reflectivity onto the perfect-conductivity
+result is **not** equivalent to the tabulated mode — that is the
+transcription error catalogued as `conventions.md` §10 item 5, and §8's
+validation now measures the difference instead of assuming it.
 
 Everything else that limits other methods is *in* scope: conical (off-plane)
 mounts are exact (§2), vertical facets are genuine geometry, and undercut
 boundaries — representable by no height function — solve the same way,
 because the method parametrises the curve itself
 (`Capabilities.handles_undercut = True`, alone in the registry).
-
-Finite conductivity — absorption, and with it absolute soft-X-ray
-efficiencies — is the planned successor milestone, following Goray & Schmidt,
-*Solving conical diffraction grating problems with integral equations*,
-JOSA A 27 (2010). The `conductivity` option is the reserved seam; asking for
-anything but `"perfect"` today raises `UnsupportedConfiguration` rather than
-approximating. Folding a Fresnel reflectivity onto the perfect-conductivity
-result is **not** a substitute — that is the transcription error catalogued
-as `conventions.md` §10 item 5.
 
 ## 2. The conical reduction
 
@@ -56,8 +57,8 @@ normal has no z-component) the two scalars never couple:
   the plain average of two independent solves.
 
 This decoupling is a perfect-conductivity privilege. With finite conductivity
-the conical problem is a coupled 2×2 system — one reason that milestone is
-separate.
+the conical problem is a coupled 2×2 system — implemented as §8, where the
+same reduced wavelength still governs the vacuum side.
 
 The reduction is also what makes the X-ray case *cheap*. Discretisation cost
 follows λ̄, not λ: at γ = 1.5°, a 1 nm photon becomes a 38 nm transverse
@@ -112,11 +113,17 @@ equation anchors are M&P §4.6.
 ## 5. Energy balance is a theorem here
 
 For a perfect conductor, `Σ_m ρ_m = 1` over propagating orders exactly (M&P
-eqs. 4.34/4.42; thesis `eq:prop_order_unity`, by Green's theorem). This is
-the sharpest self-check a solve can carry, and the solver **reports, never
-rescales**: the deviation of the computed sum from 1 is the discretisation
+eqs. 4.34/4.42; thesis `eq:prop_order_unity`, by Green's theorem). With
+finite conductivity the theorem becomes `R + A = 1` (G&S §2.C) — and it
+stays a *two-sided* check, because the absorption `A` is computed by an
+independent boundary integral of the solved densities (§8), not as
+`1 − R`; for a lossless substrate the same integral equals the transmitted
+power and `R + T = 1` is the theorem. Either way this is the sharpest
+self-check a solve can carry, and the solver **reports, never rescales**:
+the deviation of the computed conserved sum from 1 is the discretisation
 error estimate, recorded in `provenance.notes["energy_balance_deviation"]`
-and warned about above 0.5%.
+and warned about above 0.5%. `checks.check_energy_balance` consumes the
+scan's recorded absorption automatically.
 
 Measured behaviour, honestly stated:
 
@@ -127,6 +134,11 @@ Measured behaviour, honestly stated:
   and TM converges at **first order** — a percent-level deficit at P ≈ 100,
   still ~0.5% at P ≈ 1000. The convergence harness tells the truth about it;
   a graded corner mesh (M&P §4.6.6) is the known follow-up.
+- **Finite conductivity holds `R + A = 1` to ~1e-4 on smooth profiles**
+  (measured: 1.2e-4 for Au at 2 nm, 1.5° graze, P = 256; 1e-5 on a flat
+  interface). Corners now limit *both* polarizations at first order — the
+  edge-singular densities meet the same equal-arc mesh — reported through
+  the same deviation.
 
 ## 6. Validation evidence
 
@@ -145,11 +157,43 @@ Measured behaviour, honestly stated:
   *identified* the previously unconfirmed profile behind that run
   (`docs/findings.md`; `tests/test_integral_corpus.py`).
 
+Finite conductivity adds its own ladder (`tests/test_integral_finite.py`):
+
+- **Flat interface = Fresnel, amplitude and phase**: TE against `r_s`, TM
+  against `r_p` from `materials/fresnel.py`, to 1e-4 in-plane; in the
+  conical mount the full 2×2 (E_z, B_z) reflection matrix — polarization
+  conversion included — matches the rotated-Fresnel closed form to 6e-5.
+  This is the successor of the flat-mirror sign pins: every sign in the
+  coupled system rests on it.
+- **Energy theorems**: `R + T = 1` (glass sinusoid) and `R + A = 1` (gold
+  sinusoid) to a few 1e-4; the boundary-integral `A` equals the transmitted
+  Rayleigh sum for a lossless substrate — two unrelated post-processings of
+  one solve.
+- **Perfectly conducting limit**: at n = 100i the solve lands on the
+  validated PC solver to 1.3e-3 worst order — the residual is the ~1 nm
+  field penetration the mode is deliberately adding, not error — with
+  absorption at numerical zero; along a lossy path (n = |n|·e^{iπ/4}) the
+  absorbed fraction falls monotonically toward the conductor.
+- **Goray & Schmidt Table 3** (dielectric sinusoid, conical, pure E_z
+  incidence; itself a cross-method comparison against Li's CM): every
+  tabulated order, reflected and transmitted, reproduced within 6e-5.
+  Their Table 4 turned out to be a publisher's duplication of Table 3
+  (`docs/findings.md`).
+- **Lorentz reciprocity survives absorption**: measured ~5e-5 for Au at
+  X-ray grazing incidence through `checks.check_reciprocity`, unchanged.
+
 ## 7. Choosing `boundary_points`
 
 The solver refuses fewer than ~6 nodes per reduced wavelength along the
 boundary arc — below that the field is unresolved and the answer would be
-confidently wrong. Above the floor:
+confidently wrong. The tabulated mode applies the same floor to the
+**metal-side** transverse wavelength `λ / |√(n² − cos²γ)|`, which is the
+shorter one whenever the mount sits below the critical angle (the field
+then decays into the metal on the `λ/√(2δ)` scale — for Au at 2 nm and
+1.5° graze that is ~21 nm against a 76 nm vacuum reduced wavelength, a
+floor of ~210 points on a 600 nm sinusoid) and dramatically shorter for
+visible-light metals (|n| of a few), which is why that regime costs nodes
+here (M&P §4.6.4). Above the floors:
 
 - Smooth profiles: convergence is fast; the harness typically certifies
   P in the low hundreds.
@@ -159,15 +203,69 @@ confidently wrong. Above the floor:
 - Cost is O(P²·M) to build the kernels and O(P³) to solve — roughly cubic in
   the knob. The default 400 at 200 wavelengths is minutes, not seconds; the
   GUI runs it on the worker thread with a live progress bar and a Cancel
-  that actually cancels.
+  that actually cancels. The tabulated mode costs ~5–8× the perfect one per
+  wavelength (four kernels, operator products, a doubled system off-plane);
+  both incident polarizations share one factorization, so `"unpolarized"`
+  costs two triangular solves, not two factorizations.
 
-## References
+## 8. Finite conductivity: the coupled conical system
+
+Implemented in [`_finite.py`](../../src/gratinglab/solvers/integral/_finite.py),
+following Goray & Schmidt (2010) — but **derived independently in this
+project's conventions** rather than transcribed: G&S's normal points into
+the metal and their potentials carry a factor 2, and sign-sensitive
+equations do not survive PDF extraction (`references.md`). The
+construction, in our operators (outward normal up, `_nystrom` scalings):
+
+- The two coupled scalars are `E_z` and `B_z = (μ⁺/ε⁺)^{1/2} H_z`, each
+  satisfying a transverse Helmholtz equation with its own side's
+  wavenumber: `k_t⁺ = k sin γ` (exactly the reduced-wavelength problem of
+  §2) and `k_t⁻ = k √(n² − cos²γ)` (the same Green's-function code with
+  complex k — the branch pin in `_greens` was built for this).
+- The substrate fields are single-layer potentials, `u⁻ = S⁻w`,
+  `v⁻ = S⁻τ`: traces `V⁻w`, normal derivatives `(L⁻ − I/2)w` by the jump
+  relation the `_nystrom` tests pin.
+- On the vacuum side, Green's representation of the radiating scattered
+  field plus the regularity identity of the incident field give the exact
+  boundary relation `(I/2 + K⁺)ψ − V⁺ ∂_n ψ = ψ_i` for the **total**
+  field — whose perfect-conductor limits are literally the two milestone-1
+  equations (`∂_n ψ = 0` gives TM, `ψ = 0` gives TE), which is what pins
+  its signs.
+- The jump conditions (G&S eq. 6, mapped) eliminate the vacuum traces:
+  `E_z`, `B_z` continuous, and
+
+      ∂_n E_z⁺ = c_E ∂_n E_z⁻ + s ∂_t B_z,
+      ∂_n B_z⁺ = c_B ∂_n B_z⁻ − s ∂_t E_z,
+
+  with `c_E = n² k_t⁺²/k_t⁻²`, `c_B = k_t⁺²/k_t⁻²`, and
+  `s = cos γ (1 − k_t⁺²/k_t⁻²)`. The tangential derivatives act on the
+  *continuous* traces, so they are `D_t V⁻` on the densities — a
+  geometry-only spectral differentiation matrix, no new singular
+  quadrature (G&S §3 note the same option).
+
+The result is a 2×2 block system in `(w, τ)`: diagonal blocks
+`(I/2 + K⁺)V⁻ − c V⁺(L⁻ − I/2)`, cross blocks `∓ s V⁺ D_t V⁻`. In-plane
+(`cos γ = 0`, exact — computed from `sin γ` so the cross blocks vanish
+identically) the system decouples into the classical TE/TM transmission
+problems. In the perfect-conductor limit `|n| → ∞` it degenerates to the
+milestone-1 equations (`V⁻` and `c_B` die like 1/|n|).
+
+Per reflected order the efficiency is `(γ_m/γ₀)(|E_m|² + |B_m|²)` for a
+unit-power incident state — both components, because conical incidence
+converts polarization (TE ≡ incident `(p_z, q_z) = (1, 0)`, TM ≡ `(0, 1)`
+in the (E_z, B_z) basis; `conventions.md` §7). Absorption is the
+boundary integral of G&S eq. 26 mapped to our operators — on a flat
+interface it reduces *exactly* to `1 − |r|²` in both polarizations, which
+is how its sign and normalisation were pinned analytically before any
+test ran.
 
 - D. Maystre and E. Popov, "Integral Method for Gratings", ch. 4 of
   E. Popov (ed.), *Gratings: Theory and Numeric Applications*, AMU (2012).
 - J. A. McCoy, PhD thesis, Chapter 2 §2.2 (read with `conventions.md` §10;
   §2.2.3 is superseded — see item 5 there).
-- L. I. Goray and G. Schmidt, JOSA A 27, 585 (2010) — the finite-conductivity
-  successor.
+- L. I. Goray and G. Schmidt, JOSA A 27, 585 (2010) — the
+  finite-conductivity formulation (§8), implemented at M19.
+- L. Li, JOSA A 10, 2581 (1993) — the coordinate-transformation results
+  behind G&S's comparison tables, the external anchor of §6.
 - H. A. Kalhor and A. R. Neureuther, JOSA 61, 43 (1971) — early
   perfectly-conducting integral treatment.
