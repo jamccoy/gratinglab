@@ -402,11 +402,16 @@ but it is the link between efficiency and resolving power and belongs in the API
 
 ### Scalar validity guards
 
-Reported alongside any scalar result, from ISSI §4:
+Reported alongside any scalar result:
 
-- **Total external reflection:** `θ_c ≈ √(2δ_n)`; the model is only meaningful for
-  `ζ < θ_c`.
-- **Fraunhofer smoothness:** `λ > 32 · sin(ζ) · σ`.
+- **Reduced wavelength ratio:** `λ/(period · sin γ) ≲ 0.1`. The smallness scalar
+  theory needs is judged at the reduced wavelength `λ/sin γ` — the wavelength of
+  the transverse problem the grooves pose (the same decoupling the integral
+  method runs on) — not at `λ/period`, which passes extreme off-plane mounts
+  that are far outside the regime. In-plane the two coincide.
+- **Total external reflection** (ISSI §4): `θ_c ≈ √(2δ_n)`; the model is only
+  meaningful for `ζ < θ_c`.
+- **Fraunhofer smoothness** (ISSI §4): `λ > 32 · sin(ζ) · σ`.
 
 A scalar result outside these bounds is returned with a warning flag on its provenance
 record, not suppressed. Mapping where scalar theory breaks down is a deliverable, so the

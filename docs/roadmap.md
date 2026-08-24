@@ -47,12 +47,12 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | Illumination — direction cosines, three mount constructors | done |
 | Profiles — 4 representations for 4 methods, undercut support | done |
 | `Problem`, `Solver` protocol, registry | done |
-| **Scalar solver** ([theory](theory/scalar.md)) | done, validated |
+| **Scalar solver** ([theory](theory/scalar.md)) | done, validated; M19 added the reduced-wavelength validity guard, cast-shadow visibility (`visibility="horizon"`, opt-in, sub-cell boundaries), and the s/p degeneracy price tag |
 | Efficiency-table importer (external codes) | done |
 | `.ggp` boundary profiles | done, and now a single implementation |
 | **Groove metrology** ([theory](theory/metrology.md)) — AFM scans, blaze angles, boundary profiles | done, absorbed M17 |
 | Measured groove → solver, in-process | done, `BoundaryProfile.to_problem` |
-| Comparison harness | done |
+| Comparison harness | done; `tests/test_cross_method.py` commits the scalar-vs-integral agreement and divergence ladders, no corpus needed |
 | Physics self-checks — reciprocity, energy balance | done |
 | Convergence harness ([`convergence.py`](../src/gratinglab/convergence.py)) | done |
 | Progress + cancellation on the `Solver` protocol | done |

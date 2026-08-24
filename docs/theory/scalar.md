@@ -15,8 +15,8 @@ whole point of this page is that they are stated rather than implied.
 | Assumption | Consequence when it fails |
 |---|---|
 | The field is scalar — polarization is neglected | TE and TM come out identical. Real gratings separate them, sometimes by a lot. |
-| Structure is large compared to the wavelength, λ ≪ p | Sub-wavelength features are misrepresented; the model degrades smoothly rather than failing loudly. |
-| Kirchhoff (thin-element) boundary condition: the field just above the surface is the incident field times a local phase | No multiple scattering between groove facets, no field penetration into the material. Geometric self-shadowing by the local facet normal *is* modelled (§9); shadowing of one facet by another along the ray is not. |
+| Structure is large compared to the **reduced** wavelength, λ/sin γ ≪ p | Sub-wavelength features are misrepresented; the model degrades smoothly rather than failing loudly. In-plane (sin γ = 1) this is the familiar λ ≪ p; in a conical mount the grooves pose a transverse problem at λ/sin γ (the same decoupling the integral solver runs on), and judging validity on λ/p alone passes exactly the extreme off-plane mounts it should flag — see §7. |
+| Kirchhoff (thin-element) boundary condition: the field just above the surface is the incident field times a local phase | No multiple scattering between groove facets, no field penetration into the material — that is what the [integral method](integral.md) exists for. Geometric shadowing *is* modelled (§9): self-shadowing by the local facet normal always, and cast shadows — one part of the groove occluding another along the ray — under `visibility="horizon"`. |
 | Fraunhofer (far-field) observation | Valid for a telescope focal plane; not for near-field work. |
 | Reflectivity is resolved **across the groove cycle** and carried inside the diffraction integral | Name a `coating` and efficiencies are **absolute**; leave it unset and they are **relative**, which is a correct answer to a different question rather than a deficiency. §9 has the three models and what each costs. |
 
@@ -345,11 +345,12 @@ the model breaks down is a deliverable in its own right.
 
 | Condition | Meaning |
 |---|---|
-| $\lambda / p \lesssim 0.1$ | Kirchhoff theory assumes structure ≫ wavelength. Soft X-ray work runs ~0.005; visible gratings ~0.4. |
+| $\lambda / (p \sin\gamma) \lesssim 0.1$ | Kirchhoff theory assumes structure ≫ wavelength — measured at the **reduced** wavelength $\lambda/\sin\gamma$, because that is the wavelength of the transverse problem the grooves actually pose (M&P eq. 4.65). In-plane this is the familiar $\lambda/p$. The distinction is not academic: the flagship off-plane geometry reads $\lambda/p \approx 0.007$ but a reduced ratio of $0.32$, and there the scalar-vs-integral disagreement is orderwise catastrophic — `tests/test_cross_method.py` holds $\lambda/p$ fixed and closes the cone to show the discrepancy growing along exactly this axis. Order positions and the blaze envelope stay useful past the threshold; per-order numbers need a rigorous cross-check. |
 | $\zeta < \theta_c \approx \sqrt{2\,\text{decrement}}$ | Facet graze must stay below the critical angle for total external reflection, or reflectivity collapses. Evaluated when a `coating` is named; without optical constants there is nothing to compare against, so it is a check that does not apply rather than a warning. |
 | $\lambda > 32 \sin(\zeta)\,\sigma$ | Fraunhofer smoothness: below this the facet is not optically smooth and scatter dominates. Checked for every profile — it was once gated on having a blaze angle, so a rough sinusoid was never checked at all. |
 | No order fully shadowed | With reflectivity resolved across the groove (§9), an order into which no lit facet can radiate comes out at exactly zero. That is the model's answer, not the physical one, and it is reported by name so it is never mistaken for passing-off. |
 | $r_p$ stays away from zero on the lit groove | At Brewster the p amplitude changes sign and its phase jumps by $\pi$; the geometric-mean symmetrisation of §9 does not carry that cleanly. Only reachable with steep grooves near normal incidence. |
+| $R_s \approx R_p$ at the guarded graze (split $\lesssim 2\%$) | The 50/50 s/p average of §9 stands in for a groove-TE/TM → facet-s/p mapping nobody carries, and any basis rotation can move the result by at most half the split. At the grazes this project runs the split is under 1% (see §9); a steep groove near normal incidence pushes it to tens of percent, and the waiver is reported there instead of staying silently priced at zero. |
 | $\sum_m \mathscr{E}_m \leq 1$ | Not a validity condition so much as a sanity bound; see §5. |
 
 Both $\zeta$-based conditions are evaluated at the **worst local graze** across
@@ -390,12 +391,28 @@ non-monotone on top of being slower. Measured on the reference geometry
 | `average` | 2 048 | 8 192 | not reached by 131 072 |
 | `local` | 2 048 | 32 768 | not reached by 131 072 |
 
-**The default $n = 2048$ buys about $10^{-4}$ with a resolved model, not
-$10^{-6}$.** A smooth profile is unaffected — a coated sinusoid still converges
-at 256, because it has no shadow boundary to resolve. This is a real cost of the
-change and the honest way to spend it is on the convergence harness rather than
-on a larger default: `check_convergence` reports what a given case actually
-needs, and a case that never plateaus says so.
+**The default $n = 2048$ buys about $10^{-4}$ with a resolved model under
+`visibility="facet-normal"`, not $10^{-6}$.** A smooth profile is unaffected —
+a coated sinusoid still converges at 256, because it has no shadow boundary to
+resolve. This is a real cost of the change and the honest way to spend it is on
+the convergence harness rather than on a larger default: `check_convergence`
+reports what a given case actually needs, and a case that never plateaus says
+so.
+
+**`visibility="horizon"` removes the penalty rather than paying it.** Its
+shadow boundaries are geometric crossings, and
+[`geometry.horizon_weights`](../../src/gratinglab/geometry.py) places each one
+*inside* its cell — exactly, on a polygonal profile — with the lit-side sample
+absorbing the sub-cell lit length and the incident and exit masks composed by
+minimum (they share the apex boundary; a product counts it twice). Measured on
+the coated blazed reference against a 16× finer run: $2\times10^{-7}$ at the
+default $n = 2048$, worst rung of the whole ladder $1.3\times10^{-5}$ — against
+$3.4\times10^{-4}$ for the same case with binary masks, and $5\times10^{-4}$
+for `facet-normal`. `facet-normal` keeps its binary masks deliberately: its
+boundary function jumps at profile corners, where a crossing estimate is biased
+rather than sharp, and bit-for-bit reproducibility is that mode's purpose. So
+the horizon mode is both the more physical treatment (§9) and the numerically
+sharper one.
 
 (256 for the sinusoid is the ladder's first rung, not a requirement — it was
 already converged before the sweep began.)
@@ -472,10 +489,9 @@ non-uniform, near normal incidence on a deep groove, where $\arg r_p$ sweeps
 through Brewster; there the gap reaches 12%, on orders carrying $10^{-9}$, in a
 regime already flagged below.
 
-**Visibility.** Where $\sin\zeta \leq 0$ in either direction the facet is turned
-away and contributes nothing. This is self-shadowing by the local normal; it is
-*not* full ray shadowing, where an upstream facet occludes a downstream one, and
-that remains unmodelled.
+**Visibility.** Where the groove is shadowed in either direction it contributes
+nothing; which shadows the masks can see is its own decision, `visibility`, with
+its own subsection below.
 
 **Per-order gain is expected.** Since $|r^{\text{gm}}| \leq 1$ pointwise but the
 bare integral can cancel, an individual order can come out *above* its
@@ -507,6 +523,67 @@ that went unnoticed because `check_reciprocity` had only ever been pointed at
 uncoated problems. Kept so an earlier run can be reproduced exactly and so the
 size of the change is measurable rather than asserted.
 
+### Visibility: which shadows the masks see
+
+Both resolved models zero the reflection where the groove is shadowed, and
+`visibility` selects what counts as shadowed.
+
+**`"facet-normal"` (default)** is the local orientation test alone:
+$\sin\zeta \leq 0$ means the point's own facet is turned away from the
+direction in question. It cannot see a **cast** shadow — the groove apex
+blocking surface beyond the trough that faces the ray perfectly well.
+
+**`"horizon"`** adds them, via
+[`geometry.horizon_visible`](../../src/gratinglab/geometry.py): a running-maximum
+horizon scan in the transverse plane, run once for the incident direction and
+once per diffracted order. Three pieces of geometry make it simpler than it
+looks:
+
+- **The half-cone angle drops out.** The surface is invariant along the
+  grooves, so a 3D ray occludes exactly as its transverse projection does, and
+  the scan runs at the azimuth alone — $\alpha$ in, $\beta_m$ out.
+- **Reciprocity survives by construction.** Occlusion along a straight ray
+  reads the same from either end, so the incident-at-$\theta$ and
+  exit-at-$\theta$ masks are the same function and the pair is symmetric under
+  $\alpha \leftrightarrow \beta_m$ — measured at $10^{-16}$, coated and
+  uncoated.
+- **Self-shadowing is a special case.** A back-facing point has a falling
+  ray-adapted height and sits under the running horizon, so the horizon mask
+  subsumes the orientation test.
+
+On an ideal sawtooth the cast shadow past the trough has the closed form
+$\Delta = (1-t_a)(s_a - s_r)/(s_b + s_r)$ with $s_r = \cot\theta$, zero until
+the ray dips below the anti-blaze slope ($\theta > 19.5°$ for the reference
+groove) — `tests/test_geometry.py` derives it independently and pins the scan
+to it. What it is worth on the reference geometry splits sharply by side:
+
+- **Incident** ($\alpha = 19.99°$): +0.38% of the period beyond the 16.7%
+  anti-blaze facet the orientation test already sees. Nearly nothing.
+- **Exit**: 9.5–52% of the period per order — $\beta$ is much steeper than
+  $\alpha$ for the working orders. The blaze order at its blaze wavelength
+  ($m=+3$, $\lambda = 2.226$ nm, $\beta = 39°$) has 14.7% of the period
+  extra-masked and moves **0.514 → 0.348, −32%** — the same order of magnitude
+  as the M16 groove-resolution change, invisible to the orientation test.
+
+With **no coating**, `visibility="horizon"` applies the masks at unit
+amplitude: geometric shadowing on a perfect reflector, which is the
+configuration a perfect-conductor cross-check against the integral solver
+wants on grooves deep enough to shadow themselves. The default uncoated run
+stays the untouched pure phase integral. `"average"` sees the horizon on the
+incident side only (its exit side is order-blind by construction), and
+`"facet"` — which has no masks — refuses the combination rather than ignoring
+it.
+
+Two caveats, stated rather than implied. The mask is **ray optics**: near
+passing-off it overestimates blocking, because diffraction bends around the
+apex; the vanishing flux obliquity already suppresses those orders. And like
+the geometric mean, it is **not yet validated against a rigorous
+finite-conductivity method** — it moved the blaze order from 0.69 toward the
+rigorous 0.21 of the (out-of-regime) perfect-conductor comparison, which is
+suggestive rather than proof. It ships opt-in so existing results reproduce
+bit-for-bit; the default flips once a finite-conductivity A/B lands in
+[`findings.md`](../findings.md), the same road `facet` → `local` took.
+
 ### What it is worth
 
 Reference geometry — Blazed 29.5°/70.5°, $\gamma=1.25°$, $\alpha=19.99°$, Au,
@@ -534,12 +611,26 @@ around, not because a vector calculation confirmed it. The corpus A/B in
 **Which polarization.** Unpolarized, always, whatever the illumination says.
 The $s$ and $p$ of a Fresnel reflection are defined against the *facet's* plane
 of incidence; `Illumination.polarization` is TE/TM defined against the
-**grooves** (`conventions.md` §7). In a conical mount those frames differ, so
-resolving polarization here would be false precision on a model that already
-reports TE and TM as identical. The size of what is being waived is measured
-rather than assumed — on Au at 1 nm, $s$ and $p$ agree to under 1% at
-$\zeta = 1.5°$ and differ by more than 50% at 45°. Under `"local"` the two are
-combined at *amplitude* level per order, which is the more defensible place.
+**grooves** (`conventions.md` §7). In a conical mount those frames differ, and
+the rotation between them is deliberately unowned
+([`fresnel.py`](../../src/gratinglab/materials/fresnel.py) refuses TE/TM labels
+for exactly this reason). Resolving it here would be false precision on a model
+that already reports TE and TM as identical — and the size of what is being
+waived is measured rather than assumed. Fractional intensity split
+$|R_s - R_p|/R_s$ on the vendored Au table:
+
+| $\lambda$ (nm) | $\zeta = 0.5°$ | $1.25°$ | $2°$ | $5°$ |
+|---:|---:|---:|---:|---:|
+| 0.62 | $1.2\times10^{-4}$ | $3.9\times10^{-4}$ | $2.2\times10^{-3}$ | $2.8\times10^{-2}$ |
+| 3.0 | $1.9\times10^{-3}$ | $4.9\times10^{-3}$ | $7.9\times10^{-3}$ | $2.4\times10^{-2}$ |
+| 6.0 | $2.2\times10^{-3}$ | $5.5\times10^{-3}$ | $8.9\times10^{-3}$ | $2.5\times10^{-2}$ |
+
+Since the unpolarized mean is already computed, any basis rotation moves the
+result by at most **half the split** — under 0.5% at every graze the reference
+groove actually presents (its worst local graze is 1.94°). The provenance
+checks the split at the guarded graze and warns above 2% (§7), so the waiver is
+priced exactly when it stops being free. Under `"local"` the two are combined
+at *amplitude* level per order, which is the more defensible place.
 
 **Roughness.** Névot–Croce by default, Debye–Waller and `none` on request, and
 both are **intensity** factors — M16-B fixed a Névot–Croce that returned the
@@ -551,8 +642,9 @@ marginally more; far above $\theta_c$ they converge to $10^{-5}$.
 
 **Energy.** Summed efficiency falls for three distinct reasons now: the
 thin-element defect of §5, which is the model straying; ordinary absorption,
-which is physics; and geometric shadowing, which is also physics. The provenance
-separates the first from the other two.
+which is physics; and geometric shadowing — self-shadowing always, cast
+shadowing under `"horizon"` — which is also physics. The provenance separates
+the first from the other two.
 
 ---
 
