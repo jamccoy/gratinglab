@@ -85,9 +85,14 @@ __all__ = ["ReflectivityModel", "ScalarSolver", "interference_factor", "scalar"]
 #: :class:`ScalarSolver.solve` and ``docs/theory/scalar.md`` section 9.
 ReflectivityModel = Literal["local", "average", "facet"]
 
-#: Above this ratio of wavelength to period, scalar theory is losing validity.
-#: Soft X-ray work runs ~0.005; visible gratings run ~0.4.
-_LAMBDA_OVER_PERIOD_WARN = 0.1
+#: Above this ratio of the **reduced** wavelength lambda/sin(gamma) to the
+#: period, scalar theory is losing validity. In-plane this is plain
+#: lambda/period; in a conical mount the reduction is what matters, because
+#: the transverse problem the grooves actually pose lives at the reduced
+#: wavelength (M&P eq. 4.65 -- the same decoupling the integral solver is
+#: built on). Judged on lambda/period alone, the flagship off-plane geometry
+#: reads 0.007 while its effective ratio is 0.32.
+_REDUCED_RATIO_WARN = 0.1
 
 
 def interference_factor(s: ArrayLike, n_grooves: int) -> NDArray[np.float64]:
@@ -398,12 +403,27 @@ class ScalarSolver:
         graze = reflection.guard_graze
         warnings: list[str] = []
 
-        ratio = float(wavelengths.max() / problem.period)
-        if ratio > _LAMBDA_OVER_PERIOD_WARN:
+        # The *reduced* ratio, not lambda/period. A conical problem decouples
+        # into an in-plane one at lambda/sin(gamma), so "wavelength small
+        # against the structure" has to be judged after the reduction --
+        # otherwise the guard passes exactly the extreme off-plane mounts it
+        # exists for. tests/test_cross_method.py holds lambda/period fixed and
+        # closes the cone to show the scalar-vs-integral discrepancy growing;
+        # that measurement is what moved sin(gamma) into this line.
+        ratio = float(
+            wavelengths.max() / (problem.period * illumination.sin_gamma)
+        )
+        if ratio > _REDUCED_RATIO_WARN:
             warnings.append(
-                f"lambda/period reaches {ratio:.3g}; scalar theory assumes "
-                f"lambda << period and loses accuracy above "
-                f"{_LAMBDA_OVER_PERIOD_WARN}"
+                f"reduced ratio lambda/(period sin gamma) reaches {ratio:.3g}; "
+                "scalar theory needs the wavelength small against the "
+                "structure, and in a conical mount that comparison happens at "
+                "the reduced wavelength lambda/sin(gamma), so orderwise "
+                f"accuracy degrades above {_REDUCED_RATIO_WARN} even where "
+                "lambda/period looks safe. Order positions and the blaze "
+                "envelope remain useful intuition here; per-order numbers "
+                "should be cross-checked against a rigorous method -- see "
+                "docs/theory/scalar.md section 7"
             )
 
         if problem.roughness > 0:

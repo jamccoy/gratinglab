@@ -377,14 +377,40 @@ class TestProvenance:
         problem = Problem(period=1400.0, profile=Blazed(blaze_angle=30.0))
         ill = Illumination.classical(alpha=30.0, polarization=UNPOL)
         scan = scalar.solve(problem, ill, [700.0])
-        assert any("lambda/period" in w for w in scan.provenance.warnings)
+        assert any("sin gamma" in w for w in scan.provenance.warnings)
 
-    def test_does_not_warn_in_the_soft_xray_regime(self):
-        """lambda/period ~ 0.015 is exactly where scalar theory is comfortable."""
+    def test_warns_when_the_cone_closes_even_at_small_lambda_over_period(self):
+        """The guard tests the *reduced* ratio lambda/(period sin gamma).
+
+        This geometry used to be the "comfortable" no-warning case: at
+        lambda/period ~ 0.015 it looks safely inside the regime. But at a
+        1.5 deg graze the structure is probed at the reduced wavelength
+        lambda/sin(gamma), and the reduced ratio is ~0.57 -- and
+        ``tests/test_cross_method.py::TestDivergenceAsTheConeCloses`` measures
+        the scalar-vs-integral discrepancy growing along exactly this axis.
+        The relabelling of this case from comfortable to warned is the point
+        of the guard, not collateral damage.
+        """
         problem = Problem(period=160.0, profile=Blazed(blaze_angle=30.0))
         ill = Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL)
         scan = scalar.solve(problem, ill, [2.4])
-        assert not any("lambda/period" in w for w in scan.provenance.warnings)
+        assert any("sin gamma" in w for w in scan.provenance.warnings)
+
+    def test_does_not_warn_in_plane_at_the_same_lambda_over_period(self):
+        """The same lambda/period with sin(gamma) = 1 genuinely is in regime,
+        so the pair of these tests pins the guard to the reduced ratio."""
+        problem = Problem(period=160.0, profile=Blazed(blaze_angle=30.0))
+        ill = Illumination.classical(alpha=25.0, polarization=UNPOL)
+        scan = scalar.solve(problem, ill, [2.4])
+        assert not any("sin gamma" in w for w in scan.provenance.warnings)
+
+    def test_does_not_warn_off_plane_when_the_reduced_ratio_is_small(self):
+        """An off-plane mount is not warned about for being off-plane -- only
+        for a reduced ratio the theory cannot carry."""
+        problem = Problem(period=2000.0, profile=Blazed(blaze_angle=30.0))
+        ill = Illumination.offplane(graze=2.5, azimuth=20.0, polarization=UNPOL)
+        scan = scalar.solve(problem, ill, [2.0])
+        assert not any("sin gamma" in w for w in scan.provenance.warnings)
 
     def test_warns_that_polarization_is_neglected(self):
         problem = Problem(period=160.0, profile=Blazed(blaze_angle=30.0))
