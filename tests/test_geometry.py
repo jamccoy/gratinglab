@@ -482,3 +482,82 @@ class TestHorizonVisible:
 
         _, height = self._sawtooth()
         assert horizon_visible(height, self.PERIOD, 0.0).all()
+
+
+class TestHorizonWeights:
+    r"""The weighted mask: sub-cell shadow boundaries, exact on a polygon.
+
+    The sum of weights over :math:`n` is the lit fraction of the period, and
+    for a sawtooth every boundary is recovered exactly -- the entry corner by
+    secant intersection, the reappearance point by extrapolating the shadow
+    ramp to the entry corner's level -- so the lit fraction must match the
+    closed form of ``TestHorizonVisible`` to machine precision at *any* n,
+    not merely converge to it. That coarse-grid exactness is the whole
+    difference from the binary mask, whose lit fraction is only right to
+    one cell.
+    """
+
+    PERIOD = 315.15
+    S_B = np.tan(np.radians(29.5))
+    S_A = np.tan(np.radians(70.5))
+
+    def _heights(self, n):
+        from gratinglab.problem import Problem
+        from gratinglab.profiles import Blazed
+
+        problem = Problem(
+            period=self.PERIOD,
+            profile=Blazed(blaze_angle=29.5, antiblaze_angle=70.5),
+        )
+        t = np.linspace(0.0, 1.0, n, endpoint=False)
+        return problem.profile.apex, problem.height_nm(t)
+
+    @pytest.mark.parametrize("angle_deg", [19.99, 39.0, 55.3, 80.0])
+    @pytest.mark.parametrize("n", [1024, 16384])
+    def test_the_lit_fraction_is_exact_on_a_sawtooth(self, angle_deg, n):
+        from gratinglab.geometry import horizon_weights
+
+        apex, height = self._heights(n)
+        s_r = 1.0 / np.tan(np.radians(angle_deg))
+        sliver = (1.0 - apex) * max(self.S_A - s_r, 0.0) / (self.S_B + s_r)
+        weights = horizon_weights(height, self.PERIOD, np.radians(angle_deg))
+        assert weights.mean() == pytest.approx(apex - sliver, abs=1e-13)
+
+    def test_weights_vanish_exactly_where_the_mask_says_shadow(self):
+        """Interior consistency with the boolean mask: weights are 1 strictly
+        inside the lit region, 0 strictly inside the shadow, and only cells
+        touching a boundary carry fractions."""
+        from gratinglab.geometry import horizon_visible, horizon_weights
+
+        _, height = self._heights(4096)
+        angle = np.radians(39.0)
+        lit = horizon_visible(height, self.PERIOD, angle)
+        weights = horizon_weights(height, self.PERIOD, angle)
+
+        interior_lit = lit & np.roll(lit, 1) & np.roll(lit, -1)
+        interior_shadow = ~lit & np.roll(~lit, 1) & np.roll(~lit, -1)
+        assert (weights[interior_lit] == 1.0).all()
+        assert (weights[interior_shadow] == 0.0).all()
+        fractional = (weights != 0.0) & (weights != 1.0)
+        assert 0 < fractional.sum() <= 4  # one or two cells per boundary
+
+    def test_an_unshadowed_direction_gets_unit_weights(self):
+        from gratinglab.geometry import horizon_weights
+
+        _, height = self._heights(2048)
+        for angle_deg in (0.0, 15.0, -19.99):
+            weights = horizon_weights(height, self.PERIOD, np.radians(angle_deg))
+            assert (weights == 1.0).all(), angle_deg
+
+    def test_the_mirrored_direction_mirrors_the_weights(self):
+        """A profile reflected in t, lit from the mirrored angle, must weight
+        the mirrored cells identically -- the reversal trick the negative
+        branch is built on, asserted rather than assumed."""
+        from gratinglab.geometry import horizon_weights
+
+        _, height = self._heights(4096)
+        forward = horizon_weights(height, self.PERIOD, np.radians(39.0))
+        mirrored = horizon_weights(
+            height[::-1].copy(), self.PERIOD, np.radians(-39.0)
+        )
+        assert (mirrored[::-1] == forward).all()

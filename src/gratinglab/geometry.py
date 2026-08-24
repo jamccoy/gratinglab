@@ -22,7 +22,9 @@ __all__ = [
     "flux_obliquity",
     "facet_graze",
     "sin_facet_graze",
+    "horizon_clearance",
     "horizon_visible",
+    "horizon_weights",
     "blaze_direction",
     "blaze_wavelength",
 ]
@@ -260,25 +262,152 @@ def horizon_visible(
         Must be a propagating direction, :math:`|\theta| \le \pi/2`; exactly
         0 is straight down and shadows nothing.
     """
+    return horizon_clearance(height_nm, period, angle) >= 0.0
+
+
+def horizon_clearance(
+    height_nm: ArrayLike, period: float, angle: float
+) -> NDArray[np.float64]:
+    r"""Signed height (nm) of each point above the ray horizon at ``angle``.
+
+    The continuous function behind :func:`horizon_visible`: how far each
+    point sits above (positive, lit) or below (negative, cast-shadowed) the
+    highest upstream obstruction, measured along the ray direction. Exposed
+    separately because a quadrature that wants sub-cell shadow boundaries
+    needs the crossing, and a boolean mask has already thrown it away --
+    the sign of the clearance IS the mask.
+
+    The horizon here is **exclusive** -- built from strictly-upstream points
+    -- so the clearance is genuinely positive on lit terrain (each lit point
+    clears the point before it) rather than identically zero, and crosses
+    zero transversally at a shadow boundary. ``clearance >= 0`` is exactly
+    the inclusive-prefix mask of :func:`horizon_visible`, whose docstring
+    carries the derivation, the sign conventions, and the closed-form anchor.
+    """
     height_nm = np.asarray(height_nm, dtype=np.float64)
     n = len(height_nm)
     if angle == 0.0:
-        return np.ones(n, dtype=bool)
+        # Straight down: no upstream, nothing to clear.
+        return np.full(n, np.inf)
 
     t = np.arange(n) / n
     cot = 1.0 / np.tan(abs(angle))
     if angle > 0.0:
         u = height_nm + cot * t * period
-        upstream = np.maximum.accumulate(u)
+        inclusive = np.maximum.accumulate(u)
+        upstream = np.concatenate(([-np.inf], inclusive[:-1]))
     else:
         # The mirror case: travel toward -t, occluders at larger t, and the
         # linear term flips sign with the run direction.
         u = height_nm - cot * t * period
-        upstream = np.maximum.accumulate(u[::-1])[::-1]
+        inclusive = np.maximum.accumulate(u[::-1])[::-1]
+        upstream = np.concatenate((inclusive[1:], [-np.inf]))
     # Every complete upstream period is a copy of u shifted down by one
     # period's drop, so the nearest bounds them all.
     horizon = np.maximum(upstream, u.max() - cot * period)
-    return u >= horizon
+    return u - horizon
+
+
+def horizon_weights(
+    height_nm: ArrayLike, period: float, angle: float
+) -> NDArray[np.float64]:
+    r"""Quadrature weights for the lit region, with sub-cell shadow boundaries.
+
+    The weighted counterpart of :func:`horizon_visible`. A binary mask rounds
+    every shadow boundary to the nearest grid point, which puts an
+    :math:`O(1)` error in one cell per boundary and drags an integral over
+    the lit region down to :math:`O(n^{-1})` convergence. Here each boundary
+    is located *inside* its cell and the nearest lit-facet sample absorbs the
+    sub-cell lit length: interior samples keep weight 1 or 0, and a boundary
+    sample carries :math:`\tfrac12 + x` of a cell, where :math:`x` is the
+    crossing's offset from it. Shadow-side samples are never weighted -- past
+    the boundary the integrand's value is the occluded facet's, and no
+    fraction of it belongs in a lit-region integral.
+
+    The boundary locations come from the geometry, not from interpolating
+    the mask, and three facts make them exact for **polygonal profiles**
+    (``Blazed``, ``Lamellar``, and every measured boundary) and
+    :math:`O(n^{-2})`-accurate for smooth ones -- each learned by measuring
+    a failed simpler scheme, see ``docs/findings.md``:
+
+    - A shadow *begins* at a crest of the ray-adapted height
+      :math:`u = g + p\cot|\theta|\,t`, usually a profile corner that sits
+      between samples. The corner is recovered by intersecting the secant
+      through the two samples on each side -- and the lit-side pair must be
+      ``(i-2, i-1)``, because the last discretely-lit sample can already
+      sit past the corner (its running-max status can come from an
+      increment that spans the crest).
+    - Every shadow stretch is occluded by **its own entry crest**: a lit
+      point is at its running maximum, so nothing upstream stands higher.
+      The stretch therefore *ends* where :math:`u` climbs back to the entry
+      corner's height, extrapolated from the last two shadow samples.
+    - A stretch that wraps through :math:`t = 0` has its level reduced by
+      one period's run :math:`p\cot|\theta|`, exactly as whole upstream
+      periods enter the mask.
+
+    Negative ``angle`` mirrors the profile, runs the same scan, and mirrors
+    back. Same arguments and conventions as :func:`horizon_visible`; the sum
+    of weights over :math:`n` is the lit fraction of the period, to machine
+    precision on a polygon.
+    """
+    height_nm = np.asarray(height_nm, dtype=np.float64)
+    n = len(height_nm)
+    if angle == 0.0:
+        return np.ones(n)
+    if angle < 0.0:
+        return horizon_weights(height_nm[::-1], period, -angle)[::-1]
+
+    t = np.arange(n) / n
+    cot = 1.0 / np.tan(angle)
+    u = height_nm + cot * t * period
+    inclusive = np.maximum.accumulate(u)
+    upstream = np.concatenate(([-np.inf], inclusive[:-1]))
+    lit = u >= np.maximum(upstream, u.max() - cot * period)
+
+    weights = lit.astype(np.float64)
+    if lit.all() or not lit.any():
+        return weights
+
+    entries = np.flatnonzero(lit & ~np.roll(lit, -1))
+    exits = np.flatnonzero(~lit & np.roll(lit, -1))
+
+    levels: dict[int, float] = {}
+    for i in entries:
+        lit_slope = u[i - 1] - u[i - 2]
+        shadow_slope = u[(i + 2) % n] - u[(i + 1) % n]
+        if lit_slope > shadow_slope:
+            # Corner offset from sample i, in cells, in (-1, 1].
+            x = (u[(i + 1) % n] - shadow_slope - u[i - 1] - lit_slope) / (
+                lit_slope - shadow_slope
+            )
+            x = float(np.clip(x, -1.0, 1.0))
+            peak = u[i - 1] + lit_slope * (x + 1.0)
+        else:  # pragma: no cover - a crest the secants cannot see
+            x, peak = 0.5, float(u[i])
+        levels[int(i)] = peak
+        if x >= 0.0:
+            weights[i] = min(0.5 + x, 1.5)
+        else:
+            # The corner sits left of the last discretely-lit sample, whose
+            # value is therefore the shadow facet's: exclude it and let the
+            # sample before it absorb the whole boundary stretch.
+            weights[i] = 0.0
+            weights[i - 1] = max(1.5 + x, 0.0)
+
+    for j in exits:
+        i = int(entries[np.argmin((j - entries) % n)])
+        level = levels[i]
+        if j < i:
+            level -= cot * period
+        slope = u[j] - u[j - 1]
+        if slope > 0.0:
+            x = 1.0 - (level - u[j]) / slope
+        else:  # pragma: no cover - a one-sample shadow gives no slope
+            x = 0.5
+        x = float(np.clip(x, -0.5, 1.0))
+        weights[(j + 1) % n] = max(0.5 + x, 0.0)
+
+    return weights
 
 
 def facet_graze(gamma: float, blaze_angle: float, alpha: float) -> float:
