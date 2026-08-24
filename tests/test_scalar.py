@@ -1232,6 +1232,29 @@ class TestHorizonVisibility:
         horizon = scalar.solve(problem, ill, [3.0], visibility="horizon")
         assert (base.efficiency == horizon.efficiency).all()
 
+    def test_horizon_converges_at_default_quadrature_where_binary_cannot(self):
+        """The numerical dividend of the geometric boundaries.
+
+        A binary mask rounds each shadow edge to the grid, so the masked
+        models converge at O(1/n) -- the coated blazed reference needs ~32768
+        points for 1e-5. The horizon weights place each boundary exactly (a
+        sawtooth is a polygon), so the default 2048 points land within ~1e-5
+        of a 16x finer run; measured 2.0e-7 with the worst rung of the whole
+        n-ladder at 1.3e-5. The same comparison under facet-normal measures
+        ~4.5e-4, so the margin here is two orders below the binary error --
+        the assertion would catch a regression to grid-rounded boundaries.
+        """
+        problem = Problem(period=self.PERIOD, profile=self.TASTE, coating="Au")
+        coarse = scalar.solve(
+            problem, self.ILL, [2.226],
+            quadrature_points=2048, visibility="horizon",
+        )
+        fine = scalar.solve(
+            problem, self.ILL, [2.226],
+            quadrature_points=32768, visibility="horizon",
+        )
+        assert np.abs(coarse.efficiency - fine.efficiency).max() < 5e-5
+
     def test_uncoated_horizon_is_shadowing_on_a_perfect_reflector(self):
         """The masks at unit amplitude: a relative run made comparable to the
         integral solver on grooves deep enough to shadow themselves. Opt-in

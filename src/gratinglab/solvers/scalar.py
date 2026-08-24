@@ -65,7 +65,7 @@ from ..geometry import (
     cos_beta,
     facet_graze,
     flux_obliquity,
-    horizon_visible,
+    horizon_weights,
     is_propagating,
     order_range,
     sin_beta,
@@ -690,9 +690,11 @@ class _Reflection:
     #: sin(zeta) toward the incident direction, per quadrature point, unclipped.
     sin_graze_in: NDArray[np.float64] = field(default_factory=lambda: np.array([]))
     tilt: NDArray[np.float64] = field(default_factory=lambda: np.array([]))
-    #: Cast-shadow mask toward the incident direction; ``None`` means the
-    #: horizon was not consulted, which is different from all-lit.
-    lit_in: "NDArray[np.bool_] | None" = None
+    #: Incident-side quadrature weights: binary orientation under
+    #: "facet-normal", sub-cell shadow boundaries from
+    #: :func:`~gratinglab.geometry.horizon_weights` under "horizon". Zero
+    #: exactly where the beam cannot reach.
+    weight_in: NDArray[np.float64] = field(default_factory=lambda: np.array([]))
     #: Grid geometry for the exit-side horizon scans. Empty when unused.
     height_nm: NDArray[np.float64] = field(default_factory=lambda: np.array([]))
     period: float = 0.0
@@ -703,10 +705,7 @@ class _Reflection:
 
     @property
     def visible_in(self) -> NDArray[np.bool_]:
-        visible = self.sin_graze_in > 0.0
-        if self.lit_in is not None:
-            visible = visible & self.lit_in
-        return visible
+        return self.weight_in > 0.0
 
     @property
     def masked(self) -> bool:
@@ -807,14 +806,25 @@ def _build_reflection(
     reflection.tilt = tilt
     reflection.sin_graze_in = sin_in
     if visibility == "horizon":
-        reflection.lit_in = horizon_visible(
+        # The horizon alone. A back-facing point has a falling ray-adapted
+        # height, which puts it under the running horizon, so the orientation
+        # test is a subset of this one -- and the horizon's boundaries are
+        # geometric crossings `horizon_weights` places at sub-cell precision,
+        # where the orientation function just jumps at profile corners.
+        weight_in = horizon_weights(
             height, problem.period, illumination.alpha
         )
         reflection.height_nm = height
         reflection.period = problem.period
+    else:
+        # Binary, deliberately: the orientation function jumps at profile
+        # corners, where a linear crossing estimate is biased rather than
+        # sharp, and bit-for-bit reproducibility is this mode's purpose.
+        weight_in = (sin_in > 0.0).astype(np.float64)
+    reflection.weight_in = weight_in
 
     visible = reflection.visible_in
-    reflection.shadowed_fraction = float(1.0 - visible.mean())
+    reflection.shadowed_fraction = float(1.0 - weight_in.mean())
     reflection.local_graze = np.arcsin(np.clip(sin_in[visible], -1.0, 1.0))
     if visible.any():
         reflection.basis = (
@@ -840,9 +850,11 @@ def _groove_average_reflectivity(
 
     Over the **whole** period, not just the lit part: a shadowed facet reflects
     nothing, and averaging only over what is visible would quietly delete the
-    shadowing this model exists to see.
+    shadowing this model exists to see. Under ``"horizon"`` the shadow
+    boundary enters at sub-cell precision through the mask weights
+    (:func:`~gratinglab.geometry.horizon_weights`).
     """
-    visible = reflection.visible_in
+    weights = reflection.weight_in
     graze = np.arcsin(np.clip(reflection.sin_graze_in, -1.0, 1.0))
     local = reflectivity(
         coating.n(wavelength),
@@ -852,7 +864,7 @@ def _groove_average_reflectivity(
         wavelength_nm=wavelength,
         model=roughness_model,
     )
-    return float(np.mean(np.where(visible, local, 0.0)))
+    return float(np.mean(np.where(weights > 0.0, local, 0.0) * weights))
 
 
 def _local_reflected_efficiency(
@@ -919,15 +931,21 @@ def _local_reflected_efficiency(
     sin_out = sin_facet_graze(
         illumination.gamma, reflection.tilt[None, :], betas[:, None]
     )
-    visible = reflection.visible_in[None, :] & (sin_out > 0.0)
-    if reflection.visibility == "horizon":
-        visible &= _exit_lit(reflection, betas)
+    # Minimum, not product: the incident and exit shadows share boundaries
+    # (every direction's shadow starts at the same apex corner), and where
+    # two same-side boundaries land in one cell the lit overlap is the
+    # smaller of the two sub-cell weights -- multiplying them would count
+    # the shared boundary twice and put an O(1/n) error on the blaze order.
+    coverage = np.minimum(
+        reflection.weight_in[None, :], _exit_weights(reflection, betas, sin_out)
+    )
+    visible = coverage > 0.0
     graze_out = np.arcsin(np.clip(sin_out, -1.0, 1.0))
     r_s_out, r_p_out = amplitude(n_c, graze_out, **common)
 
     zero = np.zeros((), dtype=np.complex128)
-    w_s = np.where(visible, np.sqrt(r_s_in)[None, :] * np.sqrt(r_s_out), zero)
-    w_p = np.where(visible, np.sqrt(r_p_in)[None, :] * np.sqrt(r_p_out), zero)
+    w_s = np.where(visible, np.sqrt(r_s_in)[None, :] * np.sqrt(r_s_out), zero) * coverage
+    w_p = np.where(visible, np.sqrt(r_p_in)[None, :] * np.sqrt(r_p_out), zero) * coverage
 
     # An order no facet can radiate into is zero for a geometric reason, not
     # because it passed off. Record it so the provenance can say which.
@@ -942,21 +960,31 @@ def _local_reflected_efficiency(
     )
 
 
-def _exit_lit(
-    reflection: _Reflection, betas: NDArray[np.float64]
-) -> NDArray[np.bool_]:
-    """Cast-shadow masks toward each diffracted direction, one row per order.
+def _exit_weights(
+    reflection: _Reflection,
+    betas: NDArray[np.float64],
+    sin_out: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """Exit-side mask weights, one row per order: orientation, and under
+    ``"horizon"`` the cast shadows toward each diffracted direction.
 
-    The same scan the incident side ran, at each :math:`\\beta_m` -- occlusion
-    along a straight ray reads the same from either end, which is what keeps
-    the horizon model reciprocal.
+    The same scans the incident side ran, at each :math:`\\beta_m` --
+    occlusion along a straight ray reads the same from either end, which is
+    what keeps the horizon model reciprocal.
     """
-    return np.stack(
-        [
-            horizon_visible(reflection.height_nm, reflection.period, float(b))
-            for b in betas
-        ]
-    )
+    if reflection.visibility == "horizon":
+        # The horizon alone, for the same two reasons as the incident side:
+        # it subsumes the orientation test, and its boundaries are geometric
+        # crossings rather than jumps at profile corners.
+        return np.stack(
+            [
+                horizon_weights(
+                    reflection.height_nm, reflection.period, float(b)
+                )
+                for b in betas
+            ]
+        )
+    return (sin_out > 0.0).astype(np.float64)
 
 
 def _shadow_masked_efficiency(
@@ -979,15 +1007,17 @@ def _shadow_masked_efficiency(
     sin_out = sin_facet_graze(
         illumination.gamma, reflection.tilt[None, :], betas[:, None]
     )
-    visible = (
-        reflection.visible_in[None, :] & (sin_out > 0.0) & _exit_lit(reflection, betas)
+    # Minimum, not product -- see `_local_reflected_efficiency`.
+    coverage = np.minimum(
+        reflection.weight_in[None, :], _exit_weights(reflection, betas, sin_out)
     )
+    visible = coverage > 0.0
 
     reflection.suppressed.update(
         int(m) for m, lit in zip(orders, visible.any(axis=1)) if not lit
     )
 
-    return np.abs(np.mean(np.where(visible, integrand, 0.0), axis=1)) ** 2
+    return np.abs(np.mean(np.where(visible, integrand, 0.0) * coverage, axis=1)) ** 2
 
 
 def _sp_split(
