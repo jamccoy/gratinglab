@@ -919,3 +919,189 @@ tail with the defect documented in place; and the scalar-vs-PCGrate deficit
 reported earlier in this file ("the corpus can test the diffraction but not
 the reflectivity") was computed on the idealised sawtooth — the profile that
 this comparison now shows PCGrate never ran.
+
+---
+
+## Scalar validity in a conical mount follows the reduced wavelength
+
+**The λ/period guard was testing the wrong ratio, and the flagship off-plane
+regime passed a check it should have failed by a factor of 46.**
+
+For a perfect conductor the conical problem decouples exactly into an in-plane
+problem at the reduced wavelength λ/sin γ — the fact the integral solver is
+built on. So "structure ≫ wavelength", the smallness Kirchhoff theory needs,
+must be judged on λ/(p·sin γ). The old guard used λ/p, which at the reference
+geometry (period 315.15 nm, γ = 1.25°, λ = 2.226 nm) reads a comfortable 0.007
+while the effective ratio is **0.32**.
+
+Measured, scalar vs the integral solver, both relative, TE, `Sinusoidal(0.05)`,
+λ/p held fixed at 0.001 while the cone closes:
+
+| γ | λ/(p·sin γ) | max abs scalar-vs-integral |
+|---:|---:|---:|
+| 10° | 0.0058 | 1.6e-3 |
+| 5° | 0.0115 | 2.4e-3 |
+| 2.5° | 0.0229 | 3.4e-3 |
+| 1.25° | 0.0458 | 4.5e-3 |
+
+Monotone growth with 1/sin γ at fixed λ/p — the naive ratio never moved. At the
+reference geometry itself (Blazed 29.5°/70.5°, reduced ratio 0.32) the
+disagreement is orderwise catastrophic: the integral solver puts 0.42 in m=+2
+and 0.21 in m=+3 where bare scalar puts 0.69 in m=+3.
+
+Two consequences. The guard now tests the reduced ratio (in-plane unchanged),
+and **it fires on the project's own flagship regime** for λ ≳ 0.7 nm — that is
+the honest answer, not collateral damage: the long-standing scalar-vs-PCGrate
+per-order RMS of ~0.12 ("the corpus can test the diffraction but not the
+reflectivity", above) stops being a mystery and becomes a regime statement.
+Scalar remains useful there for order positions and the blaze envelope;
+per-order numbers need the integral method.
+
+Alongside the γ ladder, the committed cross-method suite
+(`tests/test_cross_method.py` — the first scalar-vs-integral tests needing no
+external corpus) measures the other two failure axes on `Sinusoidal` profiles:
+depth_fraction {0.01, 0.02, 0.05, 0.2} at λ/p = 0.04 gives max abs differences
+{3.6e-4, 8.4e-4, 4.4e-3, 1.0e-1} — depth is the dominant axis, ×285 over a
+×20 depth range — and λ/p {0.05, 0.1, 0.4} at depth 0.02 gives {8.4e-4,
+2.2e-3, 4.1e-3}. In the overlap regime (shallow, small reduced ratio) the two
+solvers agree to a few 1e-4 absolute in both mounts, with the integral
+solver's own energy-balance deviation below 1e-7 so none of the gap is mesh
+error.
+
+---
+
+## The facet-normal test misses cast shadows, almost entirely on the exit side
+
+**The visibility masks tested only whether a point's own facet faces the ray.
+The shadow the apex casts across the trough was invisible to them — a fraction
+of a percent of the period toward the incident beam, but 10–50% of it toward
+individual diffracted directions, and −32% on the blaze order.**
+
+Geometry first: for a groove-invariant surface, 3D occlusion reduces exactly to
+a 2D test in the transverse plane, and γ drops out — the ray's groove-parallel
+component slides along the invariant direction and can neither create nor
+remove an occlusion. So the scan runs at the azimuth alone: α for incidence,
+β_m per order. On an ideal sawtooth (blaze slope s_b, anti-blaze slope s_a,
+apex at t_a) the cast shadow past the trough has the closed form
+
+    Δ = (1 − t_a)(s_a − s_r)/(s_b + s_r),   s_r = cot θ
+
+zero until the ray dips below the anti-blaze slope (θ > 19.5° for the
+29.5°/70.5° reference groove). Measured on the reference geometry, extra period
+masked beyond the facet-normal test:
+
+| direction | θ | extra masked |
+|---|---:|---:|
+| incident | 19.99° | 0.38% |
+| exit m=+3, λ=2.226 | 39.0° | 14.7% |
+| exit m=+2, λ=3 | 32.1° | 9.5% |
+| exit m=+2, λ=4 | 55.3° | 28.3% |
+
+The incident side is nearly captured already — α = 19.99° sits just past the
+19.5° threshold — which is presumably why the omission survived: the
+`shadowed_fraction` a person would check barely moves. The exit directions are
+much steeper, and there the blind spot is enormous. Full-pipeline impact
+(`visibility="horizon"`, Au, local model): the blaze order at its blaze
+wavelength moves **0.514 → 0.348 (−32%)** — the same order of magnitude as the
+M16 groove-resolution change.
+
+Reciprocity survives by construction (occlusion along a straight ray reads the
+same from either end; measured 1e-16 coated and uncoated), and the horizon
+subsumes the orientation test outright: a back-facing point has a falling
+ray-adapted height u = g + p·cot θ·t, which puts it under the running horizon.
+
+Two sign traps, each of which fails **silently** — reporting "no cast shadow"
+rather than erroring — are pinned by tests
+(`tests/test_geometry.py::TestHorizonVisible` derives the sliver trig
+independently): the profile parameter runs against the dispersion direction
+("The profile parameter runs backwards", above), so a ray with α > 0 travels
+toward **+t** and its occluders sit at smaller t; and the scan must run on
+`problem.height_nm`, not the period-normalised `profile.height`, because the
+ray's run-to-drop ratio compares height against period directly.
+
+Cast shadowing moved the blaze order from 0.69 toward the rigorous 0.21 of the
+(out-of-regime) perfect-conductor comparison — the right direction, but that is
+suggestion, not validation. Like the geometric-mean weight, the horizon ships
+opt-in until a finite-conductivity A/B exists.
+
+---
+
+## s and p are degenerate at the grazes this project runs
+
+**Every scalar reflectivity model averages facet-local s and p 50/50 because
+the groove-TE/TM → facet-s/p rotation is deliberately unowned. Measured, that
+waiver costs under half a percent in the working regime — so the mapping stays
+unimplemented, and the solver now prices the waiver instead of assuming it.**
+
+Fractional intensity split |R_s − R_p|/R_s on the vendored Au table:
+
+| λ (nm) | ζ = 0.5° | 1.25° | 2° | 5° |
+|---:|---:|---:|---:|---:|
+| 0.62 | 1.2e-4 | 3.9e-4 | 2.2e-3 | 2.8e-2 |
+| 1.0 | 3.3e-4 | 8.9e-4 | 1.7e-3 | 2.4e-2 |
+| 3.0 | 1.9e-3 | 4.9e-3 | 7.9e-3 | 2.4e-2 |
+| 6.0 | 2.2e-3 | 5.5e-3 | 8.9e-3 | 2.5e-2 |
+
+At amplitude level |r_s − r_p|/|r_s| ≤ 9e-3 and arg(r_p/r_s) ≤ 8e-3 rad at
+ζ ≤ 2°. Since the unpolarized mean is already computed, **any** rotation of the
+polarization basis can move the result by at most half the split: < 0.5% at
+every graze the reference groove presents (worst local graze 1.94°). The
+mapping only starts to matter above ~5° facet graze — steep grooves near normal
+incidence, where the Brewster warning already fires.
+
+Implementing the rotation would therefore be false precision here; what was
+missing was the *price tag*. The provenance now evaluates the split at the
+guarded graze and the scan's wavelength extremes, and warns above 2% — so a
+steep-groove near-normal run (measured split: 40%) says out loud that its
+unpolarized average is a modelling decision, not a freebie.
+
+---
+
+## Sub-cell shadow boundaries: three schemes measured, one survived
+
+**Binary visibility masks cost the masked models O(1/n) convergence — ~5e-4 at
+the default 2048 points on the coated blazed reference. The scheme that fixed
+it places every boundary geometrically and reaches 2e-7 at the same 2048
+points. The two schemes that failed are recorded because each failure looks
+like a reasonable design until measured.**
+
+1. **Interpolating the mask function across the straddling pair** (the obvious
+   design) mis-handles discontinuities: at a profile corner the orientation
+   function `sin ζ(t)` *jumps* rather than crosses, the linear estimate is
+   systematically biased, and on the reference sawtooth it handed 0.8 of a
+   cell of unit-amplitude weight to a back-facing sample. Measured: *worse*
+   than binary on blazed profiles (1.5e-3 vs 5.0e-4 at n = 2048).
+2. **Extrapolating the horizon deficit from the shadow side, sample-level**
+   fixes the reappearance boundary but not the entry: a shadow's level was the
+   occluding apex's height *at a sample*, and the true corner between samples
+   sits up to one cell higher, shifting both boundaries of the stretch by
+   O(h). Measured: lit-fraction errors of 2e-4–9e-4 that plateau across n
+   before dropping — the signature of a boundary mislocated by a fixed
+   physical length.
+3. **The surviving scheme** (`geometry.horizon_weights`): the entry corner is
+   recovered by intersecting the secants through the two samples on *each
+   side* of it — and the lit-side pair must be (i−2, i−1), because the last
+   discretely-lit sample can already sit past the corner. Every shadow
+   stretch is occluded by its own entry crest (a lit point is at its running
+   maximum), so the exit is where u climbs back to that corner's height, one
+   period-drop lower if the stretch wraps t = 0. On a polygon — Blazed,
+   Lamellar, every measured groove — the lit fraction is then exact to
+   machine precision at any n (asserted at 1e-13 in
+   `tests/test_geometry.py::TestHorizonWeights`).
+
+One composition rule mattered as much as the boundaries: incident and exit
+masks combine by **minimum, not product**. Every direction's shadow starts at
+the same apex corner, so the two masks share boundary cells, and multiplying
+their sub-cell weights counts the shared boundary twice — measured as the
+entire remaining error, sitting on the blaze order (its integrand is nearly
+constant, so its efficiency is the lit overlap squared).
+
+Final measured ladder, coated blazed reference, `visibility="horizon"`,
+against a 131072-point run: 4.4e-6 (n=1024), **2.0e-7 (2048)**, 7.8e-7
+(4096), 1.0e-5 (8192), 1.8e-7 (16384) — erratic small residuals, every rung
+below the binary scheme's n=2048 error by 30× or more. `facet-normal` keeps
+binary masks deliberately: its boundary function jumps at corners where no
+crossing estimate is sharp, and bit-for-bit reproducibility is that mode's
+purpose. Orders away from the blaze converge spectrally (1e-8 at n=2048) —
+the shadow boundaries were the only thing standing between the masked models
+and the pure phase integral's convergence.
