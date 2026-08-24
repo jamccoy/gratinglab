@@ -82,6 +82,18 @@ while `Provenance.version` still records exactly which program and version gener
 
 ## Install
 
+**First, one prerequisite.** This package depends on
+[`endstation`](https://github.com/jamccoy/endstation), which is not on PyPI yet, so
+`pip` cannot resolve it from the dependency line alone — install it from git once,
+and every command below then works as written:
+
+```bash
+pip install "endstation[qt] @ git+https://github.com/jamccoy/endstation.git@v0.1.0"
+```
+
+This step goes away when endstation is published; the dependency line is already
+correct and will need no change.
+
 ```bash
 pip install -e .                      # solvers only: numpy, scipy, pydantic
 pip install -e ".[metrology]"         # + AFM readers and the boundary pipeline
