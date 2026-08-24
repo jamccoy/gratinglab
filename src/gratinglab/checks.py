@@ -238,14 +238,25 @@ def check_energy_balance(
 
     Notes
     -----
+    When the scan records an absorbed fraction (``scan.absorption``, from a
+    solver that computes one independently), the conserved quantity is the
+    sum *plus* the absorption and that is what gets checked: ``R + A = 1``
+    is a theorem for a one-interface absorbing grating, so ``lossless=True``
+    is again the right mode for the finite-conductivity integral method --
+    and it is a genuine two-sided check, because the absorption comes from a
+    boundary integral of the densities, not from ``1 - R``.
+
     The default direction matters. A deficit is ordinary: power goes into
     absorption, into evanescent orders, or is missed by an approximate method.
     An *excess* is not, and this is the check that identified the unphysical
     finite-conductivity run in the reference corpus, where summed efficiency
     reached 3.6.
     """
+    total = np.asarray(scan.total, dtype=np.float64)
+    if scan.absorption is not None:
+        total = total + scan.absorption
     return EnergyReport(
-        total=np.asarray(scan.total, dtype=np.float64),
+        total=total,
         wavelengths=scan.wavelengths,
         tolerance=tolerance,
         lossless=lossless,
