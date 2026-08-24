@@ -177,6 +177,44 @@ class TestNeumannKernel:
         assert np.allclose(kernel, 0.0, atol=1e-12)
 
 
+class TestComplexWavenumber:
+    """The metal-side kernels of the finite-conductivity system are this
+    same code with ``k`` scaled by a complex refractive index. Off the
+    boundary the raw spectral sum still converges exponentially (every term
+    decays on the pinned branch), so it stays a genuine reference."""
+
+    X = np.array([13.0, 150.0, -290.0, 411.0])
+    Z = np.array([55.0, 47.0, 61.0, -80.0])
+
+    @pytest.mark.parametrize(
+        "index", [0.9 + 0.2j, 0.2 + 3.0j], ids=["xray-like", "visible-gold"]
+    )
+    def test_greens_matches_brute_force(self, index):
+        k = K_T * index
+        slow = brute_force_greens(
+            self.X, self.Z, k=k, alpha0=ALPHA0, period=PERIOD, terms=400
+        )
+        fast = greens_function(
+            self.X, self.Z, k=k, alpha0=ALPHA0, period=PERIOD, terms=80
+        )
+        assert np.allclose(fast, slow, rtol=0.0, atol=1e-9)
+
+    @pytest.mark.parametrize(
+        "index", [0.9 + 0.2j, 0.2 + 3.0j], ids=["xray-like", "visible-gold"]
+    )
+    def test_neumann_matches_brute_force(self, index):
+        k = K_T * index
+        nx = np.array([0.3, -0.5, 0.1, 0.4])
+        ny = np.sqrt(1.0 - nx**2)
+        slow = brute_force_neumann(
+            self.X, self.Z, nx, ny, k=k, alpha0=ALPHA0, period=PERIOD, terms=6000
+        )
+        fast = neumann_function(
+            self.X, self.Z, nx, ny, k=k, alpha0=ALPHA0, period=PERIOD, terms=80
+        )
+        assert np.allclose(fast, slow, rtol=0.0, atol=1e-8)
+
+
 class TestWavenumbers:
     def test_branch_is_upper_half_plane(self):
         m = np.arange(-40, 41)
@@ -193,5 +231,13 @@ class TestWavenumbers:
         still give upward-decaying terms."""
         _, gamma = wavenumbers(
             K_T * (0.99 + 0.05j), ALPHA0, PERIOD, np.arange(-30, 31)
+        )
+        assert (gamma.imag >= -1e-15).all()
+
+    def test_strongly_complex_k_keeps_decaying_branch(self):
+        """A visible-metal wavenumber (n ~ 0.2 + 3i) lands numpy's sqrt on
+        the wrong sheet for some orders; the pin must catch every one."""
+        _, gamma = wavenumbers(
+            K_T * (0.2 + 3.0j), ALPHA0, PERIOD, np.arange(-60, 61)
         )
         assert (gamma.imag >= -1e-15).all()
