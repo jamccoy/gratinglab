@@ -98,6 +98,13 @@ ReflectivityModel = Literal["local", "average", "facet"]
 #: ``docs/theory/scalar.md`` section 9.
 Visibility = Literal["facet-normal", "horizon"]
 
+#: Above this s/p reflectivity split, the unowned groove-TE/TM to facet-s/p
+#: polarization mapping stops being free. Below it, any basis rotation moves
+#: the unpolarized mean by at most half the split -- under 1% -- which is why
+#: the mapping is documented rather than implemented; see
+#: ``docs/theory/scalar.md`` section 9 and ``docs/findings.md``.
+_SP_SPLIT_WARN = 0.02
+
 #: Above this ratio of the **reduced** wavelength lambda/sin(gamma) to the
 #: period, scalar theory is losing validity. In-plane this is plain
 #: lambda/period; in a conical mount the reduction is what matters, because
@@ -520,6 +527,26 @@ class ScalarSolver:
                     "deg there); reflectivity collapses above it, so these "
                     "wavelengths are outside the regime a grazing-incidence "
                     "design operates in -- see docs/theory/scalar.md section 7"
+                )
+
+            # The waived polarization mapping, priced. Every reflectivity
+            # model here averages facet-local s and p 50/50 because the
+            # groove-referenced TE/TM -> facet s/p rotation is deliberately
+            # unowned (see materials/fresnel.py). That waiver costs at most
+            # half the s/p split, which at the grazes this project runs is
+            # under 0.5% -- but it is a measured bound, not a law, so the one
+            # angle the guards already track is checked and the waiver is
+            # reported exactly when it stops being free.
+            split = _sp_split(coating, graze, wavelengths)
+            if split > _SP_SPLIT_WARN:
+                warnings.append(
+                    f"s and p reflectivities differ by {100 * split:.3g}% at "
+                    f"the guarded graze ({np.degrees(graze):.4g} deg); the "
+                    "50/50 s/p average used here stands in for a "
+                    "groove-TE/TM to facet-s/p mapping nobody carries, which "
+                    "is free only while the two are degenerate. Read "
+                    "polarization-sensitive conclusions from a rigorous "
+                    "method -- see docs/theory/scalar.md section 9"
                 )
 
             if reflection.brewster:
@@ -961,6 +988,29 @@ def _shadow_masked_efficiency(
     )
 
     return np.abs(np.mean(np.where(visible, integrand, 0.0), axis=1)) ** 2
+
+
+def _sp_split(
+    coating: "OpticalConstants",
+    graze: float,
+    wavelengths: NDArray[np.float64],
+) -> float:
+    r"""Worst fractional s/p intensity split, :math:`|R_s - R_p| / R_s`.
+
+    Evaluated at the guarded graze and the scan's wavelength extremes only --
+    the split grows monotonically with graze in this regime, so the angle the
+    validity guards already watch is the right single point, and two
+    wavelengths bound a table that varies smoothly between them. Roughness is
+    left out deliberately: the damping factors apply to s and p alike and
+    would cancel from the ratio.
+    """
+    split = 0.0
+    for wavelength in (float(wavelengths.min()), float(wavelengths.max())):
+        r_s, r_p = amplitude(coating.n(wavelength), graze)
+        big, small = np.abs(r_s) ** 2, np.abs(r_p) ** 2
+        if big > 0.0:
+            split = max(split, float(np.abs(big - small) / big))
+    return split
 
 
 def _brewster_crossing(r_p: NDArray[np.complex128]) -> bool:
