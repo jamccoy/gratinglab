@@ -45,6 +45,7 @@ from .. import provenance
 from ..scalar_options import (
     REFLECTIVITY_MODELS,
     ROUGHNESS_MODELS,
+    VISIBILITY_MODES,
     ScalarOptionsState,
 )
 from ..scalar_options import build_options as build_scalar_options
@@ -155,6 +156,20 @@ class ScalarTab(QWidget):
         )
         self._fields["reflectivity_model"] = reflectivity
         form.addRow("Reflectivity", reflectivity)
+
+        visibility = QComboBox()
+        visibility.addItems(VISIBILITY_MODES)
+        visibility.setToolTip(
+            "Which shadows the visibility masks see.\n"
+            "facet-normal: the local orientation test alone -- a point is\n"
+            "  shadowed iff its own facet turns away from the ray.\n"
+            "horizon: adds the shadows one part of the groove casts on\n"
+            "  another, for the incident and each exit direction.\n"
+            "With a coating, horizon needs a per-point reflectivity model\n"
+            "(local or average) -- facet has no masks for it to narrow."
+        )
+        self._fields["visibility"] = visibility
+        form.addRow("Visibility", visibility)
 
         roughness = QComboBox()
         roughness.addItems(ROUGHNESS_MODELS)
@@ -289,6 +304,7 @@ class ScalarTab(QWidget):
             quadrature_points=_value(self._fields["quadrature_points"]),
             reflectivity_model=_value(self._fields["reflectivity_model"]),
             roughness_model=_value(self._fields["roughness_model"]),
+            visibility=_value(self._fields["visibility"]),
         )
         return build_scalar_options(problem, illumination, wavelengths, options)
 

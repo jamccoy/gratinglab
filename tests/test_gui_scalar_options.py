@@ -67,11 +67,16 @@ class TestOptions:
             "quadrature_points": 4096,
             "reflectivity_model": "local",
             "roughness_model": "nevot-croce",
+            "visibility": "facet-normal",
         }
 
     @pytest.mark.parametrize(
         "field,value",
-        [("reflectivity_model", "mean-surface"), ("roughness_model", "gaussian")],
+        [
+            ("reflectivity_model", "mean-surface"),
+            ("roughness_model", "gaussian"),
+            ("visibility", "shadow-map"),
+        ],
     )
     def test_a_model_the_solver_does_not_know_is_a_form_error(self, field, value):
         """Caught on the field that produced it, alongside every other form
@@ -84,6 +89,42 @@ class TestOptions:
             )
         assert excinfo.value.errors[0].field == field
 
+    def test_facet_plus_horizon_with_a_coating_is_a_form_error(self):
+        """The one combination the solver refuses -- caught on the field that
+        produced it, same as an unknown model, rather than surfacing as a
+        ValueError from the worker."""
+        parsed = build(FormState(coating="Au"))
+        with pytest.raises(FormErrors) as excinfo:
+            build_options(
+                parsed.problem, parsed.illumination, parsed.wavelengths,
+                ScalarOptionsState(
+                    reflectivity_model="facet", visibility="horizon"
+                ),
+            )
+        error = excinfo.value.errors[0]
+        assert error.field == "visibility"
+        assert "facet" in error.message
+
+    def test_facet_plus_horizon_without_a_coating_is_accepted(self):
+        """Uncoated, the facet model is inert and the masks run at unit
+        amplitude -- if build_options() accepts it, solve() must not reject."""
+        parsed = build(FormState())
+        options = build_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths,
+            ScalarOptionsState(reflectivity_model="facet", visibility="horizon"),
+        )
+        scalar.solve(parsed.problem, parsed.illumination, [2.4], **options)
+
+    def test_horizon_with_a_coating_and_a_resolved_model_reaches_the_solver(self):
+        """The guard refuses only the facet model: coated horizon runs under
+        the default per-point reflectivity."""
+        parsed = build(FormState(coating="Au"))
+        options = build_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths,
+            ScalarOptionsState(visibility="horizon"),
+        )
+        scalar.solve(parsed.problem, parsed.illumination, [2.4], **options)
+
     def test_the_defaults_are_the_solvers_own(self):
         """A freshly opened window and a bare `scalar.solve` must agree, or the
         GUI quietly answers a different question from the API."""
@@ -91,7 +132,7 @@ class TestOptions:
 
         signature = inspect.signature(scalar.solve)
         defaults = ScalarOptionsState()
-        for name in ("reflectivity_model", "roughness_model"):
+        for name in ("reflectivity_model", "roughness_model", "visibility"):
             assert getattr(defaults, name) == signature.parameters[name].default
 
     def test_options_are_exactly_what_the_solver_accepts(self):
