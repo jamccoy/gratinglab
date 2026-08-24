@@ -65,6 +65,7 @@ from ..geometry import (
     cos_beta,
     facet_graze,
     flux_obliquity,
+    horizon_visible,
     is_propagating,
     order_range,
     sin_beta,
@@ -79,11 +80,23 @@ from .base import Capabilities, Progress, register
 if TYPE_CHECKING:  # pragma: no cover - imports for type checkers only
     from ..materials import OpticalConstants
 
-__all__ = ["ReflectivityModel", "ScalarSolver", "interference_factor", "scalar"]
+__all__ = [
+    "ReflectivityModel",
+    "ScalarSolver",
+    "Visibility",
+    "interference_factor",
+    "scalar",
+]
 
 #: How reflectivity is resolved across the groove cycle. See
 #: :class:`ScalarSolver.solve` and ``docs/theory/scalar.md`` section 9.
 ReflectivityModel = Literal["local", "average", "facet"]
+
+#: Which shadows the visibility masks see. ``"facet-normal"`` is the local
+#: orientation test alone; ``"horizon"`` adds the shadows one part of the
+#: groove casts on another. See :class:`ScalarSolver.solve` and
+#: ``docs/theory/scalar.md`` section 9.
+Visibility = Literal["facet-normal", "horizon"]
 
 #: Above this ratio of the **reduced** wavelength lambda/sin(gamma) to the
 #: period, scalar theory is losing validity. In-plane this is plain
@@ -144,6 +157,7 @@ class ScalarSolver:
         quadrature_points: int = 2048,
         roughness_model: "RoughnessModel" = "nevot-croce",
         reflectivity_model: "ReflectivityModel" = "local",
+        visibility: "Visibility" = "facet-normal",
         progress: "Progress | None" = None,
     ) -> EfficiencyScan:
         r"""Efficiency over a wavelength scan.
@@ -206,6 +220,39 @@ class ScalarSolver:
             can drive a weak order to exactly zero; when it does, the order is
             named in a provenance warning rather than left to look like a
             passing-off.
+        visibility
+            Which shadows the masks above can see.
+
+            ``"facet-normal"`` (default) is the local orientation test alone:
+            a point is shadowed iff its own facet is turned away from the
+            direction in question. That misses **cast** shadows -- the groove
+            apex blocking surface beyond the trough that faces the ray
+            perfectly well -- which on the reference sawtooth is a fraction
+            of a percent of the period on the incident side but 10-50% per
+            order on the exit side, moving the blaze order by ~-30%
+            (``docs/findings.md``).
+
+            ``"horizon"`` adds them, via
+            :func:`~gratinglab.geometry.horizon_visible` in the transverse
+            plane, for the incident direction and each diffracted one.
+            Occlusion along a straight ray is the same from either end, so
+            this keeps the :math:`\alpha \leftrightarrow \beta_m` symmetry
+            and reciprocity survives. It is ray optics: near passing-off it
+            overestimates blocking because diffraction bends around the apex
+            (the vanishing flux obliquity already suppresses those orders).
+            Kept opt-in for now so existing results reproduce bit-for-bit;
+            like the geometric-mean weight it awaits validation against a
+            rigorous finite-conductivity method.
+
+            With ``"horizon"`` and **no coating**, the masks are applied at
+            unit amplitude inside the integral -- geometric shadowing on an
+            otherwise perfect reflector, the configuration directly
+            comparable to the integral solver on deep grooves. The default
+            uncoated run remains the untouched pure phase integral. The
+            ``"average"`` model sees the horizon only on the incident side
+            (its exit side is order-blind by construction), and
+            ``"facet"`` -- which has no masks at all -- refuses the
+            combination rather than ignoring it.
         progress
             Called ``(0, n)`` before the first wavelength and ``(k, n)`` after
             each one, per the contract in
@@ -267,7 +314,7 @@ class ScalarSolver:
         kernel = np.exp(-2j * np.pi * all_orders[:, None] * t[None, :])
 
         reflection = _build_reflection(
-            problem, illumination, coating, reflectivity_model, t
+            problem, illumination, coating, reflectivity_model, visibility, t, height
         )
         resolved = coating is not None and reflection.model != "facet"
 
@@ -325,6 +372,18 @@ class ScalarSolver:
                     illumination,
                     problem.roughness,
                     roughness_model,
+                )
+            elif coating is None and reflection.visibility == "horizon":
+                # Geometric shadowing on a perfect reflector: the masks at
+                # unit amplitude, inside the integral. This is the uncoated
+                # run made comparable to the integral solver on grooves deep
+                # enough to shadow themselves.
+                values = obliquity * _shadow_masked_efficiency(
+                    integrand,
+                    reflection,
+                    beta(sines[live]),
+                    all_orders[live],
+                    illumination,
                 )
             else:
                 values = obliquity * np.abs(np.mean(integrand, axis=1)) ** 2
@@ -463,23 +522,6 @@ class ScalarSolver:
                     "design operates in -- see docs/theory/scalar.md section 7"
                 )
 
-            if reflection.suppressed:
-                # An order at exactly zero must never be mistaken for one that
-                # passed off. Naming it is the whole difference between a
-                # modelled result and a silent one.
-                named = ", ".join(str(m) for m in sorted(reflection.suppressed))
-                warnings.append(
-                    f"order(s) {named} are zero at one or more wavelengths in "
-                    f"this scan because no part of the groove faces both the "
-                    f"incident and the diffracted direction; "
-                    f"{100 * reflection.shadowed_fraction:.3g}% of the period "
-                    "is shadowed from the beam to begin with. This is geometric "
-                    "shadowing by the local facet normal, not passing-off -- "
-                    "`propagating` still marks these orders live. Scalar theory "
-                    "has no diffraction into a shadowed direction, so zero is "
-                    "the model's answer rather than the physical one"
-                )
-
             if reflection.brewster:
                 warnings.append(
                     "the p-polarized amplitude passes through zero somewhere on "
@@ -495,6 +537,29 @@ class ScalarSolver:
         # There is nothing wrong with a run that has not been given a coating;
         # warnings are reserved for cases where the model is being pushed
         # outside conditions it can actually answer for.
+
+        if reflection.suppressed:
+            # An order at exactly zero must never be mistaken for one that
+            # passed off. Naming it is the whole difference between a
+            # modelled result and a silent one. Outside the coating block
+            # deliberately: the uncoated horizon mode suppresses orders too.
+            named = ", ".join(str(m) for m in sorted(reflection.suppressed))
+            mechanism = (
+                "the local facet normal"
+                if reflection.visibility == "facet-normal"
+                else "the local facet normal and the cast-shadow horizon"
+            )
+            warnings.append(
+                f"order(s) {named} are zero at one or more wavelengths in "
+                f"this scan because no part of the groove faces both the "
+                f"incident and the diffracted direction; "
+                f"{100 * reflection.shadowed_fraction:.3g}% of the period "
+                f"is shadowed from the beam to begin with. This is geometric "
+                f"shadowing by {mechanism}, not passing-off -- "
+                "`propagating` still marks these orders live. Scalar theory "
+                "has no diffraction into a shadowed direction, so zero is "
+                "the model's answer rather than the physical one"
+            )
 
         if illumination.polarization != "unpolarized":
             warnings.append(
@@ -553,9 +618,19 @@ class ScalarSolver:
                         "coating": f"{coating.name} ({coating.source})",
                         "reflectivity_model": reflection.model,
                         "reflectivity_graze": reflection.basis,
-                        "shadowed_fraction": reflection.shadowed_fraction,
                     }
                     if coating is not None
+                    else {}
+                ),
+                **(
+                    # Whenever visibility masks actually participated --
+                    # groove-resolved reflectivity, or the uncoated horizon
+                    # mode. A "facet" run has no masks and gets neither key.
+                    {
+                        "visibility": reflection.visibility,
+                        "shadowed_fraction": reflection.shadowed_fraction,
+                    }
+                    if reflection.masked
                     else {}
                 ),
                 "alpha_deg": illumination.alpha_deg,
@@ -582,11 +657,18 @@ class _Reflection:
     #: Representative graze for the validity guards, radians.
     graze: float
     basis: str
+    visibility: "Visibility" = "facet-normal"
     #: Local graze across the visible groove, radians. Empty when unused.
     local_graze: NDArray[np.float64] = field(default_factory=lambda: np.array([]))
     #: sin(zeta) toward the incident direction, per quadrature point, unclipped.
     sin_graze_in: NDArray[np.float64] = field(default_factory=lambda: np.array([]))
     tilt: NDArray[np.float64] = field(default_factory=lambda: np.array([]))
+    #: Cast-shadow mask toward the incident direction; ``None`` means the
+    #: horizon was not consulted, which is different from all-lit.
+    lit_in: "NDArray[np.bool_] | None" = None
+    #: Grid geometry for the exit-side horizon scans. Empty when unused.
+    height_nm: NDArray[np.float64] = field(default_factory=lambda: np.array([]))
+    period: float = 0.0
     shadowed_fraction: float = 0.0
     #: Orders driven to zero purely by the exit-direction visibility mask.
     suppressed: set[int] = field(default_factory=set)
@@ -594,7 +676,15 @@ class _Reflection:
 
     @property
     def visible_in(self) -> NDArray[np.bool_]:
-        return self.sin_graze_in > 0.0
+        visible = self.sin_graze_in > 0.0
+        if self.lit_in is not None:
+            visible = visible & self.lit_in
+        return visible
+
+    @property
+    def masked(self) -> bool:
+        """Did visibility masks participate in the solve at all?"""
+        return self.sin_graze_in.size > 0
 
     @property
     def guard_graze(self) -> float:
@@ -650,7 +740,9 @@ def _build_reflection(
     illumination: Illumination,
     coating: "OpticalConstants | None",
     model: "ReflectivityModel",
+    visibility: "Visibility",
     t: NDArray[np.float64],
+    height: NDArray[np.float64],
 ) -> _Reflection:
     """Resolve the groove geometry the reflectivity treatment will use."""
     if model not in ("local", "average", "facet"):
@@ -658,28 +750,55 @@ def _build_reflection(
             f"reflectivity_model must be 'local', 'average' or 'facet', got "
             f"{model!r}"
         )
+    if visibility not in ("facet-normal", "horizon"):
+        raise ValueError(
+            f"visibility must be 'facet-normal' or 'horizon', got {visibility!r}"
+        )
+    if visibility == "horizon" and coating is not None and model == "facet":
+        # Accepting this and ignoring the horizon would be the silent wrong
+        # answer this project is arranged against.
+        raise ValueError(
+            "visibility='horizon' cannot act under reflectivity_model='facet': "
+            "that model applies one reflectivity to the whole groove and "
+            "carries no per-point masks for a horizon to narrow. Use 'local' "
+            "or 'average', or keep the default visibility."
+        )
 
     graze, basis = _reflecting_graze(problem, illumination)
-    reflection = _Reflection(model=model, graze=graze, basis=basis)
-    if coating is None or model == "facet":
+    reflection = _Reflection(
+        model=model, graze=graze, basis=basis, visibility=visibility
+    )
+    resolved = coating is not None and model != "facet"
+    if not resolved and visibility != "horizon":
         # Nothing to resolve. Without a coating there is no reflectivity at all,
         # and `facet` is the model that deliberately declines to look.
         return reflection
 
     tilt = _facet_tilt(problem.profile, t)
     sin_in = sin_facet_graze(illumination.gamma, tilt, illumination.alpha)
-    visible = sin_in > 0.0
 
     reflection.tilt = tilt
     reflection.sin_graze_in = sin_in
+    if visibility == "horizon":
+        reflection.lit_in = horizon_visible(
+            height, problem.period, illumination.alpha
+        )
+        reflection.height_nm = height
+        reflection.period = problem.period
+
+    visible = reflection.visible_in
     reflection.shadowed_fraction = float(1.0 - visible.mean())
     reflection.local_graze = np.arcsin(np.clip(sin_in[visible], -1.0, 1.0))
-    reflection.basis = (
-        f"groove cycle resolved, {np.degrees(reflection.local_graze.min()):.4g}"
-        f"-{np.degrees(reflection.local_graze.max()):.4g} deg over the "
-        f"{100 * (1 - reflection.shadowed_fraction):.3g}% of the period that "
-        "faces the beam"
-    )
+    if visible.any():
+        reflection.basis = (
+            f"groove cycle resolved, "
+            f"{np.degrees(reflection.local_graze.min()):.4g}"
+            f"-{np.degrees(reflection.local_graze.max()):.4g} deg over the "
+            f"{100 * (1 - reflection.shadowed_fraction):.3g}% of the period "
+            "that faces the beam"
+        )
+    else:  # pragma: no cover - needs a groove the beam cannot see at all
+        reflection.basis = "groove cycle resolved, fully shadowed"
     return reflection
 
 
@@ -774,6 +893,8 @@ def _local_reflected_efficiency(
         illumination.gamma, reflection.tilt[None, :], betas[:, None]
     )
     visible = reflection.visible_in[None, :] & (sin_out > 0.0)
+    if reflection.visibility == "horizon":
+        visible &= _exit_lit(reflection, betas)
     graze_out = np.arcsin(np.clip(sin_out, -1.0, 1.0))
     r_s_out, r_p_out = amplitude(n_c, graze_out, **common)
 
@@ -792,6 +913,54 @@ def _local_reflected_efficiency(
         np.abs(np.mean(w_s * integrand, axis=1)) ** 2
         + np.abs(np.mean(w_p * integrand, axis=1)) ** 2
     )
+
+
+def _exit_lit(
+    reflection: _Reflection, betas: NDArray[np.float64]
+) -> NDArray[np.bool_]:
+    """Cast-shadow masks toward each diffracted direction, one row per order.
+
+    The same scan the incident side ran, at each :math:`\\beta_m` -- occlusion
+    along a straight ray reads the same from either end, which is what keeps
+    the horizon model reciprocal.
+    """
+    return np.stack(
+        [
+            horizon_visible(reflection.height_nm, reflection.period, float(b))
+            for b in betas
+        ]
+    )
+
+
+def _shadow_masked_efficiency(
+    integrand: NDArray[np.complex128],
+    reflection: _Reflection,
+    betas: NDArray[np.float64],
+    orders: NDArray[np.int64],
+    illumination: Illumination,
+) -> NDArray[np.float64]:
+    r"""The visibility masks at unit amplitude: shadowing without a material.
+
+    The uncoated ``visibility="horizon"`` branch. Same geometry as the
+    ``"local"`` model -- a point contributes only if it faces, and is not
+    cast-shadowed from, both the incident and the diffracted direction -- but
+    with :math:`r \equiv 1` in place of a Fresnel amplitude. That makes it a
+    perfect reflector with shadows, the configuration a perfect-conductor
+    cross-check against the integral solver actually wants on grooves deep
+    enough to shadow themselves.
+    """
+    sin_out = sin_facet_graze(
+        illumination.gamma, reflection.tilt[None, :], betas[:, None]
+    )
+    visible = (
+        reflection.visible_in[None, :] & (sin_out > 0.0) & _exit_lit(reflection, betas)
+    )
+
+    reflection.suppressed.update(
+        int(m) for m, lit in zip(orders, visible.any(axis=1)) if not lit
+    )
+
+    return np.abs(np.mean(np.where(visible, integrand, 0.0), axis=1)) ** 2
 
 
 def _brewster_crossing(r_p: NDArray[np.complex128]) -> bool:

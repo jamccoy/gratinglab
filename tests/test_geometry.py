@@ -373,3 +373,112 @@ class TestFacetHandedness:
         slope_on_active_facet = float(profile.slope(profile.apex * 0.5))
         assert slope_on_active_facet > 0.0
         assert np.isclose(slope_on_active_facet, np.tan(np.radians(blaze_deg)))
+
+
+class TestHorizonVisible:
+    r"""Cast shadows on the groove, pinned to a closed form the scan never saw.
+
+    On an ideal sawtooth (blaze slope :math:`s_b`, anti-blaze slope
+    :math:`s_a`, apex at :math:`t_a`) a transverse ray at ``angle``
+    :math:`\theta` clears the apex and lands on the next blaze facet a shadow
+    of width
+
+    .. math:: \Delta = (1 - t_a)\,\frac{s_a - s_r}{s_b + s_r}, \qquad
+              s_r = \cot\theta
+
+    past the trough -- zero until :math:`s_r < s_a`, i.e. until the ray dips
+    below the anti-blaze slope (:math:`\theta > 19.5` deg for the 29.5/70.5
+    reference groove). The trig here is derived in the test, not imported,
+    so it also pins the two silent-failure traps: the travel direction
+    (``angle > 0`` moves toward +t) and the nm-vs-normalised height units --
+    getting either wrong reports "no cast shadow" and nothing else.
+    """
+
+    PERIOD = 315.15
+    N = 16384
+
+    def _sawtooth(self, blaze_deg=29.5, antiblaze_deg=70.5):
+        from gratinglab.problem import Problem
+        from gratinglab.profiles import Blazed
+
+        profile = Blazed(blaze_angle=blaze_deg, antiblaze_angle=antiblaze_deg)
+        t = np.linspace(0.0, 1.0, self.N, endpoint=False)
+        problem = Problem(period=self.PERIOD, profile=profile)
+        return profile, problem.height_nm(t)
+
+    def _expected_shadow(self, blaze_deg, antiblaze_deg, angle_deg):
+        s_b = np.tan(np.radians(blaze_deg))
+        s_a = np.tan(np.radians(antiblaze_deg))
+        s_r = 1.0 / np.tan(np.radians(angle_deg))
+        apex = (1.0 / s_b) / (1.0 / s_b + 1.0 / s_a)
+        sliver = (1.0 - apex) * max(s_a - s_r, 0.0) / (s_b + s_r)
+        return sliver
+
+    @pytest.mark.parametrize("angle_deg", [19.99, 25.0, 39.0, 55.3])
+    def test_the_sawtooth_shadow_matches_the_closed_form(self, angle_deg):
+        from gratinglab.geometry import horizon_visible
+
+        profile, height = self._sawtooth()
+        lit = horizon_visible(height, self.PERIOD, np.radians(angle_deg))
+        expected = self._expected_shadow(29.5, 70.5, angle_deg)
+        # The scan shadows the anti-blaze back-slope portion the ray cannot
+        # see either; subtract the facet geometry to isolate the cast sliver.
+        # Behind the apex the ray at angle < 90 - antiblaze grazes down the
+        # anti-blaze facet; steeper rays shadow all of it (1 - apex).
+        cast_onto_blaze = (1.0 - lit.mean()) - (1.0 - profile.apex)
+        assert cast_onto_blaze == pytest.approx(expected, abs=2.0 / self.N * 4)
+
+    def test_no_shadow_at_all_until_the_ray_dips_below_the_antiblaze_slope(self):
+        from gratinglab.geometry import horizon_visible
+
+        _, height = self._sawtooth()
+        lit = horizon_visible(height, self.PERIOD, np.radians(15.0))
+        assert lit.all()
+
+    def test_the_mirrored_direction_sees_the_whole_groove(self):
+        """At angle = -19.99 deg the ray descends steeper than either facet
+        drops away from it, so it keeps intersecting terrain and nothing is
+        occluded. A travel-direction sign error makes this fail, because the
+        +19.99 deg case above genuinely does shadow."""
+        from gratinglab.geometry import horizon_visible
+
+        _, height = self._sawtooth()
+        assert horizon_visible(height, self.PERIOD, np.radians(-19.99)).all()
+
+    def test_matches_a_brute_force_multi_period_scan(self):
+        """The O(n) closed-form treatment of whole upstream periods against
+        explicit tiling, deep into the multi-period regime (near-grazing
+        exit, where one apex shadows dozens of downstream periods)."""
+        from gratinglab.geometry import horizon_visible
+
+        _, height = self._sawtooth()
+        t = np.arange(self.N) / self.N
+        for angle_deg in (19.99, 39.0, -39.0, 80.0, 89.0):
+            angle = np.radians(angle_deg)
+            cot = 1.0 / np.tan(abs(angle))
+            sign = 1.0 if angle > 0 else -1.0
+            u = height + sign * cot * t * self.PERIOD
+            reps = 4000
+            if angle > 0:
+                tiles = [u - k * cot * self.PERIOD for k in range(reps, -1, -1)]
+                bound = np.maximum.accumulate(np.concatenate(tiles))[-self.N:]
+            else:
+                tiles = [u - k * cot * self.PERIOD for k in range(0, reps + 1)]
+                stacked = np.concatenate(tiles)
+                bound = np.maximum.accumulate(stacked[::-1])[::-1][: self.N]
+            assert (
+                horizon_visible(height, self.PERIOD, angle) == (u >= bound)
+            ).all(), angle_deg
+
+    def test_a_flat_mirror_is_lit_everywhere_at_any_angle(self):
+        from gratinglab.geometry import horizon_visible
+
+        flat = np.zeros(self.N)
+        for angle_deg in (0.0, 30.0, -30.0, 89.0):
+            assert horizon_visible(flat, self.PERIOD, np.radians(angle_deg)).all()
+
+    def test_straight_down_shadows_nothing(self):
+        from gratinglab.geometry import horizon_visible
+
+        _, height = self._sawtooth()
+        assert horizon_visible(height, self.PERIOD, 0.0).all()
