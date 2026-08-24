@@ -22,6 +22,7 @@ __all__ = [
     "flux_obliquity",
     "facet_graze",
     "sin_facet_graze",
+    "horizon_visible",
     "blaze_direction",
     "blaze_wavelength",
 ]
@@ -196,6 +197,88 @@ def sin_facet_graze(
     tilt = np.asarray(tilt, dtype=np.float64)
     angle = np.asarray(angle, dtype=np.float64)
     return np.sin(gamma) * np.cos(tilt - angle)
+
+
+def horizon_visible(
+    height_nm: ArrayLike, period: float, angle: float
+) -> NDArray[np.bool_]:
+    r"""Which points on the groove a ray at ``angle`` can actually reach.
+
+    The mask for **cast** shadows -- the ones the groove apex throws across
+    the trough onto surface that faces the ray perfectly well. The local
+    orientation test (:func:`sin_facet_graze` ``> 0``) sees only
+    *self*-shadowing, a facet turned away from the ray; on the reference
+    sawtooth at its working angles the two differ by a fraction of a percent
+    of the period on the incident side and by 10-50% on the exit side, which
+    is why this function exists (``docs/findings.md``).
+
+    **The half-cone angle is absent, deliberately.** The surface is invariant
+    along the grooves, so a 3D ray occludes exactly as its projection into the
+    transverse plane does, and ``angle`` is the transverse azimuth --
+    :math:`\alpha` for the incident direction, :math:`\beta_m` for a
+    diffracted one, measured from the normal. :math:`\gamma` scales the ray's
+    groove-parallel component, which slides *along* the invariant direction
+    and can neither create nor remove an occlusion.
+
+    **The travel direction is the trap.** The profile parameter runs against
+    the dispersion direction (``docs/findings.md``, "The profile parameter
+    runs backwards"; conventions section 3), so a ray with ``angle > 0``
+    travels toward **+t** and its occluders sit at *smaller* ``t``. Getting
+    this backwards does not fail loudly -- it reports shadows on the wrong
+    facet, which on a sawtooth mostly coincides with the self-shadowing mask
+    and looks plausible. The anchor that pins it: on an ideal sawtooth with
+    blaze slope :math:`s_b`, anti-blaze slope :math:`s_a` and apex at
+    :math:`t_a`, a ray at ``angle`` :math:`> \operatorname{arccot} s_a`
+    (19.5 deg for the 29.5/70.5 reference groove) throws a shadow of width
+
+    .. math::
+        \Delta = (1 - t_a)\,\frac{s_a - s_r}{s_b + s_r}, \qquad
+        s_r = \cot(\text{angle})
+
+    past the trough onto the blaze facet, and ``tests/test_scalar.py``
+    derives that independently and checks it here.
+
+    The scan itself is the classic running-horizon argument, exact and
+    :math:`O(n)`: with :math:`u(t) = g(t) + p\,\cot|\theta|\,t` (sign of the
+    linear term following the travel direction), a point is lit iff
+    :math:`u` at that point matches the running maximum of :math:`u` over
+    everything upstream of it. Upstream whole periods enter in closed form --
+    each sits exactly :math:`p\cot|\theta|` lower than the last, so only the
+    nearest one can ever compete -- which is what removes any need to tile.
+
+    Parameters
+    ----------
+    height_nm
+        Groove height in nm on a **uniform** grid over one period,
+        ``t = arange(n)/n``. Uniformity is load-bearing: the linear term is
+        built from the index.
+    period
+        Groove period in nm -- the same unit as ``height_nm``, because the
+        ray's run-to-drop ratio compares the two directly.
+    angle
+        Transverse azimuth of the ray in radians, from the grating normal.
+        Must be a propagating direction, :math:`|\theta| \le \pi/2`; exactly
+        0 is straight down and shadows nothing.
+    """
+    height_nm = np.asarray(height_nm, dtype=np.float64)
+    n = len(height_nm)
+    if angle == 0.0:
+        return np.ones(n, dtype=bool)
+
+    t = np.arange(n) / n
+    cot = 1.0 / np.tan(abs(angle))
+    if angle > 0.0:
+        u = height_nm + cot * t * period
+        upstream = np.maximum.accumulate(u)
+    else:
+        # The mirror case: travel toward -t, occluders at larger t, and the
+        # linear term flips sign with the run direction.
+        u = height_nm - cot * t * period
+        upstream = np.maximum.accumulate(u[::-1])[::-1]
+    # Every complete upstream period is a copy of u shifted down by one
+    # period's drop, so the nearest bounds them all.
+    horizon = np.maximum(upstream, u.max() - cot * period)
+    return u >= horizon
 
 
 def facet_graze(gamma: float, blaze_angle: float, alpha: float) -> float:

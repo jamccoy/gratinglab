@@ -1094,6 +1094,166 @@ class TestGrooveCycleResolvedReflectivity:
         assert shadowed.provenance.notes["shadowed_fraction"] > 0.15
 
 
+class TestHorizonVisibility:
+    r"""M19: the masks learn to see cast shadows, opt-in.
+
+    The facet-normal test knows only *self*-shadowing -- a facet turned away
+    from the ray. It cannot see the shadow the groove apex throws across the
+    trough onto surface that faces the ray perfectly well, and at the
+    reference geometry that blind spot is almost entirely on the **exit**
+    side: a fraction of a percent of the period toward the incident beam,
+    but 10-50% of it toward individual diffracted directions.
+    ``tests/test_geometry.py::TestHorizonVisible`` pins the scan itself to a
+    closed form; this class pins what the solver does with it.
+
+    ``visibility="horizon"`` stays opt-in so every published number
+    reproduces bit-for-bit; the geometry says the masks are right, but like
+    the geometric-mean weight they await validation against a rigorous
+    finite-conductivity method.
+    """
+
+    ILL = Illumination.offplane(graze=1.25, azimuth=19.99, polarization=UNPOL)
+    PERIOD = 315.15
+    TASTE = Blazed(blaze_angle=29.5, antiblaze_angle=70.5)
+
+    def _solve(self, profile, visibility, wavelengths, coating="Au", n=16384):
+        problem = Problem(period=self.PERIOD, profile=profile, coating=coating)
+        return scalar.solve(
+            problem, self.ILL, wavelengths,
+            quadrature_points=n, visibility=visibility,
+        )
+
+    def test_the_default_is_facet_normal_and_is_bit_identical(self):
+        """The reproducibility guarantee: not passing the option is the same
+        run it was before the option existed."""
+        explicit = self._solve(self.TASTE, "facet-normal", [3.0])
+        default = scalar.solve(
+            Problem(period=self.PERIOD, profile=self.TASTE, coating="Au"),
+            self.ILL, [3.0], quadrature_points=16384,
+        )
+        assert (default.efficiency == explicit.efficiency).all()
+        assert default.provenance.notes["visibility"] == "facet-normal"
+
+    def test_an_unknown_visibility_is_refused(self):
+        with pytest.raises(ValueError, match="visibility must be"):
+            self._solve(self.TASTE, "cast", [3.0])
+
+    def test_the_facet_model_refuses_the_horizon_rather_than_ignoring_it(self):
+        """`facet` applies one reflectivity to the whole period and has no
+        per-point masks a horizon could narrow. Accepting the combination and
+        doing nothing would be a silent wrong answer."""
+        problem = Problem(period=self.PERIOD, profile=self.TASTE, coating="Au")
+        with pytest.raises(ValueError, match="cannot act under"):
+            scalar.solve(
+                problem, self.ILL, [3.0],
+                reflectivity_model="facet", visibility="horizon",
+            )
+
+    def test_the_incident_sliver_shows_up_in_the_shadowed_fraction(self):
+        r"""The independently derived sawtooth sliver, read off the provenance.
+
+        At :math:`\alpha = 19.99` deg the cast shadow past the trough is
+        :math:`\Delta = (1-t_a)(s_a - s_r)/(s_b + s_r) \approx 0.38\%` of the
+        period, on top of the 16.69% anti-blaze facet the facet-normal test
+        already sees. Small on the incident side -- the point is that it is
+        *nonzero* and exactly predicted.
+        """
+        s_b = np.tan(np.radians(29.5))
+        s_a = np.tan(np.radians(70.5))
+        s_r = 1.0 / np.tan(np.radians(19.99))
+        sliver = (1.0 - self.TASTE.apex) * (s_a - s_r) / (s_b + s_r)
+
+        base = self._solve(self.TASTE, "facet-normal", [3.0])
+        horizon = self._solve(self.TASTE, "horizon", [3.0])
+        extra = (
+            horizon.provenance.notes["shadowed_fraction"]
+            - base.provenance.notes["shadowed_fraction"]
+        )
+        assert extra == pytest.approx(sliver, rel=0.05)
+        assert extra > 0.003  # non-vacuity: ~0.38% of the period
+
+    def test_the_exit_side_is_where_the_blind_spot_was(self):
+        """The blaze order at its blaze wavelength loses ~1/3 of its power to
+        shadows the facet-normal test cannot see: the m=+3 exit direction
+        (beta = 39 deg) is cast-shadowed over 14.7% of the period. Pinned
+        loosely as the regression anchor for the measured impact."""
+        base = self._solve(self.TASTE, "facet-normal", [2.226])
+        horizon = self._solve(self.TASTE, "horizon", [2.226])
+        assert base.at(2.226)[3] == pytest.approx(0.514, abs=0.01)
+        assert horizon.at(2.226)[3] == pytest.approx(0.348, abs=0.01)
+
+    @pytest.mark.parametrize("coating", ["Au", None])
+    def test_the_horizon_keeps_reciprocity(self, coating):
+        """Occlusion along a straight ray reads the same from either end, so
+        the mask pair is symmetric under alpha <-> beta_m by construction --
+        with or without a coating carrying Fresnel weights on top."""
+        from gratinglab.checks import check_reciprocity
+
+        problem = Problem(
+            period=self.PERIOD, profile=self.TASTE, coating=coating
+        )
+        report = check_reciprocity(
+            scalar, problem, self.ILL, [2.0, 4.0],
+            quadrature_points=8192, visibility="horizon",
+        )
+        assert report.max_violation < 1e-12
+
+    def test_in_plane_too(self):
+        """The mount pair for anything touching the transverse geometry."""
+        from gratinglab.checks import check_reciprocity
+
+        problem = Problem(period=self.PERIOD, profile=self.TASTE, coating="Au")
+        ill = Illumination.classical(alpha=25.0, polarization=UNPOL)
+        report = check_reciprocity(
+            scalar, problem, ill, [4.0, 5.0],
+            quadrature_points=8192, visibility="horizon",
+        )
+        assert report.max_violation < 1e-12
+
+    @pytest.mark.parametrize(
+        "ill",
+        [
+            Illumination.offplane(graze=1.25, azimuth=19.99, polarization=UNPOL),
+            Illumination.classical(alpha=10.0, polarization=UNPOL),
+        ],
+        ids=["off-plane", "in-plane"],
+    )
+    def test_a_profile_too_shallow_to_occlude_collapses_to_facet_normal(self, ill):
+        """No slope anywhere reaches the ray's run-to-drop ratio, so the
+        horizon must find nothing and the two visibilities must agree
+        exactly -- the reduction that shows the option adds shadows and
+        nothing else."""
+        problem = Problem(
+            period=self.PERIOD,
+            profile=Sinusoidal(depth_fraction=0.02),
+            coating="Au",
+        )
+        base = scalar.solve(problem, ill, [3.0], visibility="facet-normal")
+        horizon = scalar.solve(problem, ill, [3.0], visibility="horizon")
+        assert (base.efficiency == horizon.efficiency).all()
+
+    def test_uncoated_horizon_is_shadowing_on_a_perfect_reflector(self):
+        """The masks at unit amplitude: a relative run made comparable to the
+        integral solver on grooves deep enough to shadow themselves. Opt-in
+        only -- the default uncoated run stays the untouched phase integral,
+        and the provenance records both the mode and the cost."""
+        problem = Problem(period=self.PERIOD, profile=self.TASTE)
+        bare = scalar.solve(problem, self.ILL, [2.226], quadrature_points=16384)
+        shadowed = scalar.solve(
+            problem, self.ILL, [2.226],
+            quadrature_points=16384, visibility="horizon",
+        )
+
+        assert "visibility" not in bare.provenance.notes
+        assert shadowed.provenance.notes["visibility"] == "horizon"
+        assert shadowed.provenance.notes["normalization"] == "relative"
+        assert shadowed.provenance.notes["shadowed_fraction"] > 0.16
+        # It genuinely acts: the deep sawtooth loses real power to shadows.
+        assert np.abs(bare.efficiency - shadowed.efficiency).max() > 0.1
+        # And it only ever removes contributions, never invents them.
+        assert shadowed.total[0] < bare.total[0]
+
+
 class TestTheValidityGuardsMaterialsUnlocked:
     """M15-E. `docs/theory/scalar.md` section 7 has listed the total-external-
     reflection row as "needs a materials layer to evaluate" since it was
