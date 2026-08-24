@@ -1315,6 +1315,31 @@ class TestTheValidityGuardsMaterialsUnlocked:
         )
         assert np.array_equal(none.efficiency, self._solve().efficiency)
 
+    # -- the waived polarization mapping, priced -------------------------
+
+    def test_no_sp_warning_where_s_and_p_are_degenerate(self):
+        """At the grazes this project runs, s and p reflectivities on Au agree
+        to well under 1%, so the 50/50 average stands in for the unowned
+        groove-TE/TM to facet-s/p mapping at negligible cost -- and saying
+        nothing is correct."""
+        scan = self._solve()
+        assert not any("s and p" in w for w in scan.provenance.warnings)
+
+    def test_the_sp_split_is_reported_when_the_waiver_stops_being_free(self):
+        """A steep groove near normal incidence puts the guarded graze at
+        ~70 deg, where the s/p split on Au reaches tens of percent. There the
+        50/50 average is a real modelling decision, and the provenance must
+        say so instead of leaving it priced at zero."""
+        scan = scalar.solve(
+            Problem(period=315.15, profile=self.PROFILE, coating="Au"),
+            Illumination.classical(alpha=10.0, polarization=UNPOL),
+            [3.0],
+        )
+        warning = next(
+            w for w in scan.provenance.warnings if "s and p" in w
+        )
+        assert "%" in warning and "mapping" in warning
+
     # -- total external reflection ---------------------------------------
 
     def test_a_facet_past_the_critical_angle_is_reported(self):
