@@ -1105,3 +1105,60 @@ crossing estimate is sharp, and bit-for-bit reproducibility is that mode's
 purpose. Orders away from the blaze converge spectrally (1e-8 at n=2048) —
 the shadow boundaries were the only thing standing between the masked models
 and the pure phase integral's convergence.
+
+---
+
+## Finite conductivity lands with its signs pinned by Fresnel, not the paper
+
+The M20 coupled conical system (Goray & Schmidt 2010) was derived
+independently in project conventions rather than transcribed — their normal
+points into the metal and their potentials carry a factor 2, exactly the
+kind of mapping where a lifted sign survives every syntax check. The pinning
+strategy that replaced transcription trust, with measured outcomes:
+
+| Check | Measured |
+|---|---|
+| Flat interface, in-plane: TE amplitude vs `fresnel.amplitude` r_s, TM vs r_p, phase included | agrees to <1e-4, all of gold/X-ray/glass indices, two angles |
+| Flat interface, conical (cos γ = 0.8): full 2×2 (E_z,B_z) reflection matrix vs the rotated-Fresnel closed form | 6.2e-5, cross-coupling terms included |
+| R + A = 1 with A from the independent boundary integral (their eq. 26, re-derived; reduces exactly to 1−|r|² on a flat interface — verified analytically before any code ran) | 1e-5 flat; ~1e-4 smooth sinusoid; 1.2e-4 for Au at 2 nm, 1.5° graze, P = 256 |
+| R + T = 1, lossless substrate; boundary integral equals the transmitted Rayleigh sum | few 1e-4; A−T ≤ 9e-5 |
+| Perfect-conductor limit, n = 100i, in-plane and conical | 1.3e-3 (TE) / 7.4e-4 (TM) worst order — the residual is the ~1 nm field penetration, i.e. physics, not error; absorption at numerical zero |
+| G&S Table 3 (dielectric sinusoid, conical, pure E_z; cross-method against Li's CM) | within 6e-5 of every tabulated order, reflected and transmitted, at half their collocation count |
+| Lorentz reciprocity, lossy conical Au at X-ray graze | ~5e-5, through `check_reciprocity` unchanged |
+
+Two regime facts worth remembering:
+
+1. **Below the critical angle the metal side sets the mesh.** The field
+   decays into the metal on the λ/√(2δ) scale — for Au at 2 nm and 1.5°
+   graze that is ~21 nm against a 76 nm vacuum reduced wavelength, so the
+   metal-side floor (~210 points on the 600 nm test sinusoid) is the binding
+   one. The solver guards it with the same 6-nodes-per-wavelength refusal.
+2. **The absorbed fraction is large where it matters.** Au at 2 nm, 1.5°
+   graze on the test sinusoid: R = 0.70, A = 0.30 — the quantity the
+   perfect-conductivity mode could not produce, now recorded per wavelength
+   on the scan and consumed by `check_energy_balance` automatically.
+
+---
+
+## Goray & Schmidt's Table 4 is a publisher's duplication of Table 3
+
+Noticed while transcribing validation data: in the published PDF, Table 4
+("dielectric sine grating for E_z = 0") prints exactly the same efficiency
+and polarization-angle values as Table 3 ("for B_z = 0") — all twelve rows,
+all four digit columns — with only the footnote polarization state differing
+(δ = 8.499°, ψ = 180° vs δ = 81.501°, ψ = 0). Confirmed against the rendered
+page, not just text extraction.
+
+Physically the two incident states cannot give identical efficiencies, and
+our solver settles it: the true E_z = 0 case differs decisively (specular
+1.07% against the printed 10.33%; T₊₁ 16.7% against 9.9%) while conserving
+R + T = 1 to 2e-5. A test in `tests/test_integral_finite.py` pins the
+disagreement so the finding survives refactors; our computed E_z = 0 values
+stand in the test file as the project's record of that case.
+
+Decoding note for anyone returning to their Tables 1–2: the footnote angles
+follow Li's convention with tan δ = |E_s/E_p| and ψ the relative phase —
+recoverable because the Table 3/4 footnotes bracket the pure-z states
+(81.501° + 8.499° = 90°, and the same split reproduces from our incident
+basis rotation). Table 5's δ = 0 and Table 6's δ = 90° at θ = 0 are exactly
+the pure E_z and pure B_z states.

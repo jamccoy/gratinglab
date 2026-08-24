@@ -343,6 +343,15 @@ incidence. The two coincide only in-plane. This is stated because the opposite
 convention is common in the RCWA literature and is a frequent source of cross-code
 disagreement in conical geometry.
 
+Concretely, in the `(E_z, B_z)` basis of the conical field decomposition (grooves along
+z), **TE ≡ a pure incident `E_z` state** (`(p_z, q_z) = (1, 0)`; Goray & Schmidt's
+"`B_z = 0`") and **TM ≡ pure incident `B_z`** (`(0, 1)`; their "`E_z = 0`"), each
+reducing to the in-plane definition above. With finite conductivity a pure incident
+state diffracts into orders carrying *both* components — cross-polarization conversion
+is real off-plane — and the per-order efficiency is the flux-weighted sum
+`(γ_m/γ₀)(|E_m|² + |B_m|²)`, one number per order. Only for a perfect conductor is the
+conversion identically zero.
+
 At grazing incidence in the soft X-ray, reflectivity is nearly polarization-independent
 (thesis §C.1.2), which is why the existing PCGrate corpus carries only `Eff.TE`. That is
 a justified approximation *for that regime*, not a general one, and it is not baked into

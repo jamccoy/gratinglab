@@ -104,11 +104,33 @@ the implementation derives the kernels from the spectral form and pins every
 sign with the flat-mirror and Table 4.1 tests instead.
 
 **Goray, L. I. & Schmidt, G.** *Solving conical diffraction grating problems
-with integral equations.* J. Opt. Soc. Am. A (2010).
+with integral equations.* J. Opt. Soc. Am. A **27**, 585 (2010).
 
 Conical plus integral equations is exactly the off-plane X-ray case. Goray is
 the author of the standard commercial implementation; Schmidt supplied the
-rigorous analysis.
+rigorous analysis. **Implemented at M20** (`conductivity="tabulated"`;
+[`theory/integral.md`](theory/integral.md) §8) with the anchors: eq. (6) the
+conical jump conditions, eqs. (15)–(21) the potential operators, eq. (23) the
+coupled system (re-derived in project conventions — their normal points into
+the metal and their potentials carry a factor 2, so transcription is a sign
+trap; the flat-interface Fresnel tests pin every sign instead), §2.C the
+energy balance, eq. (26) the absorption integral, §3 the numerical-option
+note that `V⁺∂ₜV⁻` may be discretised by numerical differentiation (the
+option taken, via the spectral `D_t` matrix). Their comparison Tables 3/5/6
+are usable validation data; **Table 4 is a publisher's duplication of
+Table 3** — see [`findings.md`](findings.md). Table 2's incident state needs
+Li's polarization-angle convention (δ measured so tan δ = |E_s/E_p|, ψ the
+relative phase — decoded from the Table 3/4 footnotes) and its deep lamellar
+profile is corner-limited on the current mesh, so it is left to the
+graded-mesh milestone.
+
+**Li, L.** *Multilayer modal method for diffraction gratings of arbitrary
+profile, depth, and permittivity* (and the conical-mount companion data).
+J. Opt. Soc. Am. A **10**, 2581 (1993).
+
+The independent cross-method source behind Goray & Schmidt's comparison
+tables — what makes their Table 3 a genuine two-code anchor rather than a
+self-comparison.
 
 **Maystre, D.** *Analytic Properties of Diffraction Gratings*, ch. 2 of the same
 volume.

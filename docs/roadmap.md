@@ -62,9 +62,9 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | CI (Linux + macOS, py3.11/3.12) | green |
 | RCWA | **contributed, not yet integrated** |
 | C-method | not started |
-| **Integral method** ([theory](theory/integral.md)) | **perfect-conductivity milestone done**: conical from day one, undercut-capable, GUI tab, validated against M&P Table 4.1 and orderwise against PCGrate to 8e-4 (which also identified the TASTE profile). Finite conductivity is the named successor |
+| **Integral method** ([theory](theory/integral.md)) | **perfect-conductivity and finite-conductivity milestones done**: conical from day one, undercut-capable, GUI tab, validated against M&P Table 4.1 and orderwise against PCGrate to 8e-4 (which also identified the TASTE profile). M20 added `conductivity="tabulated"` — the coupled conical system of Goray & Schmidt (2010), absolute efficiencies with absorption recorded, flat limit = Fresnel to 6e-5, their Table 3 reproduced per order. Graded corner mesh is the named successor |
 
-Roughly 1150 tests, 11 skipped (the skips need the private reference corpus).
+Roughly 1300 tests, 11 skipped (the skips need the private reference corpus).
 Rounded on purpose: this line previously claimed 328 and was wrong by 400, so
 `pytest -q` is the authority and this is only the order of magnitude. The jump
 from ~945 is the metrology suite arriving with its package, not new coverage.
@@ -98,14 +98,21 @@ previously unconfirmed groove profile ([`findings.md`](findings.md)).
 
 Remaining integral milestones, in order:
 
-- **Finite conductivity** — the coupled conical system of Goray & Schmidt
-  (2010); optionally the impedance (Leontovich) boundary condition as an
-  intermediate rung, which is also what finally tests the
-  "ΣE ≈ R_F(ζ) is emergent" reading of `conventions.md` §10 item 5. This is
-  what makes soft-X-ray efficiencies *absolute*. Blocked in part on the
-  "finite-conductivity reference run" open question below.
+- ~~**Finite conductivity**~~ — done at M20: the coupled conical system of
+  Goray & Schmidt (2010), `conductivity="tabulated"`, absolute efficiencies
+  with the absorbed fraction recorded and `R + A = 1` a checkable theorem
+  ([`theory/integral.md`](theory/integral.md) §8). The Leontovich rung was
+  deliberately skipped — it requires |n| ≫ 1 and is invalid in the
+  soft-X-ray regime the milestone exists for, and it builds no operators the
+  full system reuses. Validated without a PCGrate reference run (see the
+  narrowed open question below): flat interface = Fresnel exactly, the
+  energy theorems two-sided, the perfect-conductor limit against the
+  already-banked 8e-4 PCGrate agreement, and Goray & Schmidt's own Table 3
+  reproduced within 6e-5 per order — which also exposed their Table 4 as a
+  publisher's duplication ([`findings.md`](findings.md)).
 - **Graded corner mesh** (M&P §4.6.6) — TM on cornered profiles currently
-  converges first-order; see [`theory/integral.md`](theory/integral.md) §5.
+  converges first-order, and with finite conductivity both polarizations
+  do; see [`theory/integral.md`](theory/integral.md) §5.
 - ~~A solver-contract conformance test~~ — done, see the note under RCWA below.
 
 ### 1. RCWA — integrating a contributed backend
@@ -238,12 +245,20 @@ about it.
 
 ### A finite-conductivity reference run
 
-The corpus has no usable one. Every perfect-conductivity table has R ≡ 1 by
-construction, so nothing in it can validate the reflectivity model that M16-D
-made the default, and `panter1_finite` is already marked `usable = false`.
-Either a fresh finite-conductivity PCGrate run or the RCWA backend would close
-the gap; until one of them lands, the groove-resolved reflectivity rests on
-internal consistency alone.
+Narrowed at M20, not closed. The corpus still has no usable
+finite-conductivity table (`panter1_finite` stays `usable = false`), but the
+rigorous solver no longer waits on one: `conductivity="tabulated"` is
+validated on the Fresnel flat limit, the two-sided energy theorems, the
+perfect-conductor limit, and Goray & Schmidt's published Table 3. What a
+fresh PCGrate run would still buy is a *like-for-like corpus item* — the
+recommended recipe: TE, Au, the TASTE geometry and the identified
+`AFM_test.ggp` groove, a wavelength grid avoiding ±0.05 nm around every
+order-passing-off point (the documented failure locus of `panter1_finite`),
+and the same `.ari` optical constants exported by `write_ari` so both codes
+eat identical n(λ). Gate it with `check_energy_balance` before admitting it
+to `corpus.toml`. It would also finally arbitrate the scalar solver's
+groove-resolved reflectivity model, which still rests on internal
+consistency plus (now) cross-checks against the rigorous absolute mode.
 
 ### Smaller ones
 
