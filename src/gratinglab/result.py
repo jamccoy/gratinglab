@@ -145,6 +145,12 @@ class EfficiencyScan:
     propagate at a given wavelength carry ``0.0`` with ``propagating=False`` --
     never ``NaN``, and never dropped, so that column *j* means order
     ``orders[j]`` at every wavelength (``docs/conventions.md`` 4).
+
+    ``absorption`` is the per-wavelength absorbed fraction for solvers that
+    compute one (the finite-conductivity integral method does, by an
+    independent boundary integral), and ``None`` everywhere else. When it is
+    present the conserved quantity is ``total + absorption``, which is what
+    :func:`gratinglab.checks.check_energy_balance` then checks.
     """
 
     wavelengths: NDArray[np.float64]
@@ -152,6 +158,7 @@ class EfficiencyScan:
     efficiency: NDArray[np.float64]
     propagating: NDArray[np.bool_]
     provenance: Provenance
+    absorption: "NDArray[np.float64] | None" = None
 
     def __post_init__(self) -> None:
         # Replace every field with an independent read-only copy, so a scan can
@@ -164,6 +171,15 @@ class EfficiencyScan:
             ("propagating", np.bool_),
         ):
             object.__setattr__(self, name, _frozen_array(getattr(self, name), dtype))
+        if self.absorption is not None:
+            object.__setattr__(
+                self, "absorption", _frozen_array(self.absorption, np.float64)
+            )
+            if self.absorption.shape != self.wavelengths.shape:
+                raise ValueError(
+                    f"absorption has shape {self.absorption.shape}, expected "
+                    f"{self.wavelengths.shape} (one value per wavelength)"
+                )
 
         n, m = len(self.wavelengths), len(self.orders)
         if self.efficiency.shape != (n, m):

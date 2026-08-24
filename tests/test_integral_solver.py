@@ -115,13 +115,149 @@ class TestUndercut:
         assert check_energy_balance(scan, tolerance=0.05, lossless=True).passed
 
 
+class TestTabulatedConductivity:
+    """The finite-conductivity mode through the public API: absolute
+    efficiencies for Au in the soft X-ray, with the absorbed fraction
+    recorded on the scan so R + A = 1 is checkable as a theorem. The
+    physics itself is pinned in tests/test_integral_finite.py; this class
+    covers what the solver adds -- material resolution, the recorded
+    absorption, provenance, and the polarization contract."""
+
+    PROBLEM = Problem(
+        period=600.0, profile=Sinusoidal(depth_fraction=0.3), coating="Au"
+    )
+
+    def test_energy_balance_includes_the_recorded_absorption(self):
+        """Measured at these settings: R = 0.702, A = 0.298, R + A - 1 =
+        -1.2e-4 -- the check consumes the scan's absorption automatically."""
+        scan = integral.solve(
+            self.PROBLEM,
+            Illumination.offplane(graze=1.5, azimuth=25.0, polarization="TE"),
+            [2.0],
+            boundary_points=256,
+            conductivity="tabulated",
+        )
+        assert scan.absorption is not None
+        assert scan.absorption[0] > 0.1
+        assert scan.total[0] < 0.9  # absolute, not perfect-reflector-relative
+        assert check_energy_balance(scan, tolerance=5e-4, lossless=True).passed
+        # The coating was consulted, so the perfect-mode warning must not be.
+        assert not any("not consulted" in w for w in scan.provenance.warnings)
+
+        p = scan.provenance
+        assert "Goray" in p.notes["boundary_condition"]
+        assert p.notes["material"] == "Au"
+        assert p.notes["normalization"] == "absolute"
+        assert p.notes["energy_balance_deviation"] < 5e-4
+
+    def test_unpolarized_is_the_mean_of_te_and_tm(self):
+        """Exact by construction -- both polarizations share one
+        factorization and the average is taken outside the solve -- and
+        asserted at machine precision so the contract cannot drift."""
+        scans = {
+            pol: integral.solve(
+                self.PROBLEM,
+                Illumination.offplane(graze=1.5, azimuth=25.0, polarization=pol),
+                [5.0],  # the metal-side mesh floor is lowest here (139 at 5 nm)
+                boundary_points=160,
+                conductivity="tabulated",
+            )
+            for pol in ("TE", "TM", "unpolarized")
+        }
+        mean = 0.5 * (scans["TE"].efficiency + scans["TM"].efficiency)
+        assert np.allclose(scans["unpolarized"].efficiency, mean, atol=1e-12)
+        mean_absorption = 0.5 * (
+            scans["TE"].absorption + scans["TM"].absorption
+        )
+        assert np.allclose(
+            scans["unpolarized"].absorption, mean_absorption, atol=1e-12
+        )
+
+    def test_reciprocity_survives_absorption(self):
+        """Lorentz reciprocity holds for lossy gratings too (measured
+        4.7e-5 at boundary_points=256; asserted with margin at a coarser,
+        faster mesh)."""
+        report = check_reciprocity(
+            integral,
+            self.PROBLEM,
+            Illumination.offplane(graze=1.5, azimuth=25.0, polarization="TE"),
+            [5.0],
+            tolerance=5e-4,
+            max_orders=4,
+            boundary_points=160,
+            conductivity="tabulated",
+        )
+        assert report.passed
+
+
 class TestRefusals:
-    def test_finite_conductivity_is_not_quietly_approximated(self):
-        with pytest.raises(UnsupportedConfiguration, match="Goray"):
+    def test_intermediate_boundary_conditions_are_refused(self):
+        """Only "perfect" and "tabulated" exist; an impedance rung is
+        refused by name rather than quietly approximated."""
+        with pytest.raises(UnsupportedConfiguration, match="not implemented"):
             integral.solve(
                 SINUSOID,
                 Illumination.classical(alpha=25.0),
                 [500.0],
+                conductivity="leontovich",
+            )
+
+    def test_tabulated_without_a_material_is_refused(self):
+        with pytest.raises(UnsupportedConfiguration, match="material"):
+            integral.solve(
+                SINUSOID,  # names neither coating nor substrate
+                Illumination.offplane(graze=1.5, azimuth=25.0, polarization="TE"),
+                [2.5],
+                boundary_points=256,
+                conductivity="tabulated",
+            )
+
+    def test_tabulated_with_an_unknown_material_lists_what_exists(self):
+        from gratinglab.materials import UnknownMaterial
+
+        problem = Problem(
+            period=600.0,
+            profile=Sinusoidal(depth_fraction=0.3),
+            coating="unobtanium",
+        )
+        with pytest.raises(UnknownMaterial):
+            integral.solve(
+                problem,
+                Illumination.offplane(graze=1.5, azimuth=25.0, polarization="TE"),
+                [2.5],
+                boundary_points=256,
+                conductivity="tabulated",
+            )
+
+    def test_tabulated_refuses_wavelengths_off_the_table(self):
+        """The Au table covers the soft X-ray; a visible wavelength must
+        refuse (extrapolating optical constants invents a material)."""
+        problem = Problem(
+            period=600.0, profile=Sinusoidal(depth_fraction=0.3), coating="Au"
+        )
+        with pytest.raises(ValueError):
+            integral.solve(
+                problem,
+                Illumination.classical(alpha=25.0, polarization="TE"),
+                [500.0],
+                boundary_points=256,
+                conductivity="tabulated",
+            )
+
+    def test_tabulated_refuses_an_unresolved_metal_side(self):
+        """Below the critical angle the field decays into the metal on the
+        lambda/sqrt(2 delta) scale -- shorter than the vacuum reduced
+        wavelength -- and a mesh that cannot resolve it is refused with
+        the number needed, naming the metal side."""
+        problem = Problem(
+            period=600.0, profile=Sinusoidal(depth_fraction=0.3), coating="Au"
+        )
+        with pytest.raises(ValueError, match="metal-side"):
+            integral.solve(
+                problem,
+                Illumination.offplane(graze=1.5, azimuth=25.0, polarization="TE"),
+                [2.0],
+                boundary_points=96,
                 conductivity="tabulated",
             )
 
