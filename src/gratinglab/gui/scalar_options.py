@@ -30,6 +30,7 @@ from .state import FieldError, FormErrors, _number
 __all__ = [
     "REFLECTIVITY_MODELS",
     "ROUGHNESS_MODELS",
+    "VISIBILITY_MODES",
     "ScalarOptionsState",
     "build_options",
 ]
@@ -40,6 +41,7 @@ __all__ = [
 #: ``scalar.solve`` call agree.
 REFLECTIVITY_MODELS = ("local", "average", "facet")
 ROUGHNESS_MODELS = ("nevot-croce", "debye-waller", "none")
+VISIBILITY_MODES = ("facet-normal", "horizon")
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +51,7 @@ class ScalarOptionsState:
     quadrature_points: str = "2048"
     reflectivity_model: str = REFLECTIVITY_MODELS[0]
     roughness_model: str = ROUGHNESS_MODELS[0]
+    visibility: str = VISIBILITY_MODES[0]
 
     def with_field(self, name: str, value: Any) -> "ScalarOptionsState":
         """Return a copy with one field changed."""
@@ -85,11 +88,29 @@ def build_options(
     for name, allowed in (
         ("reflectivity_model", REFLECTIVITY_MODELS),
         ("roughness_model", ROUGHNESS_MODELS),
+        ("visibility", VISIBILITY_MODES),
     ):
         if getattr(form, name) not in allowed:
             errors.append(
                 FieldError(name, f"must be one of {', '.join(allowed)}")
             )
+    # The one combination the solver refuses: with a coating, "facet" applies
+    # one reflectivity to the whole groove and carries no per-point masks for
+    # a horizon to narrow. Uncoated it is fine -- the model is inert and the
+    # masks run at unit amplitude.
+    if (
+        form.reflectivity_model == "facet"
+        and form.visibility == "horizon"
+        and problem.coating is not None
+    ):
+        errors.append(
+            FieldError(
+                "visibility",
+                "'horizon' cannot act under reflectivity_model='facet' with "
+                "a coating: that model has no per-point masks for a horizon "
+                "to narrow. Use 'local' or 'average', or keep 'facet-normal'.",
+            )
+        )
     if errors:
         raise FormErrors(tuple(errors))
     assert quadrature is not None
@@ -114,4 +135,5 @@ def build_options(
         "quadrature_points": int(quadrature),
         "reflectivity_model": form.reflectivity_model,
         "roughness_model": form.roughness_model,
+        "visibility": form.visibility,
     }
