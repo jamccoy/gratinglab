@@ -310,6 +310,16 @@ class TestEfficiencyDialog:
         dialog.compute()
         assert "not convergence-checked" in dialog.status.text()
 
+    def test_it_reports_the_resolving_power_of_the_measured_grooves(
+            self, qtbot, window):
+        """R = |m|*N from the groove count the scan measured, no retyping."""
+        dialog = self._dialog(qtbot, window)
+        dialog.count_spin.setValue(8)
+        dialog.compute()
+        n = window.boundary.profile.n_used
+        assert f"Resolving power from the {n} averaged grooves" in dialog.status.text()
+        assert f"m = +1: R = {n:,.0f}" in dialog.status.text()
+
     def test_a_backwards_wavelength_range_is_refused_not_raised(self, qtbot, window):
         dialog = self._dialog(qtbot, window)
         dialog.start_spin.setValue(5.0)
