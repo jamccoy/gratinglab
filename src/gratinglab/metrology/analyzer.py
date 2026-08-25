@@ -10,6 +10,7 @@ import os
 from .settings import AnalysisSettings
 from .stats.icc import compute_icc, effective_sample_size
 from .core.image_flatten import flatten_image, row_offset_spread
+from .core.tip import apply_tip_correction
 from .core.processing import (
     raw_data, raw_data_multi_group,  # NEW: added raw_data_multi_group
     flatten_profile, find_groove_positions, load_afm_data
@@ -375,6 +376,14 @@ def _load_and_validate(filename, settings):
             print(f"Image flattening: {method} "
                   f"(row-offset spread {before*1e9:.2f} -> "
                   f"{row_offset_spread(data)*1e9:.2f} nm)")
+
+        data, correction = apply_tip_correction(data, scan_x_size, settings)
+        if correction is not None:
+            # The uncertain pixels are upper bounds, not measurements. Facet
+            # fits mostly live on open facets where the apex tracks, but the
+            # reader of a blaze angle from a corrected scan should know the
+            # scan was corrected and by what tip.
+            print(f"Tip correction: {correction.summary}")
 
         return data, scan_x_size
     except Exception as e:

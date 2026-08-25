@@ -155,6 +155,13 @@ def run_boundary_profile_export(settings=None, filename=None):
         print(f"{exc}")
         return None
 
+    if profile.metrics.get('tip_correction', 'none') != 'none':
+        print(f"Tip correction: erosion "
+              f"(R = {profile.metrics['tip_radius_nm']:g} nm, "
+              f"half angle = {profile.metrics['tip_half_angle_deg']:g} deg), "
+              f"{100.0 * profile.metrics['tip_certain_fraction']:.1f}% of "
+              f"pixels certain; the rest are upper bounds")
+
     edge_note = (f" ({profile.n_edge_rejected} rejected: clipped by scan edge)"
                  if profile.n_edge_rejected else "")
     print(f"Found {profile.n_grooves} grooves{edge_note}")

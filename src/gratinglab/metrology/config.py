@@ -93,6 +93,18 @@ N_ROW_GROUPS = 20      # Number of row groups to extract from each image
 # the place to add a method that is not affine.
 IMAGE_FLATTEN_METHOD = 'align_rows'
 
+# ============ TIP CORRECTION (2-D, after image flattening) ============
+# Undo the tip's dilation of the surface where that is possible (Villarrubia
+# 1997 erosion; see core/tip.py). Off by default: the correction changes
+# measured numbers -- groove depth especially -- and must be asked for. The
+# reconstruction is an upper bound on the true surface, exact where the tip
+# apex made contact; the certainty fraction is reported wherever the results
+# land, and a facet steeper than the tip flank (90 - half angle from the
+# surface) is unrecoverable no matter the algorithm.
+TIP_CORRECTION = 'none'      # 'none' or 'erosion'
+TIP_RADIUS_NM = 1.0          # Apex radius; a "2 nm wide" tip is radius 1
+TIP_HALF_ANGLE_DEG = 18.0    # Cone half angle from the tip axis
+
 # ============ PROFILE FLATTENING (1-D, after row averaging) ============
 # This is the one that moves the answer: about 0.49 deg between methods.
 FLATTEN_METHOD = 'level_grooves'  # 'linear', 'polynomial', 'groove_peaks', or 'level_grooves'

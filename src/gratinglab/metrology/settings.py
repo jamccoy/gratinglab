@@ -17,6 +17,7 @@ settings in one process were all impossible. Settings now travel as an argument.
 from dataclasses import dataclass, replace
 
 from .core.image_flatten import VALID_IMAGE_FLATTEN_METHODS
+from .core.tip import VALID_TIP_CORRECTIONS
 
 # The blaze facet is trimmed 2.5x harder on the trough side than the land side
 # (see core/analysis.py trim_facet), so the total removed is FACET_TRIM * 3.5.
@@ -62,6 +63,17 @@ class AnalysisSettings:
     # the default costs nothing - measured 0.0000 deg on all eight samples.
     image_flatten_method: str = 'align_rows'
 
+    # Tip correction: undoing what the tip shape did to the image, where that
+    # is possible, on the 2-D array right after image flattening. Off by
+    # default because it changes measured numbers (depth especially) and must
+    # be asked for. The tip is a cone with a spherical apex cap; the radius is
+    # the *apex radius* (a "2 nm wide" tip is radius 1), and the half angle is
+    # measured from the tip axis. See core/tip.py for what can and cannot be
+    # recovered.
+    tip_correction: str = 'none'
+    tip_radius_nm: float = 1.0
+    tip_half_angle_deg: float = 18.0
+
     # Profile flattening: the 1-D stage, after each row group is averaged. This
     # one does move the answer - about 0.49 deg across the four methods.
     flatten_method: str = 'level_grooves'
@@ -106,6 +118,9 @@ class AnalysisSettings:
             blaze_side=config.BLAZE_SIDE,
             image_flatten_method=getattr(config, 'IMAGE_FLATTEN_METHOD',
                                          'align_rows'),
+            tip_correction=getattr(config, 'TIP_CORRECTION', 'none'),
+            tip_radius_nm=getattr(config, 'TIP_RADIUS_NM', 1.0),
+            tip_half_angle_deg=getattr(config, 'TIP_HALF_ANGLE_DEG', 18.0),
             flatten_method=config.FLATTEN_METHOD,
             flatten_poly_order=config.FLATTEN_POLY_ORDER,
             flatten_exclude_edges=config.FLATTEN_EXCLUDE_EDGES,
@@ -158,6 +173,18 @@ class AnalysisSettings:
             errors.append(('image_flatten_method',
                            f"must be one of "
                            f"{', '.join(VALID_IMAGE_FLATTEN_METHODS)}"))
+
+        if self.tip_correction not in VALID_TIP_CORRECTIONS:
+            errors.append(('tip_correction',
+                           f"must be one of {', '.join(VALID_TIP_CORRECTIONS)}"))
+        if self.tip_correction != 'none':
+            if self.tip_radius_nm <= 0:
+                errors.append(('tip_radius_nm', "must be greater than 0 nm"))
+            if not 0 < self.tip_half_angle_deg < 90:
+                errors.append(('tip_half_angle_deg',
+                               "must lie strictly between 0 and 90 degrees; "
+                               "90 would be a flat punch and 0 an infinitely "
+                               "thin needle"))
 
         if self.flatten_method not in VALID_FLATTEN_METHODS:
             errors.append(('flatten_method',
