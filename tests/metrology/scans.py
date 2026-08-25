@@ -35,6 +35,12 @@ SYNTHETIC_PERIOD_NM = 315.0
 SYNTHETIC_BLAZE_DEG = 30.0
 SYNTHETIC_ANTIBLAZE_DEG = 70.0
 
+#: The same grating with identical noise, imaged through a worn tip -- the
+#: companion the tip-correction tests recover from. Written by the same tool.
+SYNTHETIC_DILATED = FIXTURES / "synthetic_dilated_scan.txt"
+SYNTHETIC_TIP_RADIUS_NM = 20.0
+SYNTHETIC_TIP_HALF_ANGLE_DEG = 18.0
+
 #: Real scans, not committed. Override with ``GRATINGLAB_AFM_DIR``. Kept in step
 #: with ``gratinglab.metrology.config.DEFAULT_AFM_DIR``.
 DEFAULT_SCAN_DIR = Path.home() / "Documents" / "afm_scans"
