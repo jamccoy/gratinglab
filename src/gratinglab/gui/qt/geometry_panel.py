@@ -144,8 +144,10 @@ class GeometryPanel(QWidget):
         coating.setToolTip(
             "No coating gives relative efficiency -- a correct answer to a "
             "different question, not a missing input. Naming a material "
-            "applies its Fresnel reflectivity and makes the result absolute; "
-            "the provenance panel says which you got."
+            "makes the result absolute: the Scalar tab applies its Fresnel "
+            "reflectivity, and the Integral tab reads its complex index when "
+            'Conductivity is "tabulated" (and ignores it when "perfect"). '
+            "The provenance panel says which you got."
         )
         for name in available():
             coating.addItem(name, userData=name)

@@ -47,6 +47,11 @@ from .worker import SolveWorker
 
 __all__ = ["MainWindow"]
 
+#: Stack for the solve thread, matching the platform's own main-thread default.
+#: Not a tuning knob: a rigorous solver factors dense matrices through LAPACK,
+#: and LAPACK expects the stack the main thread has. See `_start_worker`.
+_WORKER_STACK_BYTES = 8 * 1024 * 1024
+
 #: A solve faster than this never shows a progress bar. The scalar solver takes
 #: about 70 ms, and flashing a bar on and off within one frame reads as a
 #: glitch rather than as feedback.
@@ -280,6 +285,15 @@ class MainWindow(QMainWindow):
 
     def _start_worker(self) -> None:
         self._thread = QThread(self)
+        # A QThread starts with a much smaller stack than the main thread's,
+        # and LAPACK's dense complex solve overruns it: `np.linalg.solve` on a
+        # few-hundred-square matrix segfaults the *process* here while running
+        # fine on the main thread and on a plain `threading.Thread`. That made
+        # the integral tab unusable in the real window -- both boundary
+        # conditions -- while every headless test passed, because nothing but
+        # the GUI ran a solve off the main thread. The scalar solver never
+        # tripped it: it factors nothing.
+        self._thread.setStackSize(_WORKER_STACK_BYTES)
         self._worker = SolveWorker()
         self._worker.moveToThread(self._thread)
         # Cross-thread, so both directions are queued automatically: requests

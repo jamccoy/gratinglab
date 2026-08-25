@@ -6,9 +6,10 @@ designed against a sample of one, and the way to learn the actual common
 shape is to build the second tab and *then* extract what proved common. The
 duplication between these two files is that evidence, kept visible.
 
-What genuinely differs from scalar: the options group (one accuracy knob,
-``boundary_points``, no reflectivity or roughness -- the perfectly conducting
-model has no material in it) and the state type behind ``build_options``.
+What genuinely differs from scalar: the options group (the boundary
+condition, and the accuracy knob it governs -- no reflectivity or roughness,
+because the material enters through the boundary condition itself rather than
+through a Fresnel factor) and the state type behind ``build_options``.
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ from typing import Sequence
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QComboBox,
     QFileDialog,
     QFormLayout,
     QGroupBox,
@@ -41,7 +43,11 @@ from PySide6.QtWidgets import (
 
 from .. import orders as orders_module
 from .. import provenance
-from ..integral_options import IntegralOptionsState
+from ..integral_options import (
+    CONDUCTIVITY_MODES,
+    CONDUCTIVITY_NOTES,
+    IntegralOptionsState,
+)
 from ..integral_options import build_options as build_integral_options
 from .sizing import fit_width_to_contents
 
@@ -119,14 +125,36 @@ class IntegralTab(QWidget):
         self._fields["boundary_points"] = points
         form.addRow("Boundary pts", points)
 
-        note = QLabel(
-            "Perfectly conducting boundary: efficiencies are relative to a\n"
-            "perfect reflector and sum to 1. A coating named on the Setup\n"
-            "tab is not consulted (the provenance panel says so)."
+        conductivity = QComboBox()
+        conductivity.addItems(CONDUCTIVITY_MODES)
+        conductivity.setToolTip(
+            "Which boundary condition the integral equation carries.\n"
+            "perfect: perfectly conducting, no material -- efficiencies are\n"
+            "  relative to a perfect reflector and sum to 1. A coating is\n"
+            "  not consulted.\n"
+            "tabulated: finite conductivity (Goray & Schmidt 2010), reading\n"
+            "  the coating's complex index at every wavelength --\n"
+            "  efficiencies are absolute and absorption is recorded.\n"
+            "Tabulated costs roughly twice as much per wavelength, and needs\n"
+            "a finer mesh: the field oscillates inside the material too."
         )
-        note.setWordWrap(True)
-        form.addRow(note)
+        conductivity.currentTextChanged.connect(self._show_conductivity_note)
+        self._fields["conductivity"] = conductivity
+        form.addRow("Conductivity", conductivity)
+
+        # Dynamic, because the label this replaced asserted a perfectly
+        # conducting boundary unconditionally and went stale the moment the
+        # solver grew a second one. A claim about the result is exactly what
+        # must not be hardcoded beside a control that can falsify it.
+        self._conductivity_note = QLabel()
+        self._conductivity_note.setWordWrap(True)
+        form.addRow(self._conductivity_note)
+        self._show_conductivity_note(conductivity.currentText())
         return group
+
+    def _show_conductivity_note(self, mode: str) -> None:
+        """Say what the selected boundary condition means for the numbers."""
+        self._conductivity_note.setText(CONDUCTIVITY_NOTES.get(mode, ""))
 
     def _build_orders_group(self) -> QWidget:
         group = QGroupBox("Orders")
@@ -224,7 +252,8 @@ class IntegralTab(QWidget):
 
     def build_options(self, problem, illumination, wavelengths) -> dict:
         options = IntegralOptionsState(
-            boundary_points=self._fields["boundary_points"].text(),
+            boundary_points=_value(self._fields["boundary_points"]),
+            conductivity=_value(self._fields["conductivity"]),
         )
         return build_integral_options(problem, illumination, wavelengths, options)
 
@@ -232,6 +261,9 @@ class IntegralTab(QWidget):
         self._solve_button.setEnabled(not running)
         self._converge_button.setEnabled(not running)
         self._cancel_button.setEnabled(running)
+        # Only the knob: the sweep chooses it, so the field it would come from
+        # is dead for the duration. `conductivity` is passed through to the
+        # sweep untouched, so it stays live, like scalar's model selectors.
         self._fields["boundary_points"].setEnabled(not running)
         if not running:
             self._progress.hide()
@@ -363,6 +395,20 @@ class IntegralTab(QWidget):
                 lw=1.3, label=f"m={int(order):+d}",
             )
         axes.plot(scan.wavelengths, scan.total, "k--", lw=1.0, alpha=0.7, label="Σ")
+        if scan.absorption is not None:
+            # Under a finite-conductivity solve Σ alone is the reflected
+            # fraction and sits below the unity line by exactly the absorbed
+            # one. Drawing A and Σ + A puts the R + A = 1 theorem on the same
+            # axes as its own discretisation error, rather than leaving a
+            # correct result looking like a deficit.
+            axes.plot(
+                scan.wavelengths, scan.absorption,
+                color="#a5370d", lw=1.0, ls="-.", alpha=0.8, label="A",
+            )
+            axes.plot(
+                scan.wavelengths, scan.total + scan.absorption,
+                color="k", lw=1.0, ls="-", alpha=0.5, label="Σ + A",
+            )
         axes.axhline(1.0, color="#b00020", lw=0.8, ls=":", alpha=0.7)
         axes.set_xlabel("wavelength (nm)")
         axes.set_ylabel("efficiency")
@@ -392,3 +438,10 @@ class IntegralTab(QWidget):
         QMessageBox.information(
             self, "Exported", f"{len(rows)} rows to {Path(path).name}"
         )
+
+
+def _value(widget: QWidget) -> str:
+    """The text of an input, whichever kind it is."""
+    if isinstance(widget, QComboBox):
+        return widget.currentText()
+    return widget.text()

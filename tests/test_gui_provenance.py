@@ -44,7 +44,16 @@ def default_run():
     return scan, check_energy_balance(scan), parsed.lambda_over_period
 
 
-def make_scan(*, converged=None, warnings=(), notes=None, totals=(0.5, 0.6)):
+def make_scan(
+    *,
+    converged=None,
+    warnings=(),
+    notes=None,
+    totals=(0.5, 0.6),
+    method="scalar",
+    truncation=2048,
+    absorption=None,
+):
     """A minimal scan with exactly the provenance under test."""
     values = np.asarray(totals, dtype=float)
     return EfficiencyScan(
@@ -53,14 +62,15 @@ def make_scan(*, converged=None, warnings=(), notes=None, totals=(0.5, 0.6)):
         efficiency=np.column_stack([values * 0.6, values * 0.4]),
         propagating=np.ones((len(values), 2), dtype=bool),
         provenance=Provenance(
-            "scalar",
+            method,
             version="test",
-            truncation=2048,
+            truncation=truncation,
             converged=converged,
             wall_time_s=0.071,
             warnings=tuple(warnings),
             notes=dict(notes or {}),
         ),
+        absorption=None if absorption is None else np.asarray(absorption, dtype=float),
     )
 
 
@@ -192,9 +202,29 @@ class TestHeader:
         scan, energy, ratio = default_run
         header = provenance_lines(scan, energy, ratio)[0].text
         assert scan.provenance.method in header
-        assert "quadrature pts" in header
+        assert "quadrature points" in header
         assert "ms" in header
         assert "λ/period" in header
+
+    def test_the_knob_is_named_per_method(self):
+        """The header said "quadrature pts" whatever produced the number,
+        which was wrong for the integral solver's boundary points from the day
+        that tab existed. Read off the solver's declared accuracy knob so a
+        backend added later names its own."""
+        header = lines_for(make_scan(method="integral", truncation=400))[0].text
+        assert "400 boundary points" in header
+        assert "quadrature" not in header
+
+    def test_an_unregistered_method_still_renders(self):
+        """Imported reference data carries a foreign method string. The panel
+        that exists to explain things must not be the thing that crashes."""
+        header = lines_for(make_scan(method="pcgrate-sx", truncation=91))[0].text
+        assert "91 truncation" in header
+
+    def test_a_scan_with_no_truncation_says_nothing_rather_than_None(self):
+        header = lines_for(make_scan(truncation=None))[0].text
+        assert "None" not in header
+        assert "ms" in header
 
     def test_survives_a_solver_that_recorded_no_wall_time(self):
         """Imported reference data has no timing. Formatting None with a
@@ -295,6 +325,69 @@ class TestAbout:
         assert __version__ in text
         assert "BSD-3-Clause" in text
         assert "GratingLab" in text
+
+
+class TestAbsorption:
+    """What a finite-conductivity scan adds, and what it must not look like.
+
+    `check_energy_balance` folds absorption into the total when a scan carries
+    one, so the number beside "energy balance" is R + A there while the Σ curve
+    on the plot is R alone. Two quantities under one symbol is the same class
+    of mistake as tagging a correct default as a problem.
+    """
+
+    def test_the_absorbed_fraction_is_reported(self):
+        shown = "".join(
+            line.text
+            for line in lines_for(
+                make_scan(
+                    method="integral",
+                    totals=(0.7, 0.75),
+                    absorption=(0.3, 0.25),
+                    notes={"normalization": "absolute", "material": "Au"},
+                )
+            )
+        )
+        assert "absorption: A ∈ [0.2500, 0.3000]" in shown
+
+    def test_absorption_is_not_an_alarm(self):
+        """Power going into the metal is the answer, not a warning about it."""
+        lines = lines_for(
+            make_scan(method="integral", totals=(0.7,), absorption=(0.3,))
+        )
+        assert "absorption" not in alarming_text(lines)
+
+    def test_the_conserved_quantity_is_named_when_it_includes_absorption(self):
+        shown = "".join(
+            line.text
+            for line in lines_for(
+                make_scan(method="integral", totals=(0.7, 0.75), absorption=(0.3, 0.25))
+            )
+        )
+        assert "Σ + A ∈ [1.0000, 1.0000]" in shown
+
+    def test_a_scan_without_absorption_still_says_plain_sigma(self):
+        """Non-vacuity: every scalar run, and every perfect-conductivity one."""
+        shown = "".join(line.text for line in lines_for(make_scan(totals=(0.4, 0.9))))
+        assert "Σ ∈ [0.4000, 0.9000]" in shown
+        assert "absorption" not in shown
+
+    def test_the_material_a_boundary_condition_read_is_named(self):
+        """The integral solver records `material`, not `coating`. Reading only
+        the latter reported "absolute (no coating)" for a run whose whole
+        result came from the material."""
+        shown = "".join(
+            line.text
+            for line in lines_for(
+                make_scan(
+                    method="integral",
+                    totals=(0.7,),
+                    absorption=(0.3,),
+                    notes={"normalization": "absolute", "material": "Au"},
+                )
+            )
+        )
+        assert "absolute (Au)" in shown
 
 
 class TestPurity:

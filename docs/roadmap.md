@@ -62,7 +62,7 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | CI (Linux + macOS, py3.11/3.12) | green |
 | RCWA | **contributed, not yet integrated** |
 | C-method | not started |
-| **Integral method** ([theory](theory/integral.md)) | **perfect-conductivity and finite-conductivity milestones done**: conical from day one, undercut-capable, GUI tab, validated against M&P Table 4.1 and orderwise against PCGrate to 8e-4 (which also identified the TASTE profile). M20 added `conductivity="tabulated"` — the coupled conical system of Goray & Schmidt (2010), absolute efficiencies with absorption recorded, flat limit = Fresnel to 6e-5, their Table 3 reproduced per order. Graded corner mesh is the named successor |
+| **Integral method** ([theory](theory/integral.md)) | **perfect-conductivity and finite-conductivity milestones done**: conical from day one, undercut-capable, GUI tab, validated against M&P Table 4.1 and orderwise against PCGrate to 8e-4 (which also identified the TASTE profile). M20 added `conductivity="tabulated"` — the coupled conical system of Goray & Schmidt (2010), absolute efficiencies with absorption recorded, flat limit = Fresnel to 6e-5, their Table 3 reproduced per order, and both boundary conditions selectable in the GUI. Graded corner mesh is the named successor |
 
 Roughly 1300 tests, 11 skipped (the skips need the private reference corpus).
 Rounded on purpose: this line previously claimed 328 and was wrong by 400, so

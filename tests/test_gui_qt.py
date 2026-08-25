@@ -141,6 +141,120 @@ class TestNotASecondSourceOfTruth:
         assert np.array_equal(win.tabs["scalar"]._scan.efficiency, expected.efficiency)
 
 
+class TestTheIntegralTab:
+    """The second solver's tab, and the boundary condition it now offers.
+
+    The tab existed before `conductivity` did, so it asserted a perfectly
+    conducting boundary in a static label while the solver had grown a second
+    one. These pin the selector, and pin that nothing downstream renames the
+    quantity it is showing.
+    """
+
+    #: A scan short enough to run twice in a test and coarse enough to clear
+    #: the metal-side mesh floor for Au. The point here is the wiring, not the
+    #: physics -- `test_gui_integral_options.py` owns the guards.
+    TABULATED_FORM = dict(
+        coating="Au", wavelength_start="4.0", wavelength_stop="4.5",
+        wavelength_count="2",
+    )
+    BOUNDARY_POINTS = "128"
+
+    def test_the_conductivity_selector_offers_the_solvers_modes(self, win):
+        from gratinglab.gui.integral_options import CONDUCTIVITY_MODES
+
+        combo = win.tabs["integral"]._fields["conductivity"]
+        offered = [combo.itemText(i) for i in range(combo.count())]
+        assert tuple(offered) == CONDUCTIVITY_MODES
+        assert combo.currentText() == "perfect"
+
+    def test_the_note_follows_the_selector(self, win):
+        """The label it replaced was a claim about the result that a control
+        beside it could falsify."""
+        tab = win.tabs["integral"]
+        before = tab._conductivity_note.text()
+        assert "Perfectly conducting" in before
+
+        tab._fields["conductivity"].setCurrentText("tabulated")
+        after = tab._conductivity_note.text()
+        assert after != before
+        assert "absolute" in after
+
+    def test_the_selector_reaches_build_options(self, win):
+        tab = win.tabs["integral"]
+        tab._fields["conductivity"].setCurrentText("tabulated")
+        parsed = build(FormState(coating="Au"))
+        options = tab.build_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths
+        )
+        assert options["conductivity"] == "tabulated"
+
+    def test_a_tabulated_solve_equals_a_direct_one(self, qtbot, win):
+        """`TestNotASecondSourceOfTruth`, for the coupled system: the tab must
+        not compute, reshape or rescale anything on the way to the plot."""
+        from gratinglab.gui.integral_options import (
+            IntegralOptionsState,
+            build_options as build_integral_options,
+        )
+        from gratinglab.solvers import integral
+
+        for field, value in self.TABULATED_FORM.items():
+            widget = win.geometry._fields[field]
+            if hasattr(widget, "setCurrentIndex"):
+                widget.setCurrentIndex(widget.findData(value))
+            else:
+                widget.setText(value)
+        tab = win.tabs["integral"]
+        tab._fields["boundary_points"].setText(self.BOUNDARY_POINTS)
+        tab._fields["conductivity"].setCurrentText("tabulated")
+        resolve(qtbot, win, "integral")
+
+        parsed = build(FormState(**self.TABULATED_FORM))
+        options = build_integral_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths,
+            IntegralOptionsState(
+                boundary_points=self.BOUNDARY_POINTS, conductivity="tabulated"
+            ),
+        )
+        expected = integral.solve(
+            parsed.problem, parsed.illumination, parsed.wavelengths, **options
+        )
+        assert np.array_equal(tab._scan.efficiency, expected.efficiency)
+        assert np.array_equal(tab._scan.absorption, expected.absorption)
+
+    def test_the_panel_names_the_material_and_the_conserved_quantity(
+        self, qtbot, win
+    ):
+        """A finite-conductivity run whose Σ sits at 0.7 is not a solver
+        losing power -- the rest is absorbed, and the panel has to say so
+        rather than leaving a correct result looking like a deficit."""
+        for field, value in self.TABULATED_FORM.items():
+            widget = win.geometry._fields[field]
+            if hasattr(widget, "setCurrentIndex"):
+                widget.setCurrentIndex(widget.findData(value))
+            else:
+                widget.setText(value)
+        tab = win.tabs["integral"]
+        tab._fields["boundary_points"].setText(self.BOUNDARY_POINTS)
+        tab._fields["conductivity"].setCurrentText("tabulated")
+        resolve(qtbot, win, "integral")
+
+        shown = tab._provenance.toPlainText()
+        assert "boundary points" in shown
+        assert "absolute (Au)" in shown
+        assert "absorption: A" in shown
+        assert "Σ + A" in shown
+
+    def test_without_a_coating_tabulated_is_refused_on_the_form(self, win):
+        """And refused before anything reaches the worker: the previous
+        result stays on screen and the panel names the field."""
+        tab = win.tabs["integral"]
+        tab._fields["conductivity"].setCurrentText("tabulated")
+        win.solve("integral")
+        shown = tab._provenance.toPlainText()
+        assert "coating" in shown
+        assert "field(s) need attention" in shown
+
+
 class TestBehaviour:
     def test_solves_on_construction(self, win):
         """Opening the app shows something, not an empty window."""
@@ -266,6 +380,48 @@ class TestBackgroundSolve:
 
         assert "thread" in seen, "the worker slot never ran"
         assert seen["thread"] != threading.current_thread().ident
+
+    def test_a_two_sided_theorem_is_not_checked_at_machine_precision(self):
+        """`R + A = 1` is pinned from both sides, so its discretisation error
+        lands above unity as often as below. A converged finite-conductivity
+        run measured +2.7e-6 and rendered as "EXCEEDS UNITY" in red -- the
+        exact "nothing correct looks wrong" failure `gui/provenance.py` exists
+        to prevent, reachable only once the tabulated mode was selectable."""
+        from gratinglab.gui.qt.worker import _energy
+        from gratinglab.result import EfficiencyScan, Provenance
+
+        def scan(total, absorption):
+            return EfficiencyScan(
+                wavelengths=np.array([1.0]),
+                orders=np.array([0]),
+                efficiency=np.array([[total]]),
+                propagating=np.array([[True]]),
+                provenance=Provenance("integral"),
+                absorption=None if absorption is None else np.array([absorption]),
+            )
+
+        assert _energy(scan(0.7, 0.3 + 2.7e-6)).passed
+        # Non-vacuity in both directions: a real violation still fails, and a
+        # one-sided quantity keeps the strict default, since an excess there is
+        # a modelling error rather than rounding.
+        assert not _energy(scan(0.7, 0.8)).passed
+        assert not _energy(scan(1.0 + 2.7e-6, None)).passed
+
+    def test_the_worker_thread_gets_a_full_stack(self, win):
+        """A QThread starts with a far smaller stack than the main thread's,
+        and LAPACK's dense complex solve overruns it -- `np.linalg.solve` on a
+        few-hundred-square matrix took down the whole process, so the integral
+        tab returned nothing in the real window under either boundary
+        condition while every headless test passed.
+
+        Pinned as a number as well as behaviourally (`TestTheIntegralTab`
+        actually solves through the worker) because the behavioural failure is
+        a segfault, not an assertion: it takes the suite with it rather than
+        reporting, so it is worth catching here first."""
+        from gratinglab.gui.qt.main_window import _WORKER_STACK_BYTES
+
+        assert _WORKER_STACK_BYTES >= 8 * 1024 * 1024
+        assert win._thread.stackSize() == _WORKER_STACK_BYTES
 
     def test_solve_is_disabled_while_one_is_running(self, win):
         win.solve("scalar")
