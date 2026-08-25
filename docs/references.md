@@ -188,3 +188,25 @@ which is why the reference corpus carries only TE.
 
 **McCoy, J. A. et al.** — J. Vac. Sci. Technol. B (2018); ApJ **891**, 114
 (2020); OSA Continuum **3**(11), 3141 (2020).
+
+---
+
+## Metrology
+
+**Villarrubia, J. S.** *Algorithms for scanned probe microscope image
+simulation, surface reconstruction, and tip estimation.* J. Res. Natl. Inst.
+Stand. Technol. **102**(4), 425–454 (1997).
+
+The tip-deconvolution milestone (roadmap §4): morphological dilation/erosion,
+the certainty map that marks unrecoverable points, and blind tip estimation.
+Erosion bounds the true surface; it does not recover it.
+
+---
+
+## Sibling code
+
+**PyXFocus** — sequential X-ray raytracer (Allured; forks by kbuffo and this
+project's author). Its `grating.py` holds the analytic Littrow-mount formulas
+(`blazeYaw`, `blazeAngle`) slated for a native port (roadmap §3), and its GUI's
+order-centroid/spot-width estimator is the instrument-level cross-check of
+`gratinglab.resolution`. The raytracer itself is deliberately not absorbed.
