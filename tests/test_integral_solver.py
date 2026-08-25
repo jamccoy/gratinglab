@@ -129,12 +129,20 @@ class TestTabulatedConductivity:
 
     def test_energy_balance_includes_the_recorded_absorption(self):
         """Measured at these settings: R = 0.702, A = 0.298, R + A - 1 =
-        -1.2e-4 -- the check consumes the scan's absorption automatically."""
+        -2.5e-4 -- the check consumes the scan's absorption automatically.
+
+        The node count buys the tolerance: ``D_t V^-`` is assembled as one
+        kernel with an ``O(h^3)`` remainder quadrature rather than as a
+        spectral ``d/ds`` of an assembled ``V^-``, which was spectrally
+        accurate here but carries an ``O(1)`` error on any boundary with
+        real high-frequency content (``_nystrom``). This mount converges
+        -1.9e-3, -5.9e-4, -2.5e-4 at 256, 384, 512 nodes.
+        """
         scan = integral.solve(
             self.PROBLEM,
             Illumination.offplane(graze=1.5, azimuth=25.0, polarization="TE"),
             [2.0],
-            boundary_points=256,
+            boundary_points=512,
             conductivity="tabulated",
         )
         assert scan.absorption is not None

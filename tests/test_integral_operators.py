@@ -23,6 +23,7 @@ from gratinglab.solvers.integral._nystrom import (
     neumann_matrix,
     single_layer_matrix,
     tangential_derivative_matrix,
+    tangential_layer_matrix,
 )
 
 PERIOD = 600.0
@@ -166,3 +167,73 @@ class TestTangentialDerivative:
         got = tangential_derivative_matrix(boundary, alpha0=ALPHA0) @ f
         scale = np.abs(fd).max()
         assert np.allclose(got, fd, rtol=0.0, atol=1e-4 * scale)
+
+
+class TestTangentialLayer:
+    """``D_t V`` is one operator, not a discrete ``d/ds`` applied to ``V``.
+
+    Composing an assembled ``V`` with a differentiation matrix multiplies
+    ``V``'s quadrature error by that matrix's ``O(N)`` norm, so the product
+    carries an ``O(1)`` error that refinement never removes. These pin the
+    single-operator form instead: exactness against a closed form where one
+    exists, and convergence where it does not.
+    """
+
+    @staticmethod
+    def _flat(points, period):
+        """A flat interface, where arc length is ``x`` and the tangent is
+        ``+x``, so ``V`` acts diagonally on every quasi-periodic mode."""
+        x = np.linspace(0.0, period, points, endpoint=False)
+        return PhysicalBoundary(
+            x=x,
+            y=np.zeros(points),
+            nx=np.zeros(points),
+            ny=np.ones(points),
+            arc_length=period,
+        )
+
+    @pytest.mark.parametrize("k", [0.15, 0.11163 + 0.20861j])
+    @pytest.mark.parametrize("order", [0, 1, 5])
+    def test_flat_interface_matches_the_closed_form(self, k, order):
+        """On a flat interface ``V`` maps ``exp(i alpha_m x)`` to a multiple
+        of itself, so ``d/ds (V f) = i alpha_m (V f)`` exactly -- including
+        for the complex metal-side wavenumber, where the kernel is strongly
+        evanescent."""
+        period, alpha0 = PERIOD, -0.04
+        errors = []
+        for points in (128, 256):
+            boundary = self._flat(points, period)
+            shared = dict(
+                k=k, alpha0=alpha0, period=period, terms=points // 2
+            )
+            single = single_layer_matrix(boundary, **shared)
+            tangential = tangential_layer_matrix(boundary, **shared)
+
+            alpha_m = alpha0 + 2.0 * np.pi * order / period
+            mode = np.exp(1j * alpha_m * boundary.x)
+            reference = single @ mode
+            errors.append(
+                np.abs(tangential @ mode - 1j * alpha_m * reference).max()
+                / np.abs(reference).max()
+            )
+
+        assert errors[0] < 1e-2
+        # Halving the spacing buys ~8x (the remainder quadrature is cubic).
+        # The plain rectangular rule on this Cauchy kernel manages only a
+        # factor of two, which is the failure this guards; 4 separates them.
+        assert errors[1] < errors[0] / 4.0
+
+    def test_agrees_with_spectral_differentiation_on_a_smooth_boundary(self):
+        """Where the trace *is* smooth in arc length, the two routes must
+        agree -- which is what makes the discrete one so plausible, and why
+        only a high-frequency boundary exposes the difference."""
+        shared = dict(k=K_T, alpha0=ALPHA0, period=PERIOD, terms=192)
+        single = single_layer_matrix(SINUSOID, **shared)
+        tangential = tangential_layer_matrix(SINUSOID, **shared)
+        discrete = tangential_derivative_matrix(SINUSOID, alpha0=ALPHA0)
+
+        density = smooth_density(SINUSOID, ALPHA0)
+        analytic = tangential @ density
+        spectral = discrete @ (single @ density)
+
+        assert np.abs(analytic - spectral).max() < 1e-3 * np.abs(analytic).max()

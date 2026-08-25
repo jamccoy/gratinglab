@@ -46,15 +46,28 @@ single-layer potential: the jump relation reads
 outward normal points into. The finite-conductivity system needs it to
 match normal derivatives across the interface.
 
+**Tangential layer** ``D_t V`` -- ``d/ds`` of a single-layer trace, as one
+operator. The tangential derivative is continuous across the boundary, so
+this is a plain principal-value integral of ``t(s) . grad_s G`` with no jump
+term. It is built as a single kernel rather than as a discrete ``d/ds``
+applied to an assembled ``V``: that composition multiplies ``V``'s
+quadrature error by the differentiation matrix's ``O(N)`` norm, leaving an
+``O(1)`` error that refinement does not remove. The kernel is genuinely
+Cauchy-singular (unlike ``K`` and ``L``, whose normal component cancels the
+singularity), so the rectangular rule is only ``O(h)`` on it; the
+singularity is removed with a Bloch-phased periodic Hilbert comparison
+kernel whose principal value is exact in the Fourier basis, leaving a
+continuous remainder for the usual rule.
+
 **Tangential derivative** ``D_t`` -- ``d/ds`` along the boundary of an
 ``alpha0``-quasi-periodic trace, as a dense differentiation matrix: strip
 the Bloch phase ``exp(i alpha0 x(s))``, differentiate the now-periodic
 factor spectrally on the uniform arc-length grid, restore the phase (the
 product rule contributes ``i alpha0 x'(s)``, and ``x'(s) = n_y`` is the
 tangent's x-component for our orientation: nodes ordered by increasing
-``x``, outward normal up). Geometry-only -- built once per boundary and
-reused at every wavelength. The conical finite-conductivity coupling is
-``V (D_t V)`` products, so no new singular quadrature is needed.
+``x``, outward normal up). Geometry-only. Valid only for a trace that is
+smooth as a function of arc length -- it is *not* the way to differentiate
+a single-layer trace, which is what ``tangential_layer_matrix`` is for.
 
 The perfectly conducting solve keeps its milestone-1 names as thin
 compositions: ``dirichlet_matrix`` (TE) is ``V`` itself and
@@ -75,6 +88,7 @@ __all__ = [
     "single_layer_matrix",
     "double_layer_matrix",
     "adjoint_layer_matrix",
+    "tangential_layer_matrix",
     "tangential_derivative_matrix",
     "dirichlet_matrix",
     "neumann_matrix",
@@ -229,6 +243,106 @@ def adjoint_layer_matrix(
     kernel[diag] = 0.5 * (forward + backward)
 
     return spacing * kernel
+
+
+def tangential_layer_matrix(
+    boundary: PhysicalBoundary,
+    *,
+    k: complex,
+    alpha0: float,
+    period: float,
+    terms: int,
+) -> NDArray[np.complex128]:
+    r"""The discretised operator ``D_t V`` -- ``d/ds`` of a single-layer trace.
+
+    The tangential derivative of a single-layer potential is continuous
+    across the boundary (only the *normal* derivative jumps), so the trace's
+    arc-length derivative is the plain principal-value integral
+
+    .. math::
+        \partial_s (V \sigma)(s)
+            = \int t(s) \cdot \nabla_s G(s, s')\, \sigma(s')\, ds',
+
+    with no jump term, where ``t = (n_y, -n_x)`` is the unit tangent in the
+    ``+s`` direction and ``t . grad_s = -``\ [the ``N``-form with the tangent
+    at ``s``] -- the same sign flip :func:`adjoint_layer_matrix` makes.
+
+    Taking the derivative *analytically on the kernel* is what makes this
+    usable. The alternative -- assembling ``V`` and then applying a discrete
+    ``d/ds`` -- composes an unbounded operator (discrete norm ``O(N)``) with a
+    quadrature carrying ``O(N^{-p})`` error, leaving an ``O(1)`` error that
+    refinement does not remove; on a boundary with any appreciable
+    high-frequency content that destroys the solve outright.
+
+    Unlike ``K`` and ``L``, whose normal component cancels the singularity,
+    this kernel is genuinely Cauchy-singular: ``t . grad_s G ~ 1/(2 pi u)``
+    for ``u = s - s'``. The rectangular rule is only ``O(h)`` on it, so the
+    singularity is removed the way ``single_layer_matrix`` removes its
+    logarithm -- subtract a periodic comparison kernel whose action is known
+    in closed form. Here that is the Bloch-phased periodic Hilbert kernel
+
+    .. math::
+        C(s, s') = e^{i \alpha_0 (x(s) - x(s'))}\,
+                   \frac{1}{2L} \cot\frac{\pi (s - s')}{L},
+
+    which carries the same quasi-periodicity and the same ``1/(2 pi u)``
+    behaviour. Its principal-value integral is diagonal in the Fourier basis
+    of the periodic factor -- mode ``p`` is multiplied by ``-i sgn(p) / 2``
+    -- so it is applied spectrally and exactly. The remainder ``K - C`` is
+    continuous, so the plain rectangular rule recovers its usual accuracy,
+    with the diagonal taken as the adjacent-node average as elsewhere.
+    """
+    big_x, big_z, diag = _separations(boundary)
+    spacing, length = boundary.spacing, boundary.arc_length
+    points = len(boundary.x)
+    tx, ty = boundary.ny, -boundary.nx
+
+    def kernel_at(dx, dy, vx, vy):
+        return -neumann_function(
+            dx, dy, vx, vy, k=k, alpha0=alpha0, period=period, terms=terms
+        )
+
+    kernel = kernel_at(big_x, big_z, tx[:, None], ty[:, None])
+
+    # The comparison kernel, on the same nodes: arc-length separation between
+    # nodes j and i is (j - i) * spacing on the uniform grid.
+    phase = np.exp(1j * alpha0 * boundary.x)
+    offset = (np.arange(points)[:, None] - np.arange(points)[None, :]) * spacing
+    with np.errstate(divide="ignore", invalid="ignore"):
+        comparison = (
+            (phase[:, None] / phase[None, :])
+            / (2.0 * length)
+            / np.tan(np.pi * offset / length)
+        )
+    comparison[diag] = 0.0
+
+    remainder = kernel - comparison
+
+    # The remainder is continuous; its diagonal is the adjacent-node average,
+    # taken on the same difference so the comparison's own 1/u cancels there
+    # too (its adjacent values are equal and opposite, hence absent).
+    dx_next, dy_next, dx_prev, dy_prev = _wrapped_neighbours(boundary, period)
+    forward = kernel_at(dx_next, dy_next, tx, ty)
+    backward = kernel_at(dx_prev, dy_prev, tx, ty)
+    step = 1.0 / (2.0 * length * np.tan(np.pi * spacing / length))
+    comparison_forward = -step * np.exp(1j * alpha0 * dx_next)
+    comparison_backward = step * np.exp(1j * alpha0 * dx_prev)
+    remainder[diag] = 0.5 * (
+        (forward - comparison_forward) + (backward - comparison_backward)
+    )
+
+    # The comparison kernel's principal value, applied exactly: strip the
+    # Bloch phase, multiply Fourier mode p by -i sgn(p) / 2, restore it.
+    modes = np.fft.fftfreq(points, d=1.0 / points)
+    multiplier = -0.5j * np.sign(modes)
+    if points % 2 == 0:
+        # The unpaired Nyquist mode has no signed (Hilbert) representation.
+        multiplier[points // 2] = 0.0
+    hilbert = np.fft.ifft(
+        multiplier[:, None] * np.fft.fft(np.eye(points), axis=0), axis=0
+    )
+
+    return spacing * remainder + (phase[:, None] / phase[None, :]) * hilbert
 
 
 def tangential_derivative_matrix(
