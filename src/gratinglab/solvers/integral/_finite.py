@@ -37,7 +37,12 @@ extraction (``docs/references.md``). The construction:
 
   with ``c_E = n^2 k_t^{+2}/k_t^{-2}``, ``c_B = k_t^{+2}/k_t^{-2}``, and
   ``s = \cos\gamma\,(1 - k_t^{+2}/k_t^{-2})`` -- the tangential derivatives
-  of the *continuous* traces, hence ``D_t V^-`` on the densities.
+  of the *continuous* traces, hence ``D_t V^-`` on the densities. That
+  product is assembled as one operator (``tangential_layer_matrix``), with
+  the derivative taken analytically on the kernel: differentiating an
+  assembled ``V^-`` numerically instead leaves an ``O(1)`` error that
+  refinement does not remove, which destroys the conical solve on any
+  boundary carrying appreciable high-frequency content.
 
 The result is a 2x2 block system in ``(w, tau)`` whose diagonal blocks are
 ``(I/2 + K^+)V^- - c\,V^+(L^- - I/2)`` and whose cross blocks are
@@ -72,7 +77,7 @@ from ._nystrom import (
     adjoint_layer_matrix,
     double_layer_matrix,
     single_layer_matrix,
-    tangential_derivative_matrix,
+    tangential_layer_matrix,
 )
 
 __all__ = ["FiniteSolution", "solve_transverse_finite", "solve_finite_states"]
@@ -254,8 +259,10 @@ def solve_finite_states(
 
     conical = cos_gamma != 0.0
     if conical:
-        d_t = tangential_derivative_matrix(boundary, alpha0=alpha0)
-        cross = v_plus @ (d_t @ v_minus)
+        dt_v_minus = tangential_layer_matrix(
+            boundary, k=km, alpha0=alpha0, period=period, terms=terms
+        )
+        cross = v_plus @ dt_v_minus
         system = np.block(
             [
                 [trace_block - c_e * derivative_block, -s * cross],
@@ -310,8 +317,8 @@ def solve_finite_states(
         e_normal_minus = (l_minus - half) @ w
         b_normal_minus = (l_minus - half) @ tau
         if conical:
-            dt_e = d_t @ e_trace
-            dt_b = d_t @ b_trace
+            dt_e = dt_v_minus @ w
+            dt_b = dt_v_minus @ tau
             e_normal_plus = c_e * e_normal_minus + s * dt_b
             b_normal_plus = c_b * b_normal_minus - s * dt_e
         else:
