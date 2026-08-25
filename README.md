@@ -221,6 +221,15 @@ A theory page accompanies each solver as it lands, stating its assumptions, its
 derivation in the code's own notation, and the conditions under which it stops being
 trustworthy.
 
+The [wiki](https://github.com/jamccoy/gratinglab/wiki) is a published copy of `docs/`,
+not a second source — edit `docs/` and republish, or the copy people read becomes the
+one nobody edits:
+
+```bash
+git clone https://github.com/jamccoy/gratinglab.wiki.git ../gratinglab.wiki
+.venv/bin/python tools/publish_wiki.py --wiki ../gratinglab.wiki   # then review and push
+```
+
 ## Development
 
 ```bash
