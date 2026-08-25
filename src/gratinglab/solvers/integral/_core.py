@@ -41,7 +41,7 @@ from numpy.typing import NDArray
 from ...geometry import order_range
 from ._boundary import PhysicalBoundary
 from ._greens import wavenumbers
-from ._nystrom import dirichlet_matrix, neumann_matrix
+from ._nystrom import OperatorAssembler, dirichlet_matrix, neumann_matrix
 
 __all__ = ["TransverseSolution", "solve_transverse"]
 
@@ -67,13 +67,15 @@ def solve_transverse(
     sin_alpha: float,
     polarization: str,
     terms: int,
+    assembler: OperatorAssembler | None = None,
 ) -> TransverseSolution:
     """Solve the in-plane perfectly-conducting problem for one polarization.
 
     ``wavelength`` is the *transverse* (reduced) wavelength in nm;
     ``polarization`` is ``"TE"`` or ``"TM"`` (the unpolarized average is two
     calls, taken by the solver above). ``terms`` is the spectral truncation
-    of the kernels.
+    of the kernels. ``assembler`` shares the kernel machinery across calls
+    (the solver passes one per scan); built fresh when omitted.
     """
     k = 2.0 * np.pi / wavelength
     cos_alpha = float(np.sqrt(1.0 - sin_alpha**2))
@@ -88,9 +90,13 @@ def solve_transverse(
     incident = np.exp(1j * (alpha0 * x - gamma0 * y))
     outgoing = np.exp(-1j * alpha_m[:, None] * x - 1j * gamma_m[:, None] * y)
 
+    if assembler is None:
+        assembler = OperatorAssembler(boundary, period=period, terms=terms)
+
     if polarization == "TE":
         system = dirichlet_matrix(
-            boundary, k=k, alpha0=alpha0, period=period, terms=terms
+            boundary, k=k, alpha0=alpha0, period=period, terms=terms,
+            assembler=assembler,
         )
         density = np.linalg.solve(system, -incident)
         amplitudes = (
@@ -98,7 +104,8 @@ def solve_transverse(
         )
     elif polarization == "TM":
         system = neumann_matrix(
-            boundary, k=k, alpha0=alpha0, period=period, terms=terms
+            boundary, k=k, alpha0=alpha0, period=period, terms=terms,
+            assembler=assembler,
         )
         field = np.linalg.solve(system, incident)
         direction = (

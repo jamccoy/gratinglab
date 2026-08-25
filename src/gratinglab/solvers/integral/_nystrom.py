@@ -82,9 +82,16 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ._boundary import PhysicalBoundary
-from ._greens import greens_function, greens_remainder_diagonal, neumann_function
+from ._greens import greens_remainder_diagonal, neumann_function
+from ._kernels import (
+    greens_matrix,
+    kernel_geometry,
+    neumann_core,
+    spectral_factors,
+)
 
 __all__ = [
+    "OperatorAssembler",
     "single_layer_matrix",
     "double_layer_matrix",
     "adjoint_layer_matrix",
@@ -129,6 +136,82 @@ def _wrapped_neighbours(
     return x - x_next, y - y_next, x - x_prev, y - y_prev
 
 
+class OperatorAssembler:
+    """One boundary's kernel machinery, shared across a whole scan.
+
+    Owns the wavelength-independent half of the separable kernel assembly
+    (``_kernels.KernelGeometry``, built once) and memoizes the per-(k,
+    alpha0) spectral factors and Neumann cores, so the operators that share
+    a medium at one wavelength -- ``V``/``K`` on the vacuum side, ``V``/
+    ``L``/``D_t V`` on the metal side -- pay for each spectral sum once.
+    The solver clears the memo every wavelength to keep memory flat; the
+    geometry (and its cached Kummer tails) persists for the scan.
+    """
+
+    def __init__(
+        self, boundary: PhysicalBoundary, *, period: float, terms: int
+    ) -> None:
+        self.boundary = boundary
+        self.period = period
+        self.terms = terms
+        self.geometry = kernel_geometry(boundary, period=period, terms=terms)
+        self._factors: dict = {}
+        self._cores: dict = {}
+        self._hilbert: NDArray[np.complex128] | None = None
+
+    @property
+    def sgn(self) -> NDArray[np.float64]:
+        """``sign(y_j - y_l)``, the Neumann compositions' third factor."""
+        return self.geometry.sgn
+
+    def factors(self, *, k: complex, alpha0: float):
+        key = (complex(k), float(alpha0))
+        if key not in self._factors:
+            self._factors[key] = spectral_factors(
+                self.geometry, k=k, alpha0=alpha0
+            )
+        return self._factors[key]
+
+    def greens(self, *, k: complex, alpha0: float) -> NDArray[np.complex128]:
+        """The full Green's-function matrix, diagonal garbage (overwritten
+        by the caller's analytic limit)."""
+        return greens_matrix(self.geometry, self.factors(k=k, alpha0=alpha0))
+
+    def neumann(
+        self, *, k: complex, alpha0: float
+    ) -> tuple[NDArray[np.complex128], NDArray[np.complex128]]:
+        """The Neumann kernel's ``(A, B)`` components, memoized: the double,
+        adjoint, and tangential layers at one (k, alpha0) all compose from
+        this single evaluation."""
+        key = (complex(k), float(alpha0))
+        if key not in self._cores:
+            self._cores[key] = neumann_core(
+                self.geometry, self.factors(k=k, alpha0=alpha0)
+            )
+        return self._cores[key]
+
+    def hilbert(self) -> NDArray[np.complex128]:
+        """The periodic Hilbert-multiplier matrix (geometry-only): Fourier
+        mode ``p`` times ``-i sgn(p) / 2``, Nyquist zeroed."""
+        if self._hilbert is None:
+            points = len(self.boundary.x)
+            modes = np.fft.fftfreq(points, d=1.0 / points)
+            multiplier = -0.5j * np.sign(modes)
+            if points % 2 == 0:
+                # The unpaired Nyquist mode has no signed representation.
+                multiplier[points // 2] = 0.0
+            self._hilbert = np.fft.ifft(
+                multiplier[:, None] * np.fft.fft(np.eye(points), axis=0),
+                axis=0,
+            )
+        return self._hilbert
+
+    def clear(self) -> None:
+        """Drop the per-wavelength memo; the geometry stays."""
+        self._factors.clear()
+        self._cores.clear()
+
+
 def single_layer_matrix(
     boundary: PhysicalBoundary,
     *,
@@ -136,15 +219,16 @@ def single_layer_matrix(
     alpha0: float,
     period: float,
     terms: int,
+    assembler: OperatorAssembler | None = None,
 ) -> NDArray[np.complex128]:
     """The discretised single-layer operator ``V``."""
-    big_x, big_z, diag = _separations(boundary)
     spacing, length = boundary.spacing, boundary.arc_length
     points = len(boundary.x)
+    diag = np.eye(points, dtype=bool)
 
-    matrix = spacing * greens_function(
-        big_x, big_z, k=k, alpha0=alpha0, period=period, terms=terms
-    )
+    if assembler is None:
+        assembler = OperatorAssembler(boundary, period=period, terms=terms)
+    matrix = spacing * assembler.greens(k=k, alpha0=alpha0)
 
     remainder = greens_remainder_diagonal(
         k=k, alpha0=alpha0, period=period, terms=terms
@@ -169,22 +253,17 @@ def double_layer_matrix(
     alpha0: float,
     period: float,
     terms: int,
+    assembler: OperatorAssembler | None = None,
 ) -> NDArray[np.complex128]:
     """The discretised double-layer operator ``K`` (no identity part)."""
-    big_x, big_z, diag = _separations(boundary)
     spacing = boundary.spacing
     nx, ny = boundary.nx, boundary.ny
+    diag = np.eye(len(boundary.x), dtype=bool)
 
-    kernel = neumann_function(
-        big_x,
-        big_z,
-        nx[None, :],
-        ny[None, :],
-        k=k,
-        alpha0=alpha0,
-        period=period,
-        terms=terms,
-    )
+    if assembler is None:
+        assembler = OperatorAssembler(boundary, period=period, terms=terms)
+    a_matrix, b_matrix = assembler.neumann(k=k, alpha0=alpha0)
+    kernel = a_matrix * nx[None, :] + assembler.sgn * b_matrix * ny[None, :]
 
     # Diagonal: principal-value limit as the average over the two physically
     # adjacent nodes, whose *source* normals are the neighbours' own.
@@ -209,6 +288,7 @@ def adjoint_layer_matrix(
     alpha0: float,
     period: float,
     terms: int,
+    assembler: OperatorAssembler | None = None,
 ) -> NDArray[np.complex128]:
     """The discretised adjoint double-layer operator ``L``.
 
@@ -218,20 +298,14 @@ def adjoint_layer_matrix(
     rows instead of columns and the sign flipped. The diagonal is the same
     adjacent-node principal-value average, with the node's own normal.
     """
-    big_x, big_z, diag = _separations(boundary)
     spacing = boundary.spacing
     nx, ny = boundary.nx, boundary.ny
+    diag = np.eye(len(boundary.x), dtype=bool)
 
-    kernel = -neumann_function(
-        big_x,
-        big_z,
-        nx[:, None],
-        ny[:, None],
-        k=k,
-        alpha0=alpha0,
-        period=period,
-        terms=terms,
-    )
+    if assembler is None:
+        assembler = OperatorAssembler(boundary, period=period, terms=terms)
+    a_matrix, b_matrix = assembler.neumann(k=k, alpha0=alpha0)
+    kernel = -(a_matrix * nx[:, None] + assembler.sgn * b_matrix * ny[:, None])
 
     dx_next, dy_next, dx_prev, dy_prev = _wrapped_neighbours(boundary, period)
     forward = -neumann_function(
@@ -252,6 +326,7 @@ def tangential_layer_matrix(
     alpha0: float,
     period: float,
     terms: int,
+    assembler: OperatorAssembler | None = None,
 ) -> NDArray[np.complex128]:
     r"""The discretised operator ``D_t V`` -- ``d/ds`` of a single-layer trace.
 
@@ -292,9 +367,9 @@ def tangential_layer_matrix(
     continuous, so the plain rectangular rule recovers its usual accuracy,
     with the diagonal taken as the adjacent-node average as elsewhere.
     """
-    big_x, big_z, diag = _separations(boundary)
     spacing, length = boundary.spacing, boundary.arc_length
     points = len(boundary.x)
+    diag = np.eye(points, dtype=bool)
     tx, ty = boundary.ny, -boundary.nx
 
     def kernel_at(dx, dy, vx, vy):
@@ -302,7 +377,10 @@ def tangential_layer_matrix(
             dx, dy, vx, vy, k=k, alpha0=alpha0, period=period, terms=terms
         )
 
-    kernel = kernel_at(big_x, big_z, tx[:, None], ty[:, None])
+    if assembler is None:
+        assembler = OperatorAssembler(boundary, period=period, terms=terms)
+    a_matrix, b_matrix = assembler.neumann(k=k, alpha0=alpha0)
+    kernel = -(a_matrix * tx[:, None] + assembler.sgn * b_matrix * ty[:, None])
 
     # The comparison kernel, on the same nodes: arc-length separation between
     # nodes j and i is (j - i) * spacing on the uniform grid.
@@ -333,14 +411,7 @@ def tangential_layer_matrix(
 
     # The comparison kernel's principal value, applied exactly: strip the
     # Bloch phase, multiply Fourier mode p by -i sgn(p) / 2, restore it.
-    modes = np.fft.fftfreq(points, d=1.0 / points)
-    multiplier = -0.5j * np.sign(modes)
-    if points % 2 == 0:
-        # The unpaired Nyquist mode has no signed (Hilbert) representation.
-        multiplier[points // 2] = 0.0
-    hilbert = np.fft.ifft(
-        multiplier[:, None] * np.fft.fft(np.eye(points), axis=0), axis=0
-    )
+    hilbert = assembler.hilbert()
 
     return spacing * remainder + (phase[:, None] / phase[None, :]) * hilbert
 
@@ -378,10 +449,12 @@ def dirichlet_matrix(
     alpha0: float,
     period: float,
     terms: int,
+    assembler: OperatorAssembler | None = None,
 ) -> NDArray[np.complex128]:
     """The TE (Dirichlet) system matrix -- the single-layer operator itself."""
     return single_layer_matrix(
-        boundary, k=k, alpha0=alpha0, period=period, terms=terms
+        boundary, k=k, alpha0=alpha0, period=period, terms=terms,
+        assembler=assembler,
     )
 
 
@@ -392,8 +465,10 @@ def neumann_matrix(
     alpha0: float,
     period: float,
     terms: int,
+    assembler: OperatorAssembler | None = None,
 ) -> NDArray[np.complex128]:
     """``I/2 + K`` for the TM (Neumann) problem."""
     return 0.5 * np.eye(len(boundary.x)) + double_layer_matrix(
-        boundary, k=k, alpha0=alpha0, period=period, terms=terms
+        boundary, k=k, alpha0=alpha0, period=period, terms=terms,
+        assembler=assembler,
     )
