@@ -18,6 +18,7 @@ lengths in nm, angles in degrees at the API boundary.
 from __future__ import annotations
 
 from .illumination import Illumination, Polarization
+from .resolution import ResolvingPower, resolving_power
 from .result import EfficiencyScan, OrderEfficiency, Provenance
 
 __version__ = "0.0.1"
@@ -28,5 +29,7 @@ __all__ = [
     "EfficiencyScan",
     "OrderEfficiency",
     "Provenance",
+    "ResolvingPower",
+    "resolving_power",
     "__version__",
 ]
