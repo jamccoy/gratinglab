@@ -652,6 +652,11 @@ tip characterisation, a scan of the same grating with a sharper tip, or a
 cross-section. Nothing here settles it, and the earlier version of this finding
 asserted tip convolution without excluding either alternative above.
 
+*Narrowed since (M22): a tip in nominal condition is now excluded — erosion
+with the specified probe recovers no depth from this scan, and reproducing the
+deficit forward requires an apex worn to ~80 nm. See "A nominal tip does not
+explain the rounded groove" below.*
+
 ### Why it matters more than it looks
 
 The scalar phase term is `(2π/λ)·height·sinγ`. It depends on **depth**, not on
@@ -1162,3 +1167,69 @@ recoverable because the Table 3/4 footnotes bracket the pure-z states
 (81.501° + 8.499° = 90°, and the same split reproduces from our incident
 basis rotation). Table 5's δ = 0 and Table 6's δ = 90° at θ = 0 are exactly
 the pure E_z and pure B_z states.
+
+---
+
+## A nominal tip does not explain the rounded groove
+
+**Eroding the TASTE scan with the nominal probe changes nothing it measures,
+and burying an ideal facet to the measured depth takes a tip forty times
+blunter than nominal.** The rounded-groove finding above left "grating or
+tip?" open; the tip-deconvolution milestone (M22) narrows it: a tip in
+anything like its specified condition is excluded. What remains is a severely
+worn tip, or a grating that really is rounded.
+
+Same scan as the finding above (`TASTE_ALS_A205_Ti_Pt_flatten.txt`, 512 px
+over 2 µm — 3.91 nm/px), same pipeline, with `tip_correction='erosion'` and
+the probe modelled as a cone of 18° half-angle capped by a spherical apex
+(`core/tip.py`, Villarrubia 1997). The nominal probe is R ≈ 1 nm ("2 nm
+wide"); wear only increases R.
+
+**Reconstruction direction** — erode the measured image, which can only
+*deepen* a groove the tip failed to reach into:
+
+| apex radius R | depth/period | implied blaze | pixels certain |
+|---|---|---|---|
+| uncorrected | 0.3275 | 20.33° | — |
+| 1 nm (nominal) | 0.3275 | 20.33° | 97.7% |
+| 2 nm | 0.3275 | 20.33° | 95.9% |
+| 5 nm | 0.3275 | 20.33° | 81.8% |
+| 10 nm | 0.3274 | 20.32° | 74.8% |
+
+The correction recovers **nothing** — the measured surface is already
+reachable by all of these tips, so there is no tip-hidden depth for erosion
+to return. A surface whose troughs had been rounded *by the tip* would come
+back deeper; this one does not move at the reported precision.
+
+**Forward direction** — dilate an ideal sharp `Blazed(27.91°, 70.5°)` groove
+(the fitted facet angle, at the measured 314.1 nm period, sampled at the
+scan's own pitch) with the same tip family, and ask what depth the image
+shows:
+
+| apex radius R | image depth/period | implied blaze |
+|---|---|---|
+| sharp truth | 0.4460 | 27.91° |
+| 1 nm (nominal) | 0.4439 | 27.77° |
+| 2 nm | 0.4433 | 27.74° |
+| 10 nm | 0.4316 | 27.00° |
+| 20 nm | 0.4176 | 26.11° |
+| 40 nm | 0.3909 | 24.40° |
+| **80 nm** | **0.3362** | **20.89°** |
+
+The nominal tip costs 0.14° of implied blaze — the observed gap is **7.6°**.
+Reproducing the measured depth needs **R ≈ 80 nm**, a probe worn to forty to
+eighty times its specified apex. The 18° flank is not the culprit either: at
+72° from the surface it is steeper than the 70.5° anti-blaze facet, so the
+facet remains reachable at any radius — the deficit is all apex.
+
+What would settle the remainder: the probe's actual condition at scan time
+(an 80 nm apex is far outside spec and often visible in the vendor's tip
+check), a re-scan with a fresh tip, or a cross-section. Until one of those
+exists, the rounding should be treated as plausibly real — and the absolute
+efficiency consequence of the finding above stands unchanged, because
+erosion with any defensible tip model does not sharpen this groove.
+
+Pinned by `tests/metrology/test_tip.py::TestTheRealScan`, which skips without
+the group's data and otherwise fails if nominal-tip erosion ever starts
+moving the measured depth — either the scan changed or the erosion started
+inventing surface.

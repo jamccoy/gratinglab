@@ -144,6 +144,53 @@ has **no roughness damping at all**, which overestimates it.
 
 ---
 
+## 4b. Tip correction: what erosion can and cannot give back
+
+An AFM image is the surface **dilated** by the tip: at every pixel the tip
+descends until first contact, and the recorded height is where the apex
+stopped — above the true surface wherever contact happened on the flank.
+Villarrubia (1997) gives the exact morphological inverse this pipeline
+implements in `core/tip.py`, opt-in through
+`AnalysisSettings.tip_correction = 'erosion'` with a parametric tip: a cone of
+`tip_half_angle_deg` (from the axis) capped by a spherical apex of
+`tip_radius_nm`. It runs on the 2-D array right after image flattening, in
+both branches, so the blaze fit and the boundary profile see the same surface.
+
+Three statements, each load-bearing:
+
+- **Erosion is a least upper bound, not a resurrection.** Everywhere the apex
+  made contact, the bound *is* the surface and the recovery is exact — machine
+  precision on clean data, the noise floor on the fixture
+  (`tests/metrology/test_tip.py`). Everywhere else the tip physically could
+  not reach, and no algorithm recovers what is there. The trough wedge between
+  facets is the canonical case: a sphere of radius R stands off a corner by a
+  distance that scales with R, and that depth is *gone from the data*.
+- **The certainty map is the deliverable, not a by-product.** A pixel is
+  certain when it is the unique contact point for some image position; the
+  fraction lands in `metrics['tip_certain_fraction']` and the metrics sidecar,
+  and the uncertain remainder must be read as "at most this high", not
+  "this high". A corrected profile without that number would manufacture
+  exactly the false confidence the correction exists to remove.
+- **A facet steeper than the flank is unrecoverable outright.** The flank
+  rises at `90 − half_angle` degrees; an 18° tip clears a 70.5° anti-blaze
+  facet by 1.5°. That near-parallelism, not the nanometre apex, is what limits
+  blazed-grating metrology at these geometries.
+
+The correction is off by default because it changes measured numbers — depth
+especially — and a corrected and an uncorrected depth are different
+measurements. Where it is on, the settings and the certain fraction are
+recorded with the output (metrics, sidecar, and the CLI's log line).
+
+Validation is the dilated fixture: the same synthetic sawtooth as the sharp
+fixture with the identical noise field, imaged through a known R = 20 nm tip
+by `dilate` — committed truth next to committed image, so recovery is asserted
+pointwise rather than hoped. What the milestone found on the real TASTE scan
+is in `findings.md` ("A nominal tip does not explain the rounded groove"):
+erosion with the nominal probe recovers nothing, and the rounding needs an
+~80 nm apex to be a tip artefact at all.
+
+---
+
 ## 5. Two branches, one front-end
 
 Loading, image flattening, row-averaging and groove detection are shared. After

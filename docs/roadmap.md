@@ -59,6 +59,7 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | Mutation testing ([`mutation-testing.md`](mutation-testing.md)) | done, on demand; `checks.py` and `geometry.py` at 100% |
 | Materials — CXRO constants, Fresnel, roughness, absolute efficiency | done |
 | Resolving power ([`resolution.py`](../src/gratinglab/resolution.py)) | done: `R = |m|·N` plus the finite-N line profile from ISSI eq. (8), each testing the other; measured `N` flows in from metrology via `to_problem`. Groove-error-degraded R is the named successor |
+| **Tip deconvolution** ([`core/tip.py`](../src/gratinglab/metrology/core/tip.py), [theory §4b](theory/metrology.md)) | done at M22: Villarrubia erosion with the certainty map, opt-in via `tip_correction='erosion'`, validated pointwise on a committed dilated fixture. Ran on the real TASTE scan and narrowed the rounded-groove open question: a nominal tip is excluded ([`findings.md`](findings.md)) |
 | GUI (Qt/PySide6) — tabs, geometry dock, 3D conical view | done |
 | CI (Linux + macOS, py3.11/3.12) | green |
 | RCWA | **contributed, not yet integrated** |
@@ -194,31 +195,35 @@ Its raytraced resolving-power estimator (order-centroid spacing over spot
 width) is the instrument-level cross-check of `resolution.py`'s grating-level
 number; that comparison belongs with any future instrument layer, not here.
 
-### 4. AFM tip deconvolution — the arbiter the rounded groove is waiting for
+### 4. ~~AFM tip deconvolution~~ — done at M22, and the arbiter ruled
 
-The open question below ("whether the rounding is the grating or the tip is
-undetermined") has a standard tool: Villarrubia (1997) morphological erosion
-**with the certainty map** — not a parabolic apex correction, because the
-observed defect is a whole-facet discrepancy, and the certainty map is what
-turns "nothing in the pipeline warns about it" into a warning: points the tip
-never touched are marked unrecoverable instead of silently smoothed.
+Villarrubia (1997) morphological erosion **with the certainty map**, exactly
+as planned: a parametric cone-plus-spherical-apex tip, a stage in
+`metrology/core/tip.py` on the 2-D array after image flattening in both
+branches, opt-in through `AnalysisSettings` (`tip_correction`,
+`tip_radius_nm`, `tip_half_angle_deg`), the certain fraction recorded in the
+metrics, the sidecar and the log. Validated on a committed dilated fixture —
+the sharp synthetic scan imaged through a known worn tip with the *identical*
+noise field, so recovery is asserted pointwise: machine precision on clean
+data, the noise floor (0.18 nm mean) on the fixture, against a 9 nm mean
+uncorrected error. [`theory/metrology.md`](theory/metrology.md) §4b carries
+the three load-bearing statements (a bound, not a resurrection; the certainty
+map is the deliverable; a facet steeper than the flank is gone outright).
 
-Shape: a parametric tip (radius + half-angle; measured tip images later), a
-new `metrology/core/tip.py` stage on the 2-D height array after image
-flattening and before both consumers (blaze fit and boundary averaging),
-opt-in through `AnalysisSettings` (`tip_correction`, `tip_radius_nm`,
-`tip_half_angle_deg`), with the unrecoverable fraction landing in the metrics.
-Validation: extend `tools/metrology/make_synthetic_scan.py` with a
-tip-**dilation** pass (dilation is exact and independent of the erosion code
-path), commit the fixture, and require the pipeline to recover the known blaze
-angle and depth from the dilated scan — then run the real TASTE scan and write
-the answer into `findings.md`, whichever way it goes. Erosion only *bounds*
-the true surface; the milestone must present it as a bound plus a warning, and
-the correction settings must be recorded with the profile, because depth-derived
-quantities (and every efficiency downstream of `to_problem`) change under it.
+The run on the real TASTE scan produced the milestone's finding
+([`findings.md`](findings.md), "A nominal tip does not explain the rounded
+groove"): erosion with the nominal probe (R ≈ 1–2 nm, 18°) recovers **no**
+depth — the measured surface is already tip-reachable — and reproducing the
+depth deficit forward requires an apex worn to ~80 nm. The open question
+narrows from "grating or tip?" to "grating, or a severely worn tip?", which
+is answerable outside the software: the probe's condition at scan time, a
+re-scan with a fresh tip, or a cross-section.
 
-This lands **before** the first release makes any claim that an absolute
-efficiency from a raw AFM boundary is defensible.
+What deliberately did not land: measured tip images as input (blind tip
+estimation is the natural successor if a worn tip becomes the suspect), and
+any coupling from the certainty map into `to_problem` — an uncertain-trough
+profile still converts, and the defensibility warning remains the
+depth-vs-facet-angle diagnostic named in the finding.
 
 ### 5. Native boundary format
 
@@ -340,10 +345,13 @@ of flat), as was smearing from the groove averaging (0.4%). Full evidence in
 So the open question is no longer only "which `.ggp`". Whether the rounding is
 the grating or the tip is undetermined, and either way an absolute efficiency
 from a raw AFM boundary is not defensible yet. Nothing in the pipeline warns
-about it. The planned arbiter is the tip-deconvolution milestone (§4 above):
-erode the scan with a parametric tip and see how much of the 27.91°/20.33°
-gap a plausible tip explains, with the certainty map supplying the missing
-warning either way.
+about it. The arbiter has now run (§4 above, M22): erosion with the nominal
+tip explains **none** of the 27.91°/20.33° gap, and reproducing it forward
+needs an ~80 nm apex. The question is narrowed, not closed — "grating, or a
+severely worn tip?" — and what settles the remainder is outside the software:
+the probe's condition at scan time, a re-scan with a fresh tip, or a
+cross-section. See `findings.md`, "A nominal tip does not explain the
+rounded groove".
 
 ### A finite-conductivity reference run
 
