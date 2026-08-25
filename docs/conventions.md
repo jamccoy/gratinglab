@@ -400,6 +400,7 @@ For an ideal sawtooth (blazed) reflection grating:
 | Blaze direction | `β_b = 2·blaze_angle − α` |
 | Blaze wavelength | `m·λ_b = 2·period·sin ζ·sin(blaze_angle)` |
 | Finite-N interference | `[sin(Ns)/(N sin s)]²`, `s ≡ [sin α + sin β_m]·sin γ·period·π/λ` |
+| Resolving power (Rayleigh) | `R = |m|·N`; `Δλ = λ/R`. `N` is the *illuminated* groove count |
 
 **Note the `sin γ` in the phase shift.** The thesis expression at Appendix-D.tex:651
 omits it and is inconsistent with the thesis's own Φ_b at line 672, which carries it.
@@ -407,7 +408,11 @@ The thesis form is the in-plane special case, valid only under the substitution
 `λ → λ csc γ` introduced at line 446. **We use the ISSI form, which is general.**
 
 The finite-N factor is retained deliberately. Appendix D drops it in the `N → ∞` limit,
-but it is the link between efficiency and resolving power and belongs in the API.
+but it is the link between efficiency and resolving power and belongs in the API — now
+`gratinglab.resolution`, with the factor itself in `gratinglab.geometry`. The Rayleigh
+row above is derived from it: the first zeros sit at `s = mπ ± π/N`, and placing one
+wavelength's peak on the other's first zero gives `m·Δλ = λ/N` in any mount, because
+`sin γ` scales the line width and the dispersion alike.
 
 ### Scalar validity guards
 

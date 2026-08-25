@@ -648,6 +648,42 @@ the first from the other two.
 
 ---
 
+## 10. Finite N and resolving power
+
+Everything above treats the grating as infinite: each order is a delta
+function in angle, which is the `N → ∞` limit of ISSI eq. (8),
+
+```
+[sin(Ns) / (N sin s)]²,    s ≡ [sin α + sin β]·sin γ·period·π/λ
+```
+
+The factor is deliberately **not** applied to order efficiencies — at an exact
+order `s = mπ` it equals 1, so multiplying by it changes nothing. Its content
+is the *angular line shape* around each order, and that is a different
+question, answered by `gratinglab.resolution` rather than by this solver:
+
+- `resolving_power` returns the Rayleigh closed form `R = |m|·N`, which follows
+  from the first zeros at `s = mπ ± π/N` in two lines (`conventions.md` §9).
+  It is mount-independent, because `sin γ` scales the line width and the
+  dispersion alike.
+- `line_profile` evaluates the interference function around `β_m`, and the
+  closed form and the profile test each other — the same pattern as §4's
+  closed-form efficiency anchors.
+
+`N` is the **illuminated** groove count, `Problem.n_grooves`. A problem built
+from a measured boundary carries the count the scan actually averaged
+(`BoundaryProfile.to_problem`), which is how a measured surface flows through
+to a spectrograph number in-process. A problem without `n_grooves` is refused,
+not treated as infinite: "R is undefined" and "R is very large" are different
+answers.
+
+**Scope.** This is the ideal-grating result: `N` identical grooves at exact
+spacing. Resolving power degraded by groove-placement and period errors —
+computed from a measured groove ensemble rather than assumed away — is the
+named successor in `roadmap.md`, and nothing here approximates it.
+
+---
+
 ## References
 
 - McCoy, *Scalar Treatment of Gratings*, PhD thesis Appendix D — the primary

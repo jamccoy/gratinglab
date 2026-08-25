@@ -58,6 +58,7 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | Progress + cancellation on the `Solver` protocol | done |
 | Mutation testing ([`mutation-testing.md`](mutation-testing.md)) | done, on demand; `checks.py` and `geometry.py` at 100% |
 | Materials — CXRO constants, Fresnel, roughness, absolute efficiency | done |
+| Resolving power ([`resolution.py`](../src/gratinglab/resolution.py)) | done: `R = |m|·N` plus the finite-N line profile from ISSI eq. (8), each testing the other; measured `N` flows in from metrology via `to_problem`. Groove-error-degraded R is the named successor |
 | GUI (Qt/PySide6) — tabs, geometry dock, 3D conical view | done |
 | CI (Linux + macOS, py3.11/3.12) | green |
 | RCWA | **contributed, not yet integrated** |
@@ -154,7 +155,72 @@ A conformance test every registered solver must pass is now
 refusal, scan and progress contracts the moment it registers — before anyone
 writes a line of test for it specifically.
 
-### 2. Native boundary format
+### 2. Resolving power — the ideal half landed, the measured half named
+
+`gratinglab.resolution` now answers the ideal-grating question: `R = |m|·N`
+by the Rayleigh criterion, and the finite-N line profile it is derived from
+(`interference_factor`, moved from the scalar solver to `geometry` where
+non-solver consumers can reach it). The measured groove count arrives through
+`BoundaryProfile.to_problem`, so an AFM scan flows to a spectrograph number
+in-process. A problem without `n_grooves` is refused, not treated as infinite.
+
+The successor is **groove-error-degraded resolving power**: the line-spread of
+a real groove ensemble — period jitter and placement errors, the quantities
+metrology already half-holds (`y_std_nm`, `groove_centers`) — with the
+Rayleigh criterion applied to the degraded profile. That is the link between
+groove *error* metrology and spectrograph performance, and it is deliberately
+not approximated by the ideal formula now in the API.
+
+### 3. PyXFocus analytics — port the formulas, not the raytracer
+
+PyXFocus (the sequential X-ray raytracer this project's author forked) stays
+where it is: unpackaged, numpy<2-pinned, Fortran-built — absorbing it would
+buy a liability, not a capability. What is worth porting is small and
+analytic, from its `grating.py`:
+
+- `blazeYaw` — the Littrow condition, as `geometry.littrow_alpha` plus an
+  `Illumination.littrow(order, wavelength, period, graze)` constructor.
+- `blazeAngle`/`blazeAngle2` — the facet angle Littrow requires at (λ, m).
+  First *verify numerically that the two agree* and pin the frame mapping
+  (its `cos inc` ↔ our `sin γ`) against `Illumination.offplane`, the
+  §10-of-conventions discipline: transcribe, test, then port one form.
+- `litBetaAlpha`, `eta`, `yaw` — already representable with `Illumination`
+  machinery; cover with tests rather than porting.
+- `radialApproxEffect` — not ported: radial/variable-line-space physics that
+  `Problem` cannot represent (and a live `pdb.set_trace()` in the source).
+  Radial/VLS gratings are a "Later" item.
+
+Its raytraced resolving-power estimator (order-centroid spacing over spot
+width) is the instrument-level cross-check of `resolution.py`'s grating-level
+number; that comparison belongs with any future instrument layer, not here.
+
+### 4. AFM tip deconvolution — the arbiter the rounded groove is waiting for
+
+The open question below ("whether the rounding is the grating or the tip is
+undetermined") has a standard tool: Villarrubia (1997) morphological erosion
+**with the certainty map** — not a parabolic apex correction, because the
+observed defect is a whole-facet discrepancy, and the certainty map is what
+turns "nothing in the pipeline warns about it" into a warning: points the tip
+never touched are marked unrecoverable instead of silently smoothed.
+
+Shape: a parametric tip (radius + half-angle; measured tip images later), a
+new `metrology/core/tip.py` stage on the 2-D height array after image
+flattening and before both consumers (blaze fit and boundary averaging),
+opt-in through `AnalysisSettings` (`tip_correction`, `tip_radius_nm`,
+`tip_half_angle_deg`), with the unrecoverable fraction landing in the metrics.
+Validation: extend `tools/metrology/make_synthetic_scan.py` with a
+tip-**dilation** pass (dilation is exact and independent of the erosion code
+path), commit the fixture, and require the pipeline to recover the known blaze
+angle and depth from the dilated scan — then run the real TASTE scan and write
+the answer into `findings.md`, whichever way it goes. Erosion only *bounds*
+the true surface; the milestone must present it as a bound plus a warning, and
+the correction settings must be recorded with the profile, because depth-derived
+quantities (and every efficiency downstream of `to_problem`) change under it.
+
+This lands **before** the first release makes any claim that an absolute
+efficiency from a raw AFM boundary is defensible.
+
+### 5. Native boundary format
 
 `.ggp` cannot carry the period in nm, provenance, undercut boundaries, or a
 format version. The missing period is exactly why
@@ -171,7 +237,7 @@ through a format that drops the period on the way out and cannot say where the
 profile came from. Undercut boundaries remain unrepresentable in either
 direction.
 
-### 3. First release + JOSS
+### 6. First release + JOSS
 
 Shipping something citable and correct early is what recruits collaborators.
 The release story is stronger now, not weaker, for the reordering above: a
@@ -180,9 +246,42 @@ headline, and the scalar/integral comparison plots need no PCGrate licence.
 
 ### Later
 
-Integral finite conductivity (see §0), C-method, measured-profile fitting,
-crossed/2D gratings. See [`references.md`](references.md) for the literature
-mapped to each.
+C-method, measured-profile fitting, crossed/2D gratings, radial/VLS gratings.
+See [`references.md`](references.md) for the literature mapped to each.
+
+#### Measured efficiency — the als_eff_meas split
+
+The sibling `als_eff_meas` package reduces ALS beamline scans to absolute
+measured efficiency per order, uncertainties carried end-to-end. It is the
+measured-data half this platform still lacks — and it is also genuinely
+specific to X-ray/EUV testing at one facility, so the integration is a
+*split*, not an absorption:
+
+- **Moves here, when taken up:** a measured-efficiency data model
+  (`MeasuredEfficiency`, a new `measured.py`) that `compare.align`/`records`
+  accept beside `EfficiencyScan` — measured vs scalar vs integral on one
+  plot, with error bars. *Not* a second `EfficiencyTable` (that name is taken
+  by the modelled-table importer in `io/efficiency_table.py`), and *not*
+  uncertainty fields grafted onto `EfficiencyScan`, whose dense-grid
+  invariants are model-shaped; measured data is sparse per order with
+  per-point σ. Parallel `value`/`sigma` float arrays, so the `uncertainties`
+  package never becomes a dependency here. Also the PCGrate **XML** dialect
+  from its `models.py`, which `io/efficiency_table.py` (text dialects) lacks.
+- **Stays there:** everything beamline-shaped — file pairing, dark
+  subtraction, three-point flux sums, the ODR arc fit and cone-angle
+  recovery, TOML campaigns. `als_eff_meas` grows a gratinglab dependency,
+  deletes its duplicated Fresnel/Névot–Croce/CXRO code in favour of
+  `gratinglab.materials`, and exports a `to_measured()`.
+- **The scipy pin stays out:** `als_eff_meas` pins `scipy<1.19` because
+  `scipy.odr` backs its arc fit and is scheduled for removal. The arc fit
+  does not move, so the pin does not propagate — and that package must
+  eventually migrate to `scipy.optimize.least_squares` regardless; this
+  project should not inherit the debt in the meantime.
+
+The other siblings are settled: `afm_blaze_meas` is already absorbed (M17),
+`endstation` stays the shared scaffolding dependency, `ebl_fracture` stays a
+separate fabrication-layout tool (no optics; its own roadmap excludes blazed
+and VLS geometry), and PyXFocus is §3 above — formulas, not the raytracer.
 
 ---
 
@@ -241,7 +340,10 @@ of flat), as was smearing from the groove averaging (0.4%). Full evidence in
 So the open question is no longer only "which `.ggp`". Whether the rounding is
 the grating or the tip is undetermined, and either way an absolute efficiency
 from a raw AFM boundary is not defensible yet. Nothing in the pipeline warns
-about it.
+about it. The planned arbiter is the tip-deconvolution milestone (§4 above):
+erode the scan with a parametric tip and see how much of the 27.91°/20.33°
+gap a plausible tip explains, with the certainty map supplying the missing
+warning either way.
 
 ### A finite-conductivity reference run
 
@@ -266,7 +368,11 @@ consistency plus (now) cross-checks against the rigorous absolute mode.
   cases on demand, rather than only reusing exported tables, is worth an
   afternoon.
 - Any synchrotron or Panter measured efficiency beyond the current corpus that
-  could seed the benchmark suite?
+  could seed the benchmark suite? Partially answered: `als_eff_meas` holds one
+  fully ported ALS campaign (ogre laminar, Oct 2021) with absolute
+  per-order efficiencies and uncertainties, plus ~15 legacy per-experiment
+  scripts in its archive that could be ported the same way. Reaching it from
+  the comparison harness is the measured-efficiency split under "Later".
 
 ---
 
