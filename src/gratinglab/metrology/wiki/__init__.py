@@ -28,6 +28,7 @@ PAGE_ORDER = (
     "overview",
     "file-formats",
     "flattening",
+    "tip-correction",
     "row-groups",
     "icc-correction",
     "facet-fitting",
