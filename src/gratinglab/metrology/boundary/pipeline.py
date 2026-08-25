@@ -21,6 +21,7 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from ..core.processing import find_groove_positions, raw_data
+from ..core.tip import apply_tip_correction
 from .average import (average_grooves, flatten_endpoints, normalize_profile,
                       profile_metrics)
 
@@ -141,6 +142,14 @@ def build_boundary_profile(data, scan_x_size, settings) -> BoundaryProfile:
         ValueError if no grooves are detected, or none survive the minimum
         half-width, since there is nothing to average in either case.
     """
+    # Tip correction happens here, on the 2-D array, because this function is
+    # the one seam both boundary callers (CLI export and GUI preview) pass
+    # through -- the next line averages the rows away. The correction settings
+    # and the certain fraction land in the metrics: a corrected depth and an
+    # uncorrected one are different measurements and the sidecar must say
+    # which one it is describing.
+    data, tip = apply_tip_correction(data, scan_x_size, settings)
+
     raw_x, raw_y = raw_data(data, scan_x_size)
 
     # Endpoints to zero, then remove the residual tilt. See the module docstring
@@ -178,13 +187,20 @@ def build_boundary_profile(data, scan_x_size, settings) -> BoundaryProfile:
         apply_smoothing=settings.ggp_apply_smoothing,
         smoothing_window=settings.ggp_smoothing_window)
 
+    metrics = profile_metrics(x_norm, y_norm, period_nm, n_used)
+    metrics['tip_correction'] = settings.tip_correction
+    if tip is not None:
+        metrics['tip_radius_nm'] = tip.radius_nm
+        metrics['tip_half_angle_deg'] = tip.half_angle_deg
+        metrics['tip_certain_fraction'] = tip.certain_fraction
+
     return BoundaryProfile(
         x_norm=x_norm,
         y_norm=y_norm,
         x_avg_um=x_avg,
         y_avg_nm=y_avg,
         y_std_nm=y_std,
-        metrics=profile_metrics(x_norm, y_norm, period_nm, n_used),
+        metrics=metrics,
         period_nm=period_nm,
         n_grooves=len(groove_centers),
         n_used=n_used,

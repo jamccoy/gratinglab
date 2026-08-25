@@ -23,4 +23,16 @@ def write_profile_metrics(path, metrics):
         f.write(f"RMS slope: {metrics['rms_slope']:.4f} (normalized units)\n")
         f.write(f"Max slope magnitude: {metrics['max_slope']:.4f}\n")
         f.write(f"Max curvature: {metrics['max_curvature']:.6f} (normalized units)\n")
+        # Present only when the pipeline ran a tip correction. Stated even so:
+        # a corrected depth and an uncorrected one are different measurements,
+        # and this sidecar is where a reader learns which this file holds.
+        if metrics.get('tip_correction', 'none') != 'none':
+            f.write(f"Tip correction: {metrics['tip_correction']} "
+                    f"(R = {metrics['tip_radius_nm']:g} nm, "
+                    f"half angle = {metrics['tip_half_angle_deg']:g} deg)\n")
+            f.write(f"Tip-certain pixels: "
+                    f"{100.0 * metrics['tip_certain_fraction']:.1f}% "
+                    f"(the rest are upper bounds on the surface)\n")
+        else:
+            f.write("Tip correction: none\n")
     return path
