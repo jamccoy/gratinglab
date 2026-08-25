@@ -34,6 +34,7 @@ from matplotlib.figure import Figure
 
 from gratinglab import materials
 from gratinglab.illumination import Illumination
+from gratinglab.resolution import describe
 from gratinglab.solvers import UnsupportedConfiguration, get_solver
 
 __all__ = ["EfficiencyDialog"]
@@ -48,6 +49,8 @@ class EfficiencyDialog(QDialog):
         super().__init__(parent)
         self._profile = profile
         self._scan = None
+        self._problem = None
+        self._illumination = None
 
         self.setWindowTitle("Efficiency of the measured groove")
         self.resize(940, 620)
@@ -186,11 +189,15 @@ class EfficiencyDialog(QDialog):
 
         wavelengths = np.linspace(start, stop, self.count_spin.value())
         QGuiApplication.setOverrideCursor(Qt.WaitCursor)
+        # Kept for the report: the resolving-power readout asks about the same
+        # problem and mount the solve used, not whatever the controls say later.
+        self._problem = self._to_problem()
+        self._illumination = Illumination.offplane(
+            graze=self.graze_spin.value(), azimuth=self.azimuth_spin.value())
         try:
             self._scan = get_solver("scalar").solve(
-                self._to_problem(),
-                Illumination.offplane(graze=self.graze_spin.value(),
-                                      azimuth=self.azimuth_spin.value()),
+                self._problem,
+                self._illumination,
                 wavelengths,
                 reflectivity_model=self.model_combo.currentText(),
             )
@@ -210,9 +217,19 @@ class EfficiencyDialog(QDialog):
     def _report(self):
         notes = self._scan.provenance.notes
         graze = notes.get("reflectivity_graze", "")
+        # R = |m|*N from the measured groove count -- wavelength-independent,
+        # so one midpoint evaluation covers the scan. Low orders only: R is
+        # linear in |m| and a line per propagating order would drown the panel.
+        midpoint = float(self._scan.wavelengths[len(self._scan.wavelengths) // 2])
+        resolving = describe(
+            self._problem, self._illumination, midpoint, [-2, -1, 1, 2])
+        if resolving:
+            resolving = (
+                f"\n\nResolving power from the {self._problem.n_grooves} "
+                f"averaged grooves, at {midpoint:g} nm:\n{resolving}")
         self.status.setText(
             f"Scalar solver, not convergence-checked -- a preview, not a "
-            f"defensible result.\n\n{graze}")
+            f"defensible result.\n\n{graze}{resolving}")
 
     # ── Draw ─────────────────────────────────────────────────────────────────
 
