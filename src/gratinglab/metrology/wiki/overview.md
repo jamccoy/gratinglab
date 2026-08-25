@@ -11,6 +11,7 @@ Both outputs come from one pipeline that forks only at the last step.
 ```
 AFM scan file (.txt)
       ↓  load, detect the scan width from the header
+      ↓  level the image, and optionally undo the tip's dilation
       ↓  average rows into a height profile
       ↓  flatten (remove the background tilt or curvature)
       ↓  detect groove centres, reject those clipped by a scan edge
@@ -40,6 +41,8 @@ band re-measures the same physical grooves. See **The correlation correction**.
 ## Where to go next
 
 - **Flattening** — the two stages, which one changes the answer, and by how much
+- **Tip correction** — undoing what the tip did to the surface, where that is
+  possible, and admitting where it is not
 - **Row groups and scan edges** — what row-group analysis buys, and why grooves
   at the edge of a scan are thrown away
 - **The correlation correction** — why the error bars are wider than √N suggests
