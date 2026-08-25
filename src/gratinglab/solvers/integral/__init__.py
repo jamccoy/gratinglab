@@ -63,6 +63,13 @@ __all__ = ["IntegralSolver", "integral"]
 #: makes visible-light metals (|n| of a few) cost more nodes than X-rays.
 _POINTS_PER_WAVELENGTH = 6.0
 
+#: Deviation of the conserved quantity from unity -- the sum alone under the
+#: perfect boundary, the sum plus absorption under the tabulated one -- above
+#: which the discretisation is worth naming in provenance. Reported, never
+#: rescaled: the theorem says 1, and how close the mesh got is the error
+#: estimate.
+_ENERGY_DEVIATION_WARN = 0.005
+
 #: ``min |cos beta_m|`` below which an order is passing off and the kernel's
 #: ``1/gamma_m`` makes the solve numerically delicate (a Rayleigh anomaly).
 _ANOMALY_COS = 1e-3
@@ -352,7 +359,7 @@ class IntegralSolver:
             totals = totals + absorption
         computed = totals[propagating.any(axis=1)]
         deviation = float(np.abs(computed - 1.0).max()) if computed.size else 0.0
-        if deviation > 0.005:
+        if deviation > _ENERGY_DEVIATION_WARN:
             warnings.append(
                 f"summed efficiency{' plus absorption' if conductivity == 'tabulated' else ''} "
                 f"strays from unity by up to {100 * deviation:.2f}% "

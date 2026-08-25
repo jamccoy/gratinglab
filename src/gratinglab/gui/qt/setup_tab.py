@@ -58,16 +58,43 @@ def library_page() -> str:
     return f"""\
 # Materials
 
-Optical constants for the **Coating** dropdown in the geometry panel. Naming
-one applies its Fresnel reflectivity and makes the result *absolute*; leaving
-it empty gives *relative* efficiency, which is a correct answer to a different
-question rather than a missing input. The provenance panel on each solver tab
-says which you got.
+Optical constants for the **Coating** dropdown in the geometry panel. On the
+Scalar tab, naming one applies its Fresnel reflectivity and makes the result
+*absolute*; leaving it empty gives *relative* efficiency, which is a correct
+answer to a different question rather than a missing input. The provenance
+panel on each solver tab says which you got.
 
 {listing}
 Asking for a wavelength outside a table's range **raises** rather than
 extrapolating. An extrapolated optical constant is a plausible number with
 nothing behind it, and every efficiency computed from one would inherit that.
+
+## What the coating means to the integral solver
+
+The **Conductivity** selector on the Integral tab decides whether the coating
+is read at all, because there the material is the boundary condition rather
+than a factor applied afterwards.
+
+- **perfect** (default) is a perfectly conducting boundary. It has no material
+  in it, so a named coating is *ignored* — the provenance panel says so rather
+  than letting the setting look consulted. Efficiencies are relative to a
+  perfect reflector and sum to 1, which is a theorem, so the summed deviation
+  is a direct read on discretisation error.
+- **tabulated** reads the coating's complex index at every wavelength and
+  solves the coupled system of Goray & Schmidt (2010). Efficiencies are
+  absolute, the absorbed fraction is computed independently, and `R + A = 1`
+  is the theorem that replaces the sum rule. It needs a coating: without one
+  there is nothing rigorous to compute, and the form says so instead of
+  quietly defaulting.
+
+Folding a Fresnel reflectivity onto a perfect-conductivity result is **not**
+equivalent to either of these, which is why the integral tab offers no
+reflectivity model.
+
+Tabulated costs roughly twice as much per wavelength, and demands a finer
+mesh: the field oscillates and decays inside the material on the scale
+`λ/|n|`, and the **Boundary pts** guard refuses a mesh that cannot resolve it,
+naming the number it needs.
 
 ## Adding a material
 

@@ -86,10 +86,15 @@ def provenance_lines(
     lines: list[Line] = []
 
     truncation = provenance.truncation
+    knob = (
+        f"{truncation} {_knob_label(provenance.method)}  ·  "
+        if truncation is not None
+        else ""
+    )
     lines.append(
         Line(
             f"{provenance.method} {provenance.version}  ·  "
-            f"{truncation} quadrature pts  ·  "
+            f"{knob}"
             f"{_milliseconds(provenance.wall_time_s)}  ·  "
             f"λ/period = {lambda_over_period:.4g}\n"
         )
@@ -129,15 +134,39 @@ def provenance_lines(
         # "relative (Au ...)" is a real and honest state, meaning the material
         # is known and not yet used. Deriving the wording from `normalization`
         # alone would report "no coating" for it.
-        coating = provenance.notes.get("coating")
-        detail = coating if coating else "no coating"
+        # Two keys because two solvers mean two things by it: scalar's
+        # `coating` is the material whose Fresnel amplitude was applied, the
+        # integral solver's `material` is the one its boundary condition read.
+        # Either is the honest detail; neither present means none was used.
+        detail = (
+            provenance.notes.get("coating")
+            or provenance.notes.get("material")
+            or "no coating"
+        )
         lines.append(Line("normalization: ", "dim"))
         lines.append(Line(f"{normalization} ({detail})\n", "dim"))
 
+    if scan.absorption is not None:
+        # A physical result, not a problem: `dim`, never an alarm tag. It also
+        # explains the deficit in Σ below, which would otherwise read as a
+        # method losing power it never lost.
+        lines.append(Line("absorption: ", "dim"))
+        lines.append(
+            Line(
+                f"A ∈ [{scan.absorption.min():.4f}, "
+                f"{scan.absorption.max():.4f}]\n",
+                "dim",
+            )
+        )
+
+    # `check_energy_balance` folds absorption into the total when a scan
+    # carries one, so the conserved quantity is R + A there. Naming it Σ
+    # anyway would collide with the Σ curve on the plot, which is R alone.
+    conserved = "Σ + A" if scan.absorption is not None else "Σ"
     lines.append(Line("energy balance: ", "dim"))
     lines.append(
         Line(
-            f"Σ ∈ [{energy.total.min():.4f}, {energy.total.max():.4f}]"
+            f"{conserved} ∈ [{energy.total.min():.4f}, {energy.total.max():.4f}]"
             f"{'' if energy.passed else '  — EXCEEDS UNITY'}\n",
             "ok" if energy.passed else "bad",
         )
@@ -147,6 +176,25 @@ def provenance_lines(
         lines.append(Line(f"  ⚠ {warning}\n", "warn"))
 
     return tuple(lines)
+
+
+def _knob_label(method: str) -> str:
+    """What this method's truncation count is a count *of*.
+
+    Read off the registry rather than a table kept here, so a solver added
+    later names its own knob without editing this module -- the header said
+    "quadrature pts" for every method, which was wrong for the integral
+    solver's boundary points from the day that tab existed. Falls back for
+    imported reference data, whose `method` need not be a registered solver
+    at all.
+    """
+    from ..solvers.base import get_solver
+
+    try:
+        knob = get_solver(method).capabilities.accuracy_knob
+    except (KeyError, ImportError):
+        return "truncation"
+    return knob.replace("_", " ") if knob else "truncation"
 
 
 def _evidence(study: Any) -> str:

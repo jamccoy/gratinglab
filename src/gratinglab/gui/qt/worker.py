@@ -54,6 +54,30 @@ class SolveResult(NamedTuple):
     energy: "EnergyReport"
 
 
+def _energy(scan) -> "EnergyReport":
+    """Check energy balance at a tolerance the conserved quantity can meet.
+
+    The 1e-6 default is right for a **one-sided** quantity: a scalar sum, or a
+    perfect conductor's, approaches 1 from below, so any excess at all is a
+    modelling error and worth catching at machine precision. This is the check
+    that found a reference run summing to 3.6.
+
+    A scan carrying an absorbed fraction is different in kind. ``R + A = 1`` is
+    a theorem pinned from *both* sides, so the discretisation error lands above
+    unity as often as below -- a converged run measured +2.7e-6 and rendered as
+    "EXCEEDS UNITY" in red, which is exactly the "nothing correct looks wrong"
+    failure `gui/provenance.py` exists to prevent. So it is checked at the same
+    deviation the solver itself considers worth naming, and the panel's red text
+    and the solver's own warning then agree instead of contradicting each other.
+    """
+    from ...checks import check_energy_balance
+    from ...solvers.integral import _ENERGY_DEVIATION_WARN
+
+    if scan.absorption is None:
+        return check_energy_balance(scan)
+    return check_energy_balance(scan, tolerance=_ENERGY_DEVIATION_WARN)
+
+
 class SolveWorker(QObject):
     """Runs one solve at a time on a thread of its own, for whichever solver
     asked.
@@ -86,7 +110,6 @@ class SolveWorker(QObject):
         options: dict,
         cancel: threading.Event,
     ) -> None:
-        from ...checks import check_energy_balance
         from ...compare import sweep
 
         try:
@@ -98,9 +121,7 @@ class SolveWorker(QObject):
                 options={method: options},
                 progress=self._reporter(token, cancel),
             )[0]
-            self.finished.emit(
-                token, method, SolveResult(scan, check_energy_balance(scan))
-            )
+            self.finished.emit(token, method, SolveResult(scan, _energy(scan)))
         except SolveCancelled:
             # Before the broad handler on purpose. The user asked for this, so
             # it is not a failure and rendering it as one would be the same
@@ -133,7 +154,6 @@ class SolveWorker(QObject):
         both would be refused by `check_convergence` anyway, and refusing here
         with a clear reason beats surfacing that as a solver error.
         """
-        from ...checks import check_energy_balance
         from ...convergence import check_convergence
         from ...solvers.base import get_solver
 
@@ -151,7 +171,7 @@ class SolveWorker(QObject):
             self.converged.emit(
                 token,
                 method,
-                SolveResult(report.scan, check_energy_balance(report.scan)),
+                SolveResult(report.scan, _energy(report.scan)),
                 report,
             )
         except SolveCancelled:
