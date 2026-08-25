@@ -200,13 +200,32 @@ here (M&P §4.6.4). Above the floors:
 - Cornered profiles + TM: expect the energy-balance deviation to shrink only
   linearly; let `check_convergence` (which sweeps this knob) pick the plateau
   rather than trusting a single run.
-- Cost is O(P²·M) to build the kernels and O(P³) to solve — roughly cubic in
-  the knob. The default 400 at 200 wavelengths is minutes, not seconds; the
-  GUI runs it on the worker thread with a live progress bar and a Cancel
-  that actually cancels. The tabulated mode costs ~5–8× the perfect one per
-  wavelength (four kernels, operator products, a doubled system off-plane);
-  both incident polarizations share one factorization, so `"unpolarized"`
-  costs two triangular solves, not two factorizations.
+- Cost: the kernels are assembled as separable BLAS products
+  ([`_kernels.py`](../../src/gratinglab/solvers/integral/_kernels.py)) — a
+  few `(P, 2M+1)·(2M+1, P)` GEMMs per wavelength plus a one-time O(P²·M)
+  geometry pass (the cached Kummer tails) amortised over the scan. Measured
+  at P = 400: ~100 ms per wavelength unpolarized, so the default 400 at 200
+  wavelengths is ~20 s. (The kernels were previously evaluated pointwise
+  over `(P, P, M)` broadcasts at ~14 s per wavelength — and contrary to
+  what this document used to claim, the O(P³) dense LU was never the
+  bottleneck: it is milliseconds at any realistic P, ~0.1% of the old
+  runtime.) The GUI runs the solve on the worker thread with a live
+  progress bar and a Cancel that actually cancels. The tabulated mode
+  costs ~2× the perfect one per wavelength (more kernels and operator
+  products, but the double/adjoint/tangential layers share one kernel
+  evaluation per medium); both incident polarizations share one
+  factorization, so `"unpolarized"` costs two triangular solves, not two
+  factorizations.
+- Formulation envelope: the Kummer acceleration cancels asymptote terms of
+  magnitude `exp(|α₀|·|Z|)`, so for `|α₀|·h ≳ 30` (`h` the groove height —
+  reachable only by driving a short *transverse* wavelength through a deep
+  groove, e.g. an in-plane mount at hard-X-ray wavelengths on a large
+  period) double precision has nothing left and the kernels are garbage in
+  any formulation of this acceleration, old or new — measured to affect
+  both equally. The grazing-conical mounts this solver targets keep
+  `|α₀| = k sin γ · sin α` small precisely because `sin γ` is small; if the
+  regime is ever hit, the energy-balance theorem check fails loudly (R+A
+  deviations of order 1, reported in provenance) rather than silently.
 
 ## 8. Finite conductivity: the coupled conical system
 

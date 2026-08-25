@@ -74,6 +74,7 @@ from ...geometry import order_range
 from ._boundary import PhysicalBoundary
 from ._greens import wavenumbers
 from ._nystrom import (
+    OperatorAssembler,
     adjoint_layer_matrix,
     double_layer_matrix,
     single_layer_matrix,
@@ -203,6 +204,7 @@ def solve_finite_states(
     cos_gamma: float = 0.0,
     incidents: "list[tuple[complex, complex]]",
     terms: int,
+    assembler: OperatorAssembler | None = None,
 ) -> "list[FiniteSolution]":
     """Solve several incident states against one assembly.
 
@@ -210,7 +212,8 @@ def solve_finite_states(
     kernel builds, the operator products, one factorization) is paid once
     and the states differ only in the right-hand side, which is how the
     unpolarized average costs two triangular solves rather than two
-    factorizations.
+    factorizations. ``assembler`` shares the kernel machinery across
+    wavelengths (the solver passes one per scan); built fresh when omitted.
     """
     index = complex(index)
     if index.imag < 0.0:
@@ -236,19 +239,26 @@ def solve_finite_states(
     c_b = ktp2 / ktm2
     s = cos_gamma * (1.0 - ktp2 / ktm2)
 
+    if assembler is None:
+        assembler = OperatorAssembler(boundary, period=period, terms=terms)
+
     points = len(boundary.x)
     half = 0.5 * np.eye(points)
     v_plus = single_layer_matrix(
-        boundary, k=kp, alpha0=alpha0, period=period, terms=terms
+        boundary, k=kp, alpha0=alpha0, period=period, terms=terms,
+        assembler=assembler,
     )
     v_minus = single_layer_matrix(
-        boundary, k=km, alpha0=alpha0, period=period, terms=terms
+        boundary, k=km, alpha0=alpha0, period=period, terms=terms,
+        assembler=assembler,
     )
     k_plus = double_layer_matrix(
-        boundary, k=kp, alpha0=alpha0, period=period, terms=terms
+        boundary, k=kp, alpha0=alpha0, period=period, terms=terms,
+        assembler=assembler,
     )
     l_minus = adjoint_layer_matrix(
-        boundary, k=km, alpha0=alpha0, period=period, terms=terms
+        boundary, k=km, alpha0=alpha0, period=period, terms=terms,
+        assembler=assembler,
     )
 
     trace_block = (half + k_plus) @ v_minus
@@ -260,7 +270,8 @@ def solve_finite_states(
     conical = cos_gamma != 0.0
     if conical:
         dt_v_minus = tangential_layer_matrix(
-            boundary, k=km, alpha0=alpha0, period=period, terms=terms
+            boundary, k=km, alpha0=alpha0, period=period, terms=terms,
+            assembler=assembler,
         )
         cross = v_plus @ dt_v_minus
         system = np.block(

@@ -49,6 +49,7 @@ from ..base import Capabilities, Progress, UnsupportedConfiguration, register
 from ._boundary import physical_boundary
 from ._core import solve_transverse
 from ._finite import solve_finite_states
+from ._nystrom import OperatorAssembler
 
 if TYPE_CHECKING:  # pragma: no cover - import cycle guard for annotations
     from ...materials import OpticalConstants
@@ -124,10 +125,13 @@ class IntegralSolver:
         ----------
         boundary_points
             Number of equal-arc-length nodes on one groove period -- the
-            accuracy knob the convergence harness sweeps. Cost is roughly
-            cubic in it (kernel build plus dense solve); the tabulated
-            boundary condition costs ~5-8x the perfect one per wavelength
-            (four kernels, operator products, a doubled system off-plane).
+            accuracy knob the convergence harness sweeps. Kernels are
+            assembled as separable BLAS products (``_kernels``): a few
+            ``(P, 2M+1)`` GEMMs per wavelength plus the dense solve, after
+            a one-time ``O(P^2 M)`` geometry pass amortised over the scan.
+            The tabulated boundary condition costs ~2x the perfect one per
+            wavelength (more operators, sharing kernel evaluations per
+            medium, and a doubled system off-plane).
         spectral_terms
             Truncation of the kernel's spectral sums. Defaults to
             ``max(boundary_points // 2, ...)`` so the single knob converges
@@ -262,11 +266,19 @@ class IntegralSolver:
         warnings: list[str] = []
         anomalous: list[float] = []
 
+        # One kernel assembly for the whole scan: the geometry-only half
+        # (including the cached Kummer tails) is what every wavelength and
+        # both media share; the per-wavelength memo is cleared each row.
+        assembler = OperatorAssembler(
+            boundary, period=problem.period, terms=terms
+        )
+
         for row, wavelength in enumerate(wavelengths):
             if progress is not None:
                 # Top of the row: (0, n) before any work, and a cancellation
                 # point ahead of every wavelength (see scalar.py).
                 progress(row, len(wavelengths))
+            assembler.clear()
 
             sines = sin_beta(
                 all_orders, wavelength, problem.period, sin_alpha, sin_gamma
@@ -288,6 +300,7 @@ class IntegralSolver:
                         sin_alpha=sin_alpha,
                         polarization=polarization,
                         terms=terms,
+                        assembler=assembler,
                     )
                     columns = np.searchsorted(all_orders[live], solution.orders)
                     values[columns] += solution.efficiencies / len(polarizations)
@@ -301,6 +314,7 @@ class IntegralSolver:
                     cos_gamma=cos_gamma,
                     incidents=[incidents[p] for p in polarizations],
                     terms=terms,
+                    assembler=assembler,
                 )
                 for solution in solutions:
                     columns = np.searchsorted(all_orders[live], solution.orders)
