@@ -66,6 +66,7 @@ from ..geometry import (
     facet_graze,
     flux_obliquity,
     horizon_weights,
+    interference_factor,
     is_propagating,
     order_range,
     sin_beta,
@@ -115,26 +116,10 @@ _SP_SPLIT_WARN = 0.02
 _REDUCED_RATIO_WARN = 0.1
 
 
-def interference_factor(s: ArrayLike, n_grooves: int) -> NDArray[np.float64]:
-    r"""The finite-:math:`N` grating interference function, ISSI eq. (8).
-
-    .. math::
-        \left[\frac{\sin(Ns)}{N\sin(s)}\right]^2, \qquad
-        s = \left[\sin\alpha + \sin\beta\right]\sin\gamma\,\frac{p\pi}{\lambda}
-
-    **This is deliberately not applied to order efficiencies.** At an exact
-    diffraction order ``s = mπ`` and the factor equals 1, so multiplying by it
-    would change nothing. Its role is the *angular line shape* around each
-    order -- the link to resolving power -- which is a different question from
-    how much power lands in order ``m``. Exposed here for that purpose.
-    """
-    s = np.asarray(s, dtype=np.float64)
-    numerator = np.sin(n_grooves * s)
-    denominator = n_grooves * np.sin(s)
-    # s -> m*pi is removable: the ratio tends to +/-1, so the square tends to 1.
-    near_order = np.isclose(np.sin(s), 0.0, atol=1e-12)
-    ratio = np.where(near_order, 1.0, numerator / np.where(near_order, 1.0, denominator))
-    return ratio**2
+# interference_factor lived here until the resolving-power milestone moved it
+# to gratinglab.geometry, where its consumers outside the solver stack can
+# reach it without importing a solver. Re-exported above (and kept in __all__)
+# so `gratinglab.solvers.scalar.interference_factor` keeps resolving.
 
 
 class ScalarSolver:

@@ -27,6 +27,7 @@ __all__ = [
     "horizon_weights",
     "blaze_direction",
     "blaze_wavelength",
+    "interference_factor",
 ]
 
 
@@ -457,3 +458,26 @@ def blaze_wavelength(
     numerator = 2.0 * period * np.sin(zeta) * np.sin(blaze_angle)
     with np.errstate(divide="ignore", invalid="ignore"):
         return np.where(m != 0, numerator / m, np.inf)
+
+
+def interference_factor(s: ArrayLike, n_grooves: int) -> NDArray[np.float64]:
+    r"""The finite-:math:`N` grating interference function, ISSI eq. (8).
+
+    .. math::
+        \left[\frac{\sin(Ns)}{N\sin(s)}\right]^2, \qquad
+        s = \left[\sin\alpha + \sin\beta\right]\sin\gamma\,\frac{p\pi}{\lambda}
+
+    **This is deliberately not applied to order efficiencies.** At an exact
+    diffraction order ``s = mπ`` and the factor equals 1, so multiplying by it
+    would change nothing. Its role is the *angular line shape* around each
+    order -- the link to resolving power, which is a different question from
+    how much power lands in order ``m``. :mod:`gratinglab.resolution` is the
+    consumer that asks it.
+    """
+    s = np.asarray(s, dtype=np.float64)
+    numerator = np.sin(n_grooves * s)
+    denominator = n_grooves * np.sin(s)
+    # s -> m*pi is removable: the ratio tends to +/-1, so the square tends to 1.
+    near_order = np.isclose(np.sin(s), 0.0, atol=1e-12)
+    ratio = np.where(near_order, 1.0, numerator / np.where(near_order, 1.0, denominator))
+    return ratio**2
