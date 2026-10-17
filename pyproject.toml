@@ -112,11 +112,19 @@ testpaths = ["tests"]
 # than a loud failure. A no-op for a plain `pytest` here, where it is the same
 # path the editable install already provides.
 pythonpath = ["src"]
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    # PySide6 6.12 deprecated Qt.AA_UseHighDpiPixmaps, and matplotlib 3.11's Qt
+    # backend still reads it whenever it draws a toolbar icon. Not ours to fix,
+    # and scoped to that one module, so our own code still fails on it. The dots
+    # stand in for the colons in "Qt::", which would split the filter.
+    # Drop this once a matplotlib release stops reading the attribute.
+    "ignore:Enum value .Qt..ApplicationAttribute.AA_UseHighDpiPixmaps. is marked as deprecated:DeprecationWarning:matplotlib.backends.backend_qt",
+]
 # pytest-qt would otherwise probe every binding it knows. Verified clean under
 # `python -W error -c "import PySide6.QtWidgets"`, so `filterwarnings = error`
-# above needs no exemption; if a future PySide6 starts warning at import, add a
-# narrow ignore naming the exact message -- never a bare DeprecationWarning.
+# above needs no exemption at import; if a future PySide6 starts warning there,
+# add a narrow ignore naming the exact message -- never a bare DeprecationWarning.
 qt_api = "pyside6"
 
 [tool.mutmut]
