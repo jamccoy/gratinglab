@@ -255,6 +255,7 @@ class TestBoundaryTab:
         with qtbot.waitSignal(efficiency.solved, timeout=60_000):
             pass  # the solve its constructor starts
         window.boundary._efficiency_window = efficiency
+        efficiency.destroyed.connect(window.boundary._forget_efficiency_window)
         with qtbot.waitSignal(efficiency.solved, timeout=60_000):
             opened = window.boundary.send_to_efficiency()
         assert opened is efficiency
@@ -265,6 +266,18 @@ class TestBoundaryTab:
         with qtbot.waitSignal(efficiency.solved, timeout=60_000):
             again = window.boundary.send_to_efficiency()
         assert again is efficiency, "a second send reuses the window"
+
+    def test_a_destroyed_efficiency_window_is_forgotten(self, qtbot, window):
+        """Closing and deleting it must not leave a dead reference behind."""
+        from PySide6.QtCore import QCoreApplication, QEvent
+        window.load(SAMPLE)
+        opened = window.boundary.send_to_efficiency()
+        with qtbot.waitSignal(opened.solved, timeout=60_000):
+            pass
+        opened.close()
+        opened.deleteLater()
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        qtbot.waitUntil(lambda: window.boundary._efficiency_window is None, timeout=5000)
 
     def test_panel_matches_a_direct_build(self, qtbot, window):
         """The window must show what the pipeline computes"""

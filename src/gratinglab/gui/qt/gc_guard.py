@@ -17,10 +17,18 @@ runs the collector whenever the generation counts say it is due, so garbage is
 still collected promptly and always on the one thread allowed to free a Qt
 object. When the last window releases it, automatic collection is restored,
 so code that runs with no window open behaves exactly as before.
+
+A window that is closed but never deleted never releases it, so the guard
+also restores collection at interpreter exit, through ``atexit``, and collects
+once while Qt still exists. Without that, Python's own final collection freed
+the accumulated Qt garbage after Qt was gone: the ubuntu / py3.11 CI leg passed
+every test and then aborted with ``Fatal Python error: bool_dealloc``, twice,
+with one window still holding the guard at the end of the session.
 """
 
 from __future__ import annotations
 
+import atexit
 import gc
 
 from PySide6.QtCore import QObject, QTimer
@@ -79,6 +87,14 @@ def _release(*_args) -> None:
         _collector.deleteLater()
         _collector = None
         gc.enable()
+
+
+@atexit.register
+def _restore_at_exit() -> None:
+    """Collect while Qt is still alive, and hand collection back to Python."""
+    if _holders > 0:
+        gc.enable()
+        gc.collect()
 
 
 def is_active() -> bool:
