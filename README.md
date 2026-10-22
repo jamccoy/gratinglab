@@ -10,6 +10,12 @@
 An open platform for diffraction grating groove metrology and efficiency analysis,
 from an AFM scan of a real grating to its diffraction efficiency, in one package.
 
+The part in regular use today is the **AFM groove metrology**: blaze angles from a
+scan, the averaged groove shape, how much it varies down the scan, and tip
+correction, with the groove exported as a boundary profile. The **efficiency
+solvers are experimental**: they pass their test suite but have not yet been used
+for real analysis, so treat their numbers as provisional.
+
 The rigorous methods for grating efficiency are well established, and open codes exist
 for several of them, but each carries its own conventions, normalizations and blind
 spots. No open code runs the *same* physical problem through several methods for a fair
@@ -31,14 +37,15 @@ Solver (plugin)  ->  Result (+ provenance)
 ```
 
 The two halves are one package because a file between them loses information. A
-PCGrate `.ggp` boundary carries a *shape* and not a grating: it cannot hold the period,
+plain boundary file carries a *shape* and not a grating: it cannot hold the period,
 so the period gets retyped, guessed, or recovered from a sidecar later.
 `BoundaryProfile.to_problem()` carries the period the scan measured, and the fitted
 facet angle with it. To save a profile without losing that, write it as gratinglab's
 own `.json` (`gratinglab.io.boundary.write_boundary_json`): reading it back gives the
 same problem, and the efficiency window's "Load boundary profile" fills in the
-period from it. The metrology window's Boundary tab exports `.ggp`, `.json` or
-`.csv`, and its "Send to efficiency window" button opens the groove there directly.
+period from it. The metrology window's Boundary tab exports `.json` or `.csv`, among
+other formats, and its "Send to efficiency window" button opens the groove there
+directly.
 
 ```python
 from gratinglab.metrology.boundary import build_boundary_profile
@@ -49,10 +56,13 @@ problem = profile.to_problem(coating="Au", blaze_angle=29.5)
 
 ## Status
 
-Pre-alpha. The scalar and integral solvers, the comparison harness, the convergence
-harness and the materials layer work end to end. Efficiencies are absolute when a
-coating is named, using an optical constant table of your own (see Install). RCWA is
-contributed and not yet integrated.
+Pre-alpha. The AFM metrology is the mature half and the one in use. On the efficiency
+side the scalar and integral solvers, the comparison harness, the convergence harness
+and the materials layer work end to end and are checked against closed forms,
+published benchmarks and their own physics (energy balance, reciprocity), but they are
+**experimental** until they have been used on real problems. Efficiencies are absolute
+when a coating is named, using an optical constant table of your own (see Install).
+RCWA is contributed and not yet integrated.
 
 ## Scope
 
@@ -69,14 +79,15 @@ Both mounts are supported:
 
 - **In-plane / classical:** UV–Vis–NIR optical engineering.
 - **Extreme off-plane (conical), grazing incidence:** soft X-ray spectroscopy, where
-  PCGrate is the community standard and general-purpose open RCWA codes are weakest.
+  the integral method is the method of record and general-purpose open RCWA codes are
+  weakest.
 
 Planned method backends, in order:
 
 | Method | Status |
 |---|---|
-| Scalar (Kirchhoff, X-ray blaze form) | **done**, validated |
-| Integral method (boundary integral, conical, undercut-capable) | **done**: perfect conductivity validated order by order against PCGrate, the commercial integral-method code, and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010) with absolute efficiencies and recorded absorption |
+| Scalar (Kirchhoff, X-ray blaze form) | **experimental**: checked against closed forms |
+| Integral method (boundary integral, conical, undercut-capable) | **experimental**: perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with recorded absorption; checked against published benchmark tables (Maystre & Popov, Goray & Schmidt), energy balance and reciprocity |
 | RCWA (in-plane, conical, off-plane; Li factorization, S-matrix) | contributed, not yet integrated |
 | C-method (Chandezon) | planned |
 
@@ -173,12 +184,12 @@ with the `gui` extra.
 ### Where the measurement data lives
 
 Scans are **not** in the repository. They are research data, and the same rule already
-applies to the PCGrate reference corpus:
+applies to the private reference corpus of efficiency tables:
 
 | Data | Environment variable | Default |
 |---|---|---|
 | AFM scans | `GRATINGLAB_AFM_DIR` | `~/Documents/afm_scans` |
-| PCGrate reference corpus | `GRATINGLAB_REF_DIR` | `~/Documents/diffraction_efficiency` |
+| Reference efficiency tables | `GRATINGLAB_REF_DIR` | `~/Documents/diffraction_efficiency` |
 
 Tests that need either **skip cleanly** when it is absent, so the suite is green on a
 fresh clone. Most of the metrology suite does not need it at all: it runs against a

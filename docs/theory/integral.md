@@ -151,11 +151,12 @@ Measured behaviour, honestly stated:
   first-order through the corner limitation, monotonically.
 - **Lorentz reciprocity** (`checks.check_reciprocity`): TE to ~1e-8, TM to
   ~1e-5.
-- **PCGrate, orderwise, on a measured groove**: the TASTE
-  perfect-conductivity wavescan is reproduced to **7.8e-4 across every
-  propagating order of the full 0.6–6.0 nm scan** — and the comparison
-  *identified* the previously unconfirmed profile behind that run
-  (`docs/findings.md`; `tests/test_integral_corpus.py`).
+- **An independent integral-method code, orderwise, on a measured groove**:
+  the TASTE perfect-conductivity wavescan in the private reference corpus is
+  reproduced across every propagating order of the full 0.6–6.0 nm scan, within
+  the reference's own energy-balance error, and the comparison *identified* the
+  previously unconfirmed profile behind that run (`docs/findings.md`;
+  `tests/test_integral_corpus.py`). The figures stay with the private corpus.
 
 Finite conductivity adds its own ladder (`tests/test_integral_finite.py`):
 

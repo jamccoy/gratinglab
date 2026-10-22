@@ -519,24 +519,27 @@ that; see below.
 ## The corpus can test the diffraction but not the reflectivity
 
 Run against `OGRE/tastetest_perf_wavescan.txt` (TASTE, period 315.15 nm,
-γ=1.25°, α=19.99°), comparing **relative** scalar against PCGrate:
+γ=1.25°, α=19.99°), comparing **relative** scalar against a perfect-conductivity
+reference table from an independent integral-method code. Comparisons against the commercial code are not published here: its licence terms
+have not been checked, so the figures stay with the private corpus.
+Our own totals:
 
-| Profile | Σ, M16 | Σ, pre-M16 | per-order RMS, M16 / pre-M16 |
-|---|---|---|---|
-| Blazed 29.5°/70.5° | 0.5431 | 0.5514 | 0.11661 / 0.11671 |
-| Blazed 29.5° ideal | 0.6301 | 0.6380 | 0.13634 / 0.13704 |
-| `AFM_real_echelle.ggp` | 0.6138 | 0.6427 | 0.19639 / 0.19921 |
+| Profile | Σ, M16 | Σ, pre-M16 |
+|---|---|---|
+| Blazed 29.5°/70.5° | 0.5431 | 0.5514 |
+| Blazed 29.5° ideal | 0.6301 | 0.6380 |
+| `AFM_real_echelle.ggp` | 0.6138 | 0.6427 |
 
 The flux obliquity improves agreement in every case, and only slightly. That is
 consistent rather than disappointing: at this mount the blaze order leaves near
 39° against a 19.99° incidence, so $O_m \approx 0.99$ for the orders carrying
 the power, and §"the scalar solver was never checked" predicts a small change
-exactly here. The residual RMS of ~0.12 is dominated by profile mismatch — which
+exactly here. The residual per-order disagreement is dominated by profile mismatch; which
 `.ggp` this run used is still unconfirmed, and `corpus.toml` marks the entry
 `confirmed = false`. It is not evidence about the normalisation either way.
 
 **The corpus says nothing at all about M16-D.** Every usable reference run is
-**perfect conductivity** — the TASTE table sums to 1.0005, i.e. R ≡ 1, so there
+**perfect conductivity**: the TASTE table sums to unity, i.e. R ≡ 1, so there
 is no reflectivity in it to compare a reflectivity model against. The one
 finite-conductivity run in the collection is `panter1_finite`, already marked
 `usable = false` for summing to 3.6 at the Rayleigh anomalies.
@@ -544,7 +547,7 @@ finite-conductivity run in the collection is `panter1_finite`, already marked
 So the groove-resolved reflectivity model rests on: reciprocity (which it
 restores and the alternative breaks), an exact closed-form reduction on a
 single-facet profile, and correct limiting behaviour. It has **no external
-validation**, and acquiring some needs either a finite-conductivity PCGrate run
+validation**, and acquiring some needs either a finite-conductivity reference run
 or the RCWA backend. Worth stating plainly, because the model changes individual
 orders by up to 51% and is now the default.
 
@@ -555,8 +558,9 @@ orders by up to 51% and is now the default.
 The first thing the metrology merge (M17) made testable, and it went the
 opposite way to the prediction.
 
-`docs/roadmap.md` has long held that the TASTE residual — scalar's total near
-0.55 against a PCGrate total of 1.0005 — is dominated by **profile mismatch**,
+`docs/roadmap.md` has long held that the TASTE residual (scalar's total near
+0.55 against the unit total of the perfect-conductivity reference) is dominated
+by **profile mismatch**,
 because the comparison runs on an idealised `Blazed(29.5°, 70.5°)` while the
 `.ggp` the reference run actually used cannot be found. With the metrology
 package absorbed, an AFM scan of what is plausibly that grating became
@@ -565,20 +569,20 @@ so the idealised sawtooth can be replaced with a measured groove and the
 hypothesis tested directly.
 
 The scan is **not in the repository** — it is the group's measurement data, held
-under `GRATINGLAB_AFM_DIR` (default `~/Documents/afm_scans/`) like the PCGrate
+under `GRATINGLAB_AFM_DIR` (default `~/Documents/afm_scans/`) like the reference
 corpus. Everything below is reproducible from it; nothing below is reproducible
 from a bare clone, which is the cost of not committing measurements and is
 stated here rather than discovered.
 
 Run at the corpus geometry (period 315.15 nm, γ=1.25°, α=19.99°, perfect
-conductivity, 8192 quadrature points), mean total over the reference grid:
+conductivity, 8192 quadrature points), mean total over the reference grid, where a
+perfect-conductivity reference sums to unity:
 
-| Profile | mean Σ | vs PCGrate |
-|---|---|---|
-| PCGrate (integral method) | 1.0005 | — |
-| idealised `Blazed(29.5°, 70.5°)` | 0.5420 | 0.542 |
-| measured AFM groove, p = 315.15 nm | 0.3362 | 0.336 |
-| measured AFM groove, p = 314.09 nm (its own) | 0.3354 | 0.335 |
+| Profile | mean Σ |
+|---|---|
+| idealised `Blazed(29.5°, 70.5°)` | 0.5420 |
+| measured AFM groove, p = 315.15 nm | 0.3362 |
+| measured AFM groove, p = 314.09 nm (its own) | 0.3354 |
 
 **The measured profile is worse, by a lot.** Substituting real geometry for
 idealised geometry moved the total *away* from unity. The period makes almost no
@@ -677,7 +681,7 @@ and the depth is the number the solver uses, and they disagree by 3.6σ.
   measured against 315.15 nm known independently from `OGRE/pcgratewavscan.py`),
   and a facet angle consistent with 29.5°. Suggestive, not decisive.
 - Scalar theory does not conserve energy by construction (`theory/scalar.md` §5),
-  so *part* of the gap to 1.0005 was never attributable to the profile at all.
+  so *part* of the gap to unity was never attributable to the profile at all.
 
 **Consequence: an absolute efficiency from a raw AFM boundary is not currently
 defensible**, and nothing in the pipeline says so. The cheapest available warning
@@ -887,32 +891,29 @@ The two that matter most:
 
 ---
 
-## The integral solver reproduces PCGrate to 8e-4 — and identifies the TASTE profile
+## The integral solver matches an independent integral-method code, and identifies the TASTE profile
 
 The first rigorous-vs-rigorous comparison the project has produced: the new
-perfectly-conducting integral solver against the PCGrate TASTE wavescan
-(`OGRE/tastetest_perf_wavescan.txt`, 541 wavelengths, 0.6–6.0 nm, γ = 1.25°,
-α = +19.99°). Orderwise, across every propagating order of the full scan:
-
-| Profile fed to our solver | max abs orderwise difference |
-|---|---|
-| **`OGRE/AFM_test.ggp`** (162-point AFM groove, depth/period 0.292) | **7.8e-4** |
-| ideal `Blazed(29.5, 70.5)` design sawtooth | 0.29 |
-| `OGRE/AFM_real_echelle.ggp` | 0.65 |
-| any candidate, mirrored | worse still |
+perfectly-conducting integral solver against the TASTE wavescan in the reference
+corpus (`OGRE/tastetest_perf_wavescan.txt`, 541 wavelengths, 0.6–6.0 nm,
+γ = 1.25°, α = +19.99°), computed by an independent, commercial implementation
+of the same method. Orderwise, across every propagating order of the full scan,
+exactly one candidate profile agrees within the reference's own energy-balance
+error, and every alternative, the design sawtooth and the mirrored candidates
+included, is two to three orders of magnitude further off. Comparisons against the commercial code are not published here: its licence terms
+have not been checked, so the figures stay with the private corpus.
 
 Three things fall out at once:
 
 1. **The unidentified `.ggp` is identified.** The roadmap's "which `.ggp`
    goes with which run" question is answered for TASTE: the run was made from
-   `AFM_test.ggp`, not the design sawtooth. A 5e-4 match against a 0.29
-   nearest-alternative is identification, not tolerance slack — encoded as a
-   positive test and a negative control in `tests/test_integral_corpus.py`.
+   `AFM_test.ggp`, not the design sawtooth. A margin of that size is
+   identification, not tolerance slack, and is encoded as a positive test and a
+   negative control in `tests/test_integral_corpus.py`.
 2. **The solver stack is validated end to end** — conical reduction, kernels,
    quadrature, amplitude extraction — against an independent implementation
-   of the same method on a measured profile. Our energy balance on that scan:
-   1.1e-8; PCGrate's own totals sit at 1.0005, so a fair share of the
-   remaining 7.8e-4 is theirs.
+   of the same method on a measured profile. Our own energy balance on that
+   scan is 1.1e-8.
 3. **The polarization mapping is pinned.** PCGrate's exported `Eff.TE`
    column corresponds to this project's groove-referenced TE at this mount.
    Each PCGrate table carries exactly one polarization — the earlier
@@ -920,10 +921,10 @@ Three things fall out at once:
 
 Two caveats for honesty: `AFM_test.ggp` still fails `read_ggp` (the
 truncated-write defect above), so the corpus test parses around the damaged
-tail with the defect documented in place; and the scalar-vs-PCGrate deficit
+tail with the defect documented in place; and the scalar-vs-reference deficit
 reported earlier in this file ("the corpus can test the diffraction but not
 the reflectivity") was computed on the idealised sawtooth — the profile that
-this comparison now shows PCGrate never ran.
+this comparison now shows the reference run never used.
 
 ---
 
@@ -956,8 +957,8 @@ and 0.21 in m=+3 where bare scalar puts 0.69 in m=+3.
 
 Two consequences. The guard now tests the reduced ratio (in-plane unchanged),
 and **it fires on the project's own flagship regime** for λ ≳ 0.7 nm — that is
-the honest answer, not collateral damage: the long-standing scalar-vs-PCGrate
-per-order RMS of ~0.12 ("the corpus can test the diffraction but not the
+the honest answer, not collateral damage: the long-standing scalar-vs-reference
+per-order disagreement ("the corpus can test the diffraction but not the
 reflectivity", above) stops being a mystery and becomes a regime statement.
 Scalar remains useful there for order positions and the blaze envelope;
 per-order numbers need the integral method.

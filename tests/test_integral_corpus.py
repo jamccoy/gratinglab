@@ -8,9 +8,11 @@ The comparison also *identified the profile*. ``benchmarks/corpus.toml``
 carried the TASTE run's ``.ggp`` as unconfirmed since the corpus was
 recovered; sweeping the candidate profiles against the table found exactly
 one that matches -- ``OGRE/AFM_test.ggp`` at azimuth +19.99 deg, our TE
-against PCGrate's TE column, orderwise to 8e-4 across the full scan. The
-ideal ``Blazed(29.5, 70.5)`` sawtooth disagrees by up to 0.29, so the run was
-made from the measured AFM groove, not the design geometry.
+against the table's TE column, orderwise inside the bound below across the full
+scan. The ideal ``Blazed(29.5, 70.5)`` sawtooth is two orders of magnitude
+further off, so the run was made from the measured AFM groove, not the design
+geometry. Measured figures are not quoted here: they derive from a commercial
+code's output and stay with the private corpus.
 """
 
 import numpy as np
@@ -79,8 +81,8 @@ class TestTasteWavescan:
             ours, theirs = scan.at(float(w)), reference.at(float(w))
             for m in theirs.propagating_orders:
                 worst = max(worst, abs(ours[int(m)] - theirs[int(m)]))
-        # Measured 7.8e-4 over the full 541-point scan; PCGrate's own totals
-        # sit at 1.0005, so a fair share of the gap is theirs.
+        # The bound sits above the measured agreement and far below the
+        # nearest wrong profile; the figures stay with the private corpus.
         assert worst < 2e-3
 
     def test_the_design_sawtooth_is_not_what_pcgrate_ran(self, ref_dir):
