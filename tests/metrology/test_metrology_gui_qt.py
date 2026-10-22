@@ -495,6 +495,58 @@ class TestTipCorrectionControls:
         assert "Tip correction   : erosion" in window.results_label.text()
 
 
+class TestTipShapePicker:
+    """Named probes and asymmetric flanks, from the window."""
+
+    def _pick(self, window, key):
+        combo = window.tip_shape_combo
+        combo.setCurrentIndex(combo.findData(key))
+
+    def test_starts_as_a_symmetric_cone_with_the_right_flank_tied(self, qtbot, window):
+        window.tip_combo.setCurrentText('erosion')
+        assert window.tip_shape_combo.currentText() == window.TIP_SYMMETRIC
+        assert not window.tip_angle_right_spin.isEnabled()
+        window.tip_angle_spin.setValue(21.0)
+        assert window.tip_angle_right_spin.value() == 21.0
+        from gratinglab.metrology.gui.state import build
+        settings, _ = build(window.form_state())
+        assert settings.tip_half_angle_right_deg is None
+
+    def test_a_preset_fills_the_numbers_and_reaches_the_settings(self, qtbot, window):
+        from gratinglab.metrology.gui.state import build
+        window.tip_combo.setCurrentText('erosion')
+        self._pick(window, 'scanasyst-air-along-front-minus')
+        assert (window.tip_radius_spin.value(), window.tip_angle_spin.value(),
+                window.tip_angle_right_spin.value()) == (2.0, 15.0, 25.0)
+        assert window.tip_angle_right_spin.isEnabled()
+        settings, errors = build(window.form_state())
+        assert errors == ()
+        assert (settings.tip_radius_nm, settings.tip_half_angle_deg,
+                settings.tip_half_angle_right_deg) == (2.0, 15.0, 25.0)
+
+    def test_the_across_preset_is_symmetric_in_the_settings(self, qtbot, window):
+        from gratinglab.metrology.gui.state import build
+        window.tip_combo.setCurrentText('erosion')
+        self._pick(window, 'scanasyst-air-across')
+        settings, _ = build(window.form_state())
+        assert (settings.tip_half_angle_deg, settings.tip_half_angle_right_deg) == (17.5, None)
+
+    def test_editing_a_preset_makes_it_custom(self, qtbot, window):
+        window.tip_combo.setCurrentText('erosion')
+        self._pick(window, 'scanasyst-air-along-front-plus')
+        window.tip_radius_spin.setValue(12.0)    # a worn tip, Bruker's maximum
+        assert window.tip_shape_combo.currentText() == window.TIP_CUSTOM
+        assert window.tip_angle_spin.value() == 25.0
+
+    def test_an_asymmetric_tip_reaches_the_boundary_tab(self, qtbot, window):
+        window.load(SAMPLE)
+        window.tip_combo.setCurrentText('erosion')
+        self._pick(window, 'scanasyst-air-along-front-minus')
+        m = window.boundary.profile.metrics
+        assert (m['tip_half_angle_deg'], m['tip_half_angle_right_deg']) == (15.0, 25.0)
+        assert "15 deg (-x) / 25 deg (+x)" in window.boundary.metrics_label.text()
+
+
 class TestGarbageCollectionStaysOnTheGuiThread:
     """CI run 39835186938 segfaulted on macOS with "Garbage-collecting" at the
     top of the analysis worker's stack: the cycle collector ran on the worker

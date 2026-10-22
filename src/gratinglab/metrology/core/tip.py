@@ -19,22 +19,36 @@ two operations this module implements:
   the difference, which is the entire point: a reconstruction without one
   manufactures exactly the false confidence it exists to remove.
 
-The tip is a cone with a spherical apex cap -- ``radius_nm`` and
-``half_angle_deg`` (measured from the tip axis, so the flank rises at
-``90 - half_angle`` degrees from the surface). The consequence worth knowing
-before trusting any corrected groove: a facet steeper than the flank is
-touched only at its top corner and is **unrecoverable**, and a facet close to
-the flank angle is the marginal case -- an 18 deg tip has a 72 deg flank,
-almost parallel to a 70.5 deg anti-blaze facet. That near-parallelism, not
-the nanometre apex, is what rounds the troughs of blazed gratings.
+The tip is a spherical apex cap of ``radius_nm`` on two straight flanks, one
+either side of the apex in the scan direction. Each flank has its own half
+angle, **measured from the tip axis**, so a flank of half angle ``a`` rises at
+``90 - a`` degrees from the surface. ``half_angle_deg`` is the flank on the
+-x side (towards column 0) and ``half_angle_right_deg`` the one on the +x
+side; leaving the second out gives a symmetric cone, which is what every
+earlier version of this module assumed.
 
-One dimension only. The operations run along the fast-scan axis
-(rows), not over the full 2-D image. For a grating the surface is invariant
-along the grooves, and dilating an invariant surface with a cone reduces
-exactly to dilating each cross-section with the cone's cross-section -- the
-groove-parallel extent of the tip touches nothing the transverse extent does
-not. What a 2-D pass would add is sensitivity to along-groove features, and
-it would need the slow-axis pixel pitch, which the text-export format does
+The asymmetry is not a refinement for its own sake. A real tip is a pyramid,
+and which of its faces meet the surface depends on how the cantilever lies
+relative to the fast-scan axis. Bruker's ScanAsyst-Air, for instance, has a
+15 deg front face, a 25 deg back face and 17.5 deg sides (each +/- 2.5 deg).
+Scanned across the cantilever the profile sees the two sides, a symmetric 72.5
+deg flank either way. Scanned along it, one flank rises at 75 deg and the other
+at only **65**, which cannot follow a 70 deg anti-blaze facet at all. See
+:data:`TIP_PRESETS`.
+
+The consequence worth knowing before trusting any corrected groove: a facet
+steeper than the flank facing it is touched only at its top corner and is
+**unrecoverable**, and a facet close to the flank angle is the marginal case.
+That near-parallelism, not the nanometre apex, is what rounds the troughs of
+blazed gratings.
+
+One dimension only. The operations run along the fast-scan axis (rows), not
+over the full 2-D image. For a grating the surface is invariant along the
+grooves, and dilating an invariant surface with the tip reduces exactly to
+dilating each cross-section with the tip's cross-section in the scan plane --
+the groove-parallel extent of the tip touches nothing the transverse extent
+does not. What a 2-D pass would add is sensitivity to along-groove features,
+and it would need the slow-axis pixel pitch, which the text-export format does
 not record.
 
 All heights are in metres (the unit the loaders promise), tip parameters in
@@ -56,44 +70,109 @@ VALID_TIP_CORRECTIONS = ('none', 'erosion')
 _TIE_TOL_M = 1e-12
 
 
-def tip_cross_section(dx_nm, radius_nm, half_angle_deg, max_height_nm):
-    """The tip's transverse profile, sampled at the pixel pitch.
+@dataclass(frozen=True)
+class TipPreset:
+    """A named tip, as the three numbers the model takes."""
 
-    Returns heights in nm above the apex at lateral offsets
-    ``k * dx_nm`` for ``k in [-K, K]`` (odd length, apex at the centre,
-    ``t[K] == 0``). ``K`` is chosen so the profile just exceeds
-    ``max_height_nm`` -- parts of the tip higher than the tallest feature can
-    never make contact and would only widen every window.
+    label: str
+    radius_nm: float
+    half_angle_deg: float          #: the -x flank
+    half_angle_right_deg: float    #: the +x flank
+    note: str
 
-    Sphere of radius ``R`` capping a cone of half-angle ``theta``: the two
-    meet where the sphere's tangent matches the cone flank, at lateral offset
-    ``R cos(theta)`` and height ``R (1 - sin(theta))``.
-    """
-    if radius_nm <= 0:
-        raise ValueError(f"tip radius must be positive, got {radius_nm} nm")
-    if not 0.0 < half_angle_deg < 90.0:
-        raise ValueError(
-            f"tip half angle must lie in (0, 90) degrees, got {half_angle_deg}")
 
-    theta = np.radians(half_angle_deg)
+#: Probes worth having by name. Bruker's figures for the ScanAsyst-Air
+#: (brukerafmprobes.com, p-3726): tip radius 2 nm nominal and 12 nm maximum,
+#: front angle 15, back angle 25 and side angle 17.5 deg, each +/- 2.5 deg and
+#: each a half angle from the tip axis. The radius is a radius as quoted, not a
+#: width. A worn tip is blunter than nominal, so a correction made with the
+#: nominal radius is the optimistic one.
+#:
+#: Which face looks which way along the scan is a fact about the instrument and
+#: the scan angle, not about the tip, so the along-cantilever case comes in both
+#: orientations and choosing between them is the user's.
+TIP_PRESETS = {
+    'scanasyst-air-across': TipPreset(
+        'ScanAsyst-Air, scanning across the cantilever', 2.0, 17.5, 17.5,
+        "the two 17.5 deg side faces: a 72.5 deg flank either way"),
+    'scanasyst-air-along-front-minus': TipPreset(
+        'ScanAsyst-Air, along the cantilever, front face to -x', 2.0, 15.0, 25.0,
+        "front face (15 deg, a 75 deg flank) to -x, back face (25 deg, a 65 "
+        "deg flank) to +x"),
+    'scanasyst-air-along-front-plus': TipPreset(
+        'ScanAsyst-Air, along the cantilever, front face to +x', 2.0, 25.0, 15.0,
+        "back face (25 deg, a 65 deg flank) to -x, front face (15 deg, a 75 "
+        "deg flank) to +x"),
+}
+
+
+def format_angles(half_angle_deg, half_angle_right_deg=None) -> str:
+    """The flank angles the way a reader wants them: one figure when they agree."""
+    if half_angle_right_deg is None or half_angle_right_deg == half_angle_deg:
+        return f"half angle = {half_angle_deg:g} deg"
+    return (f"half angles = {half_angle_deg:g} deg (-x) / "
+            f"{half_angle_right_deg:g} deg (+x)")
+
+
+def _check_angle(name, value):
+    if not 0.0 < value < 90.0:
+        raise ValueError(f"tip {name} must lie in (0, 90) degrees, got {value}")
+
+
+def _flank_reach(radius_nm, theta, height_nm):
+    """Lateral offset at which one side of the tip reaches ``height_nm``."""
+    t_tangent = radius_nm * (1.0 - np.sin(theta))
+    if height_nm <= t_tangent:
+        return float(np.sqrt(max(radius_nm**2 - (radius_nm - height_nm)**2, 0.0)))
+    return float(radius_nm * np.cos(theta) + (height_nm - t_tangent) * np.tan(theta))
+
+
+def _flank_profile(r, radius_nm, theta):
+    """Height above the apex at lateral distance ``r >= 0`` on one side."""
     r_tangent = radius_nm * np.cos(theta)
     t_tangent = radius_nm * (1.0 - np.sin(theta))
+    sphere = radius_nm - np.sqrt(np.maximum(radius_nm**2 - r**2, 0.0))
+    cone = t_tangent + (r - r_tangent) / np.tan(theta)
+    return np.where(r <= r_tangent, sphere, cone)
 
-    # Lateral extent at which the tip profile reaches max_height_nm.
-    if max_height_nm <= t_tangent:
-        r_max = float(np.sqrt(max(radius_nm**2 - (radius_nm - max_height_nm)**2,
-                                  0.0)))
-    else:
-        r_max = float(r_tangent + (max_height_nm - t_tangent) * np.tan(theta))
+
+def tip_cross_section(dx_nm, radius_nm, half_angle_deg, max_height_nm,
+                      half_angle_right_deg=None):
+    """The tip's profile in the scan plane, sampled at the pixel pitch.
+
+    Returns heights in nm above the apex at lateral offsets ``k * dx_nm`` for
+    ``k in [-K, K]`` (odd length, apex at the centre, ``t[K] == 0``), negative
+    offsets on the ``half_angle_deg`` flank and positive ones on
+    ``half_angle_right_deg``, which defaults to the same. ``K`` is chosen so
+    the profile just exceeds ``max_height_nm`` on its wider side -- parts of
+    the tip higher than the tallest feature can never make contact and would
+    only widen every window.
+
+    The sphere of radius ``R`` meets each flank where its tangent matches it,
+    at lateral offset ``R cos(theta)`` and height ``R (1 - sin(theta))`` for
+    that side's ``theta``, so the slope is continuous on both sides however
+    different they are.
+    """
+    if half_angle_right_deg is None:
+        half_angle_right_deg = half_angle_deg
+    if radius_nm <= 0:
+        raise ValueError(f"tip radius must be positive, got {radius_nm} nm")
+    _check_angle("half angle", half_angle_deg)
+    _check_angle("right half angle", half_angle_right_deg)
+
+    left = np.radians(half_angle_deg)
+    right = np.radians(half_angle_right_deg)
+    r_max = max(_flank_reach(radius_nm, left, max_height_nm),
+                _flank_reach(radius_nm, right, max_height_nm))
 
     # At least the nearest neighbours, so a sub-pixel tip degrades to a
     # near-no-op rather than an empty window.
     k = max(int(np.ceil(r_max / dx_nm)), 1)
-    r = np.abs(np.arange(-k, k + 1)) * dx_nm
-
-    sphere = radius_nm - np.sqrt(np.maximum(radius_nm**2 - r**2, 0.0))
-    cone = t_tangent + (r - r_tangent) / np.tan(theta)
-    return np.where(r <= r_tangent, sphere, cone)
+    offsets = np.arange(-k, k + 1) * dx_nm
+    r = np.abs(offsets)
+    return np.where(offsets < 0,
+                    _flank_profile(r, radius_nm, left),
+                    _flank_profile(r, radius_nm, right))
 
 
 def _pixel_pitch_nm(data, scan_x_size):
@@ -113,18 +192,21 @@ def _shifted(data, k, fill):
     return out
 
 
-def dilate(data, scan_x_size, *, radius_nm, half_angle_deg):
+def dilate(data, scan_x_size, *, radius_nm, half_angle_deg,
+           half_angle_right_deg=None):
     """Image formation: what this tip reports for the surface ``data``.
 
     ``img(x) = max_u [ surface(x + u) - tip(u) ]`` -- the apex height when the
-    tip, centred at ``x``, rests on whichever point it touches first. Always
-    ``>= data`` pointwise: a tip can hide a trough but never dig one.
+    tip, centred at ``x``, rests on whichever point it touches first; ``u`` is
+    the offset from the apex, positive to +x. Always ``>= data`` pointwise: a
+    tip can hide a trough but never dig one.
 
     Exists for synthesis and testing; the pipeline itself only erodes.
     """
     dx_nm = _pixel_pitch_nm(data, scan_x_size)
     relief_nm = float(data.max() - data.min()) * 1e9
-    tip_m = tip_cross_section(dx_nm, radius_nm, half_angle_deg, relief_nm) * 1e-9
+    tip_m = tip_cross_section(dx_nm, radius_nm, half_angle_deg, relief_nm,
+                              half_angle_right_deg) * 1e-9
     k_max = len(tip_m) // 2
 
     img = np.full_like(data, -np.inf)
@@ -146,8 +228,19 @@ class TipCorrection:
     data: np.ndarray       #: corrected heights, metres, same shape as input
     certain: np.ndarray    #: bool; True where the apex provably made contact
     radius_nm: float
-    half_angle_deg: float
+    half_angle_deg: float  #: the -x flank
     footprint_px: int      #: window width used; 3 means the tip is sub-pixel
+    half_angle_right_deg: float = None  #: the +x flank; None means symmetric
+
+    @property
+    def symmetric(self) -> bool:
+        return (self.half_angle_right_deg is None
+                or self.half_angle_right_deg == self.half_angle_deg)
+
+    @property
+    def angles(self) -> str:
+        """The flank angles, the way a reader wants them written."""
+        return format_angles(self.half_angle_deg, self.half_angle_right_deg)
 
     @property
     def certain_fraction(self) -> float:
@@ -159,18 +252,29 @@ class TipCorrection:
         """One line for a log or a metrics sidecar."""
         note = (" -- tip is sub-pixel at this pitch, correction is a near-no-op"
                 if self.footprint_px <= 3 else "")
-        return (f"erosion, R = {self.radius_nm:g} nm, "
-                f"half angle = {self.half_angle_deg:g} deg: "
+        return (f"erosion, R = {self.radius_nm:g} nm, {self.angles}: "
                 f"{100.0 * self.certain_fraction:.1f}% of pixels certain, "
                 f"the rest upper bounds{note}")
 
 
-def erode(data, scan_x_size, *, radius_nm, half_angle_deg) -> TipCorrection:
+def erode(data, scan_x_size, *, radius_nm, half_angle_deg,
+          half_angle_right_deg=None) -> TipCorrection:
     """Reconstruct the least upper bound on the surface behind an image.
 
-    ``rec(x) = min_u [ img(x + u) + tip(u) ]`` -- the lowest the surface can
-    be at ``x`` given that the tip, wherever it stood, stopped where the image
-    says. Sits between the truth and the image: ``surface <= rec <= img``.
+    ``rec(y) = min_u [ img(y - u) + tip(u) ]`` -- the lowest the surface can
+    be at ``y`` given that the tip, wherever it stood, stopped where the image
+    says: with the apex at ``y - u`` the point ``y`` lies under the tip at
+    offset ``u``. Sits between the truth and the image:
+    ``surface <= rec <= img``.
+
+    Note the ``y - u``. Written as a loop over shifts ``k = -u`` it pairs
+    ``img(y + k)`` with ``tip(-k)``, the tip **reflected**. For a symmetric
+    tip the reflection is invisible, which is why it matters to say so: with
+    an asymmetric one, pairing ``img(y + k)`` with ``tip(k)`` erodes by the
+    mirror image of the tip. On the asymmetric test wall that version is no
+    longer the least upper bound (4.09 nm above the surface on average against
+    3.53) and re-imaging it misses the image by up to 2.7 nm, where the right
+    one reproduces it to 1e-14. ``test_tip.py`` catches it three ways.
 
     The certainty map re-runs the contact argument: re-dilating ``rec``
     reproduces the image exactly, and for each image pixel the surface point
@@ -183,12 +287,13 @@ def erode(data, scan_x_size, *, radius_nm, half_angle_deg) -> TipCorrection:
     """
     dx_nm = _pixel_pitch_nm(data, scan_x_size)
     relief_nm = float(data.max() - data.min()) * 1e9
-    tip_m = tip_cross_section(dx_nm, radius_nm, half_angle_deg, relief_nm) * 1e-9
+    tip_m = tip_cross_section(dx_nm, radius_nm, half_angle_deg, relief_nm,
+                              half_angle_right_deg) * 1e-9
     k_max = len(tip_m) // 2
 
     rec = np.full_like(data, np.inf)
     for k in range(-k_max, k_max + 1):
-        np.minimum(rec, _shifted(data, k, np.inf) + tip_m[k + k_max], out=rec)
+        np.minimum(rec, _shifted(data, k, np.inf) + tip_m[k_max - k], out=rec)
 
     # Contact scan: for each image pixel, the best (highest) candidate
     # rec(x+u) - tip(u) is the redilated image; its argmax u is the contact.
@@ -213,6 +318,7 @@ def erode(data, scan_x_size, *, radius_nm, half_angle_deg) -> TipCorrection:
         radius_nm=radius_nm,
         half_angle_deg=half_angle_deg,
         footprint_px=2 * k_max + 1,
+        half_angle_right_deg=half_angle_right_deg,
     )
 
 
@@ -229,5 +335,6 @@ def apply_tip_correction(data, scan_x_size, settings):
         return data, None
     correction = erode(data, scan_x_size,
                        radius_nm=settings.tip_radius_nm,
-                       half_angle_deg=settings.tip_half_angle_deg)
+                       half_angle_deg=settings.tip_half_angle_deg,
+                       half_angle_right_deg=settings.tip_half_angle_right_deg)
     return correction.data, correction

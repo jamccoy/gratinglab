@@ -11,6 +11,7 @@ offending inputs.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Optional
 
 from endstation.forms import FieldError as _FieldError
 
@@ -61,6 +62,7 @@ class FormState:
     tip_correction: str = 'none'
     tip_radius_nm: float = 1.0
     tip_half_angle_deg: float = 18.0
+    tip_half_angle_right_deg: Optional[float] = None
 
     @classmethod
     def from_settings(cls, settings: AnalysisSettings) -> "FormState":
@@ -82,6 +84,7 @@ class FormState:
             tip_correction=settings.tip_correction,
             tip_radius_nm=settings.tip_radius_nm,
             tip_half_angle_deg=settings.tip_half_angle_deg,
+            tip_half_angle_right_deg=settings.tip_half_angle_right_deg,
         )
 
 
@@ -130,6 +133,7 @@ def _to_settings(form: FormState) -> AnalysisSettings:
         tip_correction=form.tip_correction,
         tip_radius_nm=form.tip_radius_nm,
         tip_half_angle_deg=form.tip_half_angle_deg,
+        tip_half_angle_right_deg=form.tip_half_angle_right_deg,
     )
 
 

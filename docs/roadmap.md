@@ -219,6 +219,16 @@ narrows from "grating or tip?" to "grating, or a severely worn tip?", which
 is answerable outside the software: the probe's condition at scan time, a
 re-scan with a fresh tip, or a cross-section.
 
+**Extended 2026-10-22 to asymmetric pyramid tips.** Each flank has its own
+half angle (`tip_half_angle_right_deg`, `None` for the old symmetric cone),
+with Bruker ScanAsyst-Air presets across and along the cantilever in
+`core.tip.TIP_PRESETS` and a Tip shape picker in the metrology window. The
+erosion now uses the reflected tip, which a symmetric one never needed. Rerun
+forward on the ideal TASTE groove it narrows the gap without closing it: the
+65° back face facing the anti-blaze facet implies 26.4° at the nominal 2 nm
+and 25.1° at the worst the spec allows, against the measured 20.3°
+([`findings.md`](findings.md)).
+
 What deliberately did not land: measured tip images as input (blind tip
 estimation is the natural successor if a worn tip becomes the suspect), and
 any coupling from the certainty map into `to_problem` — an uncertain-trough

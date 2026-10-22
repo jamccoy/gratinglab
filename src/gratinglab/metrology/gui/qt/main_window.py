@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 
 from ...core.processing import raw_data, raw_data_multi_group
-from ...core.tip import VALID_TIP_CORRECTIONS
+from ...core.tip import TIP_PRESETS, VALID_TIP_CORRECTIONS, format_angles
 from ...settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES)
 from ..state import FormState, build, summarize_result
 from .canvas import PlotCanvas
@@ -220,7 +220,9 @@ class MainWindow(QMainWindow):
                        self.side_combo.currentTextChanged, self.edge_spin.valueChanged,
                        self.row_groups_check.toggled, self.n_groups_spin.valueChanged,
                        self.tip_combo.currentTextChanged, self.tip_radius_spin.valueChanged,
-                       self.tip_angle_spin.valueChanged):
+                       self.tip_angle_spin.valueChanged,
+                       self.tip_angle_right_spin.valueChanged,
+                       self.tip_shape_combo.currentTextChanged):
             signal.connect(self._settings_changed)
 
         self.run_btn = QPushButton("Run Analysis")
@@ -264,12 +266,20 @@ class MainWindow(QMainWindow):
         group.setMaximumHeight(130)
         return group
 
+    #: The tip-shape picker's first and last entries; presets sit between.
+    TIP_SYMMETRIC = "Symmetric cone"
+    TIP_CUSTOM = "Custom (asymmetric)"
+
     def _build_tip_controls(self, layout):
         """Tip deconvolution: which correction, and the tip it assumes.
 
-        The radius and half-angle describe a cone with a spherical apex and are
-        only read when a correction is chosen, so they are disabled otherwise
-        rather than hidden: the values a user typed stay visible.
+        The tip is a spherical apex on two flanks, one each side of the apex
+        along the scan, each with its own half angle from the tip axis. The
+        shape picker fills the numbers from a named probe and drops to Custom
+        the moment one is edited, so it never names a tip the numbers do not
+        describe. The fields are only read when a correction is chosen, so
+        they are disabled otherwise rather than hidden: the values a user
+        typed stay visible.
         """
         layout.addWidget(QLabel("Tip correction:"))
         self.tip_combo = QComboBox()
@@ -291,24 +301,132 @@ class MainWindow(QMainWindow):
         self.tip_radius_spin.setToolTip(
             "Apex radius. A new probe is a few nm; a worn one can be tens.")
         row.addWidget(self.tip_radius_spin)
-        row.addWidget(QLabel("Half angle (deg):"))
+        layout.addLayout(row)
+
+        layout.addWidget(QLabel("Tip shape:"))
+        self.tip_shape_combo = QComboBox()
+        self.tip_shape_combo.addItem(self.TIP_SYMMETRIC)
+        for key, preset in TIP_PRESETS.items():
+            self.tip_shape_combo.addItem(preset.label, key)
+            self.tip_shape_combo.setItemData(
+                self.tip_shape_combo.count() - 1, preset.note, Qt.ToolTipRole)
+        self.tip_shape_combo.addItem(self.TIP_CUSTOM)
+        self.tip_shape_combo.setToolTip(
+            "A pyramid tip meets the profile with different faces depending on\n"
+            "how the cantilever lies against the fast-scan axis. Across the\n"
+            "cantilever a ScanAsyst-Air shows its two 17.5 deg sides; along it,\n"
+            "the 15 deg front and 25 deg back, and which faces +x depends on\n"
+            "the scan angle.")
+        layout.addWidget(self.tip_shape_combo)
+
+        layout.addWidget(QLabel("Flank half angles (deg):"))
+        angle_row = QHBoxLayout()
+        angle_row.addWidget(QLabel("-x"))
         self.tip_angle_spin = QDoubleSpinBox()
         self.tip_angle_spin.setRange(0.5, 89.5)
         self.tip_angle_spin.setDecimals(1)
         self.tip_angle_spin.setValue(self._defaults.tip_half_angle_deg)
         self.tip_angle_spin.setToolTip(
-            "Cone half-angle measured from the tip's axis, so an 18 deg tip has\n"
-            "flanks at 72 deg from the surface.")
-        row.addWidget(self.tip_angle_spin)
-        layout.addLayout(row)
+            "Half angle of the flank on the -x side, measured from the tip's\n"
+            "axis, so 18 deg is a flank rising at 72 deg from the surface.")
+        angle_row.addWidget(self.tip_angle_spin, 1)
+        angle_row.addWidget(QLabel("+x"))
+        self.tip_angle_right_spin = QDoubleSpinBox()
+        self.tip_angle_right_spin.setRange(0.5, 89.5)
+        self.tip_angle_right_spin.setDecimals(1)
+        right = self._defaults.tip_half_angle_right_deg
+        self.tip_angle_right_spin.setValue(
+            self._defaults.tip_half_angle_deg if right is None else right)
+        self.tip_angle_right_spin.setToolTip(
+            "Half angle of the flank on the +x side. A wall rising towards +x\n"
+            "is followed by this flank, and cannot be recovered if it is steeper\n"
+            "than 90 minus this angle.")
+        angle_row.addWidget(self.tip_angle_right_spin, 1)
+        layout.addLayout(angle_row)
+
+        self._select_tip_shape_for(self._defaults.tip_radius_nm,
+                                   self._defaults.tip_half_angle_deg, right)
 
         self.tip_combo.currentTextChanged.connect(self._sync_tip_controls)
+        self.tip_shape_combo.currentIndexChanged.connect(self._apply_tip_shape)
+        for spin in (self.tip_radius_spin, self.tip_angle_spin,
+                     self.tip_angle_right_spin):
+            spin.valueChanged.connect(self._tip_numbers_edited)
         self._sync_tip_controls()
+
+    def _select_tip_shape_for(self, radius, left, right):
+        """Point the shape picker at whatever these numbers are."""
+        if right is None or right == left:
+            index = 0
+            for i in range(1, self.tip_shape_combo.count() - 1):
+                p = TIP_PRESETS[self.tip_shape_combo.itemData(i)]
+                if (p.radius_nm, p.half_angle_deg, p.half_angle_right_deg) == \
+                        (radius, left, left):
+                    index = i
+        else:
+            index = self.tip_shape_combo.count() - 1
+            for i in range(1, self.tip_shape_combo.count() - 1):
+                p = TIP_PRESETS[self.tip_shape_combo.itemData(i)]
+                if (p.radius_nm, p.half_angle_deg, p.half_angle_right_deg) == \
+                        (radius, left, right):
+                    index = i
+        self.tip_shape_combo.blockSignals(True)
+        self.tip_shape_combo.setCurrentIndex(index)
+        self.tip_shape_combo.blockSignals(False)
+
+    def _apply_tip_shape(self, index):
+        """A preset fills the numbers; the cone ties +x to -x."""
+        key = self.tip_shape_combo.itemData(index)
+        if key in TIP_PRESETS:
+            preset = TIP_PRESETS[key]
+            spins = (self.tip_radius_spin, self.tip_angle_spin,
+                     self.tip_angle_right_spin)
+            for spin in spins:
+                spin.blockSignals(True)
+            self.tip_radius_spin.setValue(preset.radius_nm)
+            self.tip_angle_spin.setValue(preset.half_angle_deg)
+            self.tip_angle_right_spin.setValue(preset.half_angle_right_deg)
+            for spin in spins:
+                spin.blockSignals(False)
+        elif self.tip_shape_combo.currentText() == self.TIP_SYMMETRIC:
+            self.tip_angle_right_spin.blockSignals(True)
+            self.tip_angle_right_spin.setValue(self.tip_angle_spin.value())
+            self.tip_angle_right_spin.blockSignals(False)
+        self._sync_tip_controls()
+        self._settings_changed()
+
+    def _tip_numbers_edited(self, *_):
+        """Keep the picker honest: an edited preset is no longer that preset."""
+        if self.tip_shape_combo.currentText() == self.TIP_SYMMETRIC:
+            self.tip_angle_right_spin.blockSignals(True)
+            self.tip_angle_right_spin.setValue(self.tip_angle_spin.value())
+            self.tip_angle_right_spin.blockSignals(False)
+            return
+        key = self.tip_shape_combo.currentData()
+        if key in TIP_PRESETS:
+            p = TIP_PRESETS[key]
+            if (p.radius_nm, p.half_angle_deg, p.half_angle_right_deg) != (
+                    self.tip_radius_spin.value(), self.tip_angle_spin.value(),
+                    self.tip_angle_right_spin.value()):
+                self.tip_shape_combo.blockSignals(True)
+                self.tip_shape_combo.setCurrentIndex(self.tip_shape_combo.count() - 1)
+                self.tip_shape_combo.blockSignals(False)
+                self._sync_tip_controls()
 
     def _sync_tip_controls(self, *_):
         on = self.tip_combo.currentText() != 'none'
         self.tip_radius_spin.setEnabled(on)
         self.tip_angle_spin.setEnabled(on)
+        self.tip_shape_combo.setEnabled(on)
+        self.tip_angle_right_spin.setEnabled(
+            on and self.tip_shape_combo.currentText() != self.TIP_SYMMETRIC)
+
+    def _tip_half_angle_right(self):
+        """The +x flank for the settings, None when the tip is symmetric."""
+        left, right = self.tip_angle_spin.value(), self.tip_angle_right_spin.value()
+        if self.tip_shape_combo.currentText() == self.TIP_SYMMETRIC or right == left:
+            return None
+        return right
 
     def _settings_changed(self, *_):
         """Re-send valid settings to the Boundary tab; invalid ones wait for Run."""
@@ -340,6 +458,7 @@ class MainWindow(QMainWindow):
             tip_correction=self.tip_combo.currentText(),
             tip_radius_nm=self.tip_radius_spin.value(),
             tip_half_angle_deg=self.tip_angle_spin.value(),
+            tip_half_angle_right_deg=self._tip_half_angle_right(),
         )
 
     # ── Actions ──────────────────────────────────────────────────────────────
@@ -431,7 +550,7 @@ class MainWindow(QMainWindow):
         if settings.tip_correction != 'none':
             text += (f"\nTip correction   : {settings.tip_correction}, "
                      f"R = {settings.tip_radius_nm:g} nm, "
-                     f"half angle {settings.tip_half_angle_deg:g} deg")
+                     f"{format_angles(settings.tip_half_angle_deg, settings.tip_half_angle_right_deg)}")
         self.results_label.setText(text)
         self.show_angles()
         self._set_status(f"Analysis complete: {result['n_grooves']} measurements, "

@@ -112,7 +112,8 @@ formula is not used to approximate it.
 ### The tip is not the surface
 
 An AFM image is the surface dilated by the tip. `tip_correction='erosion'` inverts that
-where the inversion exists (a cone-plus-spherical-apex tip, Villarrubia 1997) and
+where the inversion exists (a spherical apex on two flanks that may differ, so a
+pyramid such as Bruker's ScanAsyst-Air can be modelled; Villarrubia 1997) and
 reports a **certainty map** for where it does not. No algorithm can recover a trough
 the tip never entered, and a correction that filled it in silently would be worse than
 no correction.

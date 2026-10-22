@@ -192,6 +192,8 @@ def build_boundary_profile(data, scan_x_size, settings) -> BoundaryProfile:
     if tip is not None:
         metrics['tip_radius_nm'] = tip.radius_nm
         metrics['tip_half_angle_deg'] = tip.half_angle_deg
+        if not tip.symmetric:
+            metrics['tip_half_angle_right_deg'] = tip.half_angle_right_deg
         metrics['tip_certain_fraction'] = tip.certain_fraction
 
     return BoundaryProfile(

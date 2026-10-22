@@ -26,6 +26,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from ...boundary import build_boundary_profile
+from ...core.tip import format_angles
 from ...config import RESULTS_DIR
 from gratinglab.io.boundary import write_boundary_csv, write_boundary_json
 from gratinglab.io.ggp import write_ggp
@@ -249,7 +250,7 @@ class BoundaryView(QWidget):
             # so the fraction recovered belongs beside the depth it qualifies.
             tip = (f"\nTip correction  : {m['tip_correction']}, "
                    f"R {m.get('tip_radius_nm', float('nan')):g} nm, "
-                   f"{m.get('tip_half_angle_deg', float('nan')):g} deg"
+                   f"{format_angles(m.get('tip_half_angle_deg', float('nan')), m.get('tip_half_angle_right_deg'))}"
                    f"\n{'':<18}{100 * m.get('tip_certain_fraction', float('nan')):.1f}% "
                    f"of pixels recovered exactly")
         self.metrics_label.setText(

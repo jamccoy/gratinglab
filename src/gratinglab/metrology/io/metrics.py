@@ -11,6 +11,8 @@ back. The numbers that a solver needs travel through
 :meth:`~gratinglab.metrology.boundary.BoundaryProfile.to_problem`.
 """
 
+from ..core.tip import format_angles
+
 
 def write_profile_metrics(path, metrics):
     """Write the slope/curvature summary that accompanies a boundary profile"""
@@ -29,7 +31,7 @@ def write_profile_metrics(path, metrics):
         if metrics.get('tip_correction', 'none') != 'none':
             f.write(f"Tip correction: {metrics['tip_correction']} "
                     f"(R = {metrics['tip_radius_nm']:g} nm, "
-                    f"half angle = {metrics['tip_half_angle_deg']:g} deg)\n")
+                    f"{format_angles(metrics['tip_half_angle_deg'], metrics.get('tip_half_angle_right_deg'))})\n")
             f.write(f"Tip-certain pixels: "
                     f"{100.0 * metrics['tip_certain_fraction']:.1f}% "
                     f"(the rest are upper bounds on the surface)\n")
