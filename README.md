@@ -122,9 +122,11 @@ pip install "gratinglab[gui]"         # + the Qt windows
 From a checkout, `pip install -e ".[dev,gui,metrology]"` instead.
 
 No optical constant tables ship with the package, so absolute efficiencies need
-one of your own: a CXRO export read with `materials.from_cxro_file(path)`. See
-[`SOURCES.md`](src/gratinglab/materials/data/SOURCES.md) for why, and for the
-exact request that reproduces the table the test suite uses.
+your own. A library is a directory of them, one material per file: save a CXRO
+export as `~/.gratinglab/materials/Pt.txt` (or a PCGrate `Pt.ari`) and
+`coating="Pt"` works. `GRATINGLAB_MATERIALS` points elsewhere, and
+`materials.from_cxro_file(path)` reads one file without a library. See
+[`SOURCES.md`](src/gratinglab/materials/data/SOURCES.md) for why none ship.
 
 The core stays deliberately light — a solver-only user never installs a plotting
 stack — and each subpackage says which extra it needs rather than failing with a bare

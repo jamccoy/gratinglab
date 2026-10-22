@@ -15,6 +15,8 @@ It still uses ``setdefault`` throughout, so ``QT_QPA_PLATFORM=cocoa pytest ...``
 still lets you watch a test drive a real window.
 """
 
+import os
+import tempfile
 from pathlib import Path
 
 import pytest
@@ -23,6 +25,14 @@ import pytest
 # `corpus.py` because a module-level `from .conftest import ...` breaks under
 # a tool that drives pytest in-process from a copied tree -- see that file.
 from corpus import DATA, DEFAULT_REF_DIR, reference_dir  # noqa: F401
+
+# Your own material library (``~/.gratinglab/materials``, or wherever
+# GRATINGLAB_MATERIALS points) must not leak into the suite: a test that passes
+# because of a table on one machine fails on the next. An empty directory, set
+# at import rather than in a fixture, because `parametrize(materials.available())`
+# runs at collection, before any fixture would. A test that wants a library
+# sets the variable itself with monkeypatch, which restores this afterwards.
+os.environ["GRATINGLAB_MATERIALS"] = tempfile.mkdtemp(prefix="gratinglab-no-library-")
 
 
 @pytest.fixture(scope="session")

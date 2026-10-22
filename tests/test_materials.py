@@ -7,6 +7,7 @@ is the same reasoning that put `check_reciprocity` in `checks.py` rather than
 more closed-form tests in `test_scalar.py`.
 """
 
+import os
 from pathlib import Path
 
 import numpy as np
@@ -217,11 +218,83 @@ class TestLookup:
         assert materials.lookup("Au") is materials.lookup("Au")
 
     def test_an_empty_data_directory_is_a_supported_state(self, monkeypatch):
-        """`SOURCES.md` says the vendored data can be deleted outright if the
-        redistribution terms do not hold up, and that this is a deletion rather
-        than a rewrite. That claim is worth a test."""
+        """An install ships no tables (see `SOURCES.md`), so an empty library
+        is what every user starts with, not a broken install."""
         monkeypatch.setattr(materials, "_DATA", Path("/nonexistent"))
         assert materials.available() == ()
+
+
+class TestUserLibraries:
+    """A library is a directory of tables, one material per file. An install
+    ships none, so this is how anybody gets a coating at all."""
+
+    @pytest.fixture
+    def library(self, tmp_path, monkeypatch):
+        monkeypatch.setenv(materials.LIBRARY_ENV, str(tmp_path))
+        return tmp_path
+
+    def test_a_table_dropped_in_is_a_coating(self, library):
+        (library / "Edge.txt").write_text(EDGE_TEXT, encoding="utf-8")
+        assert "Edge" in materials.available()
+        assert materials.lookup("Edge").name == "Edge"
+
+    def test_the_source_names_the_file_it_came_from(self, library):
+        """Provenance has to say which table answered, now that there can be
+        more than one candidate for a name."""
+        (library / "Edge.txt").write_text(EDGE_TEXT, encoding="utf-8")
+        source = materials.lookup("Edge").source
+        assert "Edge.txt" in source and str(library) in source
+
+    def test_yours_replaces_a_bundled_table_of_the_same_name(self, library):
+        (library / "Au.txt").write_text(EDGE_TEXT, encoding="utf-8")
+        assert len(materials.lookup("Au").wavelength_nm) == 6
+        assert materials.available().count("Au") == 1
+
+    def test_several_directories_are_searched_in_order(self, tmp_path, monkeypatch):
+        first, second = tmp_path / "first", tmp_path / "second"
+        first.mkdir()
+        second.mkdir()
+        (second / "Edge.txt").write_text(EDGE_TEXT, encoding="utf-8")
+        (second / "Only.txt").write_text(EDGE_TEXT, encoding="utf-8")
+        (first / "Edge.txt").write_text(CXRO_TEXT, encoding="utf-8")
+        monkeypatch.setenv(materials.LIBRARY_ENV, f"{first}{os.pathsep}{second}")
+        assert len(materials.lookup("Edge").wavelength_nm) != 6   # first wins
+        assert materials.lookup("Only").name == "Only"           # second searched
+
+    def test_a_pcgrate_ari_table_is_read_too(self, library, gold):
+        materials.write_ari(gold, library / "Gold2.ari")
+        table = materials.lookup("Gold2")
+        assert table.decrement == pytest.approx(gold.decrement, abs=1e-6)
+
+    def test_two_tables_for_one_name_in_one_directory_are_refused(self, library, gold):
+        """Neither suffix outranks the other, so picking one would be a guess."""
+        (library / "Edge.txt").write_text(EDGE_TEXT, encoding="utf-8")
+        materials.write_ari(gold, library / "Edge.ari")
+        with pytest.raises(ValueError, match="two tables for 'Edge'"):
+            materials.lookup("Edge")
+
+    def test_an_edited_table_is_reread(self, library):
+        """The cache is keyed on the file and its mtime, not the name, or an
+        edit would keep serving the old numbers for the life of the process."""
+        path = library / "Edge.txt"
+        path.write_text(EDGE_TEXT, encoding="utf-8")
+        before = materials.lookup("Edge")
+        path.write_text(CXRO_TEXT, encoding="utf-8")
+        os.utime(path, ns=(path.stat().st_atime_ns, path.stat().st_mtime_ns + 10**9))
+        assert materials.lookup("Edge") is not before
+
+    def test_without_the_variable_the_home_library_is_used(self, tmp_path, monkeypatch):
+        monkeypatch.delenv(materials.LIBRARY_ENV)
+        monkeypatch.setattr(materials, "user_dir", lambda: tmp_path)
+        (tmp_path / "Edge.txt").write_text(EDGE_TEXT, encoding="utf-8")
+        assert materials.lookup("Edge").name == "Edge"
+
+    def test_a_refusal_says_where_it_looked_and_how_to_add_one(self, library):
+        with pytest.raises(materials.UnknownMaterial) as caught:
+            materials.lookup("Pt")
+        message = str(caught.value)
+        assert str(library) in message
+        assert "Pt.txt" in message and materials.LIBRARY_ENV in message
 
 
 class TestEveryVendoredTable:
