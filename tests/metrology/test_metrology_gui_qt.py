@@ -396,6 +396,51 @@ class TestEfficiencyDialog:
         assert dialog.status.text()
 
 
+class TestSwathDialog:
+    """Per-swath groove statistics, opened from the Boundary tab."""
+
+    def test_button_follows_the_profile(self, qtbot, window):
+        assert not window.boundary.swaths_btn.isEnabled()
+        window.load(SAMPLE)
+        assert window.boundary.swaths_btn.isEnabled()
+
+    def test_dialog_shows_statistics_for_the_loaded_scan(self, qtbot, window):
+        window.load(SAMPLE)
+        dialog = window.boundary.swath_dialog()
+        qtbot.addWidget(dialog)
+        assert dialog.stats is not None and dialog.stats.n_swaths >= 2
+        assert "nm RMS" in dialog.summary_label.text()
+        assert dialog.export_btn.isEnabled()
+
+    def test_swath_count_reaches_the_statistics(self, qtbot, window):
+        window.load(SAMPLE)
+        dialog = window.boundary.swath_dialog()
+        qtbot.addWidget(dialog)
+        dialog.n_spin.setValue(4)
+        assert dialog.stats.n_swaths == 4
+
+    def test_boundary_settings_reach_the_swaths(self, qtbot, window):
+        window.load(SAMPLE)
+        window.boundary.n_points_spin.setValue(500)
+        dialog = window.boundary.swath_dialog()
+        qtbot.addWidget(dialog)
+        assert dialog.stats.profiles.shape[1] == 500
+
+    def test_export_writes_one_row_per_swath(self, qtbot, window, tmp_path, monkeypatch):
+        from PySide6.QtWidgets import QFileDialog
+        window.load(SAMPLE)
+        dialog = window.boundary.swath_dialog()
+        qtbot.addWidget(dialog)
+        dialog.n_spin.setValue(5)
+        target = tmp_path / "swaths.csv"
+        monkeypatch.setattr(QFileDialog, "getSaveFileName",
+                            lambda *a, **k: (str(target), "CSV table (*.csv)"))
+        dialog.export()
+        rows = [l for l in target.read_text(encoding="utf-8").splitlines()
+                if l and not l.startswith("#")]
+        assert len(rows) == 1 + 5
+
+
 class TestTipCorrectionControls:
     """Tip deconvolution, from the window rather than config.py."""
 

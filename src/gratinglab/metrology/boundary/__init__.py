@@ -10,6 +10,7 @@ with the blaze-angle analysis in gratinglab.metrology.core.
 """
 
 from .pipeline import BoundaryProfile, build_boundary_profile
+from .swaths import SwathStatistics, swath_statistics
 from .average import (
     flatten_endpoints,
     average_grooves,
@@ -20,6 +21,8 @@ from .average import (
 __all__ = [
     'BoundaryProfile',
     'build_boundary_profile',
+    'SwathStatistics',
+    'swath_statistics',
     'flatten_endpoints',
     'average_grooves',
     'normalize_profile',
