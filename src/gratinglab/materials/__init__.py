@@ -3,15 +3,17 @@ r"""Optical constants: looking them up, and reading your own.
 ```python
 from gratinglab import materials
 
-materials.available()          # ('Au',)
-gold = materials.lookup("Au")  # a vendored table
-mine = materials.from_cxro_file("Ni_CXRO.txt")   # your own download
+materials.available()          # every material in every library
+pt = materials.lookup("Pt")    # ~/.gratinglab/materials/Pt.txt, say
+mine = materials.from_cxro_file("Ni_CXRO.txt")   # any file, no library
 ```
 
-**A vendored table is a convenience, never a requirement.** Everything here
-works on a user-supplied CXRO export, and `data/SOURCES.md` records what is
-bundled and why that directory could be deleted outright without changing any
-code. See that file before the first public release.
+**A library is a directory of tables, one material per file**, named for it:
+`Pt.txt` (a CXRO export) or `Pt.ari` (PCGrate) is `coating="Pt"`. Yours is
+`~/.gratinglab/materials`, or whatever `GRATINGLAB_MATERIALS` names, and it is
+searched before the tables bundled with a checkout, so your own replaces a
+bundled one of the same name. The release packages bundle none, because CXRO's
+terms for redistributing its tables are not settled; `data/SOURCES.md` says so.
 
 Lookup is by name, deliberately, because that is what a
 :class:`~gratinglab.problem.Problem` carries: `coating="Au"` keeps a benchmark
@@ -27,6 +29,8 @@ has to honour.
 
 from __future__ import annotations
 
+import os
+from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
 
@@ -40,20 +44,33 @@ from .optical import (
 
 __all__ = [
     "HC_EV_NM",
+    "LIBRARY_ENV",
     "OpticalConstants",
     "UnknownMaterial",
     "available",
     "data_dir",
     "from_ari_file",
     "from_cxro_file",
+    "library_dirs",
     "lookup",
     "read_ari",
     "read_cxro",
+    "user_dir",
     "write_ari",
 ]
 
-#: Vendored tables live here. One CXRO export per material, named for it.
+#: Tables bundled with a checkout live here. The release packages ship none;
+#: see ``data/SOURCES.md``.
 _DATA = Path(__file__).parent / "data"
+
+#: Names your own library directories, separated by ``os.pathsep``. When set it
+#: replaces :func:`user_dir` rather than adding to it, the same rule
+#: ``GRATINGLAB_AFM_DIR`` follows.
+LIBRARY_ENV = "GRATINGLAB_MATERIALS"
+
+#: One reader per file suffix. A library is a directory of these, one material
+#: per file, named for it: ``Pt.txt`` is ``coating="Pt"``.
+_READERS = {".txt": read_cxro, ".ari": read_ari}
 
 
 class UnknownMaterial(KeyError):
@@ -69,40 +86,101 @@ class UnknownMaterial(KeyError):
 
 
 def data_dir() -> Path:
-    """Where vendored tables are read from. Exposed so a test can say that the
+    """Where bundled tables are read from. Exposed so a test can say that the
     directory being empty is a supported state rather than a broken install."""
     return _DATA
 
 
-def available() -> tuple[str, ...]:
-    """Vendored material names, sorted.
+def user_dir() -> Path:
+    """Your default library, used when ``GRATINGLAB_MATERIALS`` is unset.
 
-    Reads the directory rather than a hardcoded list, so adding a table is a
-    file drop -- see ``data/SOURCES.md``. Returns empty if the directory has
-    been removed, which is a supported configuration, not an error.
+    Under the home directory rather than beside the package, because an
+    install's own directory is site-packages: a table dropped there is lost on
+    the next upgrade, and may not be writable at all.
     """
-    if not _DATA.is_dir():
-        return ()
-    return tuple(sorted(p.stem for p in _DATA.glob("*.txt")))
+    return Path.home() / ".gratinglab" / "materials"
+
+
+def library_dirs() -> tuple[Path, ...]:
+    """Every directory searched for a material, in the order searched.
+
+    Yours first, then the bundled one, so a table of your own replaces a
+    bundled one of the same name. The table's ``source`` names the file it was
+    read from, so a result's provenance says which one was used. Directories
+    that do not exist are listed anyway, since they are where a lookup looked.
+    """
+    configured = os.environ.get(LIBRARY_ENV)
+    if configured:
+        yours = [Path(p).expanduser() for p in configured.split(os.pathsep) if p]
+    else:
+        yours = [user_dir()]
+    return (*yours, _DATA)
+
+
+def _tables(directory: Path) -> dict[str, Path]:
+    """The tables in one library directory, by material name.
+
+    Two files for one name in the same directory (``Pt.txt`` and ``Pt.ari``)
+    are refused rather than one being picked: neither suffix outranks the
+    other, so any choice would be a guess about which the user meant.
+    """
+    if not directory.is_dir():
+        return {}
+    found: dict[str, Path] = {}
+    for path in sorted(directory.iterdir()):
+        if path.suffix.lower() not in _READERS or not path.is_file():
+            continue
+        if path.stem in found:
+            raise ValueError(
+                f"{directory} holds two tables for {path.stem!r}, "
+                f"{found[path.stem].name} and {path.name}; keep one"
+            )
+        found[path.stem] = path
+    return found
+
+
+def available() -> tuple[str, ...]:
+    """Material names across every library, sorted.
+
+    Reads the directories rather than a hardcoded list, so adding a material is
+    a file drop. Empty is a supported configuration, not an error: it is what
+    an install starts with.
+    """
+    names: set[str] = set()
+    for directory in library_dirs():
+        names.update(_tables(directory))
+    return tuple(sorted(names))
+
+
+def lookup(name: str) -> OpticalConstants:
+    """A material by name, e.g. ``"Au"``, from the first library that has it."""
+    for directory in library_dirs():
+        path = _tables(directory).get(name)
+        if path is not None:
+            return _read(path, path.stat().st_mtime_ns, name)
+    known = ", ".join(available()) or "none installed"
+    searched = "; ".join(str(d) for d in library_dirs())
+    raise UnknownMaterial(
+        f"no optical constants for {name!r}; available: {known}. Searched: "
+        f"{searched}. Add a CXRO export as {name}.txt, or a PCGrate {name}.ari, "
+        f"to {user_dir()} or to a directory named in {LIBRARY_ENV}; or read one "
+        "directly with materials.from_cxro_file(path)."
+    )
 
 
 @lru_cache(maxsize=None)
-def lookup(name: str) -> OpticalConstants:
-    """A vendored table by material name, e.g. ``"Au"``.
+def _read(path: Path, mtime_ns: int, name: str) -> OpticalConstants:
+    """Cached by file and modification time, not by name.
 
-    Cached: the tables are immutable (`OpticalConstants` freezes its arrays),
-    a solve may resolve the same coating once per wavelength grid, and parsing
-    500 rows repeatedly is pure waste.
+    The tables are immutable (`OpticalConstants` freezes its arrays) and a
+    solve may resolve the same coating once per wavelength grid, so parsing
+    500 rows each time is waste. Keying on the name alone would keep serving a
+    table after its file was edited or a library was added in front of it.
     """
-    path = _DATA / f"{name}.txt"
-    if not path.is_file():
-        known = ", ".join(available()) or "none installed"
-        raise UnknownMaterial(
-            f"no optical constants for {name!r}; available: {known}. "
-            "Supply your own with materials.from_cxro_file(path), or see "
-            "src/gratinglab/materials/data/SOURCES.md to add a table."
-        )
-    return read_cxro(path, name=name)
+    table = _READERS[path.suffix.lower()](path, name=name)
+    # The reader records the file name; the directory is what tells two
+    # libraries' Au.txt apart, and `source` is what provenance carries.
+    return replace(table, source=f"{table.source}, in {path.parent}")
 
 
 def from_cxro_file(path: "str | Path", name: str | None = None) -> OpticalConstants:

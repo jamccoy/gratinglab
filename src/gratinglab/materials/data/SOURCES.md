@@ -39,9 +39,14 @@ message naming the way out. Nothing in `gratinglab` requires a table to exist;
 
 ## Adding a material
 
-Download an `(Energy, Delta, Beta)` table from the CXRO page above, drop it in
-here as `<Element>.txt`, and add a row to the table. `available()` reads the
-directory, so no code changes.
+For yourself, not here. Put the table in your own library,
+`~/.gratinglab/materials` or a directory named in `GRATINGLAB_MATERIALS`, as
+`<Name>.txt` for a CXRO export or `<Name>.ari` for PCGrate's format. That is
+searched before this directory, survives an upgrade, and is never published.
+See `materials/__init__.py`.
+
+This directory holds only what the test suite needs and is never packaged, so
+a table belongs here only if a test needs it, and only with its row above.
 
 Do **not** hand-edit these files. If a table needs trimming or resampling, do it
-at load time — an edited copy stops being the thing this file claims it is.
+at load time: an edited copy stops being the thing this file claims it is.

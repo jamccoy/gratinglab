@@ -81,6 +81,15 @@ jobs:
               raise SystemExit("lookup('Au') resolved from an install that ships no tables")
           PY
 
+      # And the way out works from an install: a table in a user library is a
+      # coating. A tiny synthetic export, so this needs no CXRO data either.
+      - name: Installed from the wheel, a user library resolves
+        run: |
+          mkdir -p /tmp/library
+          printf ' Test Density=1.0\n Energy(eV), Delta, Beta\n 200. 0.01 0.001\n 2000. 0.0005 0.0001\n' > /tmp/library/Test.txt
+          cd /tmp
+          GRATINGLAB_MATERIALS=/tmp/library /tmp/clean/bin/python -c "from gratinglab import materials; print(materials.available()); print(materials.lookup('Test'))"
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:

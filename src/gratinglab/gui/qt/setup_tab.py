@@ -35,25 +35,39 @@ def library_page() -> str:
     `materials.available()` actually returns -- the failure mode of a
     hand-maintained list is that it is right on the day it is written.
     """
-    from ...materials import available, data_dir, lookup
+    from ...materials import LIBRARY_ENV, available, library_dirs, lookup
 
-    names = available()
+    try:
+        names = available()
+        unlisted = ""
+    except ValueError as refused:  # two tables for one name in one directory
+        names, unlisted = (), f"**A library could not be read:** {refused}\n\n"
     if not names:
-        listing = (
-            "**No tables are installed.** That is a supported configuration, "
-            "not a broken one: the reader works on any CXRO/Henke export you "
-            "download, and nothing in `gratinglab` requires a bundled file.\n"
+        listing = unlisted + (
+            "**No tables are installed.** That is what an install starts with, "
+            "not a broken one: the package ships none, and any CXRO/Henke "
+            "export you download becomes a coating when you add it to a "
+            "library, below.\n"
         )
     else:
         rows = ["| Material | Range | Points | Source |", "|---|---|---|---|"]
         for name in names:
-            table = lookup(name)
+            # One row per table, and an unreadable file is a row saying so
+            # rather than a page that fails: a library is the user's own
+            # directory and can hold anything.
+            try:
+                table = lookup(name)
+            except (OSError, ValueError) as unreadable:
+                rows.append(f"| `{name}` | unreadable | | {unreadable} |")
+                continue
             low, high = table.range_nm
             rows.append(
                 f"| `{name}` | {low:.3g} – {high:.3g} nm | "
                 f"{len(table.wavelength_nm)} | {table.source} |"
             )
-        listing = "\n".join(rows) + "\n"
+        listing = unlisted + "\n".join(rows) + "\n"
+
+    searched = "\n".join(f"    {d}" for d in library_dirs())
 
     return f"""\
 # Materials
@@ -98,14 +112,17 @@ naming the number it needs.
 
 ## Adding a material
 
-Download an `(Energy, Delta, Beta)` table from
-[CXRO](https://henke.lbl.gov/optical_constants/) and drop it in as
-`<Element>.txt` here:
+A library is a directory of tables, one material per file and named for it:
+an `(Energy, Delta, Beta)` export from
+[CXRO](https://henke.lbl.gov/optical_constants/) saved as `Pt.txt`, or a
+PCGrate `Pt.ari`, is the coating `Pt`. These are searched in this order, so a
+table of your own replaces a bundled one of the same name:
 
-    {data_dir()}
+{searched}
 
-The list above reads that directory, so no code changes. Or load one from
-anywhere without installing it:
+The first is yours. Set `{LIBRARY_ENV}` to use other directories instead,
+separated as your platform separates `PATH`. The list above reads them, so no
+code changes. Or load a table from anywhere without adding it:
 
     from gratinglab import materials
     nickel = materials.from_cxro_file("Ni_CXRO.txt")
@@ -117,10 +134,10 @@ These are the Henke–Gullikson–Davis compilation. Work using them should cite
 at E = 50–30000 eV, Z = 1–92*, Atomic Data and Nuclear Data Tables **54** (2),
 181–342 (1993).
 
-`SOURCES.md` in the directory above records per-file provenance, and states
-plainly that redistribution terms have not been formally confirmed for
-bundling inside a BSD-3 package. If they do not hold up, deleting that
-directory is the whole fix -- the reader keeps working on user-supplied files.
+The package ships no tables: CXRO's terms for redistributing them inside a
+BSD-3 package have not been confirmed, and `SOURCES.md` beside the bundled
+directory records why. Each table's source names the file it was read from,
+so a result's provenance says which library answered.
 
 ## Surface roughness
 

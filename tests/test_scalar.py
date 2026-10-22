@@ -1390,10 +1390,8 @@ class TestTheValidityGuardsMaterialsUnlocked:
         one wavelength where reflectivity has least to stand on."""
         from test_materials import EDGE_NM, EDGE_TEXT
 
-        from gratinglab import materials
-
         (tmp_path / "Edge.txt").write_text(EDGE_TEXT, encoding="utf-8")
-        monkeypatch.setattr(materials, "_DATA", tmp_path)
+        monkeypatch.setenv("GRATINGLAB_MATERIALS", str(tmp_path))
         scan = scalar.solve(
             Problem(period=315.15, profile=self.PROFILE, coating="Edge"),
             Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL),
