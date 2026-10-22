@@ -4,7 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gratinglab"
-version = "0.1.1"
+# Read from `gratinglab.__version__`, the way endstation does, so a release
+# bumps one literal. Everything else (provenance, the GUI's About box, the
+# release workflow's tag check) already reads `__version__`, and
+# tests/test_result.py holds CITATION.cff to it.
+dynamic = ["version"]
 description = "Open platform for diffraction grating groove metrology and efficiency analysis"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -75,6 +79,9 @@ Homepage = "https://github.com/jamccoy/gratinglab"
 
 # Solver backends register here. A backend may live in its own distribution.
 [project.entry-points."gratinglab.solvers"]
+
+[tool.setuptools.dynamic]
+version = { attr = "gratinglab.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
