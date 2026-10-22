@@ -35,7 +35,11 @@ The two halves are one package because a file between them loses information. A
 PCGrate `.ggp` boundary carries a *shape* and not a grating: it cannot hold the period,
 so the period gets retyped, guessed, or recovered from a sidecar later.
 `BoundaryProfile.to_problem()` carries the period the scan measured, and the fitted
-facet angle with it.
+facet angle with it. To save a profile without losing that, write it as gratinglab's
+own `.json` (`gratinglab.io.boundary.write_boundary_json`): reading it back gives the
+same problem, and the efficiency window's "Load boundary profile" fills in the
+period from it. The metrology window's Boundary tab exports `.ggp`, `.json` or
+`.csv`, and its "Send to efficiency window" button opens the groove there directly.
 
 ```python
 from gratinglab.metrology.boundary import build_boundary_profile

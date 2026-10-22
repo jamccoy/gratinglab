@@ -388,3 +388,28 @@ def test_without_the_guard_the_partial_groove_collapses_the_window():
     span = lambda result: (result[0][-1] - result[0][0]) * 1000 / profile.period_nm  # noqa: E731
     assert without[3] == with_guard[3] + 1
     assert span(without) < 0.8 < 0.98 < span(with_guard)
+
+
+# -- saving the profile keeps everything the solver needs ------------------------
+
+def test_saved_json_gives_the_same_problem_as_the_in_process_handoff(tmp_path):
+    """The reason the format exists: a .ggp loses the period, this must not.
+    Field for field the same Problem as BoundaryProfile.to_problem."""
+    from gratinglab.io.boundary import read_boundary_json, write_boundary_json
+
+    profile = _profile()
+    settings = AnalysisSettings.from_config()
+    path = write_boundary_json(tmp_path / "groove.json", profile,
+                               source=SOURCE, settings=settings)
+    saved = read_boundary_json(path).to_problem(coating="Au")
+    direct = profile.to_problem(coating="Au")
+    assert saved == direct
+    assert saved.period == profile.period_nm
+
+
+def test_saved_csv_carries_the_measured_period(tmp_path):
+    from gratinglab.io.boundary import write_boundary_csv
+
+    profile = _profile()
+    text = write_boundary_csv(tmp_path / "groove.csv", profile).read_text(encoding="utf-8")
+    assert f"# period_nm: {float(profile.period_nm)!r}" in text

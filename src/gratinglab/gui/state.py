@@ -246,9 +246,12 @@ def _build_profile(form: FormState, errors: list[FieldError]):
         errors.append(FieldError("profile_path", f"no such file: {path}"))
         return None
     try:
-        from ..io.ggp import read_profile
+        # A gratinglab .json or a PCGrate .ggp, by suffix. The JSON's period is
+        # applied to the form when the file is loaded (GeometryPanel), not here:
+        # the period field stays the one place the period is read from.
+        from ..io.boundary import read_profile_file
 
-        return read_profile(path)
+        return read_profile_file(path)
     except Exception as exc:  # the reader raises ValueError with a useful message
         errors.append(FieldError("profile_path", str(exc).split("\n")[0]))
         return None
