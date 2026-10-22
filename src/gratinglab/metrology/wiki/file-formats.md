@@ -42,7 +42,7 @@ Each plane's header section says where its bytes start (`Data offset`), how wide
 each sample is (`Bytes/pixel`, 2 or 4), and its dimensions (`Samps/line` for
 columns, `Number of lines` for rows).
 
-**Rows and columns are read separately.** They are frequently unequal — the
+Rows and columns are read separately. They are frequently unequal: the
 bundled fixture is 512 wide by 401 lines, because that scan stopped early.
 Assuming a square image would read past the plane and reshape the next channel's
 bytes into the height map.
@@ -56,12 +56,12 @@ signal, not topography; running it through a blaze-angle pipeline produces a
 confident-looking number that means nothing.
 
 Retrace is the default because it is the plane this project's existing Gwyddion
-exports were taken from — it correlates 0.98 with the export, where Trace
+exports were taken from: it correlates 0.98 with the export, where Trace
 correlates 0.90. That makes the two input routes agree by construction rather
 than by luck. Both directions image the same grooves and either is a legitimate
 choice; the GUI offers a selector when a `.spm` is loaded.
 
-### The height scale, and the trap in it
+### The height scale, and how to misread it
 
 Raw samples are integers. Converting them to nanometres uses a line like:
 
@@ -71,7 +71,7 @@ Raw samples are integers. Converting them to nanometres uses a line like:
 
 giving `height = raw × (V/LSB) × Sens`.
 
-**The name in brackets must be used verbatim.** A file typically defines both:
+The name in brackets must be used verbatim. A file typically defines both:
 
 ```
 \@Sens. Zsens:     V  32.46000 nm/V
@@ -84,7 +84,7 @@ right shape, the grooves sit in the right places, the flattening succeeds, and
 every reported blaze angle is quietly incorrect.
 
 This is guarded by a test that compares peak-to-peak against the known export and
-names the trap in its failure message.
+names the mistake in its failure message.
 
 ## The two routes compared
 
@@ -104,7 +104,7 @@ background. The Gwyddion step turns out to be redundant for this pipeline.
 
 One incidental finding while verifying that: the `_flatten.0_00003` companion
 file sitting beside the raw scan is **byte-identical** to it. Gwyddion never
-wrote modified data — the flattening existed only in the text export.
+wrote modified data; the flattening existed only in the text export.
 
 ## Practical notes
 

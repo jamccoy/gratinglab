@@ -1,4 +1,4 @@
-# Vendored optical constants — provenance
+# Vendored optical constants: provenance
 
 Every file here is a **verbatim CXRO/Henke export**, not a re-derivation. They
 are committed in their original format so that the reader shipped in

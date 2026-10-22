@@ -126,6 +126,14 @@ pip install "gratinglab[gui]"                # + the Qt windows
 pip install "gratinglab[refractiveindex]"    # + refractiveindex.info tables
 ```
 
+With [uv](https://docs.astral.sh/uv/), the same extras work:
+
+```bash
+uv pip install "gratinglab[refractiveindex]"    # into the active environment
+uv add gratinglab                               # into a uv project
+uv tool install "gratinglab[gui]"               # gratinglab-gui as a standalone command
+```
+
 From a checkout, `pip install -e ".[dev,gui,metrology,refractiveindex]"` instead.
 
 No optical constant tables ship with the package, so absolute efficiencies need

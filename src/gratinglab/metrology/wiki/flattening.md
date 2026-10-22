@@ -8,7 +8,7 @@ confuse.
 | | Acts on | When | Changes the blaze angle? |
 |---|---|---|---|
 | **Image flattening** | the 2-D scan | before rows are averaged | **No** (for the methods offered) |
-| **Profile flattening** | one averaged 1-D trace | per row group | **Yes — about 0.49°** |
+| **Profile flattening** | one averaged 1-D trace | per row group | **Yes, about 0.49°** |
 
 Both are set in the **Import** tab, where the profile preview draws the
 background about to be removed.
@@ -25,7 +25,7 @@ to each other.
 | `align_rows` | Subtract each row's median, putting every scan line on a common level. **The default.** |
 
 `align_rows` uses the median rather than the mean because a grating profile is
-not symmetric about its own mean — a row catching more groove bottom than land
+not symmetric about its own mean: a row catching more groove bottom than land
 would be dragged by a mean where the median barely moves.
 
 The Import tab reports the **row-offset spread** (the standard deviation of the
@@ -37,8 +37,8 @@ this project's data that spread runs 0.44–2.74 nm, against groove depths near
 
 This is worth stating plainly, because it looks like a bug otherwise.
 
-On `20250820_280C_00004.txt` — the scan with the worst row-offset spread in the
-dataset — `none`, `plane` and `align_rows` all give **30.8524°**, agreeing to
+On `20250820_280C_00004.txt` (the scan with the worst row-offset spread in the
+dataset), `none`, `plane` and `align_rows` all give **30.8524°**, agreeing to
 within 5×10⁻¹⁵. Across all eight compare-mode samples, switching `align_rows` on
 moved the mean by **0.0000°**.
 
@@ -57,7 +57,7 @@ moving, and it is guarded by a test.
 - **Seeing the data.** A raw image with sample tilt renders as a gradient with
   the grating barely visible. Levelled, it looks like a grating.
 - **Methods that aren't affine.** A per-row *quadratic* changes the shape within
-  each row rather than just its offset or tilt, and does survive the averaging —
+  each row rather than just its offset or tilt, and does survive the averaging:
   measured at 0.0003°. Small, but not zero. The registry in
   `core/image_flatten.py` is where such a method would go.
 - **Being explicit.** The step now happens somewhere named and recorded, rather
@@ -73,7 +73,7 @@ detected and facets fitted. **This is the choice that matters.**
 | `linear` | A straight line through the whole profile |
 | `polynomial` | A polynomial of `FLATTEN_POLY_ORDER`, optionally ignoring the edges |
 | `groove_peaks` | A polynomial through the detected peaks only |
-| `level_grooves` | A polynomial through chosen features — `peaks` (the lands), `troughs` (groove bottoms), or `both`. **The default.** |
+| `level_grooves` | A polynomial through chosen features: `peaks` (the lands), `troughs` (groove bottoms), or `both`. **The default.** |
 
 On the same scan:
 
@@ -84,7 +84,7 @@ On the same scan:
 | `polynomial` | 31.1098° | 105 |
 | `groove_peaks` | 31.3466° | 106 |
 
-A **0.49° spread** — around 250× the image-flattening effect, and comparable to
+A **0.49° spread**, around 250× the image-flattening effect, and comparable to
 the differences between samples this software exists to detect. It also changes
 how many grooves are found, because the flattened profile is what groove
 detection runs on.
