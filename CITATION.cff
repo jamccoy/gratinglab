@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+message: If you use gratinglab, please cite it as below.
+type: software
+title: "gratinglab: an open platform for diffraction grating groove metrology and efficiency analysis"
+authors:
+  - family-names: McCoy
+    given-names: Jake
+version: 0.1.0
+license: BSD-3-Clause
+repository-code: "https://github.com/jamccoy/gratinglab"
+keywords:
+  - diffraction grating
+  - diffraction efficiency
+  - integral method
+  - x-ray optics
+  - off-plane
+  - AFM
+  - metrology

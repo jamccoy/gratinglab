@@ -1,0 +1,92 @@
+name: release
+
+# Tag vX.Y.Z on a commit whose pyproject.toml says X.Y.Z, and this publishes to
+# PyPI by Trusted Publishing and creates the GitHub Release. The Release is what
+# Zenodo listens for, so the DOI is minted from the same event.
+#
+# There is no token anywhere in this file and there must never be one:
+# pypa/gh-action-pypi-publish uses a `password:` whenever one is given and then
+# ignores OIDC entirely, so adding one would silently switch the trust model.
+# The publisher lives on pypi.org (Owner jamccoy, repository gratinglab,
+# workflow release.yml, environment blank), which is why no checkout shows it.
+
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # gh release create
+      id-token: write   # Trusted Publishing
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: The tag must name the version being built
+        run: |
+          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match pyproject.toml version $version"
+            exit 1
+          fi
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          twine check --strict dist/*
+
+      # A table that exists in a checkout and vanishes on install is the
+      # failure pyproject.toml's package-data comment describes, and nothing
+      # else in CI installs a wheel. Read the wheel, then use it.
+      - name: The wheel carries its data
+        run: |
+          python - <<'PY'
+          import glob, zipfile
+          names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
+          tables = sorted(n for n in names if n.startswith("gratinglab/materials/data/") and n.endswith(".txt"))
+          wiki = [n for n in names if n.startswith("gratinglab/metrology/wiki/") and n.endswith(".md")]
+          print("tables:", tables)
+          print("metrology wiki pages:", len(wiki))
+          # No optical constant tables ship until their redistribution terms
+          # are settled; see materials/data/SOURCES.md.
+          assert not tables, f"the wheel must carry no tables: {tables}"
+          assert "gratinglab/materials/data/SOURCES.md" in names
+          assert wiki, "metrology wiki missing from the wheel"
+          PY
+          tar -tzf dist/*.tar.gz | grep -E 'materials/data/.*\.txt$' && { echo "::error::the sdist carries a table"; exit 1; } || true
+
+      # With no tables shipped, what a user meets is the refusal, so that is
+      # what is checked: an empty library, and a message naming the way out.
+      - name: Installed from the wheel, an absent coating is refused helpfully
+        run: |
+          python -m venv /tmp/clean
+          /tmp/clean/bin/pip install dist/*.whl
+          cd /tmp
+          /tmp/clean/bin/python - <<'PY'
+          from gratinglab import materials
+          assert materials.available() == (), materials.available()
+          try:
+              materials.lookup("Au")
+          except materials.UnknownMaterial as refused:
+              print(refused)
+              assert "from_cxro_file" in str(refused)
+          else:
+              raise SystemExit("lookup('Au') resolved from an install that ships no tables")
+          PY
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          skip-existing: true
+
+      - name: Create the GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes --verify-tag

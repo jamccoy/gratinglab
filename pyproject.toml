@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "gratinglab"
-version = "0.0.1"
+version = "0.1.0"
 description = "Open platform for diffraction grating groove metrology and efficiency analysis"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -76,19 +76,23 @@ Homepage = "https://github.com/jamccoy/gratinglab"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# Vendored optical constants ship with the wheel. Without this they exist in a
-# checkout and vanish on install, so `materials.lookup("Au")` would work for
-# every developer and fail for every user -- the worst version of the bug.
-# `docs/theory/` is deliberately *not* handled this way: it is genuinely
-# dev-checkout-only and `gui/docs.py` degrades to an explanatory entry when it
-# is absent. Optical constants cannot degrade like that; a missing table has to
-# raise.
+# Optical constant TABLES do not ship: whether CXRO's may be redistributed is
+# not settled, so the wheel and sdist carry none and `available()` is empty on
+# install. That is the one place a checkout and an install differ on purpose,
+# and both halves are checked: the suite uses `data/Au.txt` from the checkout,
+# and release.yml asserts the wheel holds no table and that an install refuses
+# `lookup("Au")` with the message that says what to do instead. A missing table
+# raises rather than degrading, so the difference cannot pass for a result.
+# SOURCES.md ships, because it is how a user finds out where to get one.
 [tool.setuptools.package-data]
-"gratinglab.materials" = ["data/*.txt", "data/SOURCES.md"]
+"gratinglab.materials" = ["data/SOURCES.md"]
 # The metrology wiki ships too, for the same reason: pages that exist in a
 # checkout and vanish on install are worse than no pages. This is also the
 # model `docs/theory/` should adopt -- see docs/roadmap.md.
 "gratinglab.metrology.wiki" = ["*.md"]
+
+[tool.setuptools.exclude-package-data]
+"gratinglab.materials" = ["data/*.txt"]
 
 # Linting arrived with the metrology package and was briefly lost with it: the
 # configuration lived in that project's pyproject.toml, which the merge
