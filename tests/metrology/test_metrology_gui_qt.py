@@ -436,8 +436,8 @@ class TestSwathDialog:
         monkeypatch.setattr(QFileDialog, "getSaveFileName",
                             lambda *a, **k: (str(target), "CSV table (*.csv)"))
         dialog.export()
-        rows = [l for l in target.read_text(encoding="utf-8").splitlines()
-                if l and not l.startswith("#")]
+        rows = [line for line in target.read_text(encoding="utf-8").splitlines()
+                if line and not line.startswith("#")]
         assert len(rows) == 1 + 5
 
 
