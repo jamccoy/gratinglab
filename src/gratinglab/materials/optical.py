@@ -155,9 +155,17 @@ class OpticalConstants:
         directly comparable. That comparison is the validity guard
         ``docs/theory/scalar.md`` §7 has carried as "needs a materials layer to
         evaluate".
+
+        **Zero where the decrement is not positive.** Just below an absorption
+        edge anomalous dispersion drives it negative (Cr near 574 eV, Ni near
+        853 eV), the real part of n rises above 1, and there is no total
+        external reflection at any graze. A bare square root returned NaN
+        there, and ``graze > nan`` is False, so the scalar solver's guard
+        passed silently at exactly the wavelengths it should warn about most.
+        Zero makes every graze exceed it, which is the physics.
         """
         decrement, _ = self.at(wavelength_nm)
-        return np.sqrt(2.0 * decrement)
+        return np.sqrt(2.0 * np.clip(decrement, 0.0, None))
 
     def _require_in_range(self, values: NDArray[np.float64]) -> None:
         outside = ~self.covers(values)
