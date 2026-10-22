@@ -117,17 +117,22 @@ plots the profile rather than only reporting numbers.
 | Max slope magnitude | Steepest gradient |
 | Max curvature | Sharpest bend, a proxy for how rounded the groove is |
 
-### Why edge exclusion matters especially here
+### Partial grooves are skipped
 
-`average_grooves` trims every groove to the **most restrictive** common extent,
-so one groove near a scan edge narrows the window shared by all of them. The
-normalisation step then stretches whatever window it has to span a full period.
+`average_grooves` averages every groove over the **narrowest** window in the set,
+and the normalisation step then stretches that window to span a full period. So a
+single groove the scan edge cuts into would narrow the window for all of them and
+distort the exported shape. It therefore skips any groove whose full period does
+not fit inside the scan, whatever the edge-exclusion setting is. The summary's
+"n of m grooves averaged" counts the skipped ones.
 
+Before this check, edge exclusion was the only protection, and it is a setting.
 On the TASTE scan the last groove sits 38 samples from the edge against a
 half-width of 40, which stretched the exported profile horizontally by **5.5%**.
-With the edge rule applied: **0.31%**. A 5% error in the groove's aspect ratio is
-a real error in the efficiency it predicts, and nothing about the file would have
-shown it.
+On the synthetic sawtooth, one partial groove narrowed the window to 0.66 of a
+period, turned a 70° anti-blaze facet into 58° and took 13% off the depth. A
+change that large in the groove's shape is a real change in the efficiency it
+predicts, and nothing in the file would show it.
 
 ### Controls worth understanding
 
