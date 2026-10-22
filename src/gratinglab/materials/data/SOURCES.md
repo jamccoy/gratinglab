@@ -24,21 +24,18 @@ constants should cite:
 > photoabsorption, scattering, transmission, and reflection at E = 50–30000 eV,
 > Z = 1–92*, Atomic Data and Nuclear Data Tables **54** (2), 181–342 (1993).
 
-## Redistribution — read before the first public release
+## Redistribution: none, for now
 
 CXRO makes these tables freely available for scientific use and they are widely
-redistributed, but **the terms have not been formally confirmed for
-redistribution inside a BSD-3 package**, and this file is not a licence
-determination. Before `gratinglab` is published:
+redistributed, but the terms have not been confirmed for bundling inside a
+BSD-3 package, and the site states no data licence. So **the wheel and sdist
+ship no table**, decided 2026-10-21 before the first release. `Au.txt` stays in
+the repository because the test suite needs a real table, and `release.yml`
+fails a build whose wheel or sdist carries one.
 
-1. Confirm CXRO's current terms for bundling the tables.
-2. If bundling is not clearly permitted, delete this directory and fall back to
-   `materials.from_cxro_file(path)` — the reader works on a user-supplied
-   download, the tests that need a table skip the way the reference-corpus tests
-   already do, and nothing else in the package changes.
-
-The layer is deliberately built so that step 2 is a deletion rather than a
-rewrite. Nothing in `gratinglab` requires a vendored file to exist.
+An install therefore starts with no materials, and `lookup` refuses with a
+message naming the way out. Nothing in `gratinglab` requires a table to exist;
+`test_an_empty_data_directory_is_a_supported_state` holds it to that.
 
 ## Adding a material
 

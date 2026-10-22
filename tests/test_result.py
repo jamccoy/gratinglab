@@ -4,6 +4,8 @@ Every solver and importer flows through these, so the invariants here are what
 make an energy-balance check mean anything.
 """
 
+from pathlib import Path
+
 import numpy as np
 import pytest
 
@@ -188,3 +190,16 @@ class TestPublicAPI:
     def test_all_is_accurate(self):
         for name in gratinglab.__all__:
             assert hasattr(gratinglab, name)
+
+
+def test_the_version_provenance_records_is_the_one_being_shipped():
+    """`__version__` is stamped on every result's provenance and is written by
+    hand beside pyproject.toml's. A release that bumped one and not the other
+    would label its results with a version nobody can install."""
+    import tomllib
+
+    from gratinglab import __version__
+
+    pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    with pyproject.open("rb") as f:
+        assert __version__ == tomllib.load(f)["project"]["version"]

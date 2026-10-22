@@ -114,10 +114,17 @@ the explanation
 ## Install
 
 ```bash
-pip install -e .                      # solvers only: numpy, scipy, pydantic
-pip install -e ".[metrology]"         # + AFM readers and the boundary pipeline
-pip install -e ".[gui]"               # + the Qt windows
+pip install gratinglab                # solvers only: numpy, scipy, pydantic
+pip install "gratinglab[metrology]"   # + AFM readers and the boundary pipeline
+pip install "gratinglab[gui]"         # + the Qt windows
 ```
+
+From a checkout, `pip install -e ".[dev,gui,metrology]"` instead.
+
+No optical constant tables ship with the package, so absolute efficiencies need
+one of your own: a CXRO export read with `materials.from_cxro_file(path)`. See
+[`SOURCES.md`](src/gratinglab/materials/data/SOURCES.md) for why, and for the
+exact request that reproduces the table the test suite uses.
 
 The core stays deliberately light — a solver-only user never installs a plotting
 stack — and each subpackage says which extra it needs rather than failing with a bare
