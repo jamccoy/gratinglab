@@ -43,9 +43,9 @@ so the period gets retyped, guessed, or recovered from a sidecar later.
 facet angle with it. To save a profile without losing that, write it as gratinglab's
 own `.json` (`gratinglab.io.boundary.write_boundary_json`): reading it back gives the
 same problem, and the efficiency window's "Load boundary profile" fills in the
-period from it. The metrology window's Boundary tab exports `.json` or `.csv`, among
-other formats, and its "Send to efficiency window" button opens the groove there
-directly.
+period from it. The metrology window's Boundary tab exports `.json`, `.csv`, or a
+`.ggp` boundary file for PCGrate, and its "Send to efficiency window" button opens the
+groove there directly.
 
 ```python
 from gratinglab.metrology.boundary import build_boundary_profile
