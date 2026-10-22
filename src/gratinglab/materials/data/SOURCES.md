@@ -41,7 +41,8 @@ message naming the way out. Nothing in `gratinglab` requires a table to exist;
 
 For yourself, not here. Put the table in your own library,
 `~/.gratinglab/materials` or a directory named in `GRATINGLAB_MATERIALS`, as
-`<Name>.txt` for a CXRO export or `<Name>.ari` for PCGrate's format. That is
+`<Name>.txt` for a CXRO export, `<Name>.yml` for a refractiveindex.info file or
+`<Name>.ari` for PCGrate's format. That is
 searched before this directory, survives an upgrade, and is never published.
 See `materials/__init__.py`.
 

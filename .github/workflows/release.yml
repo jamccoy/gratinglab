@@ -90,6 +90,15 @@ jobs:
           cd /tmp
           GRATINGLAB_MATERIALS=/tmp/library /tmp/clean/bin/python -c "from gratinglab import materials; print(materials.available()); print(materials.lookup('Test'))"
 
+      # The refractiveindex extra resolves from the real wheel's metadata, and
+      # a database file in a library is then a coating.
+      - name: Installed with the refractiveindex extra, a YAML table resolves
+        run: |
+          /tmp/clean/bin/pip install "$(ls dist/*.whl)[refractiveindex]"
+          cp tests/data/refractiveindex/tabulated-nk_Au-Johnson.yml /tmp/library/Au.yml
+          cd /tmp
+          GRATINGLAB_MATERIALS=/tmp/library /tmp/clean/bin/python -c "from gratinglab import materials; t = materials.lookup('Au'); assert 'refractiveindex.info' in t.source; print(t)"
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:

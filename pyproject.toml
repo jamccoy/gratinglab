@@ -51,6 +51,9 @@ gui = ["matplotlib>=3.8", "PySide6-Essentials>=6.7", "endstation[qt]>=0.1"]
 # installs a plotting stack. The delta is small in practice: matplotlib is
 # already in `gui`, so anyone running the window has it either way.
 metrology = ["matplotlib>=3.9"]
+# refractiveindex.info's tables are YAML, and the core must stay numpy, scipy
+# and pydantic. PyYAML is imported only when one of those files is read.
+refractiveindex = ["pyyaml>=6"]
 # Mutation testing, run on demand rather than in CI -- a full sweep is orders
 # of magnitude slower than the suite. Deliberately *not* in `dev`: nothing in
 # CI needs it, and pinning below mutmut 3.3 keeps it installable without a Rust

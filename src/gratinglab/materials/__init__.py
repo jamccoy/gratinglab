@@ -9,7 +9,8 @@ mine = materials.from_cxro_file("Ni_CXRO.txt")   # any file, no library
 ```
 
 **A library is a directory of tables, one material per file**, named for it:
-`Pt.txt` (a CXRO export) or `Pt.ari` (PCGrate) is `coating="Pt"`. Yours is
+`Pt.txt` (a CXRO export, X-ray), `Pt.yml` (a refractiveindex.info file,
+ultraviolet to infrared) or `Pt.ari` (PCGrate) is `coating="Pt"`. Yours is
 `~/.gratinglab/materials`, or whatever `GRATINGLAB_MATERIALS` names, and it is
 searched before the tables bundled with a checkout, so your own replaces a
 bundled one of the same name. The release packages bundle none, because CXRO's
@@ -41,6 +42,7 @@ from .optical import (
     read_cxro,
     write_ari,
 )
+from .refractiveindex import read_refractiveindex
 
 __all__ = [
     "HC_EV_NM",
@@ -51,10 +53,12 @@ __all__ = [
     "data_dir",
     "from_ari_file",
     "from_cxro_file",
+    "from_refractiveindex_file",
     "library_dirs",
     "lookup",
     "read_ari",
     "read_cxro",
+    "read_refractiveindex",
     "user_dir",
     "write_ari",
 ]
@@ -70,7 +74,12 @@ LIBRARY_ENV = "GRATINGLAB_MATERIALS"
 
 #: One reader per file suffix. A library is a directory of these, one material
 #: per file, named for it: ``Pt.txt`` is ``coating="Pt"``.
-_READERS = {".txt": read_cxro, ".ari": read_ari}
+_READERS = {
+    ".txt": read_cxro,
+    ".ari": read_ari,
+    ".yml": read_refractiveindex,
+    ".yaml": read_refractiveindex,
+}
 
 
 class UnknownMaterial(KeyError):
@@ -162,9 +171,10 @@ def lookup(name: str) -> OpticalConstants:
     searched = "; ".join(str(d) for d in library_dirs())
     raise UnknownMaterial(
         f"no optical constants for {name!r}; available: {known}. Searched: "
-        f"{searched}. Add a CXRO export as {name}.txt, or a PCGrate {name}.ari, "
-        f"to {user_dir()} or to a directory named in {LIBRARY_ENV}; or read one "
-        "directly with materials.from_cxro_file(path)."
+        f"{searched}. Add a CXRO export as {name}.txt, a refractiveindex.info "
+        f"file as {name}.yml, or a PCGrate {name}.ari, to {user_dir()} or to a "
+        f"directory named in {LIBRARY_ENV}; or read one directly with "
+        "materials.from_cxro_file(path)."
     )
 
 
@@ -186,6 +196,17 @@ def _read(path: Path, mtime_ns: int, name: str) -> OpticalConstants:
 def from_cxro_file(path: "str | Path", name: str | None = None) -> OpticalConstants:
     """Read a CXRO/Henke ``(energy, delta, beta)`` export you downloaded."""
     return read_cxro(path, name=name)
+
+
+def from_refractiveindex_file(
+    path: "str | Path", name: str | None = None
+) -> OpticalConstants:
+    """Read a refractiveindex.info YAML file, ultraviolet to infrared.
+
+    Needs the ``refractiveindex`` extra. See :mod:`.refractiveindex` for what
+    each kind of entry becomes, and which are refused.
+    """
+    return read_refractiveindex(path, name=name)
 
 
 def from_ari_file(path: "str | Path", name: str | None = None) -> OpticalConstants:

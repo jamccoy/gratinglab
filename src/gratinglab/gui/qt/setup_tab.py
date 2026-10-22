@@ -54,10 +54,11 @@ def library_page() -> str:
         for name in names:
             # One row per table, and an unreadable file is a row saying so
             # rather than a page that fails: a library is the user's own
-            # directory and can hold anything.
+            # directory and can hold anything, including a .yml file on an
+            # install without the refractiveindex extra (MissingExtra).
             try:
                 table = lookup(name)
-            except (OSError, ValueError) as unreadable:
+            except (OSError, ValueError, ImportError) as unreadable:
                 rows.append(f"| `{name}` | unreadable | | {unreadable} |")
                 continue
             low, high = table.range_nm
@@ -112,11 +113,19 @@ naming the number it needs.
 
 ## Adding a material
 
-A library is a directory of tables, one material per file and named for it:
-an `(Energy, Delta, Beta)` export from
-[CXRO](https://henke.lbl.gov/optical_constants/) saved as `Pt.txt`, or a
-PCGrate `Pt.ari`, is the coating `Pt`. These are searched in this order, so a
-table of your own replaces a bundled one of the same name:
+A library is a directory of tables, one material per file and named for it.
+Any of these, saved as `Pt` plus its suffix, is the coating `Pt`:
+
+- `Pt.txt`: an `(Energy, Delta, Beta)` export from
+  [CXRO](https://henke.lbl.gov/optical_constants/), for X-rays.
+- `Pt.yml`: a file from [refractiveindex.info](https://refractiveindex.info),
+  ultraviolet to infrared. The database names files for their authors
+  (`Au/nk/Johnson.yml`), so rename it to the material. Needs the
+  `refractiveindex` extra.
+- `Pt.ari`: a PCGrate table.
+
+These directories are searched in this order, so a table of your own replaces
+a bundled one of the same name:
 
 {searched}
 
