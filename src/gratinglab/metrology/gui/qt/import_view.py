@@ -241,7 +241,7 @@ class ImportView(QWidget):
         """
         The period lives with the analysis controls, but `level_grooves` needs it
         to find the features it levels on. The window pushes it here so the
-        preview matches what the analysis will actually do.
+        preview matches what the analysis will do.
         """
         if period_nm and period_nm != self._period_est:
             self._period_est = period_nm
@@ -342,7 +342,7 @@ class ImportView(QWidget):
         image_ax.set_xlabel("X (µm)", fontsize=10)
         image_ax.set_ylabel("Scan line", fontsize=10)
         image_ax.set_title(
-            f"{os.path.basename(self._filename)} — image flattening: "
+            f"{os.path.basename(self._filename)}: image flattening: "
             f"{self.image_method_combo.currentText()}", fontsize=10)
 
         x_um, profile_nm = raw_data(self._flat, self._scan_size)

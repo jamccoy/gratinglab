@@ -1,7 +1,7 @@
 """
 A PySide6 front-end for the blaze-angle analysis.
 
-**This package carries no analysis logic.** It computes nothing itself: every
+This package carries no analysis logic. It computes nothing itself: every
 number it shows comes from :func:`gratinglab.metrology.analyzer.analyze_single_file`,
 which knows nothing about Qt, so behaviour stays testable without a display.
 

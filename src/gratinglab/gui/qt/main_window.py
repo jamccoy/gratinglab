@@ -1,6 +1,6 @@
 """The window.
 
-Deliberately thin, as its Tk predecessor was. Every number shown comes from
+Thin, as its Tk predecessor was. Every number shown comes from
 :func:`gratinglab.compare.sweep`; every validation from
 :mod:`gratinglab.gui.state`; every line of a tab's provenance panel from
 :mod:`gratinglab.gui.provenance`. Nothing here computes physics, so a bug in
@@ -324,7 +324,7 @@ class MainWindow(QMainWindow):
     def _refresh_geometry_tab(self) -> None:
         """Redraw the geometry tab from the form as it stands.
 
-        Deliberately not driven off `_on_solved`: the tab holds no solver
+        Not driven off `_on_solved`: the tab holds no solver
         output, so waiting for a solve to redraw a picture no solver
         contributed to would be a false dependency. It runs at construction,
         after each solve, and -- debounced -- on every edit.
@@ -400,7 +400,7 @@ class MainWindow(QMainWindow):
     def cancel(self) -> None:
         """Stop the running solve.
 
-        Setting the event is what actually stops it: the solver checks it at
+        Setting the event is what stops it: the solver checks it at
         every wavelength and raises out of its own loop (see `worker.py`).
 
         Bumping the token as well is not redundant. The worker may already

@@ -150,7 +150,7 @@ def flux_obliquity(cos_alpha: ArrayLike, cos_beta_m: ArrayLike) -> NDArray[np.fl
     ``tests/test_perturbation.py``, which derives it from two closed forms with
     no solver in the loop.
 
-    Three properties, all load-bearing:
+    Three properties, all of them required:
 
     - **Symmetric** under :math:`\alpha \leftrightarrow \beta_m`, so Lorentz
       reciprocity survives it untouched. That is what makes it admissible at
@@ -180,7 +180,7 @@ def sin_facet_graze(
 ) -> NDArray[np.float64]:
     r"""":math:`\sin\zeta = \sin\gamma\,\cos(\text{tilt} - \text{angle})`, unclipped.
 
-    The vector form of :func:`facet_graze`, and deliberately **not** wrapped in
+    The vector form of :func:`facet_graze`, and **not** wrapped in
     ``arcsin``. Two reasons:
 
     - A **negative** value is the meaningful signal that the facet is turned
@@ -205,7 +205,7 @@ def sin_facet_graze(
 def horizon_visible(
     height_nm: ArrayLike, period: float, angle: float
 ) -> NDArray[np.bool_]:
-    r"""Which points on the groove a ray at ``angle`` can actually reach.
+    r"""Which points on the groove a ray at ``angle`` can reach.
 
     The mask for **cast** shadows -- the ones the groove apex throws across
     the trough onto surface that faces the ray perfectly well. The local
@@ -215,7 +215,7 @@ def horizon_visible(
     of the period on the incident side and by 10-50% on the exit side, which
     is why this function exists (``docs/findings.md``).
 
-    **The half-cone angle is absent, deliberately.** The surface is invariant
+    The half-cone angle is absent. The surface is invariant
     along the grooves, so a 3D ray occludes exactly as its projection into the
     transverse plane does, and ``angle`` is the transverse azimuth --
     :math:`\alpha` for the incident direction, :math:`\beta_m` for a
@@ -223,7 +223,7 @@ def horizon_visible(
     groove-parallel component, which slides *along* the invariant direction
     and can neither create nor remove an occlusion.
 
-    **The travel direction is the trap.** The profile parameter runs against
+    The travel direction is easy to get wrong. The profile parameter runs against
     the dispersion direction (``docs/findings.md``, "The profile parameter
     runs backwards"; conventions section 3), so a ray with ``angle > 0``
     travels toward **+t** and its occluders sit at *smaller* ``t``. Getting
@@ -253,7 +253,7 @@ def horizon_visible(
     ----------
     height_nm
         Groove height in nm on a **uniform** grid over one period,
-        ``t = arange(n)/n``. Uniformity is load-bearing: the linear term is
+        ``t = arange(n)/n``. Uniformity is required: the linear term is
         built from the index.
     period
         Groove period in nm -- the same unit as ``height_nm``, because the
@@ -467,7 +467,7 @@ def interference_factor(s: ArrayLike, n_grooves: int) -> NDArray[np.float64]:
         \left[\frac{\sin(Ns)}{N\sin(s)}\right]^2, \qquad
         s = \left[\sin\alpha + \sin\beta\right]\sin\gamma\,\frac{p\pi}{\lambda}
 
-    **This is deliberately not applied to order efficiencies.** At an exact
+    This is not applied to order efficiencies. At an exact
     diffraction order ``s = mπ`` and the factor equals 1, so multiplying by it
     would change nothing. Its role is the *angular line shape* around each
     order -- the link to resolving power, which is a different question from

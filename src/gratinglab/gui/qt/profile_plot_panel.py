@@ -56,10 +56,10 @@ class ProfilePlotPanel(QWidget):
         height = parsed.problem.height_nm(t)
         axes.plot(x, height, color="#1f3b73", lw=1.8)
         axes.fill_between(x, 0, height, color="#1f3b73", alpha=0.12)
-        axes.set_xlabel("position along d̂ (nm)  —  two periods shown")
+        axes.set_xlabel("position along d̂ (nm), two periods shown")
         axes.set_ylabel("height (nm)")
         axes.set_title(
-            f"{type(parsed.problem.profile).__name__} — "
+            f"{type(parsed.problem.profile).__name__}: "
             f"period {parsed.problem.period:g} nm, depth {parsed.problem.depth:.4g} nm",
             fontsize=10,
         )

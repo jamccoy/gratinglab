@@ -1,6 +1,6 @@
 """Turning form fields into a validated problem.
 
-This module is the GUI's only interesting logic, and it is deliberately
+This module is the GUI's only interesting logic, and it is kept
 separated from the widgets so it can be tested headlessly. **Nothing here
 imports a GUI toolkit**, and nothing here computes physics -- it parses strings,
 validates ranges, and hands the result to the tested core.
@@ -46,7 +46,7 @@ __all__ = [
 #: Selectable profile kinds, in the order they should appear in the UI.
 PROFILE_KINDS = ("Blazed", "Lamellar", "Sinusoidal", "From file")
 
-#: Which form fields each profile kind actually uses. The UI hides the rest,
+#: Which form fields each profile kind uses. The UI hides the rest,
 #: because a duty cycle means nothing for a sinusoid and offering it invites
 #: the reasonable assumption that it does something.
 #:

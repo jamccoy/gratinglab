@@ -186,7 +186,7 @@ def run_boundary_profile_export(settings=None, filename=None):
 
 def run_icc_report():
     """
-    Measure how correlated the row-group measurements actually are.
+    Measure how correlated the row-group measurements are.
 
     Diagnostic only - reports numbers, changes nothing. Row-group analysis
     re-measures the same grooves in each band of a scan, so the measurements are
@@ -279,7 +279,7 @@ def _format_icc_report(rows):
     lines.append("  ICC    fraction of variance sitting between row groups rather")
     lines.append("         than within them. 0 = independent, 1 = each group adds")
     lines.append("         only one measurement's worth of information.")
-    lines.append("  N_eff  measurements the data is actually worth, n / design effect.")
+    lines.append("  N_eff  measurements the data is worth, n / design effect.")
     lines.append("  SEM x  factor the reported standard error should be multiplied")
     lines.append("         by. Confidence intervals scale the same way.")
     lines.append("")

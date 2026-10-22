@@ -114,7 +114,7 @@ def _progress_option(
 def _resample(scan: EfficiencyScan, wavelengths: NDArray[np.float64]) -> EfficiencyScan:
     """Put a precomputed scan on ``wavelengths`` by nearest-neighbour lookup.
 
-    Nearest-neighbour rather than interpolation, deliberately: efficiency curves
+    Nearest-neighbour rather than interpolation, because efficiency curves
     have sharp features at order passing-off, and interpolating across one
     invents a value that no method produced. Points outside the source range
     are marked non-propagating rather than extrapolated.

@@ -40,7 +40,7 @@ __all__ = [
 DEFAULT_THRESHOLD = 1e-4
 
 #: At most this many curves by default, largest peaks first. New, and the part
-#: that actually protects the plot: an X-ray geometry can propagate hundreds of
+#: that protects the plot: an X-ray geometry can propagate hundreds of
 #: orders, and the old code's only defence was a legend that grew columns.
 DEFAULT_LIMIT = 20
 

@@ -43,8 +43,8 @@ rather than a stand-in beside one -- so the sliver was retired (M13-I). Two
 drawings of one angle are two answers to one question. The captions still say
 what this projection cannot show, and now point at the view that can.
 
-What is deliberately *not* drawn
-================================
+What is *not* drawn
+===================
 
 :math:`\zeta`, the facet graze angle, is **text only**.
 :func:`~gratinglab.geometry.facet_graze` is the three-dimensional angle between
@@ -166,7 +166,7 @@ class Polyline:
 class Arrow:
     """A directed segment, tail to head, in absolute coordinates.
 
-    Endpoints rather than angle-and-length on purpose: the widget then converts
+    Endpoints rather than angle-and-length, so that the widget converts
     nothing, and a sign error has nowhere to hide in the untested layer.
     """
 
@@ -494,8 +494,8 @@ def captions(
             "with no ray, having no direction.\n"
         ),
         Line(
-            "View along the groove axis ĝ. Angles in this plane — α, β_m, δ, "
-            "β_b — are true, and the groove cross-section is to scale.\n",
+            "View along the groove axis ĝ. Angles in this plane (α, β_m, δ, "
+            "β_b) are true, and the groove cross-section is to scale.\n",
             "dim",
         ),
     ]
@@ -515,7 +515,7 @@ def captions(
                 f"γ = {illumination.gamma_deg:g}°: every ray also carries "
                 f"k_z = k cos γ = {cos_gamma:.5f} k out of the page, "
                 "identically for all orders. It is perpendicular to this "
-                "projection and so cannot appear in it — the 3D view beside "
+                "projection and so cannot appear in it; the 3D view beside "
                 "it draws γ as a real angle.\n",
                 "dim",
             )

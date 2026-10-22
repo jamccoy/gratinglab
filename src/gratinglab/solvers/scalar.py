@@ -12,15 +12,15 @@ height in nm. Efficiency is :math:`\mathscr{E}_m = |G_m|^2`.
 
 Two consequences of doing it this way are worth stating plainly.
 
-**It accepts any profile**, including a measured AFM boundary, which the closed
+It accepts any profile, including a measured AFM boundary, which the closed
 forms cannot. That is what lets a scalar calculation and a PCGrate run be driven
 from the identical geometry.
 
-**The closed forms become tests, not code paths.** The Appendix D results --
+The closed forms become tests, not code paths. The Appendix D results --
 sawtooth ``sinc²(φ/2 − mπ)``, square wave, sinusoid -- are exact answers we
 already trust, so they check the numerics rather than duplicating them.
 
-**The phase depends on the order** through :math:`\cos\beta_m` (ISSI eq. 15;
+The phase depends on the order through :math:`\cos\beta_m` (ISSI eq. 15;
 thesis Appendix-D.tex:651), so this is one integral per order rather than a
 single FFT. That choice is deliberate and carries a known cost, because no
 scalar formulation can satisfy all three of the following at once:
@@ -39,7 +39,7 @@ Parseval *requires* a single fixed function, which forbids :math:`\beta_m`.
 Physical optics is reciprocal but not energy-conserving; the pure
 transmittance-function picture is the reverse.
 
-**Reciprocity is the invariant this solver keeps.** The energy deviation is
+Reciprocity is the invariant this solver keeps. The energy deviation is
 therefore expected, is reported rather than hidden, and is never renormalised
 away. It is not an implementation defect: in the shallow-groove limit the sum
 is 1.00000 exactly, degrading smoothly as groove depth grows (0.0001 -> 1.00000,
@@ -109,7 +109,7 @@ _SP_SPLIT_WARN = 0.02
 #: Above this ratio of the **reduced** wavelength lambda/sin(gamma) to the
 #: period, scalar theory is losing validity. In-plane this is plain
 #: lambda/period; in a conical mount the reduction is what matters, because
-#: the transverse problem the grooves actually pose lives at the reduced
+#: the transverse problem the grooves pose lives at the reduced
 #: wavelength (M&P eq. 4.65 -- the same decoupling the integral solver is
 #: built on). Judged on lambda/period alone, the flagship off-plane geometry
 #: reads 0.007 while its effective ratio is 0.32.
@@ -250,7 +250,7 @@ class ScalarSolver:
             each one, per the contract in
             :class:`~gratinglab.solvers.base.Solver`. Exceptions from it are
             **not** caught, which is what lets a caller raise
-            :class:`~gratinglab.solvers.base.SolveCancelled` and actually stop
+            :class:`~gratinglab.solvers.base.SolveCancelled` and stop
             this loop. A scan cancelled that way returns nothing at all: a
             partially filled efficiency array with the remaining rows still
             zero is indistinguishable from a scan whose orders all passed off,
@@ -402,7 +402,7 @@ class ScalarSolver:
             scale = reflectivity(
                 coating.n(wavelengths),
                 reflection.graze,
-                # Unpolarized deliberately, whatever the illumination says.
+                # Unpolarized, whatever the illumination says.
                 # These s and p are facet-local and `Illumination.polarization`
                 # is groove-referenced (conventions.md 7) -- different frames,
                 # and in a conical mount the mapping is not the identity.
@@ -534,7 +534,7 @@ class ScalarSolver:
 
             # The waived polarization mapping, priced. Every reflectivity
             # model here averages facet-local s and p 50/50 because the
-            # groove-referenced TE/TM -> facet s/p rotation is deliberately
+            # groove-referenced TE/TM -> facet s/p rotation is
             # unowned (see materials/fresnel.py). That waiver costs at most
             # half the s/p split, which at the grazes this project runs is
             # under 0.5% -- but it is a measured bound, not a law, so the one
@@ -566,13 +566,13 @@ class ScalarSolver:
         # is reported via notes["normalization"] below, not as a warning.
         # There is nothing wrong with a run that has not been given a coating;
         # warnings are reserved for cases where the model is being pushed
-        # outside conditions it can actually answer for.
+        # outside conditions it can answer for.
 
         if reflection.suppressed:
             # An order at exactly zero must never be mistaken for one that
             # passed off. Naming it is the whole difference between a
             # modelled result and a silent one. Outside the coating block
-            # deliberately: the uncoated horizon mode suppresses orders too.
+            # because the uncoated horizon mode suppresses orders too.
             named = ", ".join(str(m) for m in sorted(reflection.suppressed))
             mechanism = (
                 "the local facet normal"
@@ -635,7 +635,7 @@ class ScalarSolver:
             wall_time_s=elapsed,
             warnings=tuple(warnings),
             notes={
-                # Keyed on whether a reflectivity was actually applied, never
+                # Keyed on whether a reflectivity was applied, never
                 # on whether a coating was *named*. `Problem.coating` used to
                 # be a free-form string nothing read, so setting it to anything
                 # at all relabelled a result as "absolute" while leaving every
@@ -653,7 +653,7 @@ class ScalarSolver:
                     else {}
                 ),
                 **(
-                    # Whenever visibility masks actually participated --
+                    # Whenever visibility masks participated --
                     # groove-resolved reflectivity, or the uncoated horizon
                     # mode. A "facet" run has no masks and gets neither key.
                     {
@@ -680,7 +680,7 @@ class _Reflection:
 
     Carries the provenance material too, so the reporting and the arithmetic
     cannot drift apart: ``shadowed_fraction`` and ``suppressed`` are what the
-    solve actually did, not a second estimate of it.
+    solve did, not a second estimate of it.
     """
 
     model: ReflectivityModel
@@ -800,7 +800,7 @@ def _build_reflection(
     resolved = coating is not None and model != "facet"
     if not resolved and visibility != "horizon":
         # Nothing to resolve. Without a coating there is no reflectivity at all,
-        # and `facet` is the model that deliberately declines to look.
+        # and `facet` is the model that declines to look.
         return reflection
 
     tilt = _facet_tilt(problem.profile, t)
@@ -820,7 +820,7 @@ def _build_reflection(
         reflection.height_nm = height
         reflection.period = problem.period
     else:
-        # Binary, deliberately: the orientation function jumps at profile
+        # Binary, because the orientation function jumps at profile
         # corners, where a linear crossing estimate is biased rather than
         # sharp, and bit-for-bit reproducibility is this mode's purpose.
         weight_in = (sin_in > 0.0).astype(np.float64)
@@ -888,7 +888,7 @@ def _local_reflected_efficiency(
             \left|\int r_s(t)\,e^{i\Phi_m(t)}e^{-2\pi i m t}dt\right|^2 +
             \left|\int r_p(t)\,\cdots\right|^2\right)
 
-    **Why a geometric mean.** The obvious local coefficient,
+    Why a geometric mean. The obvious local coefficient,
     :math:`r(\zeta_i(t))`, depends on :math:`\alpha` alone, which destroys the
     :math:`\alpha\leftrightarrow\beta_m` symmetry and breaks Lorentz
     reciprocity -- by 82% on the reference geometry, measured. Weighting a facet
@@ -900,7 +900,7 @@ def _local_reflected_efficiency(
     and collapses to plain :math:`r(\zeta)` wherever the facet is at specular --
     so a perfectly blazed groove is unaffected by the change.
 
-    **The square roots are taken separately**, rather than as
+    The square roots are taken separately, rather than as
     :math:`\sqrt{r_i r_d}`, so that the only discontinuities left in the weight
     are the ones :math:`r` itself has.
 
@@ -918,7 +918,7 @@ def _local_reflected_efficiency(
     :math:`10^{-9}`, and in a regime `_brewster_crossing` already reports as
     outside what this symmetrisation can carry.
 
-    So this is the cheap defensive choice, not a load-bearing one. Stated that
+    So this is the cheap defensive choice, not an essential one. Stated that
     way because the first draft of this docstring claimed the product wrapped in
     the grazing regime and that the separate roots were therefore essential;
     the measurement says otherwise.
@@ -1004,7 +1004,7 @@ def _shadow_masked_efficiency(
     cast-shadowed from, both the incident and the diffracted direction -- but
     with :math:`r \equiv 1` in place of a Fresnel amplitude. That makes it a
     perfect reflector with shadows, the configuration a perfect-conductor
-    cross-check against the integral solver actually wants on grooves deep
+    cross-check against the integral solver wants on grooves deep
     enough to shadow themselves.
     """
     sin_out = sin_facet_graze(
@@ -1034,7 +1034,7 @@ def _sp_split(
     the split grows monotonically with graze in this regime, so the angle the
     validity guards already watch is the right single point, and two
     wavelengths bound a table that varies smoothly between them. Roughness is
-    left out deliberately: the damping factors apply to s and p alike and
+    left out because the damping factors apply to s and p alike and
     would cancel from the ratio.
     """
     split = 0.0
@@ -1130,9 +1130,9 @@ def _resolve_coating(problem: Problem) -> "OpticalConstants | None":
     serialisable file rather than embedding a 500-row table. Resolving it here
     rather than in ``Problem.__init__`` keeps a saved case loadable on a
     machine whose vendored tables have been trimmed -- it only has to resolve
-    when someone actually solves.
+    when someone solves.
 
-    An unknown name **raises**. It is the whole point: the string used to be
+    An unknown name **raises**, because the string used to be
     read by nothing, so ``coating="unobtanium"`` silently relabelled a result
     as absolute. A name that cannot be resolved is a question this solver
     cannot answer, not a default to fall back on.

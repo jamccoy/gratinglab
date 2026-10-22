@@ -253,17 +253,17 @@ class BoundaryView(QWidget):
         avg_ax.set_xlabel("Position (nm)", fontsize=10)
         avg_ax.set_ylabel("Height (nm)", fontsize=10)
         avg_ax.set_title(
-            f"Averaged groove — {os.path.basename(self._filename)}", fontsize=10)
+            f"Averaged groove: {os.path.basename(self._filename)}", fontsize=10)
         avg_ax.legend(fontsize=8)
         avg_ax.grid(True, alpha=0.3)
 
-        # What actually lands in the file.
+        # What lands in the file.
         norm_ax.plot(p.x_norm, p.y_norm, color='steelblue', linewidth=1.6)
         norm_ax.axhline(0, color='k', linestyle='--', linewidth=0.5)
         norm_ax.set_xlabel("Normalised position (0 to 1 = one period)", fontsize=10)
         norm_ax.set_ylabel("Height (fraction of period)", fontsize=10)
         norm_ax.set_title(
-            f"Exported profile — {len(p.x_norm)} points, "
+            f"Exported profile: {len(p.x_norm)} points, "
             f"depth {p.metrics['groove_depth']:.4f} of period", fontsize=10)
         norm_ax.grid(True, alpha=0.3)
 
@@ -279,7 +279,7 @@ class BoundaryView(QWidget):
     def show_efficiency(self):
         """Hand the previewed profile straight to the scalar solver.
 
-        No file in between. That is the whole point: a .ggp round trip keeps
+        No file in between, because a .ggp round trip keeps
         the shape and drops the period, which then has to be retyped from the
         metrics panel above.
         """

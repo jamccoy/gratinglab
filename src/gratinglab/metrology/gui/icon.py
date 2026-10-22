@@ -5,7 +5,7 @@ Rendered from matplotlib because this machine has no SVG rasteriser
 reproducible and editable in the same language as the rest of the project.
 
 The motif is a blazed sawtooth with an AFM cantilever and tip riding across it --
-the measurement this software performs. Deliberately few, thick elements so it
+the measurement this software performs. Few, thick elements, so it
 stays legible at 16 px, which is where most icons fail.
 
 Sibling project GratingLab uses a sawtooth with diffracted orders fanning out of
@@ -38,7 +38,7 @@ TIP = "#ffb03a"
 
 #: Shadowed under-face of each tooth, giving the sawtooth its asymmetry at a
 #: glance. A flat silhouette reads as a triangle wave rather than a *blazed*
-#: grating, which is the whole point of the motif.
+#: grating, which is what the motif is meant to show.
 SUBSTRATE = "#8d7a63"
 
 

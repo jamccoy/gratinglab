@@ -7,10 +7,10 @@ it back -- except the period, which the file cannot carry and which a user then
 had to retype from the metrics panel. This path keeps it, because
 `BoundaryProfile.to_problem` carries the number the scan measured.
 
-Deliberately a *preview*, not a second efficiency application. It offers one
+A *preview*, not a second efficiency application. It offers one
 mount, one solver and no convergence check, and says as much: a result whose
 convergence was never demonstrated reports itself as not defensible, and this
-dialog does not demonstrate it. Anything load-bearing belongs in the main
+dialog does not demonstrate it. Any result to rely on belongs in the main
 window, where the convergence harness and the comparison view live.
 
 Synchronous, following the Boundary tab's own reasoning rather than the main

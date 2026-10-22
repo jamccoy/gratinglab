@@ -4,7 +4,7 @@ Thin, like every widget here. :mod:`gratinglab.gui.diagram3d` decides every
 direction, every surface and every caption; this positions them. It computes no
 angle and picks no colour.
 
-**No navigation toolbar on this axes, deliberately.** `NavigationToolbar2QT`'s
+No navigation toolbar on this axes. `NavigationToolbar2QT`'s
 zoom rescales an `Axes3D`'s data limits, which breaks the cube bounding box
 `set_box_aspect((1, 1, 1))` depends on -- and then the angles this view exists
 to show would silently stop being true. A control that can make the picture lie
@@ -233,7 +233,7 @@ class Scene3DPanel(QWidget):
         self._axes.set_box_aspect((1.0, 1.0, 1.0))
 
         self._magnification.setText(
-            f"cone rim — {scene.rim_magnification:.0f}×" if use_rim else ""
+            f"cone rim, {scene.rim_magnification:.0f}×" if use_rim else ""
         )
         # Display ranges, not the physical ones: `_bounds` holds permuted
         # coordinates, and comparing the two frames would hide everything.

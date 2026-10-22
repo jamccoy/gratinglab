@@ -1,7 +1,7 @@
 r"""Fresnel reflectivity at a grazing interface, and what roughness does to it.
 
 This is the factor that turns the scalar solver's *relative* groove efficiency
-into an *absolute* one: light has to actually reflect off the facet before the
+into an *absolute* one: light has to reflect off the facet before the
 groove can diffract it.
 
 Angles are measured **from the surface**, not from the normal
@@ -16,8 +16,8 @@ still returns numbers in :math:`[0, 1]`.
 ``s`` and ``p``, not ``TE`` and ``TM``
 =====================================
 
-**These are different conventions and this module deliberately does not accept
-the project's.** ``conventions.md`` §7 defines TE and TM with respect to the
+These are different conventions, and this module does not accept
+the project's. ``conventions.md`` §7 defines TE and TM with respect to the
 **grooves**, and notes that the opposite choice is common in the RCWA
 literature and a frequent source of cross-code disagreement in conical mounts.
 
@@ -257,7 +257,7 @@ def nevot_croce(
     nearly imaginary, and the product barely damps the reflection. Debye–Waller
     has no such term and over-damps there.
 
-    **This returns an intensity factor, and the square is why.** Névot–Croce is
+    This returns an intensity factor, and the square is why. Névot–Croce is
     usually quoted on the *amplitude*, :math:`r = r_F e^{-2k_{iz}k_{tz}\sigma^2}`,
     so the reflectivity carries its modulus squared. Both functions in this
     module return intensity factors, because :func:`reflectivity` multiplies

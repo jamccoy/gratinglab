@@ -50,8 +50,8 @@ class Line:
     tag: str | None = None
 
 
-#: Only four, and their meanings are load-bearing. ``dim`` is for facts about
-#: the run, ``ok``/``bad`` for a verdict that was actually reached, and ``warn``
+#: Only four, and each has one meaning. ``dim`` is for facts about
+#: the run, ``ok``/``bad`` for a verdict that was reached, and ``warn``
 #: for a validity guard the solver itself raised.
 TAG_COLORS: dict[str, str] = {
     "warn": "#a5370d",
@@ -106,7 +106,7 @@ def provenance_lines(
         # every wavelength and raises out of its own loop.
         lines.append(
             Line(
-                "cancelled — the calculation stopped; showing the previous "
+                "cancelled: the calculation stopped; showing the previous "
                 "result\n",
                 "dim",
             )
@@ -119,7 +119,7 @@ def provenance_lines(
         # does not run it -- a sweep costs several solves and is the caller's
         # decision, not a hidden tax on pressing Solve. So this stays the
         # ordinary state and must not be styled as alarming.
-        lines.append(Line("not checked — see gratinglab.convergence\n", "dim"))
+        lines.append(Line("not checked; see gratinglab.convergence\n", "dim"))
     elif provenance.converged:
         lines.append(Line("yes", "ok"))
         lines.append(Line(_evidence(study), "dim"))
@@ -167,7 +167,7 @@ def provenance_lines(
     lines.append(
         Line(
             f"{conserved} ∈ [{energy.total.min():.4f}, {energy.total.max():.4f}]"
-            f"{'' if energy.passed else '  — EXCEEDS UNITY'}\n",
+            f"{'' if energy.passed else '  (EXCEEDS UNITY)'}\n",
             "ok" if energy.passed else "bad",
         )
     )
@@ -212,8 +212,8 @@ def _evidence(study: Any) -> str:
     at, values = study.get("converged_at"), study.get("values") or []
     swept = f", swept to {values[-1]}" if values else ""
     if at is None:
-        return f" — {knob} still moving{swept}\n"
-    return f" — {knob}={at} is enough{swept}\n"
+        return f"; {knob} still moving{swept}\n"
+    return f"; {knob}={at} is enough{swept}\n"
 
 
 def error_lines(errors: Sequence["FieldError"]) -> tuple[Line, ...]:
@@ -226,7 +226,7 @@ def error_lines(errors: Sequence["FieldError"]) -> tuple[Line, ...]:
 def solving_lines(method: str, wavelength_count: int) -> tuple[Line, ...]:
     """Shown while a solve is in flight, in place of a stale verdict."""
     return (
-        Line(f"solving — {method}, {wavelength_count} wavelengths…\n", "dim"),
+        Line(f"solving: {method}, {wavelength_count} wavelengths…\n", "dim"),
     )
 
 

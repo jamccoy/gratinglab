@@ -74,7 +74,7 @@ _CANONICAL_FIRST = "3 0 - Polygonal type"
 class GgpFile:
     """A parsed ``.ggp``, with the header provenance kept.
 
-    ``format_valid`` records whether the file as written would actually
+    ``format_valid`` records whether the file as written would
     load in PCGrate -- worth surfacing, because a hashed header fails there
     while parsing perfectly well here.
     """

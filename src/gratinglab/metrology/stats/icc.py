@@ -100,7 +100,7 @@ def compute_icc(values, group_labels):
 
 def effective_sample_size(n_measurements, mean_group_size, icc):
     """
-    Sample size the measurements are actually worth, given their correlation.
+    Sample size the measurements are worth, given their correlation.
 
     n_eff = n / (1 + (m - 1) * ICC), the standard design-effect correction, where
     m is the mean measurements per group. At ICC = 0 this returns n; as ICC rises

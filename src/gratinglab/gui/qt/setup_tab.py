@@ -14,7 +14,7 @@ of truth for the same value.
 What this tab owns instead is the *library* -- which materials are available,
 what they were derived from, and how to add one. That is genuinely tab-shaped
 (it is reference material, not an input), it duplicates no state, and it is
-the thing a user actually needs when the coating dropdown offers one entry and
+the thing a user needs when the coating dropdown offers one entry and
 they wanted nickel.
 """
 
@@ -32,7 +32,7 @@ def library_page() -> str:
     """The tab's markdown, built from the installed tables.
 
     Generated rather than written out, so it cannot drift from what
-    `materials.available()` actually returns -- the failure mode of a
+    `materials.available()` returns -- the failure mode of a
     hand-maintained list is that it is right on the day it is written.
     """
     from ...materials import LIBRARY_ENV, available, library_dirs, lookup
@@ -91,7 +91,7 @@ is read at all, because there the material is the boundary condition rather
 than a factor applied afterwards.
 
 - **perfect** (default) is a perfectly conducting boundary. It has no material
-  in it, so a named coating is *ignored* — the provenance panel says so rather
+  in it, so a named coating is *ignored*, and the provenance panel says so rather
   than letting the setting look consulted. Efficiencies are relative to a
   perfect reflector and sum to 1, which is a theorem, so the summed deviation
   is a direct read on discretisation error.
@@ -166,7 +166,7 @@ the reflection calculation looks at, and also does nothing without a coating.
   from the local facet tilt and carries it inside the diffraction integral. A
   groove whose reflectivity varies across the cycle is an amplitude grating as
   well as a phase grating, so reflectivity becomes order-dependent.
-- **average** takes the groove-cycle mean of the intensity — one factor per
+- **average** takes the groove-cycle mean of the intensity: one factor per
   wavelength, but one that sees the shadowing.
 - **facet** is the older treatment: a single reflectivity at the active-facet
   angle. Kept so an earlier run can be reproduced; it breaks reciprocity, so it
@@ -174,7 +174,7 @@ the reflection calculation looks at, and also does nothing without a coating.
 
 A facet turned away from the beam contributes nothing under the two resolved
 models. On a blazed groove that can be a sixth of the period, and it can drive
-a weak order to exactly zero — which the provenance panel names, so it is never
+a weak order to exactly zero, which the provenance panel names, so it is never
 mistaken for an order passing off.
 """
 
@@ -182,7 +182,7 @@ mistaken for an order passing off.
 class SetupTab(QWidget):
     """Reference material, not a form.
 
-    Deliberately has no ``solve_requested`` or ``build_options`` -- it is not
+    Has no ``solve_requested`` or ``build_options`` -- it is not
     part of the solve/cancel contract every solver tab implements, and
     ``MainWindow`` never routes to it.
     """

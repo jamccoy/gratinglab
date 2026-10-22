@@ -5,7 +5,7 @@ Rendered from matplotlib because this machine has no SVG rasteriser
 reproducible and editable in the same language as the rest of the project.
 
 The motif is a blazed sawtooth with diffracted orders fanning out of it -- the
-thing this software computes. Deliberately few, thick elements so it stays
+thing this software computes. Few, thick elements, so it stays
 legible at 16 px, which is where most icons fail.
 
 ``tools/make_icon.py`` turns this into a macOS ``.icns``.

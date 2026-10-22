@@ -4,7 +4,7 @@ The canonical internal state is the pair ``(alpha_deg, gamma_deg)`` -- azimuthal
 incidence angle and half-cone angle -- because every mount reduces to it and it
 serialises readably. Direction cosines are available as a derived property.
 
-Three constructors exist so that each community can pass the angles it actually
+Three constructors exist so that each community can pass the angles it
 uses; they all resolve to the same internal state:
 
 >>> Illumination.classical(alpha=10.0)                  # in-plane
@@ -29,7 +29,7 @@ Polarization = Literal["TE", "TM", "unpolarized"]
 class Illumination(BaseModel):
     """Direction and polarization of the incident plane wave.
 
-    Wavelength is deliberately **not** a field: a single geometry is normally
+    Wavelength is **not** a field: a single geometry is normally
     scanned over many wavelengths, so it is passed at solve time instead.
 
     Attributes

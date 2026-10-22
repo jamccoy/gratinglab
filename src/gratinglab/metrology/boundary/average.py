@@ -16,7 +16,7 @@ def flatten_endpoints(x, y):
     """
     Flatten a curve so it starts and ends at zero.
 
-    This is deliberately not the same as core.processing.flatten_profile. That
+    This is not the same as core.processing.flatten_profile. That
     one removes a fitted background to measure facet angles accurately; this one
     forces the endpoints to zero so a single groove tiles seamlessly into a
     periodic boundary. Different jobs, different maths - they are not

@@ -154,7 +154,7 @@ def _tabulated_index(
     or unusable material lands on a form field rather than arriving as a
     traceback from the worker thread.
 
-    ``lookup`` is called without an :class:`UnknownMaterial` guard on purpose:
+    ``lookup`` is called without an :class:`UnknownMaterial` guard because
     :func:`gratinglab.gui.state.build` has already rejected any coating name
     that is not in the library, so that branch is unreachable from the window
     and a handler for it would be untested dead code.

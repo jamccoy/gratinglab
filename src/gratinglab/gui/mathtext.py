@@ -12,7 +12,7 @@ embeddable image lives in :mod:`gratinglab.gui.richtext` and
 
 Two things worth knowing before touching this file:
 
-**`\boxed{...}` is not supported by mathtext** (confirmed by testing --
+`\boxed{...}` is not supported by mathtext (confirmed by testing --
 it raises `ValueError` wrapping a `ParseFatalException`). `scalar.md`'s two
 headline equations use it. :func:`strip_boxed` removes the wrapper by counting
 braces rather than by regex, because the boxed content itself contains nested
@@ -24,7 +24,7 @@ display equation into multiple sub-images for a cosmetic rule. The equation
 still renders correctly and reads as its own centered line, which is the part
 that matters.
 
-**A render failure degrades, it does not crash the viewer.** `render_math_png`
+A render failure degrades rather than crashing the viewer. `render_math_png`
 returns `None` rather than propagating the parser's exception, so one
 unsupported macro in a future edit shows as visible raw source for that one
 span -- diagnosable at a glance -- rather than taking down the whole page.

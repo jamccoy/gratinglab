@@ -1,6 +1,6 @@
 """Groove profiles, in the four representations the solver methods need.
 
-**Profiles are normalised.** Both the coordinate ``t`` and the returned height
+Profiles are normalised. Both the coordinate ``t`` and the returned height
 are expressed in units of the period, so a profile is a pure *shape* and the
 period lives once, on :class:`~gratinglab.problem.Problem`. A solver that needs
 physical height multiplies by ``problem.period``. This also matches PCGrate's
@@ -21,7 +21,7 @@ Integral           :meth:`Profile.boundary` -- parametrised curve with
 Designing all four now is deliberate. Retrofitting normals and arc lengths onto
 a shipped API once the integral method arrives would churn every profile type.
 
-**A profile that cannot supply a representation raises.** ``Blazed`` with a
+A profile that cannot supply a representation raises. ``Blazed`` with a
 vertical anti-blaze facet has no finite slope there, so :meth:`Blazed.slope`
 refuses rather than returning a large number that would quietly poison a
 C-method solve.
@@ -424,7 +424,7 @@ class FromProfileData(_BaseProfile):
     PCGrate treats a polygonal border, so a scalar calculation and a PCGrate
     run can be driven from the identical geometry.
 
-    **Undercut profiles are representable.** If ``t`` doubles back, the boundary
+    Undercut profiles are representable. If ``t`` doubles back, the boundary
     is not a function of position and :meth:`height` and
     :meth:`~_BaseProfile.slice_layers` refuse -- but :meth:`boundary` still
     works, because an integral-equation solver parametrises the curve rather
