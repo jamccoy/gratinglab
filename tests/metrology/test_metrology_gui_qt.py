@@ -216,12 +216,55 @@ class TestBoundaryTab:
         assert os.path.exists(str(tmp_path / "out_metrics.txt"))
 
     def test_efficiency_button_tracks_the_export_button(self, qtbot, window):
-        """Both need one thing -- a profile -- so they must not drift apart."""
+        """All three need one thing -- a profile -- so they must not drift apart."""
         assert not window.boundary.export_btn.isEnabled()
         assert not window.boundary.efficiency_btn.isEnabled()
+        assert not window.boundary.send_btn.isEnabled()
         window.load(SAMPLE)
         assert window.boundary.export_btn.isEnabled()
         assert window.boundary.efficiency_btn.isEnabled()
+        assert window.boundary.send_btn.isEnabled()
+
+    def test_a_json_export_keeps_the_measured_period(self, qtbot, window, tmp_path):
+        from gratinglab.io.boundary import read_boundary_json
+        window.load(SAMPLE)
+        path, metrics = window.boundary.write_profile(str(tmp_path / "out.json"))
+        saved = read_boundary_json(path)
+        assert saved.period_nm == window.boundary.profile.period_nm
+        assert saved.provenance["source"] == window.boundary._filename
+        assert metrics is None, "the JSON carries its metrics inside"
+
+    def test_a_name_without_a_suffix_takes_the_chosen_format(self, qtbot, window, tmp_path):
+        window.load(SAMPLE)
+        json_filter = window.boundary.EXPORT_FORMATS[1][0]
+        path, _ = window.boundary.write_profile(str(tmp_path / "groove"), json_filter)
+        assert path.endswith(".json") and os.path.exists(path)
+
+    def test_a_csv_export_writes_its_metrics_beside_it(self, qtbot, window, tmp_path):
+        window.load(SAMPLE)
+        path, metrics = window.boundary.write_profile(str(tmp_path / "out.csv"))
+        with open(path, encoding="utf-8") as handle:
+            assert handle.readline().strip() == "t,y,x_nm,y_nm"
+        assert metrics and os.path.exists(metrics)
+
+    def test_send_to_efficiency_opens_the_groove_with_its_period(self, qtbot, window):
+        from gratinglab.gui.qt.main_window import MainWindow
+        window.load(SAMPLE)
+        efficiency = MainWindow()
+        qtbot.addWidget(efficiency)
+        with qtbot.waitSignal(efficiency.solved, timeout=60_000):
+            pass  # the solve its constructor starts
+        window.boundary._efficiency_window = efficiency
+        with qtbot.waitSignal(efficiency.solved, timeout=60_000):
+            opened = window.boundary.send_to_efficiency()
+        assert opened is efficiency
+        form = efficiency.geometry.read_form()
+        assert form.profile_kind == "From file"
+        assert float(form.period) == pytest.approx(window.boundary.profile.period_nm, rel=1e-5)
+
+        with qtbot.waitSignal(efficiency.solved, timeout=60_000):
+            again = window.boundary.send_to_efficiency()
+        assert again is efficiency, "a second send reuses the window"
 
     def test_panel_matches_a_direct_build(self, qtbot, window):
         """The window must show what the pipeline computes"""

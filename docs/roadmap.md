@@ -227,6 +227,18 @@ depth-vs-facet-angle diagnostic named in the finding.
 
 ### 5. Native boundary format
 
+**Done for measured profiles.** `gratinglab.io.boundary` writes and reads a
+versioned `.json` that carries the period in nm, the groove count, the metrics and
+provenance, and its `to_problem` equals `BoundaryProfile.to_problem` field for
+field (`tests/metrology/test_boundary_pipeline.py`). Its `t` may double back, so
+an undercut groove is representable, though nothing measured produces one yet. The
+metrology window exports it, and the efficiency window loads it with the period.
+What remains: the analytic profiles (`Blazed`, `Lamellar`, `Sinusoidal`) are not
+written to it, and `benchmarks/corpus.toml` still holds periods for `.ggp` files
+written before it existed.
+
+The original case for it, unchanged:
+
 `.ggp` cannot carry the period in nm, provenance, undercut boundaries, or a
 format version. The missing period is exactly why
 [`benchmarks/corpus.toml`](../benchmarks/corpus.toml) has to exist as a sidecar.

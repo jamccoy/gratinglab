@@ -313,6 +313,16 @@ class MainWindow(QMainWindow):
 
     # -- actions ---------------------------------------------------------
 
+    def open_boundary(self, path) -> None:
+        """Load a boundary profile file as the grating, as if chosen by hand.
+
+        The metrology window's "Send to efficiency window" calls this with a
+        gratinglab ``.json``, so the measured period arrives with the shape.
+        """
+        self.geometry.load_boundary_file(path)
+        if not self.geometry_dock.isVisible():
+            self.geometry_dock.show()
+
     def _geometry_edited(self) -> None:
         """A field was edited. Schedule a redraw; solve nothing.
 

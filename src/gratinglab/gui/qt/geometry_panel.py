@@ -216,13 +216,40 @@ class GeometryPanel(QWidget):
 
     def load_profile(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
-            self, "Load boundary profile", "", "PCGrate boundary (*.ggp);;All files (*)"
+            self, "Load boundary profile", "",
+            "Boundary profiles (*.json *.ggp);;"
+            "gratinglab boundary, with period (*.json);;"
+            "PCGrate boundary (*.ggp);;All files (*)",
         )
         if path:
-            self._fields["profile_path"].setText(path)
-            self._path_label.setText(Path(path).name)
-            self.changed.emit()
-            self.solve_requested.emit()
+            self.load_boundary_file(path)
+
+    def load_boundary_file(self, path: "str | Path") -> None:
+        """Use a boundary file as the profile, and its period if it has one.
+
+        A gratinglab ``.json`` carries the period it was measured at, so the
+        period field is set from it; a ``.ggp`` cannot, so the field is left as
+        it is, which is the one case where the user still has to supply it.
+        Also what the metrology window's "Send to efficiency window" calls.
+        """
+        path = Path(path)
+        note = ""
+        if path.suffix.lower() == ".json":
+            from ...io.boundary import read_boundary_json
+
+            try:
+                saved = read_boundary_json(path)
+            except (OSError, ValueError):
+                pass  # the form's own validation reports the reason
+            else:
+                self._fields["period"].setText(f"{saved.period_nm:.6g}")
+                note = f" (period {saved.period_nm:.6g} nm from the file)"
+        kind = self._fields["profile_kind"]
+        kind.setCurrentIndex(kind.findText("From file"))
+        self._fields["profile_path"].setText(str(path))
+        self._path_label.setText(path.name + note)
+        self.changed.emit()
+        self.solve_requested.emit()
 
 
 def _value(widget: QWidget) -> str:

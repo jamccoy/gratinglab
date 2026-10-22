@@ -73,10 +73,23 @@ Produced by `ANALYSIS_MODE = 'icc'`. Per-scan ICC, effective sample size, and th
 factor by which the naive SEM is understated. Diagnostic only: it changes
 nothing, and tells you how much the correction is doing.
 
-## The boundary profile: `.ggp` and its metrics
+## The boundary profile: `.ggp`, `.json`, `.csv` and its metrics
 
 Produced by the **Boundary** tab, or by `ANALYSIS_MODE = 'ggp'`. Both share one
-computation, so they cannot drift apart.
+computation, so they cannot drift apart. **Export…** writes any of three formats,
+chosen by the file type in the save dialog:
+
+| Format | Holds | For |
+|---|---|---|
+| `.ggp` | the shape only, normalised to one period | PCGrate |
+| `.json` | the shape at full precision, the measured period in nm, the groove counts, the metrics, and provenance (gratinglab version, source scan, analysis settings) | reloading into gratinglab's efficiency window or `read_boundary_json`, with nothing to retype |
+| `.csv` | one row per point: `t`, `y` as fractions of the period and `x_nm`, `y_nm` in nm, with the period and groove counts in `#` lines after the header | a spreadsheet, MATLAB, or another code |
+
+A `.ggp` or `.csv` gets the metrics file below beside it; the `.json` carries
+them inside. **Send to efficiency window** opens the groove in the main gratinglab
+window with the measured period already filled in, by way of a `.json` in the
+temporary folder. Only the `.json` and that button keep the period: a `.ggp`
+cannot hold it, so a profile loaded from one needs the period typed in again.
 
 ### `averaged_groove_profile_<sample>.ggp`
 

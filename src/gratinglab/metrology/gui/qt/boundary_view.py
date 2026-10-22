@@ -27,6 +27,7 @@ from matplotlib.figure import Figure
 
 from ...boundary import build_boundary_profile
 from ...config import RESULTS_DIR
+from gratinglab.io.boundary import write_boundary_csv, write_boundary_json
 from gratinglab.io.ggp import write_ggp
 
 from ...io.metrics import write_profile_metrics
@@ -126,15 +127,19 @@ class BoundaryView(QWidget):
         self.min_half_spin.setRange(1, 200)
         self.min_half_spin.setValue(self._defaults.ggp_min_half_width)
         self.min_half_spin.setToolTip(
-            "Grooves whose symmetric extent is at or below this are skipped.\n"
-            "A groove near a scan edge would otherwise narrow the window every\n"
-            "groove shares, and normalisation would then stretch the exported\n"
-            "profile to fill a period.")
+            "Grooves sampled at or below this many points per half period are\n"
+            "skipped. A groove the scan edge cuts into is always skipped,\n"
+            "whatever this says: it would narrow the window every groove\n"
+            "shares, and normalisation would then stretch the profile.")
         self.min_half_spin.valueChanged.connect(self.refresh)
         layout.addWidget(self.min_half_spin)
 
-        self.export_btn = QPushButton("Export .ggp…")
+        self.export_btn = QPushButton("Export…")
         self.export_btn.setEnabled(False)
+        self.export_btn.setToolTip(
+            "PCGrate .ggp (shape only), gratinglab .json (shape, measured\n"
+            "period and provenance, reloads into the efficiency window), or\n"
+            ".csv (columns in period fractions and nm, for other software).")
         self.export_btn.clicked.connect(self.export)
         layout.addWidget(self.export_btn)
 
@@ -148,6 +153,18 @@ class BoundaryView(QWidget):
             "number -- the file format cannot carry it.")
         self.efficiency_btn.clicked.connect(self.show_efficiency)
         layout.addWidget(self.efficiency_btn)
+
+        # The full efficiency application rather than the preview above: every
+        # solver, mount and convergence check. Handed over as a gratinglab
+        # .json, so the measured period arrives with the shape.
+        self.send_btn = QPushButton("Send to efficiency window")
+        self.send_btn.setEnabled(False)
+        self.send_btn.setToolTip(
+            "Open this groove in the main gratinglab window, with the period\n"
+            "this scan measured already filled in.")
+        self.send_btn.clicked.connect(self.send_to_efficiency)
+        layout.addWidget(self.send_btn)
+        self._efficiency_window = None
         return group
 
     def _build_metrics_group(self):
@@ -273,6 +290,7 @@ class BoundaryView(QWidget):
         """Both actions need one thing -- a profile -- so they move together."""
         self.export_btn.setEnabled(enabled)
         self.efficiency_btn.setEnabled(enabled)
+        self.send_btn.setEnabled(enabled)
 
     # ── Out to a solver ──────────────────────────────────────────────────────
 
@@ -294,8 +312,19 @@ class BoundaryView(QWidget):
 
     # ── Export ───────────────────────────────────────────────────────────────
 
+    #: File-dialog filters, and the suffix each one writes.
+    EXPORT_FORMATS = (
+        ("PCGrate boundary profile (*.ggp)", ".ggp"),
+        ("gratinglab boundary, with period and provenance (*.json)", ".json"),
+        ("CSV table, fractions of the period and nm (*.csv)", ".csv"),
+    )
+
     def export(self):
-        """Write the .ggp, and the metrics file beside it."""
+        """Write the profile as .ggp, .json or .csv, by the chosen file type.
+
+        A .ggp or .csv also gets the metrics file beside it; the JSON carries
+        the metrics inside itself.
+        """
         if self._profile is None:
             return
 
@@ -304,21 +333,81 @@ class BoundaryView(QWidget):
                                  f'averaged_groove_profile_{stem}.ggp')
         os.makedirs(RESULTS_DIR, exist_ok=True)
 
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export PCGrate boundary profile", suggested,
-            "PCGrate boundary profile (*.ggp);;All files (*)")
+        filters = ";;".join(f for f, _ in self.EXPORT_FORMATS) + ";;All files (*)"
+        path, chosen = QFileDialog.getSaveFileName(
+            self, "Export boundary profile", suggested, filters)
         if not path:
             return
 
         try:
-            write_ggp(path, t=self._profile.x_norm, y=self._profile.y_norm)
-            metrics_path = os.path.splitext(path)[0] + '_metrics.txt'
-            write_profile_metrics(metrics_path, self._profile.metrics)
-        except OSError as exc:
+            path, metrics_path = self.write_profile(path, chosen)
+        except (OSError, ValueError) as exc:
             QMessageBox.warning(self, "Export failed", str(exc))
             return
 
-        QMessageBox.information(
-            self, "Exported",
-            f"Boundary profile written to:\n{path}\n\n"
-            f"Metrics written to:\n{metrics_path}")
+        message = f"Boundary profile written to:\n{path}"
+        if metrics_path:
+            message += f"\n\nMetrics written to:\n{metrics_path}"
+        QMessageBox.information(self, "Exported", message)
+
+    def write_profile(self, path, chosen_filter=""):
+        """Write the current profile; return (path written, metrics path or None).
+
+        The format follows the file's suffix, or the dialog's filter when the
+        name has no recognised suffix, in which case that suffix is added.
+        Separate from :meth:`export` so it can be driven without a dialog.
+        """
+        suffix = os.path.splitext(path)[1].lower()
+        known = {sfx for _, sfx in self.EXPORT_FORMATS}
+        if suffix not in known:
+            suffix = next((sfx for f, sfx in self.EXPORT_FORMATS if f == chosen_filter), ".ggp")
+            path += suffix
+
+        settings = self._settings.with_(**self.settings_overrides()) if self._settings else None
+        metrics_path = None
+        if suffix == ".json":
+            write_boundary_json(path, self._profile, source=self._filename, settings=settings)
+        elif suffix == ".csv":
+            write_boundary_csv(path, self._profile, source=self._filename)
+            metrics_path = os.path.splitext(path)[0] + '_metrics.txt'
+            write_profile_metrics(metrics_path, self._profile.metrics)
+        else:
+            write_ggp(path, t=self._profile.x_norm, y=self._profile.y_norm)
+            metrics_path = os.path.splitext(path)[0] + '_metrics.txt'
+            write_profile_metrics(metrics_path, self._profile.metrics)
+        return path, metrics_path
+
+    def send_to_efficiency(self):
+        """Open this groove in the main efficiency window, period included.
+
+        Written to a gratinglab .json in the temporary directory first, because
+        the efficiency window's form takes a profile *file*. That also leaves
+        the user a file the period travels with, should they want to keep it.
+        The same window is reused on a second send rather than stacking copies.
+        """
+        if self._profile is None:
+            return
+        try:
+            from gratinglab.gui.qt.main_window import MainWindow
+        except ImportError as exc:
+            QMessageBox.warning(
+                self, "Efficiency window unavailable",
+                f"The efficiency window could not be loaded:\n{exc}\n\n"
+                'It needs the gui extra: pip install "gratinglab[gui]"')
+            return
+
+        import tempfile
+
+        stem = os.path.splitext(os.path.basename(self._filename or "scan"))[0]
+        folder = os.path.join(tempfile.gettempdir(), "gratinglab")
+        os.makedirs(folder, exist_ok=True)
+        path, _ = self.write_profile(os.path.join(folder, f"{stem}_boundary.json"))
+
+        if self._efficiency_window is None:
+            self._efficiency_window = MainWindow()
+        window = self._efficiency_window
+        window.open_boundary(path)
+        window.show()
+        window.raise_()
+        window.activateWindow()
+        return window

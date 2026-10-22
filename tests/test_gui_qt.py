@@ -1532,3 +1532,39 @@ class TestEntryPoint:
             if isinstance(node, ast.Import)
         }
         assert "PySide6" not in top_level
+
+
+class TestOpeningASavedBoundary:
+    """A gratinglab .json brings its measured period with it."""
+
+    def _saved(self, tmp_path, period=314.97):
+        from types import SimpleNamespace
+
+        import numpy as np
+
+        from gratinglab.io.boundary import write_boundary_json
+
+        t = np.linspace(0.0, 1.0, 41)
+        y = np.where(t < 0.7, t / 0.7, (1 - t) / 0.3) * 0.31
+        y[0] = y[-1] = 0.0
+        profile = SimpleNamespace(x_norm=t, y_norm=y, period_nm=period, n_grooves=6,
+                                  n_used=5, n_edge_rejected=1, metrics={})
+        return write_boundary_json(tmp_path / "measured.json", profile)
+
+    def test_the_period_and_profile_both_arrive(self, qtbot, win, tmp_path):
+        from gratinglab.gui.state import build
+
+        path = self._saved(tmp_path)
+        with qtbot.waitSignal(win.solved, timeout=SOLVE_TIMEOUT_MS):
+            win.open_boundary(path)
+        form = win.geometry.read_form()
+        assert form.profile_kind == "From file"
+        assert float(form.period) == pytest.approx(314.97)
+        parsed = build(form)
+        assert parsed.problem.period == pytest.approx(314.97)
+        assert parsed.problem.profile.depth == pytest.approx(0.31)
+
+    def test_the_label_says_where_the_period_came_from(self, qtbot, win, tmp_path):
+        with qtbot.waitSignal(win.solved, timeout=SOLVE_TIMEOUT_MS):
+            win.open_boundary(self._saved(tmp_path))
+        assert "from the file" in win.geometry._path_label.text()
