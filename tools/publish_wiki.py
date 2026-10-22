@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Publish ``docs/`` into the GitHub wiki checkout.
+"""Publish ``docs/`` and the metrology window's own pages into the GitHub wiki.
 
     git clone https://github.com/jamccoy/gratinglab.wiki.git ../gratinglab.wiki
     .venv/bin/python tools/publish_wiki.py --wiki ../gratinglab.wiki
@@ -16,6 +16,16 @@ against ``/wiki/`` and 404. So after the copy, this rewrites every
 repository-relative target to an absolute blob URL on the default branch --
 which is where that file actually lives, and where a reader following the link
 wants to end up.
+
+The metrology window carries a wiki of its own, in
+``src/gratinglab/metrology/wiki/``, shipped as package data so an installed copy
+has it. Those pages are the ones a person analysing a scan actually reads (tip
+correction, swath statistics, reading the outputs), so they are published too,
+as ``AFM-<slug>`` pages in the window's reading order. The prefix is not
+decoration: a wiki names a page after its file, and a bare ``overview`` or
+``flattening`` next to the project pages would say nothing about what it
+covers. Their source stays inside the package, so an edit there is still one
+edit.
 
 ``Home.md`` and ``_Sidebar.md`` are generated rather than copied. They are
 navigation, not prose: their whole content is a list of the pages that exist,
@@ -36,6 +46,10 @@ from endstation.tools.publish_wiki import publish
 
 REPO = Path(__file__).resolve().parent.parent
 BLOB = "https://github.com/jamccoy/gratinglab/blob/master"
+METROLOGY_WIKI = REPO / "src" / "gratinglab" / "metrology" / "wiki"
+
+#: Prefix for the metrology window's pages, see the module docstring.
+AFM_PREFIX = "AFM-"
 
 #: A markdown inline link with a local target: not an image, not a URL, not a
 #: bare anchor. Anchors on the target are preserved.
@@ -65,6 +79,9 @@ next publish.
 | See what has actually been established, with evidence | **[findings](findings)** |
 | Find the literature behind a method | **[references](references)** |
 | Run or read a mutation-testing sweep | **[mutation-testing](mutation-testing)** |
+| Analyse an AFM scan: the metrology window's own guide | **[AFM overview](AFM-overview)**, then the AFM pages in the sidebar |
+| Correct for the tip, or pick a ScanAsyst-Air preset | **[AFM tip correction](AFM-tip-correction)** |
+| See how much the groove shape varies down a scan | **[AFM swath statistics](AFM-swath-statistics)** |
 
 ## The shape of it
 
@@ -114,6 +131,31 @@ def _to_blob_urls(text: str, pages: set[str]) -> str:
     return _LOCAL_LINK.sub(replace, text)
 
 
+def _metrology_pages() -> list[tuple[str, str, str]]:
+    """``(wiki name, title, markdown)`` for each metrology page, in reading order.
+
+    Read through ``gratinglab.metrology.wiki.pages``, so the order is the
+    window's and a page the window would skip is skipped here too.
+    """
+    from gratinglab.metrology.wiki import pages
+
+    return [(AFM_PREFIX + page.slug, page.title, page.markdown) for page in pages()]
+
+
+def _publish_metrology(wiki: Path, dry_run: bool) -> list[Path]:
+    """Copy the metrology pages in, comparing first so a dry run means "differs"."""
+    changed = []
+    for name, _title, markdown in _metrology_pages():
+        target = wiki / f"{name}.md"
+        text = markdown.replace("\r\n", "\n")
+        if target.exists() and target.read_text(encoding="utf-8").replace("\r\n", "\n") == text:
+            continue
+        changed.append(target)
+        if not dry_run:
+            target.write_text(text, encoding="utf-8", newline="\n")
+    return changed
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--wiki", type=Path, required=True,
@@ -124,6 +166,11 @@ def main(argv: list[str] | None = None) -> int:
     docs = REPO / "docs"
     changed = publish(docs, args.wiki, dry_run=args.dry_run)
     pages = {path.stem for path in sorted(docs.glob("*.md"))}
+    metrology = _metrology_pages()
+    clash = pages & {name for name, _, _ in metrology}
+    if clash:
+        raise SystemExit(f"docs/ and the metrology wiki both publish {sorted(clash)}")
+    changed += _publish_metrology(args.wiki, args.dry_run)
 
     if not args.dry_run:
         for name in sorted(pages):
@@ -136,7 +183,10 @@ def main(argv: list[str] | None = None) -> int:
             "### gratinglab\n\n"
             "- [Home](Home)\n"
             + "".join(f"- [{name}]({name})\n" for name in sorted(pages))
-            + f"\n- [Repository]({BLOB.rsplit('/blob/', 1)[0]})\n"
+            + "\n### AFM analysis\n\n"
+            + "".join(f"- [{title}]({name})\n" for name, title, _ in metrology)
+            + f"\n- [Repository]({BLOB.rsplit('/blob/', 1)[0]})\n",
+            encoding="utf-8",
         )
 
     print(f"{len(changed)} page(s) {'would change' if args.dry_run else 'written'}")
