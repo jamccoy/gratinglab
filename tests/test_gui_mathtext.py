@@ -142,7 +142,7 @@ class TestAgainstTheRealDocs:
     introduces an unsupported macro fails here, not silently in the app."""
 
     def test_every_math_span_in_scalar_md_renders(self):
-        text = (THEORY_ROOT / "scalar.md").read_text()
+        text = (THEORY_ROOT / "scalar.md").read_text(encoding="utf-8")
         math_segments = [s for s in split_segments(text) if s.kind == "math"]
         assert len(math_segments) > 10, "sanity check: did the file load correctly?"
 
@@ -153,7 +153,7 @@ class TestAgainstTheRealDocs:
         conventions = THEORY_ROOT.parent / "conventions.md"
         if not conventions.is_file():
             pytest.skip("conventions.md not found")
-        text = conventions.read_text()
+        text = conventions.read_text(encoding="utf-8")
         math_segments = [s for s in split_segments(text) if s.kind == "math"]
 
         failures = [s.content for s in math_segments if render_math_png(s.content) is None]

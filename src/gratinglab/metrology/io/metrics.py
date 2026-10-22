@@ -14,7 +14,7 @@ back. The numbers that a solver actually needs travel through
 
 def write_profile_metrics(path, metrics):
     """Write the slope/curvature summary that accompanies a boundary profile"""
-    with open(path, 'w') as f:
+    with open(path, 'w', encoding="utf-8") as f:
         f.write("=== Groove Profile Analysis (Final Phase-Shifted Data) ===\n")
         f.write(f"Period: {metrics['period_nm']:.2f} nm\n")
         f.write(f"Grooves averaged: {metrics['n_grooves']}\n")

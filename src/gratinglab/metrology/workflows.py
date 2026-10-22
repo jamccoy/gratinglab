@@ -234,7 +234,7 @@ def run_icc_report():
     os.makedirs(RESULTS_DIR, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     path = os.path.join(RESULTS_DIR, f'icc_report_{timestamp}.txt')
-    with open(path, 'w') as f:
+    with open(path, 'w', encoding="utf-8") as f:
         f.write(report)
     print(f"\n✓ ICC report saved to: {path}")
 

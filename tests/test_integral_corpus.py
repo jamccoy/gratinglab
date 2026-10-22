@@ -40,7 +40,7 @@ def taste_profile() -> FromProfileData:
     non-monotone stray at the tail is dropped.
     """
     pairs = []
-    with (reference_dir() / "OGRE" / "AFM_test.ggp").open() as handle:
+    with (reference_dir() / "OGRE" / "AFM_test.ggp").open(encoding="utf-8", errors="replace") as handle:
         for line in handle:
             parts = line.split()
             if len(parts) == 2:

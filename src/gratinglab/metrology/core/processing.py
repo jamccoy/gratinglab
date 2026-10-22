@@ -54,7 +54,7 @@ def _load_text(filename, default_scan_size=2.0):
     
     # Try to read scan size from header
     try:
-        with open(filename, 'r') as f:
+        with open(filename, 'r', encoding="utf-8", errors="replace") as f:
             # Read first 10 lines to look for scan size info
             header_lines = [f.readline() for _ in range(10)]
             
@@ -86,7 +86,10 @@ def _load_text(filename, default_scan_size=2.0):
     
     # Load the data
     try:
-        data = np.genfromtxt(filename, skip_header=4, skip_footer=0)
+        # Another program's file: only the numbers are parsed, so an
+        # undecodable byte in the skipped header must not stop the load.
+        with open(filename, encoding="utf-8", errors="replace") as handle:
+            data = np.genfromtxt(handle, skip_header=4, skip_footer=0)
     except Exception as e:
         raise Exception(f"Error loading {filename}: {e}") from e
     

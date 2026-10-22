@@ -97,7 +97,7 @@ class TestRejection:
     def test_rejects_a_file_that_is_not_an_efficiency_table(self, tmp_path):
         path = tmp_path / "notpcgrate.txt"
         # Long enough to get past the length check, so the banner check is what fires.
-        path.write_text("\n".join(f"{i}.0 {i}.5 {i}.9" for i in range(12)))
+        path.write_text("\n".join(f"{i}.0 {i}.5 {i}.9" for i in range(12)), encoding="utf-8")
         with pytest.raises(ValueError, match="not a PCGrate banner"):
             read_table(path)
 
@@ -106,14 +106,14 @@ class TestRejection:
         path.write_text(
             '"PCGrate-SX 6.7.1 (c)1996-2020 I.I.G., Inc."\n\nP\n'
             "Solved at\t1/1/2026\t00:00:00\nCalculating time\t00:00:01\n\n"
-            "\tScan Step\t\n P. ang., deg\t20.0\t\n"
+            "\tScan Step\t\n P. ang., deg\t20.0\t\n", encoding="utf-8"
         )
         with pytest.raises(ValueError, match="no 'Eff"):
             read_table(path)
 
     def test_rejects_truncated_file(self, tmp_path):
         path = tmp_path / "short.txt"
-        path.write_text('"PCGrate-SX 6.7.1 (c)1996-2020 I.I.G., Inc."\n\nP\n')
+        path.write_text('"PCGrate-SX 6.7.1 (c)1996-2020 I.I.G., Inc."\n\nP\n', encoding="utf-8")
         with pytest.raises(ValueError, match="too short"):
             read_table(path)
 
@@ -123,7 +123,7 @@ class TestRejection:
             '"PCGrate-SX 6.7.1 (c)1996-2020 I.I.G., Inc."\n\nP\n'
             "Solved at\t1/1/2026\t00:00:00\nCalculating time\t00:00:01\n\n"
             '\tScan Step\t"Eff.TE(0,R)"\n'
-            " P. ang., deg Az. ang., deg\t20.0 89.0\t0.5\n"
+            " P. ang., deg Az. ang., deg\t20.0 89.0\t0.5\n", encoding="utf-8"
         )
         table = read_table(path)
         assert not table.is_wavelength_scan

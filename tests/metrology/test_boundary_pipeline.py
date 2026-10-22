@@ -199,7 +199,7 @@ def test_written_file_has_the_uncommented_two_line_header():
     with tempfile.TemporaryDirectory() as scratch:
         path = os.path.join(scratch, 'out.ggp')
         write_ggp(path, t=p.x_norm, y=p.y_norm)
-        with open(path) as handle:
+        with open(path, encoding="utf-8") as handle:
             lines = handle.read().splitlines()
 
     assert lines[0] == GGP_HEADER.splitlines()[0] == "3 0 - Polygonal type"

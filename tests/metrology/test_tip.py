@@ -236,14 +236,14 @@ class TestThePipeline:
         from gratinglab.metrology.io.metrics import write_profile_metrics
         p = self._profile(SYNTHETIC_DILATED, **self.CORRECTED)
         path = write_profile_metrics(tmp_path / "metrics.txt", p.metrics)
-        text = path.read_text()
+        text = path.read_text(encoding="utf-8")
         assert "Tip correction: erosion" in text
         assert "upper bounds" in text
 
     def test_the_sidecar_states_the_absence_too(self, tmp_path):
         from gratinglab.metrology.io.metrics import write_profile_metrics
         p = self._profile(SYNTHETIC_DILATED)
-        text = write_profile_metrics(tmp_path / "m.txt", p.metrics).read_text()
+        text = write_profile_metrics(tmp_path / "m.txt", p.metrics).read_text(encoding="utf-8")
         assert "Tip correction: none" in text
 
 

@@ -209,7 +209,7 @@ class TestBoundaryTab:
                                               "warning": staticmethod(lambda *a: None)}))
         window.boundary.export()
 
-        with open(target) as handle:
+        with open(target, encoding="utf-8") as handle:
             lines = handle.read().splitlines()
         assert lines[0] == "3 0 - Polygonal type"
         assert lines[1] == "Period: 1 PSC: 1"

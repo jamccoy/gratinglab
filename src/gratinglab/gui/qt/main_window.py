@@ -43,6 +43,7 @@ from .geometry_tab import GeometryTab
 from .integral_tab import IntegralTab
 from .scalar_tab import ScalarTab
 from .setup_tab import SetupTab
+from .sizing import fit_width_to_contents
 from .worker import SolveWorker
 
 __all__ = ["MainWindow"]
@@ -154,7 +155,10 @@ class MainWindow(QMainWindow):
         scroller = QScrollArea()
         scroller.setWidget(self.geometry)
         scroller.setWidgetResizable(True)
-        scroller.setMinimumWidth(280)
+        # Derived, with the old literal kept as a floor so a platform whose
+        # fonts fit in 280 px renders exactly as before. The literal alone
+        # clipped the dock on Windows, whose form needs 388 px; see sizing.py.
+        scroller.setMinimumWidth(max(280, fit_width_to_contents(scroller)))
 
         dock = self.geometry_dock = QDockWidget("Grating geometry", self)
         dock.setObjectName("geometry_dock")  # so a future saveState() works

@@ -23,8 +23,25 @@ jobs:
           # BLAS/LAPACK differences that would otherwise only show up locally.
           - os: macos-latest
             python-version: "3.12"
+          # Windows is where the platform's default encoding is not UTF-8, so
+          # a text read that leaves it unsaid decodes the theory pages as
+          # cp1252 and fails. 152 tests did, unseen, until this leg existed.
+          - os: windows-latest
+            python-version: "3.12"
 
     name: ${{ matrix.os }} / py${{ matrix.python-version }}
+
+    # Every step is written for bash (heredocs, tee, grep); Windows would
+    # otherwise run them in PowerShell. Git Bash is on the hosted image.
+    defaults:
+      run:
+        shell: bash
+
+    # pytest's own output on a Windows pipe is cp1252 without this. Only
+    # stdout: PYTHONUTF8 would change open()'s default too, and hide exactly
+    # the bug the Windows leg is here to catch.
+    env:
+      PYTHONIOENCODING: utf-8
 
     steps:
       - uses: actions/checkout@v4
@@ -99,9 +116,19 @@ jobs:
       # research data will hit. If those tests ever error instead of skipping,
       # that is a real bug.
       - name: Run tests
+        env:
+          # Any text open() that leaves the encoding to the platform now fails
+          # on every OS, not only on Windows with a non-ASCII file. The
+          # third-party exceptions are scoped in pyproject.toml.
+          PYTHONWARNDEFAULTENCODING: "1"
         run: python -m pytest -v --durations=10
 
       - name: Confirm reference-data tests skipped rather than failed
+        env:
+          # Any text open() that leaves the encoding to the platform now fails
+          # on every OS, not only on Windows with a non-ASCII file. The
+          # third-party exceptions are scoped in pyproject.toml.
+          PYTHONWARNDEFAULTENCODING: "1"
         run: |
           python -m pytest -q -rs 2>&1 | tee result.txt
           for marker in "reference corpus" "GRATINGLAB_AFM_DIR"; do
@@ -116,7 +143,7 @@ jobs:
           # would go quietly green while testing almost nothing.
           python - <<'EOF'
           import re, sys
-          text = open("result.txt").read()
+          text = open("result.txt", encoding="utf-8").read()
           m = re.search(r"(\d+) passed", text)
           passed = int(m.group(1)) if m else 0
           print(f"{passed} passed")

@@ -128,9 +128,10 @@ def main(argv: list[str] | None = None) -> int:
     if not args.dry_run:
         for name in sorted(pages):
             page = args.wiki / f"{name}.md"
-            page.write_text(_to_blob_urls(page.read_text(), pages))
+            text = page.read_text(encoding="utf-8")
+            page.write_text(_to_blob_urls(text, pages), encoding="utf-8")
 
-        (args.wiki / "Home.md").write_text(HOME.format(blob=BLOB))
+        (args.wiki / "Home.md").write_text(HOME.format(blob=BLOB), encoding="utf-8")
         (args.wiki / "_Sidebar.md").write_text(
             "### gratinglab\n\n"
             "- [Home](Home)\n"
