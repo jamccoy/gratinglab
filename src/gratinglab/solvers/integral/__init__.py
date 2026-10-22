@@ -8,8 +8,9 @@ Chapter-2.tex:931), TE stays a Dirichlet problem, TM a Neumann problem,
 cross-polarization conversion is identically zero, and efficiencies are
 **relative to a perfect reflector** -- the sum over orders is exactly 1 in
 the continuum (M&P eqs. 4.34/4.42; thesis eq:prop_order_unity). This
-matches the perfect-conductivity PCGrate reference tables the solver is
-validated against; a named coating is ignored, with a provenance warning.
+matches the convention of the perfect-conductivity reference tables the
+solver is checked against; a named coating is ignored, with a provenance
+warning.
 
 With ``conductivity="tabulated"`` the grating is one interface into a
 semi-infinite material whose complex index is read per wavelength from the

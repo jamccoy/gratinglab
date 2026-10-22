@@ -64,7 +64,7 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | CI (Linux py3.11/3.12, macOS and Windows py3.12) | green. Runs with `PYTHONWARNDEFAULTENCODING=1`, so a text `open()` that leaves its encoding to the platform fails everywhere, not only on Windows |
 | RCWA | **contributed, not yet integrated** |
 | C-method | not started |
-| **Integral method** ([theory](theory/integral.md)) | **perfect-conductivity and finite-conductivity milestones done**: conical from day one, undercut-capable, GUI tab, validated against M&P Table 4.1 and orderwise against PCGrate to 8e-4 (which also identified the TASTE profile). M20 added `conductivity="tabulated"` — the coupled conical system of Goray & Schmidt (2010), absolute efficiencies with absorption recorded, flat limit = Fresnel to 6e-5, their Table 3 reproduced per order, and both boundary conditions selectable in the GUI. Graded corner mesh is the named successor |
+| **Integral method** ([theory](theory/integral.md)) | **perfect-conductivity and finite-conductivity milestones done**: conical from day one, undercut-capable, GUI tab, validated against M&P Table 4.1 and orderwise against an independent integral-method code on the private corpus (which also identified the TASTE profile). **Experimental**: not yet used for real analysis. M20 added `conductivity="tabulated"`: the coupled conical system of Goray & Schmidt (2010), absolute efficiencies with absorption recorded, flat limit = Fresnel to 6e-5, their Table 3 reproduced per order, and both boundary conditions selectable in the GUI. Graded corner mesh is the named successor |
 
 Roughly 1450 tests; the skips are the ones that need the private reference
 corpus or the AFM scans. Rounded on purpose: this line once claimed 328 and was
@@ -83,7 +83,7 @@ reversed, for three reasons the earlier revision could not have known:
 
 1. **The corpus can only validate an integral solver.** The one rigorous
    reference dataset on disk is perfect-conductivity *integral-method* output
-   (PCGrate). Scalar could never test more than the diffraction pattern
+   from a commercial code. Scalar could never test more than the diffraction pattern
    against it; a like-for-like comparison needed a like method.
 2. **The off-plane X-ray application is the project's point, and the integral
    method is the method of record there.** The conical decoupling theorem
@@ -95,8 +95,9 @@ reversed, for three reasons the earlier revision could not have known:
    the protocol held; see the current-state table.
 
 The gamble paid off immediately: the first rigorous-vs-rigorous comparison
-reproduced PCGrate orderwise to 8e-4 *and* identified the TASTE run's
-previously unconfirmed groove profile ([`findings.md`](findings.md)).
+matched the reference orderwise, within its own energy-balance error, *and*
+identified the TASTE run's previously unconfirmed groove profile
+([`findings.md`](findings.md)).
 
 Remaining integral milestones, in order:
 
@@ -106,10 +107,10 @@ Remaining integral milestones, in order:
   ([`theory/integral.md`](theory/integral.md) §8). The Leontovich rung was
   deliberately skipped — it requires |n| ≫ 1 and is invalid in the
   soft-X-ray regime the milestone exists for, and it builds no operators the
-  full system reuses. Validated without a PCGrate reference run (see the
-  narrowed open question below): flat interface = Fresnel exactly, the
+  full system reuses. Validated without a finite-conductivity reference run
+  (see the narrowed open question below): flat interface = Fresnel exactly, the
   energy theorems two-sided, the perfect-conductor limit against the
-  already-banked 8e-4 PCGrate agreement, and Goray & Schmidt's own Table 3
+  already-banked integral-method agreement, and Goray & Schmidt's own Table 3
   reproduced within 6e-5 per order — which also exposed their Table 4 as a
   publisher's duplication ([`findings.md`](findings.md)).
 - **Graded corner mesh** (M&P §4.6.6) — TM on cornered profiles currently
@@ -359,7 +360,7 @@ settle. Until it is, the comparison uses an idealised `Blazed(29.5°, 70.5°)`,
 which is probably why scalar's total sits near 0.55 rather than closer to unity.
 
 M16 remeasured this: the total is 0.5431 for the idealised sawtooth and 0.6138
-for `AFM_real_echelle.ggp`, against a PCGrate total of 1.0005. The flux
+for `AFM_real_echelle.ggp`, against the reference's unit total. The flux
 obliquity of M16-C moved it in the right direction but only slightly, because
 this mount is near enough to Littrow that the factor is ~0.99 on the orders
 carrying the power. The residual is profile mismatch, not normalisation — see
@@ -369,7 +370,7 @@ carrying the power. The residual is profile mismatch, not normalisation — see
 what is plausibly the same grating into the repo
 (`data/TASTE_ALS_A205_Ti_Pt_flatten.txt`), so the idealised sawtooth could be
 swapped for a measured groove. The total moved the *wrong* way: 0.5420 idealised
-to 0.3362 measured, against PCGrate's 1.0005. The groove's facet fit (27.91° ±
+to 0.3362 measured, against the reference's unit total. The groove's facet fit (27.91° ±
 2.13°) and its depth (implying 20.33°) disagree by 3.6σ: it is rounded rather
 than faceted, and the solver reads the depth. A flat land would explain the same
 deficit and was excluded (it would need 25–30% of the period; 2.9% is within 2°
@@ -394,7 +395,7 @@ finite-conductivity table (`panter1_finite` stays `usable = false`), but the
 rigorous solver no longer waits on one: `conductivity="tabulated"` is
 validated on the Fresnel flat limit, the two-sided energy theorems, the
 perfect-conductor limit, and Goray & Schmidt's published Table 3. What a
-fresh PCGrate run would still buy is a *like-for-like corpus item* — the
+fresh finite-conductivity reference run would still buy is a *like-for-like corpus item*: the
 recommended recipe: TE, Au, the TASTE geometry and the identified
 `AFM_test.ggp` groove, a wavelength grid avoiding ±0.05 nm around every
 order-passing-off point (the documented failure locus of `panter1_finite`),

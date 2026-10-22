@@ -4,8 +4,8 @@ measured divergence everywhere else.
 This is the committed version of the cross-check the project exists to make
 possible. The closed-form tests in ``test_scalar.py`` verify the scalar
 integral against answers derived from the same transmittance picture; the
-integral solver is validated against PCGrate (``test_integral_corpus.py``,
-which needs the external corpus). Here the two live solvers meet with no
+integral solver is validated against an independent integral-method code
+(``test_integral_corpus.py``, which needs the external corpus). Here the two live solvers meet with no
 external data at all, so this file runs everywhere and skips nothing.
 
 Ground rules that keep the comparison honest:

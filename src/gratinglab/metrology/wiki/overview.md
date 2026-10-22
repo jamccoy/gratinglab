@@ -1,7 +1,7 @@
 # Overview
 
 This software measures **blaze angles** on diffraction gratings from AFM
-topography scans, and exports the averaged groove shape as a **PCGrate boundary
+topography scans, and exports the averaged groove shape as a **boundary
 profile** for efficiency modelling.
 
 Both outputs come from one pipeline that forks only at the last step.
@@ -20,7 +20,7 @@ AFM scan file (.txt)
       ↓                          ↓
   fit each facet             average the grooves
   → blaze angles             → one normalised groove
-  → statistics, CSV          → .ggp for PCGrate
+  → statistics, CSV          → .json, .csv or .ggp
 ```
 
 Everything above the fork is shared code. That is deliberate: these were once two
