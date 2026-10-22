@@ -29,7 +29,7 @@ they drifted apart until a bug fixed in one quietly survived in the other.
 
 ## What a "measurement" is
 
-A single scan is divided into **row groups** — horizontal bands, 20 by default.
+A single scan is divided into **row groups**: horizontal bands, 20 by default.
 Each band is averaged into its own profile and analysed separately, so one image
 yields 80–100 blaze-angle measurements rather than the 4–10 you would get by
 averaging the whole image into a single profile.
@@ -40,12 +40,12 @@ band re-measures the same physical grooves. See **The correlation correction**.
 
 ## Where to go next
 
-- **Flattening** — the two stages, which one changes the answer, and by how much
-- **Tip correction** — undoing what the tip did to the surface, where that is
+- **Flattening**: the two stages, which one changes the answer, and by how much
+- **Tip correction**: undoing what the tip did to the surface, where that is
   possible, and admitting where it is not
-- **Row groups and scan edges** — what row-group analysis buys, and why grooves
+- **Row groups and scan edges**: what row-group analysis buys, and why grooves
   at the edge of a scan are thrown away
-- **The correlation correction** — why the error bars are wider than √N suggests
-- **Facet fitting and trim** — how the blaze facet is chosen and measured, and
+- **The correlation correction**: why the error bars are wider than √N suggests
+- **Facet fitting and trim**: how the blaze facet is chosen and measured, and
   the one parameter that moves the answer most
-- **Reading the outputs** — what every column and file means
+- **Reading the outputs**: what every column and file means

@@ -4,16 +4,16 @@
 
 A traditional AFM profile analysis averages every row of the image into one
 height profile, finds the grooves in it, and measures each one. A 2 µm scan of a
-315 nm grating gives about six grooves — six measurements per image.
+315 nm grating gives about six grooves, so six measurements per image.
 
 Row-group analysis divides the image into `N_ROW_GROUPS` horizontal bands (20 by
 default), averages each band separately, and analyses all of them. The same scan
 now yields 80–100 measurements.
 
-**What that buys:** a view of how the groove shape varies down the image, and
+What that buys: a view of how the groove shape varies down the image, and
 enough measurements to see the distribution rather than six points.
 
-**What it costs:** the measurements are not independent — see
+What it costs: the measurements are not independent; see
 **The correlation correction**. More bands over the same grooves does not
 straightforwardly mean more information.
 
@@ -32,13 +32,13 @@ not a measurement of anything.
 ### The failure this prevents
 
 Four measurements in `20250905_280C_00004.txt` came back as blaze angles of
-**2.40°, 2.64°, 2.69° and 3.60°** — in a population averaging 30°. A blazed
+**2.40°, 2.64°, 2.69° and 3.60°**, in a population averaging 30°. A blazed
 facet cannot be 2.4°.
 
 Tracing them: the pixel size in that scan is 3.70 nm, and a healthy blaze facet
 spans about 50 pixels. Those four spanned **5–6 pixels**. The groove sat at pixel
 5 of a 512-pixel profile, the extraction window was clipped at the array
-boundary, and the facet-splitting step landed on the very first sample — leaving
+boundary, and the facet-splitting step landed on the very first sample, leaving
 a sliver. A straight line fitted through five noisy points returns an arbitrary
 shallow slope.
 
@@ -50,13 +50,13 @@ degraded quietly instead of producing an obviously absurd number.
 
 - Minimum angle across all measurements: **2.40° → 25.58°**, inside the physical
   range for these gratings.
-- No fit now falls below R² 0.95 — every poor fit in the dataset was an edge
+- No fit now falls below R² 0.95: every poor fit in the dataset was an edge
   groove.
 - The 280 °C standard deviation fell from 3.04° to 1.65°, in line with the other
   samples rather than looking anomalously noisy.
 
 It also puts the samples on equal terms. How many edge grooves a scan contains is
-pure luck of where the scan happened to start relative to the grating phase — the
+pure luck of where the scan happened to start relative to the grating phase: the
 master sample had none, every other sample had 18–26. Leaving them in weighted
 the samples differently for no physical reason.
 
