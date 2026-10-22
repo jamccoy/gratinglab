@@ -30,9 +30,9 @@ jobs:
 
       - name: The tag must name the version being built
         run: |
-          version=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
+          version=$(python -c "import re; print(re.search(r'^__version__ = \"([^\"]+)\"', open('src/gratinglab/__init__.py', encoding='utf-8').read(), re.M).group(1))")
           if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "::error::tag $GITHUB_REF_NAME does not match pyproject.toml version $version"
+            echo "::error::tag $GITHUB_REF_NAME does not match gratinglab.__version__ $version"
             exit 1
           fi
 

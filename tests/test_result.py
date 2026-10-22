@@ -192,14 +192,32 @@ class TestPublicAPI:
             assert hasattr(gratinglab, name)
 
 
-def test_the_version_provenance_records_is_the_one_being_shipped():
-    """`__version__` is stamped on every result's provenance and is written by
-    hand beside pyproject.toml's. A release that bumped one and not the other
-    would label its results with a version nobody can install."""
+def test_the_package_version_is_read_from_version():
+    """`__version__` is the one written version: it is stamped on every
+    result's provenance, and pyproject.toml reads it rather than restating it.
+    A second literal there could drift and label results with a version
+    nobody can install."""
     import tomllib
-
-    from gratinglab import __version__
 
     pyproject = Path(__file__).resolve().parents[1] / "pyproject.toml"
     with pyproject.open("rb") as f:
-        assert __version__ == tomllib.load(f)["project"]["version"]
+        config = tomllib.load(f)
+    assert "version" not in config["project"]
+    assert "version" in config["project"]["dynamic"]
+    assert config["tool"]["setuptools"]["dynamic"]["version"] == {
+        "attr": "gratinglab.__version__"
+    }
+
+
+def test_the_citation_names_the_version_being_shipped():
+    """CITATION.cff is the one copy setuptools cannot read for us, so a release
+    that bumps `__version__` and forgets it fails here instead of shipping a
+    citation for the previous release."""
+    import re
+
+    from gratinglab import __version__
+
+    citation = Path(__file__).resolve().parents[1] / "CITATION.cff"
+    found = re.search(r"^version: (\S+)$", citation.read_text(encoding="utf-8"), re.M)
+    assert found is not None, "CITATION.cff has no version line"
+    assert found.group(1) == __version__
