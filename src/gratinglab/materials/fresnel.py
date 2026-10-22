@@ -68,15 +68,20 @@ RoughnessModel = Literal["nevot-croce", "debye-waller", "none"]
 
 
 def critical_angle(decrement: ArrayLike) -> NDArray[np.float64]:
-    r"""Total-external-reflection graze angle, :math:`\theta_c=\sqrt{2\delta}`.
+    r"""Total-external-reflection graze angle, :math:`\theta_c=\arccos(1-\delta)`.
 
     Radians, from the surface. Below it a lossless material reflects
-    everything; the small-angle expansion this uses is excellent for the
-    :math:`\delta \sim 10^{-3}` of the soft X-ray and would not be for a
-    material with a large decrement.
+    everything, which `tests/test_fresnel.py` checks against :func:`amplitude`
+    on both sides of the edge. The familiar :math:`\sqrt{2\delta}` is the
+    leading term of this, short by a relative :math:`\delta/12`: about 1e-4 in
+    the soft X-ray, and enough at a large decrement to put a graze the
+    amplitudes still reflect totally on the wrong side of it.
 
     :class:`~.optical.OpticalConstants` has a method of the same name that
     reads a table; this is the bare relation, for a decrement you already have.
+    It is the lossless edge and nothing more: it does not ask whether the
+    material is near enough to n = 1 for an edge to mean anything, which the
+    method does.
     """
     decrement = np.asarray(decrement, dtype=np.float64)
     if (decrement < 0).any():
@@ -84,7 +89,12 @@ def critical_angle(decrement: ArrayLike) -> NDArray[np.float64]:
             "decrement must be non-negative; a negative one puts the real part "
             "of n above 1, which deletes total external reflection entirely"
         )
-    return np.sqrt(2.0 * decrement)
+    if (decrement > 1).any():
+        raise ValueError(
+            "decrement must not exceed 1; beyond it the real part of n is "
+            "negative and there is no lossless edge to compute"
+        )
+    return np.arccos(1.0 - decrement)
 
 
 def _normal_components(

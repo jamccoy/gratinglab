@@ -181,18 +181,38 @@ class TestAgainstPublishedValues:
         assert np.all(n.imag > 0.0)
 
     def test_the_critical_angle_is_a_few_degrees_and_grows_with_wavelength(self, gold):
-        r""":math:`\theta_c = \sqrt{2\delta}`, and the decrement rises towards
+        r""":math:`\theta_c \approx \sqrt{2\delta}`, and the decrement rises towards
         longer wavelengths, so grazing optics get more forgiving there. About
         3.1 degrees at 1 nm for Au."""
         assert np.degrees(gold.critical_angle(1.0)) == pytest.approx(3.1, abs=0.3)
         angles = np.degrees(gold.critical_angle([1.0, 2.0, 4.0]))
         assert np.all(np.diff(angles) > 0)
 
-    def test_it_matches_the_square_root_definition_exactly(self, gold):
-        """Not a re-implementation -- the point is that `critical_angle` reads
-        the same table `at` does, so the two can never disagree."""
+    def test_it_matches_the_exact_lossless_definition_exactly(self, gold):
+        r"""Not a re-implementation -- the point is that `critical_angle` reads
+        the same table `at` does, so the two can never disagree.
+
+        This pinned :math:`\sqrt{2\delta}` until the materials layer met
+        refractiveindex.info, and was changed on purpose rather than loosened:
+        the arccos is what Snell's law gives and what `fresnel.amplitude`
+        reflects totally below, so it is the definition, and the square root
+        is now the expansion the next test holds it to."""
         decrement, _ = gold.at(2.5)
-        assert gold.critical_angle(2.5) == pytest.approx(np.sqrt(2.0 * decrement))
+        assert gold.critical_angle(2.5) == pytest.approx(
+            np.arccos(1.0 - decrement), rel=1e-12
+        )
+
+    def test_and_differs_from_the_square_root_only_by_its_next_term(self, gold):
+        r"""What the change from :math:`\sqrt{2\delta}` costs X-ray results:
+        :math:`\arccos(1-\delta) = \sqrt{2\delta}\,(1 + \delta/12 + \dots)`, so
+        across the whole Au table the two agree to that term, about 1e-4.
+        Asserting the term itself, not a tolerance wide enough to hide a
+        wrong formula."""
+        lam = np.geomspace(*gold.range_nm, 400)
+        decrement, _ = gold.at(lam)
+        relative = gold.critical_angle(lam) / np.sqrt(2.0 * decrement) - 1.0
+        assert relative == pytest.approx(decrement / 12.0, rel=0.01)
+        assert relative.max() < 2e-3
 
 
 class TestLookup:
@@ -359,6 +379,71 @@ class TestBelowAnAbsorptionEdge:
         """n above 1 deletes total external reflection, so no graze is below
         critical. NaN said nothing, and every comparison against it is False."""
         assert edge.critical_angle(EDGE_NM) == 0.0
+
+    def test_and_it_is_still_in_the_regime_where_that_matters(self, edge):
+        """n is above 1 but only just, so reflectivity has nothing to stand on
+        and the scalar solver must still warn here. Being outside the regime
+        is what silences the warning for a glass, and this is not a glass."""
+        assert edge.near_unity(EDGE_NM)
+
+
+RII = Path(__file__).parent / "data" / "refractiveindex"
+
+
+@pytest.fixture(scope="module")
+def au():
+    return materials.from_refractiveindex_file(RII / "tabulated-nk_Au-Johnson.yml")
+
+
+@pytest.fixture(scope="module")
+def bk7():
+    return materials.from_refractiveindex_file(RII / "formula-2-tabulated-k_N-BK7.yml")
+
+
+class TestOutsideTheXRay:
+    """From the UV to the IR there is usually no critical angle at all.
+
+    The committed refractiveindex.info fixtures are the two shapes that went
+    wrong when the small-angle form met them: a visible metal, whose real part
+    is below 1 but whose absorption is of order 1, and a glass, whose real part
+    is above 1. Both now read as having no critical angle, and both as outside
+    the regime where that is worth a warning.
+    """
+
+    def test_visible_gold_has_its_real_part_below_one(self, au):
+        """Non-vacuity: this is the case the square root answered with 72
+        degrees and the arccos would answer with 76. Neither means anything."""
+        n = complex(au.n(600.0))
+        assert 0.0 < n.real < 1.0
+        assert n.imag > 1.0
+
+    def test_and_no_critical_angle(self, au):
+        assert au.critical_angle(600.0) == 0.0
+        assert not au.near_unity(600.0)
+
+    def test_because_fresnel_finds_no_edge_there(self, au):
+        """The physics behind the zero, checked on the exact amplitudes rather
+        than asserted: from 10 degrees to normal incidence the reflectivity of
+        Au at 600 nm stays between 0.90 and 0.93, with nothing at 76 degrees or
+        anywhere else. A critical angle is the place where it would collapse,
+        and an X-ray material loses more than 99% within two of them."""
+        from gratinglab.materials.fresnel import reflectivity
+
+        graze = np.radians(np.linspace(10.0, 90.0, 81))
+        R = reflectivity(complex(au.n(600.0)), graze)
+        assert R.min() > 0.90
+        assert R.max() < 0.93
+
+    def test_glass_has_no_critical_angle_either(self, bk7):
+        lam = np.array([400.0, 550.0, 1000.0])
+        assert np.all(bk7.n(lam).real > 1.0)
+        assert np.all(bk7.critical_angle(lam) == 0.0)
+        assert not bk7.near_unity(lam).any()
+
+    def test_and_the_x_ray_table_is_inside_the_regime_everywhere(self):
+        """The other side: nothing about Au's own X-ray constants moved out."""
+        gold = materials.lookup("Au")
+        assert gold.near_unity(np.geomspace(*gold.range_nm, 400)).all()
 
 
 class TestConstruction:

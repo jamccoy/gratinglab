@@ -1399,6 +1399,58 @@ class TestTheValidityGuardsMaterialsUnlocked:
         )
         assert any("critical angle for Edge" in w for w in scan.provenance.warnings)
 
+    def test_the_edge_warning_says_there_is_no_tir_rather_than_a_zero_angle(
+        self, tmp_path, monkeypatch
+    ):
+        """"theta_c falls to 0 deg" was true and read like a number; the
+        reason is that there is no critical angle there at all."""
+        from test_materials import EDGE_NM, EDGE_TEXT
+
+        (tmp_path / "Edge.txt").write_text(EDGE_TEXT, encoding="utf-8")
+        monkeypatch.setenv("GRATINGLAB_MATERIALS", str(tmp_path))
+        scan = scalar.solve(
+            Problem(period=315.15, profile=self.PROFILE, coating="Edge"),
+            Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL),
+            [EDGE_NM],
+        )
+        warning = next(
+            w for w in scan.provenance.warnings if "critical angle for Edge" in w
+        )
+        assert "no total external reflection" in warning
+
+    @pytest.mark.parametrize(
+        ("fixture", "name", "wavelengths"),
+        [
+            ("tabulated-nk_Au-Johnson.yml", "AuVis", [550.0, 600.0, 700.0]),
+            ("formula-2-tabulated-k_N-BK7.yml", "BK7", [450.0, 550.0, 650.0]),
+        ],
+    )
+    def test_a_visible_design_is_not_warned_about(
+        self, tmp_path, monkeypatch, fixture, name, wavelengths
+    ):
+        """There is usually no critical angle from the UV to the IR, and a
+        near-normal design there is ordinary. This used to warn on every one:
+        a glass got theta_c = 0, so any graze exceeded it, and the message
+        called a classical visible mount "outside the regime a
+        grazing-incidence design operates in".
+
+        Non-vacuity in the first two asserts: the graze really is above the
+        zero the coating reports, so only the regime test is silencing it."""
+        from test_materials import RII
+
+        (tmp_path / f"{name}.yml").write_bytes((RII / fixture).read_bytes())
+        monkeypatch.setenv("GRATINGLAB_MATERIALS", str(tmp_path))
+        from gratinglab import materials
+
+        coating = materials.lookup(name)
+        assert np.all(coating.critical_angle(wavelengths) == 0.0)
+        scan = scalar.solve(
+            Problem(period=1666.67, profile=self.PROFILE, coating=name),
+            Illumination.classical(alpha=10.0, polarization=UNPOL),
+            wavelengths,
+        )
+        assert not any("critical angle" in w for w in scan.provenance.warnings)
+
     def test_a_grazing_design_is_not_warned_about(self):
         """Non-vacuity: the reference geometry sits at 1.5 degrees, comfortably
         below Au's 3.1-degree critical angle at 1 nm, and must stay quiet."""
