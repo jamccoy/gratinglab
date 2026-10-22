@@ -59,7 +59,8 @@ contributed and not yet integrated.
 
 Two halves. **Metrology** (`gratinglab.metrology`) reads AFM scans (Nanoscope `.spm`
 or Gwyddion text exports) and produces blaze angles per groove with row-group
-statistics and an ICC correction, plus one averaged groove normalised to a period.
+statistics and an ICC correction, plus one averaged groove normalised to a period,
+and swath statistics for how much that groove varies down the scan.
 Tip convolution can be undone where the tip reached the surface, and the region it
 never reached is marked rather than smoothed over. **Efficiency** is everything else:
 the problem spec, the solvers, the comparison and convergence harnesses, the materials

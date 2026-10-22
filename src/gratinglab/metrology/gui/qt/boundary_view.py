@@ -164,6 +164,14 @@ class BoundaryView(QWidget):
             "this scan measured already filled in.")
         self.send_btn.clicked.connect(self.send_to_efficiency)
         layout.addWidget(self.send_btn)
+
+        self.swaths_btn = QPushButton("Swath statistics…")
+        self.swaths_btn.setEnabled(False)
+        self.swaths_btn.setToolTip(
+            "Build the groove separately for each horizontal band of rows and "
+            "show how much the shape varies down the scan.")
+        self.swaths_btn.clicked.connect(self.show_swaths)
+        layout.addWidget(self.swaths_btn)
         self._efficiency_window = None
         return group
 
@@ -300,6 +308,7 @@ class BoundaryView(QWidget):
         self.export_btn.setEnabled(enabled)
         self.efficiency_btn.setEnabled(enabled)
         self.send_btn.setEnabled(enabled)
+        self.swaths_btn.setEnabled(enabled)
 
     # ── Out to a solver ──────────────────────────────────────────────────────
 
@@ -318,6 +327,21 @@ class BoundaryView(QWidget):
         from .efficiency_dialog import EfficiencyDialog
 
         EfficiencyDialog(self._profile, self).exec()
+
+    def swath_dialog(self):
+        """A SwathDialog for the current scan and settings, or None."""
+        if self._profile is None:
+            return None
+        from .swath_dialog import SwathDialog
+
+        settings = self._settings.with_(**self.settings_overrides())
+        return SwathDialog(self._data, self._scan_size, settings, self._filename, self)
+
+    def show_swaths(self):
+        """How much the groove varies from swath to swath down the scan."""
+        dialog = self.swath_dialog()
+        if dialog is not None:
+            dialog.exec()
 
     # ── Export ───────────────────────────────────────────────────────────────
 

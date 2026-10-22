@@ -31,6 +31,7 @@ PAGE_ORDER = (
     "tip-correction",
     "row-groups",
     "icc-correction",
+    "swath-statistics",
     "facet-fitting",
     "reading-outputs",
 )
