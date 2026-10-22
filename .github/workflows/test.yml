@@ -74,7 +74,7 @@ jobs:
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,gui,metrology]"
+          python -m pip install -e ".[dev,gui,metrology,refractiveindex]"
 
       - name: Lint with ruff
         run: ruff check .
@@ -109,6 +109,17 @@ jobs:
           require_matplotlib()
           from gratinglab.metrology.boundary import build_boundary_profile
           print('metrology ok')
+          "
+
+      # The refractiveindex.info tests skip without PyYAML, so a broken extra
+      # would read as a smaller suite rather than a failure. Read a real file
+      # here instead, next to the install step that would be at fault.
+      - name: Confirm the refractiveindex extra installed
+        run: |
+          python -W error -c "
+          from gratinglab import materials
+          t = materials.from_refractiveindex_file('tests/data/refractiveindex/formula-1_SiO2-Malitson.yml')
+          print('refractiveindex ok', t)
           "
 
       # CI has neither the PCGrate reference corpus nor the AFM scans, so this

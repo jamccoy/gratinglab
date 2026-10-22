@@ -119,13 +119,22 @@ pip install "gratinglab[metrology]"   # + AFM readers and the boundary pipeline
 pip install "gratinglab[gui]"         # + the Qt windows
 ```
 
-From a checkout, `pip install -e ".[dev,gui,metrology]"` instead.
+From a checkout, `pip install -e ".[dev,gui,metrology,refractiveindex]"` instead.
 
 No optical constant tables ship with the package, so absolute efficiencies need
-your own. A library is a directory of them, one material per file: save a CXRO
-export as `~/.gratinglab/materials/Pt.txt` (or a PCGrate `Pt.ari`) and
-`coating="Pt"` works. `GRATINGLAB_MATERIALS` points elsewhere, and
-`materials.from_cxro_file(path)` reads one file without a library. See
+your own. A library is a directory of them, one material per file, named for
+the material:
+
+| File | From | Range |
+|---|---|---|
+| `Pt.txt` | a [CXRO](https://henke.lbl.gov/optical_constants/) export | X-ray |
+| `Pt.yml` | a [refractiveindex.info](https://refractiveindex.info) file, renamed from its author's name | ultraviolet to infrared |
+| `Pt.ari` | a PCGrate table | whatever it covers |
+
+Save one as `~/.gratinglab/materials/Pt.yml` and `coating="Pt"` works.
+`GRATINGLAB_MATERIALS` points elsewhere, and `materials.from_cxro_file(path)`
+or `from_refractiveindex_file(path)` reads a file without a library. The YAML
+files need `pip install "gratinglab[refractiveindex]"`. See
 [`SOURCES.md`](src/gratinglab/materials/data/SOURCES.md) for why none ship.
 
 The core stays deliberately light — a solver-only user never installs a plotting
@@ -230,7 +239,7 @@ git clone https://github.com/jamccoy/gratinglab.wiki.git ../gratinglab.wiki
 ## Development
 
 ```bash
-.venv/bin/python -m pip install -e ".[dev,gui,metrology]"
+.venv/bin/python -m pip install -e ".[dev,gui,metrology,refractiveindex]"
 .venv/bin/python -m pytest
 .venv/bin/ruff check .
 ```
