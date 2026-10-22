@@ -157,6 +157,14 @@ The core install has no plotting stack, so a user who only runs solvers never in
 one. Each subpackage that needs an extra names it when it is missing, rather than
 failing with a bare `ModuleNotFoundError`.
 
+Besides numpy, scipy and pydantic, the one dependency is
+[endstation](https://github.com/jamccoy/endstation), shared scaffolding for desktop
+science tools by the same author. gratinglab uses its optional-extra guards (the
+messages above), form validation, Qt layout sizing, test helpers, and the tools that
+build the icon and the macOS app and publish the wiki. endstation's own core has no
+dependencies, so it adds nothing to a solver-only install; its Qt parts arrive only
+with the `gui` extra.
+
 ### Where the measurement data lives
 
 Scans are **not** in the repository. They are research data, and the same rule already

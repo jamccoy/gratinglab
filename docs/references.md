@@ -229,6 +229,14 @@ Erosion bounds the true surface; it does not recover it.
 
 ## Sibling code
 
+**endstation** ([github.com/jamccoy/endstation](https://github.com/jamccoy/endstation),
+on PyPI). Shared scaffolding for the author's desktop science tools, and
+gratinglab's one non-scientific dependency: the optional-dependency guards behind
+every missing-extra message, form-error collection, Qt layout sizing, the
+toolkit-boundary test and pytest plugin, and the icon, macOS app and wiki-publishing
+tools. Its core declares no dependencies, so it costs a solver-only install
+nothing. A fix to any of those lands there, not here.
+
 **PyXFocus** — sequential X-ray raytracer (Allured; forks by kbuffo and this
 project's author). Its `grating.py` holds the analytic Littrow-mount formulas
 (`blazeYaw`, `blazeAngle`) slated for a native port (roadmap §3), and its GUI's
