@@ -29,7 +29,7 @@ dependencies = [
     # `dependencies = []` and has a test that fails if that stops being true,
     # so this line adds no transitive weight -- the Qt and matplotlib parts sit
     # behind its own extras, which our `gui` extra asks for by name.
-    "endstation>=0.1",
+    "endstation>=0.2.2",
 ]
 
 [project.optional-dependencies]
@@ -44,7 +44,7 @@ dev = ["pytest>=7", "pytest-qt>=4.5", "matplotlib>=3.8", "pandas>=2.1", "ruff>=0
 #
 # PySide6 (LGPLv3) rather than PyQt6 (GPL): this package is BSD-3, and an
 # optional dynamically-linked dependency keeps it that way.
-gui = ["matplotlib>=3.8", "PySide6-Essentials>=6.7", "endstation[qt]>=0.1"]
+gui = ["matplotlib>=3.8", "PySide6-Essentials>=6.7", "endstation[qt]>=0.2.2"]
 # Groove metrology: reading AFM scans and averaging them into a boundary
 # profile. An extra for the same reason the GUI is one -- `pip install
 # gratinglab` must stay numpy/scipy/pydantic, so a solver-only user never
@@ -129,13 +129,12 @@ filterwarnings = [
     "ignore:Enum value .Qt..ApplicationAttribute.AA_UseHighDpiPixmaps. is marked as deprecated:DeprecationWarning:matplotlib.backends.backend_qt",
     # CI runs with PYTHONWARNDEFAULTENCODING=1, so any text open() here that
     # leaves the encoding to the platform fails on every OS, not only on
-    # Windows with a non-ASCII file. These four are other projects' calls.
+    # Windows with a non-ASCII file. These three are other projects' calls.
     # numpy's savetxt touches its output with a bare open() whatever encoding
     # it is given. Inert without the flag.
     "ignore::EncodingWarning:matplotlib.font_manager",
     "ignore::EncodingWarning:numpy.lib._npyio_impl",
     "ignore::EncodingWarning:numpy.lib._datasource",
-    "ignore::EncodingWarning:endstation.testing.boundary",
 ]
 # pytest-qt would otherwise probe every binding it knows. Verified clean under
 # `python -W error -c "import PySide6.QtWidgets"`, so `filterwarnings = error`
