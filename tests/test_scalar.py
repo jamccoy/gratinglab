@@ -1381,6 +1381,26 @@ class TestTheValidityGuardsMaterialsUnlocked:
         assert "Au" in warning
         assert "theta_c" in warning
 
+    def test_below_an_absorption_edge_any_graze_is_past_critical(
+        self, tmp_path, monkeypatch
+    ):
+        """Just below an L3 edge the decrement is negative, n exceeds 1 and
+        there is no total external reflection at all. The guard used to compare
+        the graze against NaN there, which is False, and so said nothing at the
+        one wavelength where reflectivity has least to stand on."""
+        from test_materials import EDGE_NM, EDGE_TEXT
+
+        from gratinglab import materials
+
+        (tmp_path / "Edge.txt").write_text(EDGE_TEXT, encoding="utf-8")
+        monkeypatch.setattr(materials, "_DATA", tmp_path)
+        scan = scalar.solve(
+            Problem(period=315.15, profile=self.PROFILE, coating="Edge"),
+            Illumination.offplane(graze=1.5, azimuth=25.0, polarization=UNPOL),
+            [EDGE_NM],
+        )
+        assert any("critical angle for Edge" in w for w in scan.provenance.warnings)
+
     def test_a_grazing_design_is_not_warned_about(self):
         """Non-vacuity: the reference geometry sits at 1.5 degrees, comfortably
         below Au's 3.1-degree critical angle at 1 nm, and must stay quiet."""

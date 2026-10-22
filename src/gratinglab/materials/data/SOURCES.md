@@ -7,7 +7,13 @@ density the tables were computed at.
 
 | File | Material | Range | Points | Origin |
 |---|---|---|---|---|
-| `Au.txt` | Gold, density 19.32 g/cm³ | 200 eV – 2 keV (0.620 – 6.171 nm) | 498 | CXRO, <https://henke.lbl.gov/optical_constants/> |
+| `Au.txt` | Gold, density 19.32 g/cm³ | 200 eV to 2 keV (0.620 to 6.199 nm) | 500 | CXRO, <https://henke.lbl.gov/optical_constants/> |
+
+That row said 6.171 nm and 498 points until 2026-10-21, and both were wrong:
+1239.84 / 200 eV is 6.199 nm. The request that produced the file is recovered
+rather than remembered. <https://henke.lbl.gov/optical_constants/getdb2.html>
+with formula `Au`, density `-1` (tabulated), `Scan=Energy`, `Min=200`,
+`Max=2000` and `Npts=500` returns it value for value.
 
 ## Citation
 

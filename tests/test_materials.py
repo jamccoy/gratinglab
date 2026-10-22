@@ -224,6 +224,70 @@ class TestLookup:
         assert materials.available() == ()
 
 
+class TestEveryVendoredTable:
+    """Each file in `data/` is a claim made in `SOURCES.md`, so each is held to
+    it rather than Au alone standing in for any that arrive later."""
+
+    @pytest.mark.parametrize("name", materials.available())
+    def test_it_loads_as_a_cxro_table(self, name):
+        table = materials.lookup(name)
+        assert "CXRO" in table.source
+        assert len(table.wavelength_nm) == 500
+
+    @pytest.mark.parametrize("name", materials.available())
+    def test_it_spans_200_ev_to_2_kev(self, name):
+        low, high = materials.lookup(name).range_nm
+        assert low == pytest.approx(0.6199, abs=1e-3)
+        assert high == pytest.approx(6.199, abs=1e-3)
+
+    @pytest.mark.parametrize("name", materials.available())
+    def test_its_index_is_close_to_one_and_lossy(self, name):
+        """Close to one, not below it everywhere: just under an absorption edge
+        the decrement goes negative, so the bound is two-sided."""
+        table = materials.lookup(name)
+        assert (np.abs(table.decrement) < 0.05).all()
+        assert (table.absorption > 0).all()
+
+    @pytest.mark.parametrize("name", materials.available())
+    def test_it_has_a_row_in_sources(self, name):
+        sources = (materials.data_dir() / "SOURCES.md").read_text(encoding="utf-8")
+        assert f"| `{name}.txt` |" in sources
+
+
+#: A synthetic CXRO export with a negative decrement at 572.7 eV, the shape
+#: real data takes just below an L3 edge (chromium's is 574 eV). Synthetic so
+#: the test needs no table the package may not ship.
+EDGE_TEXT = """\
+ Edge Density=1.0
+ Energy(eV), Delta, Beta
+  200.  0.0100  0.0010
+  400.  0.0050  0.0010
+  572.7  -0.0050  0.0010
+  600.  0.0040  0.0010
+  1000.  0.0020  0.0010
+  2000.  0.0005  0.0010
+"""
+EDGE_NM = 1239.84 / 572.7
+
+
+class TestBelowAnAbsorptionEdge:
+    @pytest.fixture
+    def edge(self, tmp_path):
+        path = tmp_path / "Edge.txt"
+        path.write_text(EDGE_TEXT, encoding="utf-8")
+        return materials.from_cxro_file(path)
+
+    def test_the_decrement_really_is_negative_there(self, edge):
+        """Non-vacuity for the test below: without this the clip is untested."""
+        decrement, _ = edge.at(EDGE_NM)
+        assert decrement < 0
+
+    def test_the_critical_angle_is_zero_not_nan(self, edge):
+        """n above 1 deletes total external reflection, so no graze is below
+        critical. NaN said nothing, and every comparison against it is False."""
+        assert edge.critical_angle(EDGE_NM) == 0.0
+
+
 class TestConstruction:
     def test_a_descending_table_is_refused(self):
         with pytest.raises(ValueError, match="ascending"):
