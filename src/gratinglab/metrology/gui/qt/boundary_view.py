@@ -235,6 +235,15 @@ class BoundaryView(QWidget):
         m = p.metrics
         edge = (f"\n{'':<18}({p.n_edge_rejected} rejected at a scan edge)"
                 if p.n_edge_rejected else "")
+        tip = ""
+        if m.get('tip_correction', 'none') != 'none':
+            # The uncertain remainder is an upper bound, never a measurement,
+            # so the fraction recovered belongs beside the depth it qualifies.
+            tip = (f"\nTip correction  : {m['tip_correction']}, "
+                   f"R {m.get('tip_radius_nm', float('nan')):g} nm, "
+                   f"{m.get('tip_half_angle_deg', float('nan')):g} deg"
+                   f"\n{'':<18}{100 * m.get('tip_certain_fraction', float('nan')):.1f}% "
+                   f"of pixels recovered exactly")
         self.metrics_label.setText(
             f"Period          : {p.period_nm:.2f} nm\n"
             f"Grooves averaged: {p.n_used} of {p.n_grooves}{edge}\n"
@@ -242,7 +251,7 @@ class BoundaryView(QWidget):
             f"Peak-to-valley  : {m['peak_to_valley']:.4f} of period\n"
             f"RMS slope       : {m['rms_slope']:.4f}\n"
             f"Max sidewall    : {m['max_angle_deg']:.2f} deg\n"
-            f"Max curvature   : {m['max_curvature']:.4f}")
+            f"Max curvature   : {m['max_curvature']:.4f}{tip}")
 
     def _show_placeholder(self, message="Load an AFM file in the Import tab"):
         self.figure.clear()

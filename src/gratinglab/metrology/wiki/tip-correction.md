@@ -25,7 +25,19 @@ a flank rising at **72°** from the surface, which clears a 70.5° anti-blaze
 facet by 1.5°, and would not clear a 75° one at all. That near-parallelism, not
 the nanometre apex, is what limits blazed-grating metrology.
 
-Set them in `config.py`, or pass an `AnalysisSettings` with the fields set.
+In the metrology window they are under **Analysis parameters**: choose `erosion`
+under Tip correction and set the apex radius and half-angle. The Boundary
+profile is corrected straight away, with the fraction of pixels recovered
+exactly shown under its metrics; the blaze angles are corrected at the next
+Run, and the results say which tip was assumed. Outside the window, set them
+in `config.py`, or pass an `AnalysisSettings` with the fields set.
+
+Expect the exported groove shape to change less than the image does. The
+export sets its lowest point to zero, and after erosion that point is the
+trough floor the tip never reached, which stays an upper bound. On the
+dilated test fixture the image error falls from 9.06 nm to 0.87 nm while the
+averaged groove's shape error, with that offset removed, stays about 2 nm,
+because the tip's 72 degree flank already followed the 70 degree facet.
 There is no control in the window yet.
 
 ## What you get back, and what you do not

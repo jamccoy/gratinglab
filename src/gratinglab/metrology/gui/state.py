@@ -55,6 +55,13 @@ class FormState:
     flatten_feature: str = 'peaks'
     flatten_exclude_edges: float = 0.05
 
+    # Tip deconvolution, applied to the 2-D scan before either the blaze-angle
+    # analysis or the boundary profile sees it. Off by default: a corrected and
+    # an uncorrected depth are different measurements.
+    tip_correction: str = 'none'
+    tip_radius_nm: float = 1.0
+    tip_half_angle_deg: float = 18.0
+
     @classmethod
     def from_settings(cls, settings: AnalysisSettings) -> "FormState":
         """Initial control values, taken from config.py defaults"""
@@ -72,6 +79,9 @@ class FormState:
             flatten_poly_order=settings.flatten_poly_order,
             flatten_feature=settings.flatten_feature,
             flatten_exclude_edges=settings.flatten_exclude_edges,
+            tip_correction=settings.tip_correction,
+            tip_radius_nm=settings.tip_radius_nm,
+            tip_half_angle_deg=settings.tip_half_angle_deg,
         )
 
 
@@ -117,6 +127,9 @@ def _to_settings(form: FormState) -> AnalysisSettings:
         flatten_poly_order=form.flatten_poly_order,
         flatten_feature=form.flatten_feature,
         flatten_exclude_edges=form.flatten_exclude_edges,
+        tip_correction=form.tip_correction,
+        tip_radius_nm=form.tip_radius_nm,
+        tip_half_angle_deg=form.tip_half_angle_deg,
     )
 
 
