@@ -1,7 +1,7 @@
 # gratinglab
 
-[![PyPI](https://img.shields.io/pypi/v/gratinglab)](https://pypi.org/project/gratinglab/)
-[![Python](https://img.shields.io/pypi/pyversions/gratinglab)](https://pypi.org/project/gratinglab/)
+[![PyPI](https://img.shields.io/pypi/v/gratinglab?cacheSeconds=3600)](https://pypi.org/project/gratinglab/)
+[![Python](https://img.shields.io/pypi/pyversions/gratinglab?cacheSeconds=3600)](https://pypi.org/project/gratinglab/)
 [![tests](https://github.com/jamccoy/gratinglab/actions/workflows/test.yml/badge.svg)](https://github.com/jamccoy/gratinglab/actions/workflows/test.yml)
 [![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue)](https://github.com/jamccoy/gratinglab/blob/master/LICENSE)
 
