@@ -151,10 +151,19 @@ descends until first contact, and the recorded height is where the apex
 stopped — above the true surface wherever contact happened on the flank.
 Villarrubia (1997) gives the exact morphological inverse this pipeline
 implements in `core/tip.py`, opt-in through
-`AnalysisSettings.tip_correction = 'erosion'` with a parametric tip: a cone of
-`tip_half_angle_deg` (from the axis) capped by a spherical apex of
-`tip_radius_nm`. It runs on the 2-D array right after image flattening, in
-both branches, so the blaze fit and the boundary profile see the same surface.
+`AnalysisSettings.tip_correction = 'erosion'` with a parametric tip: a
+spherical apex of `tip_radius_nm` on two straight flanks, `tip_half_angle_deg`
+on the -x side and `tip_half_angle_right_deg` on the +x side (both from the
+axis; the second defaults to the first, a symmetric cone). The two flanks are
+the cross-section of a pyramid in the scan plane, so they depend on how the
+cantilever lay against the fast axis: a ScanAsyst-Air shows its 17.5° sides
+across the cantilever and its 15° front and 25° back along it. It runs on the
+2-D array right after image flattening, in both branches, so the blaze fit and
+the boundary profile see the same surface.
+
+With unequal flanks the erosion uses the tip **reflected**,
+`rec(y) = min_u [img(y - u) + tip(u)]`: a symmetric tip hides the reflection,
+which is why it is stated.
 
 Three statements, each load-bearing:
 
@@ -171,10 +180,13 @@ Three statements, each load-bearing:
   and the uncertain remainder must be read as "at most this high", not
   "this high". A corrected profile without that number would manufacture
   exactly the false confidence the correction exists to remove.
-- **A facet steeper than the flank is unrecoverable outright.** The flank
-  rises at `90 − half_angle` degrees; an 18° tip clears a 70.5° anti-blaze
-  facet by 1.5°. That near-parallelism, not the nanometre apex, is what limits
-  blazed-grating metrology at these geometries.
+- **A facet steeper than the flank facing it is unrecoverable outright.** A
+  flank rises at `90 − half_angle` degrees, and a wall rising towards +x is
+  followed by the +x flank. An 18° tip clears a 70.5° anti-blaze facet by
+  1.5°; a ScanAsyst-Air's 25° back face, a 65° flank, does not clear it at
+  all, so along the cantilever the orientation decides whether that facet
+  exists in the data. That near-parallelism, not the nanometre apex, is what
+  limits blazed-grating metrology at these geometries.
 
 The correction is off by default because it changes measured numbers — depth
 especially — and a corrected and an uncorrected depth are different

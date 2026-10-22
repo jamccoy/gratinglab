@@ -11,6 +11,7 @@ from .config import (
     resolve_path, GGP_SOURCE_FILE,
 )
 from .analyzer import analyze_single_file
+from .core.tip import format_angles
 from .io.file_io import save_results_to_file
 from .data.aggregation import group_by_temperature, extract_temperatures_for_output
 from .stats.analysis import (
@@ -158,7 +159,7 @@ def run_boundary_profile_export(settings=None, filename=None):
     if profile.metrics.get('tip_correction', 'none') != 'none':
         print(f"Tip correction: erosion "
               f"(R = {profile.metrics['tip_radius_nm']:g} nm, "
-              f"half angle = {profile.metrics['tip_half_angle_deg']:g} deg), "
+              f"{format_angles(profile.metrics['tip_half_angle_deg'], profile.metrics.get('tip_half_angle_right_deg'))}), "
               f"{100.0 * profile.metrics['tip_certain_fraction']:.1f}% of "
               f"pixels certain; the rest are upper bounds")
 

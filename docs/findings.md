@@ -1229,6 +1229,32 @@ exists, the rounding should be treated as plausibly real — and the absolute
 efficiency consequence of the finding above stands unchanged, because
 erosion with any defensible tip model does not sharpen this groove.
 
+**Note added 2026-10-22: the probe is a pyramid, and one reason above is wrong
+along the cantilever.** Bruker quotes the ScanAsyst-Air at R = 2 nm nominal and
+12 nm maximum (a radius, not a width, so "R ≈ 1 nm" above undersells it; the
+2 nm rows already cover it), with a 15° front face, a 25° back face and
+17.5° sides, each ±2.5°. The tables were made with an 18° cone, which matches
+the sides, so they describe a scan **across** the cantilever. "The 18° flank is
+not the culprit ... the facet remains reachable at any radius" is not true
+**along** it: the back face rises at 65°, below the 70.5° facet, and buries it.
+The forward test repeated with that pyramid, same ideal groove and pitch:
+
+| tip, flank facing the anti-blaze facet | image depth/period | implied blaze |
+|---|---|---|
+| 17.5° sides, R = 2 nm | 0.4435 | 27.75° |
+| 25° back face, R = 2 nm | 0.4224 | 26.41° |
+| 25° back face, R = 12 nm | 0.4097 | 25.61° |
+| 27.5° back face (spec limit), R = 12 nm | 0.4014 | 25.08° |
+| 27.5° back face, R = 40 nm | 0.3694 | 23.03° |
+
+So the worst tip within the specification, in its worst orientation, accounts
+for 2.8° of the 7.6° gap (1.8° of it the orientation alone, at 12 nm), and
+the conclusion stands: no tip within Bruker's specification reproduces the
+measured 20.3°. Still unknown is how the TASTE scan was oriented against the
+cantilever, which decides whether the orientation part applies at all. Erosion of the real
+scan with the along-cantilever presets has not been run, because the scan is
+not in this checkout.
+
 Pinned by `tests/metrology/test_tip.py::TestTheRealScan`, which skips without
 the group's data and otherwise fails if nominal-tip erosion ever starts
 moving the measured depth — either the scan changed or the erosion started

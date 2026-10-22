@@ -102,8 +102,14 @@ IMAGE_FLATTEN_METHOD = 'align_rows'
 # land, and a facet steeper than the tip flank (90 - half angle from the
 # surface) is unrecoverable no matter the algorithm.
 TIP_CORRECTION = 'none'      # 'none' or 'erosion'
-TIP_RADIUS_NM = 1.0          # Apex radius; a "2 nm wide" tip is radius 1
-TIP_HALF_ANGLE_DEG = 18.0    # Cone half angle from the tip axis
+TIP_RADIUS_NM = 1.0          # Apex RADIUS; check a datasheet says radius, not width
+TIP_HALF_ANGLE_DEG = 18.0    # Half angle from the tip axis, the -x flank
+TIP_HALF_ANGLE_RIGHT_DEG = None  # The +x flank; None for a symmetric cone.
+# A pyramid tip meets the profile with different faces depending on how the
+# cantilever lies against the fast-scan axis. Bruker ScanAsyst-Air: R = 2 nm
+# nominal (12 max), front 15, back 25, side 17.5 deg, each +/- 2.5. Across the
+# cantilever that is 17.5 / 17.5; along it 15 / 25 or 25 / 15 by orientation.
+# core/tip.py TIP_PRESETS names all three.
 
 # ============ PROFILE FLATTENING (1-D, after row averaging) ============
 # This is the one that moves the answer: about 0.49 deg between methods.

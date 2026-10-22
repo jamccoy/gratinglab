@@ -309,3 +309,156 @@ class TestTheSettings:
     def test_tip_values_are_not_policed_when_the_correction_is_off(self):
         base = AnalysisSettings.from_config().with_(tip_radius_nm=-1.0)
         assert 'tip_radius_nm' not in [f for f, _ in base.validate()]
+
+
+# ── An asymmetric tip: a pyramid seen along its cantilever ───────────────────
+
+ASYM = dict(radius_nm=2.0, half_angle_deg=15.0, half_angle_right_deg=25.0)
+
+
+def _wall(rise_deg=70.0, fall_deg=30.0, rows=3, cols=384):
+    """A sawtooth whose steep wall RISES towards +x, in metres.
+
+    Going right, the surface climbs a ``rise_deg`` wall and then descends a
+    ``fall_deg`` facet. The wall faces -x, so it is the tip's +x flank that has
+    to follow it.
+    """
+    period = 315.0
+    cot_r = 1.0 / np.tan(np.radians(rise_deg))
+    cot_f = 1.0 / np.tan(np.radians(fall_deg))
+    depth = period / (cot_r + cot_f)
+    t = np.linspace(0.0, 2000.0, cols, endpoint=False) % period
+    run = depth * cot_r
+    y = np.where(t <= run, t / cot_r, depth - (t - run) / cot_f)
+    return np.tile(y, (rows, 1)) * 1e-9
+
+
+class TestAnAsymmetricTip:
+    def test_each_side_has_its_own_flank(self):
+        dx = 0.5
+        t = tip_cross_section(dx, 2.0, 15.0, 200.0, half_angle_right_deg=25.0)
+        k = len(t) // 2
+        # Far from the apex each side is a straight line of slope cot(angle)
+        # per unit lateral distance; -x is the 15 deg side, +x the 25 deg one.
+        left = (t[k - 80] - t[k - 81]) / dx
+        right = (t[k + 81] - t[k + 80]) / dx
+        assert left == pytest.approx(-1.0 / np.tan(np.radians(15.0)), rel=1e-9)
+        assert right == pytest.approx(1.0 / np.tan(np.radians(25.0)), rel=1e-9)
+        assert t[k] == 0.0
+
+    def test_swapping_the_angles_mirrors_the_tip(self):
+        a = tip_cross_section(5.0, 2.0, 15.0, 150.0, half_angle_right_deg=25.0)
+        b = tip_cross_section(5.0, 2.0, 25.0, 150.0, half_angle_right_deg=15.0)
+        assert np.array_equal(a, b[::-1])
+
+    def test_omitting_the_right_angle_is_the_old_symmetric_cone(self):
+        a = tip_cross_section(5.0, 20.0, 18.0, 150.0)
+        b = tip_cross_section(5.0, 20.0, 18.0, 150.0, half_angle_right_deg=18.0)
+        assert np.array_equal(a, b)
+
+    def test_a_spike_images_the_tip_reflected(self):
+        # The image of a delta is the tip upside down AND left-right reversed:
+        # with the apex at 200 + j the spike sits at offset -j under the tip.
+        # Symmetric tests cannot see the reversal; this one exists for it.
+        spike = np.zeros((2, 384))
+        spike[:, 200] = 120.0e-9
+        img = dilate(spike, SCAN_X_UM, **ASYM)
+        dx_nm = SCAN_X_UM * 1000.0 / 383
+        t = tip_cross_section(dx_nm, 2.0, 15.0, 120.0, half_angle_right_deg=25.0)
+        k = len(t) // 2
+        expected = np.maximum(120.0 - t[::-1], 0.0) * 1e-9
+        assert np.allclose(img[0, 200 - k:200 + k + 1], expected, atol=1e-18)
+
+    def test_the_reconstruction_still_sits_between_truth_and_image(self):
+        # Necessary and not sufficient: eroding by the UNREFLECTED tip passes
+        # this too, as a looser bound. The three tests after it are the ones
+        # that catch that mistake, checked by putting it back.
+        surface = _wall()
+        img = dilate(surface, SCAN_X_UM, **ASYM)
+        rec = erode(img, SCAN_X_UM, **ASYM).data
+        assert (rec >= surface - 1e-15).all()
+        assert (rec <= img + 1e-15).all()
+
+    def test_redilating_the_reconstruction_reproduces_the_image(self):
+        img = dilate(_wall(), SCAN_X_UM, **ASYM)
+        rec = erode(img, SCAN_X_UM, **ASYM).data
+        assert np.allclose(dilate(rec, SCAN_X_UM, **ASYM), img, atol=1e-15, rtol=0)
+
+    def test_certain_pixels_are_the_surface(self):
+        surface = _wall()
+        img = dilate(surface, SCAN_X_UM, **ASYM)
+        tip = erode(img, SCAN_X_UM, **ASYM)
+        assert tip.certain.any()
+        assert np.allclose(tip.data[tip.certain], surface[tip.certain],
+                           atol=1e-15, rtol=0)
+
+    def test_which_face_meets_the_steep_wall_decides_whether_it_is_recovered(self):
+        # The ScanAsyst-Air case. A 70 deg wall rising to +x is followed by the
+        # tip's +x flank: the 15 deg front face (a 75 deg flank) clears it and
+        # the 25 deg back face (65 deg) cannot, so the same tip, rotated, either
+        # recovers the anti-blaze facet or loses it.
+        surface = _wall(rise_deg=70.0)
+        slope = np.diff(surface[0])
+        on_wall = np.zeros(surface.shape[1], dtype=bool)
+        on_wall[1:-1] = (slope[:-1] > 0) & (slope[1:] > 0)
+        idx = np.nonzero(on_wall)[0]
+        walls = np.split(idx, np.nonzero(np.diff(idx) > 1)[0] + 1)
+
+        def certain_per_wall(left, right):
+            tip = dict(radius_nm=2.0, half_angle_deg=left, half_angle_right_deg=right)
+            img = dilate(surface, SCAN_X_UM, **tip)
+            certain = erode(img, SCAN_X_UM, **tip).certain[0]
+            return [int(certain[w].sum()) for w in walls]
+
+        # 75 deg flank: nearly every wall pixel, measured 8 or 9 of 10.
+        assert all(n >= 0.7 * len(w)
+                   for n, w in zip(certain_per_wall(25.0, 15.0), walls))
+        # 65 deg flank: the tip rides the top corner and nothing below it, so
+        # at most that one pixel per wall. Measured 0 or 1, by sampling phase.
+        assert all(n <= 1 for n in certain_per_wall(15.0, 25.0))
+
+    def test_the_summary_names_both_flanks(self):
+        tip = erode(dilate(_wall(), SCAN_X_UM, **ASYM), SCAN_X_UM, **ASYM)
+        assert "15 deg (-x) / 25 deg (+x)" in tip.summary
+        sym = erode(_triangle(), SCAN_X_UM, radius_nm=2.0, half_angle_deg=18.0)
+        assert "half angle = 18 deg" in sym.summary
+
+
+class TestThePresets:
+    def test_scanasyst_air_matches_bruker(self):
+        from gratinglab.metrology.core.tip import TIP_PRESETS
+        across = TIP_PRESETS['scanasyst-air-across']
+        assert (across.radius_nm, across.half_angle_deg,
+                across.half_angle_right_deg) == (2.0, 17.5, 17.5)
+        minus = TIP_PRESETS['scanasyst-air-along-front-minus']
+        plus = TIP_PRESETS['scanasyst-air-along-front-plus']
+        assert (minus.half_angle_deg, minus.half_angle_right_deg) == (15.0, 25.0)
+        assert (plus.half_angle_deg, plus.half_angle_right_deg) == (25.0, 15.0)
+
+    def test_every_preset_runs_through_the_pipeline(self):
+        from gratinglab.metrology.core.tip import TIP_PRESETS
+        base = AnalysisSettings.from_config().with_(tip_correction='erosion')
+        for preset in TIP_PRESETS.values():
+            settings = base.with_(tip_radius_nm=preset.radius_nm,
+                                  tip_half_angle_deg=preset.half_angle_deg,
+                                  tip_half_angle_right_deg=preset.half_angle_right_deg)
+            assert not settings.validate()
+            _, correction = apply_tip_correction(_triangle(), SCAN_X_UM, settings)
+            assert correction.half_angle_right_deg == preset.half_angle_right_deg
+
+    def test_a_bad_right_angle_is_refused(self):
+        bad = AnalysisSettings.from_config().with_(
+            tip_correction='erosion', tip_half_angle_right_deg=0.0)
+        assert 'tip_half_angle_right_deg' in [f for f, _ in bad.validate()]
+
+    def test_the_records_carry_the_right_flank(self, tmp_path):
+        from gratinglab.metrology.io.metrics import write_profile_metrics
+        data = flatten_image(_fixture(SYNTHETIC_DILATED)[0], 'align_rows')
+        settings = AnalysisSettings.from_config().with_(
+            tip_correction='erosion', tip_radius_nm=2.0,
+            tip_half_angle_deg=15.0, tip_half_angle_right_deg=25.0)
+        profile = build_boundary_profile(data, SCAN_X_UM, settings)
+        assert profile.metrics['tip_half_angle_right_deg'] == 25.0
+        path = tmp_path / "m.txt"
+        write_profile_metrics(path, profile.metrics)
+        assert "15 deg (-x) / 25 deg (+x)" in path.read_text(encoding="utf-8")
