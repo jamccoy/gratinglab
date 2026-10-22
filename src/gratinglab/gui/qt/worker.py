@@ -5,19 +5,19 @@ notice. RCWA at N ≈ 200–400 and the integral method will take seconds to
 minutes, and retrofitting an event flow around a window that has already
 frozen is worse than building for it once.
 
-**Cancel now stops the work**, not merely the waiting. It used to do only the
+Cancel now stops the work, not merely the waiting. It used to do only the
 latter -- ``sweep`` reaches a NumPy-bound call with no check point and a
 Python thread cannot be killed, so there was nothing to interrupt from out
 here. `Capabilities.reports_progress` changed that: the solver calls back once
 per wavelength, and a callback that raises
 :class:`~gratinglab.solvers.base.SolveCancelled` unwinds it.
 
-**The token is still needed.** Real cancellation does not remove the race it
+The token is still needed. Real cancellation does not remove the race it
 was covering for: the worker may already have finished when Cancel is clicked,
 so a result can still be in flight and must still be recognised as stale on
 arrival. Belt and braces, for two different situations.
 
-**A fresh event per solve, created by the window and carried in the request.**
+A fresh event per solve, created by the window and carried in the request.
 Not one owned by this object and cleared at the top of `run` -- that has a real
 race, in which a Cancel clicked between the request and the clear is silently
 lost.
@@ -123,12 +123,12 @@ class SolveWorker(QObject):
             )[0]
             self.finished.emit(token, method, SolveResult(scan, _energy(scan)))
         except SolveCancelled:
-            # Before the broad handler on purpose. The user asked for this, so
+            # Before the broad handler: the user asked for this, so
             # it is not a failure and rendering it as one would be the same
             # category mistake M8 fixed for the no-coating default.
             self.cancelled.emit(token, method)
         except Exception as exc:  # noqa: BLE001 - see below
-            # Deliberately broad. A Python exception escaping a slot under
+            # Broad, because a Python exception escaping a slot under
             # PySide6 does not surface as a friendly dialog: depending on
             # version and excepthook state it prints a traceback and aborts
             # the process. Turning any failure into a signal keeps the window

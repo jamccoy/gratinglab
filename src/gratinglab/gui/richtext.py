@@ -1,6 +1,6 @@
 r"""Theory pages as rich text: markdown structure *and* typeset math.
 
-M7 got the equations rendering and deliberately stopped there -- tables and
+M7 got the equations rendering and stopped there -- tables and
 bullet lists stayed as literal pipes and dashes, because real column layout in a
 `tkinter.Text` widget -- the toolkit at the time -- is a great deal of
 engineering for content that is readable enough as-is. That trade has since gone bad: `docs/theory/scalar.md`
@@ -14,23 +14,23 @@ this module converts a page to HTML, and the widget layer only displays it.
 
 Three things worth knowing before editing:
 
-**Math is split out before anything is escaped.** Four math spans in the real
+Math is split out before anything is escaped. Four math spans in the real
 docs contain `<` or `>` (`$t < w$`, `$\zeta < \theta_c$`, `$\lambda > 32 ...$`,
 `$k > 0$`). Escaping first would hand mathtext the string `t &lt; w`, which it
 renders literally. So :func:`~gratinglab.gui.mathtext.split_segments` runs on
 the raw source and only the *text* spans are escaped -- the LaTeX never is.
 
-**Images are referenced by key, not embedded.** `QTextDocument.loadResource`
+Images are referenced by key, not embedded. `QTextDocument.loadResource`
 does not handle `data:` URLs, so each image gets a `gratinglab-math:N` src and
 the viewer registers the bytes with `addResource`. That also keeps this module
 free of base64 padding it would only have to undo.
 
-**A render failure still degrades rather than crashing**, exactly as the Tk
+A render failure still degrades rather than crashing, exactly as the Tk
 viewer did: the raw `$...$` source appears in a distinct colour, so a future
 edit using an unsupported macro is diagnosable at a glance instead of taking
 down the page.
 
-Deliberately not supported, because the two real pages do not use them and
+Not supported, because the two real pages do not use them and
 guessing is worse than a visible gap: nested lists, ordered lists inside
 blockquotes, inline HTML, reference-style links, and setext (`===`) headings.
 A standalone `---` is always a horizontal rule here, never a setext underline.
@@ -71,7 +71,7 @@ DISPLAY_DPI = 170
 #: `unrendered` tag gave.
 UNRENDERED_COLOR = "#a5370d"
 
-#: Colour for the approximate-method banner. Deliberately its own constant even
+#: Colour for the approximate-method banner. Its own constant even
 #: though it currently matches: "this solver approximates" and "this equation
 #: failed to render" are unrelated facts, and a test that cannot tell them
 #: apart is a test that will one day pass for the wrong reason.
@@ -199,7 +199,7 @@ def to_html(
         return rendered
     banner = (
         f'<p style="color:{BANNER_COLOR}"><b>'
-        "⚠ Approximate method — see Limits below."
+        "⚠ Approximate method: see Limits below."
         "</b></p>"
     )
     return RichPage(html=banner + "\n" + rendered.html, images=rendered.images)
@@ -220,7 +220,7 @@ def _blocks(markdown: str) -> tuple[_Block, ...]:
     """Split a page into block-level structures.
 
     One pass, no lookbehind: every block kind is identified by its first line,
-    which is true of the markdown these docs actually use.
+    which is true of the markdown these docs use.
     """
     lines = markdown.split("\n")
     blocks: list[_Block] = []

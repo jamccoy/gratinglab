@@ -8,7 +8,7 @@ pt = materials.lookup("Pt")    # ~/.gratinglab/materials/Pt.txt, say
 mine = materials.from_cxro_file("Ni_CXRO.txt")   # any file, no library
 ```
 
-**A library is a directory of tables, one material per file**, named for it:
+A library is a directory of tables, one material per file, named for it:
 `Pt.txt` (a CXRO export, X-ray), `Pt.yml` (a refractiveindex.info file,
 ultraviolet to infrared) or `Pt.ari` (PCGrate) is `coating="Pt"`. Yours is
 `~/.gratinglab/materials`, or whatever `GRATINGLAB_MATERIALS` names, and it is
@@ -16,7 +16,7 @@ searched before the tables bundled with a checkout, so your own replaces a
 bundled one of the same name. The release packages bundle none, because CXRO's
 terms for redistributing its tables are not settled; `data/SOURCES.md` says so.
 
-Lookup is by name, deliberately, because that is what a
+Lookup is by name, because that is what a
 :class:`~gratinglab.problem.Problem` carries: `coating="Au"` keeps a benchmark
 case a small serialisable file instead of embedding a 500-row table in it, and
 keeps `Problem` free of any dependency on which tables happen to be installed.

@@ -1,4 +1,4 @@
-"""The Grating Geometry tab: what the grating and the beams actually look like.
+"""The Grating Geometry tab: what the grating and the beams look like.
 
 Thin, like every widget here. :mod:`gratinglab.gui.diagram` decides what to
 draw -- every ray direction, every cutoff, every colour tag, every caption --
@@ -46,7 +46,7 @@ _GLYPHS = {
 
 _PANEL_TITLES = {
     "main": "Down the groove axis ĝ",
-    "ladder": "sin β  —  every order, propagating or not",
+    "ladder": "sin β: every order, propagating or not",
 }
 
 
@@ -217,7 +217,7 @@ class GeometryTab(QWidget):
         reddening a label for them would style ordinary typing as a problem.
         So the picture stays, and a `dim` line says plainly that it is one
         edit behind -- never `warn`, never `bad`, which are what the panel
-        reserves for something actually wrong.
+        reserves for something wrong.
 
         Errors are counted, not listed: naming a half-typed field would be the
         same accusation in smaller type.
@@ -228,7 +228,7 @@ class GeometryTab(QWidget):
         note = provenance.Line(
             # Trailing newline: `to_html` concatenates runs, so a line that
             # does not end one runs into the caption beneath it.
-            f"waiting for {count} field{'' if count == 1 else 's'} to finish — "
+            f"waiting for {count} field{'' if count == 1 else 's'} to finish; "
             "the drawing below is from the last complete geometry\n",
             "dim",
         )

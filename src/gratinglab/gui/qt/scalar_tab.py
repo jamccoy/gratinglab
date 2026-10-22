@@ -354,7 +354,7 @@ class ScalarTab(QWidget):
 
         No new rendering: `provenance_lines` already reads the study off
         `scan.provenance.notes["convergence"]` -- that is what M3-C put there
-        -- so the panel says "convergence: yes — quadrature_points=4096 is
+        -- so the panel says "convergence: yes; quadrature_points=4096 is
         enough" with no help from here.
         """
         self.show_result(scan, energy, lambda_over_period)

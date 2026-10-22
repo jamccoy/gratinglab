@@ -10,7 +10,7 @@ This is the *first* of two flattening stages, and the two are easy to confuse:
 
 Both are "flattening" in the usual AFM sense. The distinction is what they see.
 
-**Affine image flattening cannot change a blaze angle.** Measured, not assumed:
+Affine image flattening cannot change a blaze angle. Measured, not assumed:
 on ``20250820_280C_00004.txt`` - the scan with the worst row-offset spread in
 this project's dataset, 2.74 nm - ``none``, ``plane`` and ``align_rows`` all give
 30.8524 degrees - identical to four decimal places, and to within 5e-15 in

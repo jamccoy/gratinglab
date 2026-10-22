@@ -6,7 +6,7 @@ This module reads the tabular dialect written by PCGrate-SX, which implements
 the integral method and is the de-facto standard for grazing-incidence X-ray
 gratings.
 
-**The reader does not label the physics.** It cannot know from a file which
+The reader does not label the physics. It cannot know from a file which
 numerical method produced it, so :func:`read_scan` takes a ``method`` argument
 that the caller supplies -- ``method="integral"`` for an integral-method code.
 That keeps comparison legends describing physics ("scalar vs integral") rather
@@ -30,7 +30,7 @@ Format, confirmed by inspection of PCGrate-SX 6.7.1 output::
 
 Every line is tab-separated and right-padded with empty fields.
 
-**Order indices come from the column headers, never from a positional offset.**
+Order indices come from the column headers, never from a positional offset.
 The prototype scripts in ``~/Documents/diffraction_efficiency`` read columns as
 ``data[i+11]``, which works only because ``np.genfromtxt`` splits the quoted
 label ``" Wav., nm"`` into two whitespace-delimited fields. That offset is

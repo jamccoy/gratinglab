@@ -1,6 +1,6 @@
 """The integral solver's own tab: its knob, its result, its provenance.
 
-Deliberately a parallel construction of ``scalar_tab.py`` rather than a
+A parallel construction of ``scalar_tab.py`` rather than a
 shared base class: the roadmap's own warning is that every solver seam was
 designed against a sample of one, and the way to learn the actual common
 shape is to build the second tab and *then* extract what proved common. The

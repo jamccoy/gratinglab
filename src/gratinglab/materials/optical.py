@@ -168,7 +168,7 @@ class OpticalConstants:
         ``docs/theory/scalar.md`` §7 has carried as "needs a materials layer to
         evaluate".
 
-        **The exact lossless edge, not the small-angle one.** Snell's law
+        The exact lossless edge, not the small-angle one. Snell's law
         from the surface, :math:`\cos\theta = n'\cos\theta_t`, has no real
         transmitted angle once :math:`\cos\theta > n'`, which is the arccos.
         :math:`\sqrt{2\,\text{decrement}}` is its leading term, and for the
@@ -178,7 +178,7 @@ class OpticalConstants:
         Absorption does not move the edge, only softens it, which is why the
         imaginary part takes no part in the value.
 
-        **Zero means there is no critical angle**, and there are two ways not
+        Zero means there is no critical angle, and there are two ways not
         to have one:
 
         - the real part of n is not below 1. Just below an X-ray absorption
@@ -214,7 +214,7 @@ class OpticalConstants:
         is zero for want of an edge rather than because anything is wrong.
 
         The test is on :math:`|n - 1|` and not on absorption against
-        decrement, deliberately: the shipped Au table has absorption above its
+        decrement, because the shipped Au table has absorption above its
         decrement over a third of its range, where the edge is soft but
         reflectivity still collapses above it.
         """
@@ -356,7 +356,7 @@ def write_ari(constants: OpticalConstants, path: "str | Path") -> Path:
 def _numeric_row(line: str) -> "list[float] | None":
     """The first three fields as floats, or ``None`` if this is not a data row.
 
-    Deliberately not a regex: "does it parse as a float" is exactly the
+    Not a regex: "does it parse as a float" is exactly the
     question, and `float` answers it for every spelling a table might use --
     ``200.``, ``1e-3``, and the ``3.55e-006`` three-digit exponents the
     Windows-written ``.ari`` files carry.

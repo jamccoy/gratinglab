@@ -114,7 +114,7 @@ class ConvergenceReport:
     knob
         Name of the swept keyword, from the solver's declared capabilities.
     values
-        Knob values actually solved, ascending.
+        Knob values solved, ascending.
     differences
         ``differences[i]`` is the largest change in efficiency between
         ``values[i]`` and ``values[i + 1]``. One shorter than ``values``.
@@ -146,7 +146,7 @@ class ConvergenceReport:
 
     @property
     def passed(self) -> bool:
-        """True only if a plateau was actually found."""
+        """True only if a plateau was found."""
         return self.converged_at is not None
 
     @property
@@ -244,7 +244,7 @@ def check_convergence(
     progress
         Called ``(rungs_done, len(ladder))``.
 
-        Two granularities, deliberately different. The callback is **invoked
+        Two different granularities. The callback is **invoked
         once per wavelength**, so a
         :class:`~gratinglab.solvers.base.SolveCancelled` raised from it lands
         within milliseconds rather than at the end of a rung -- and a rung is
@@ -306,7 +306,7 @@ def check_convergence(
             scan = solver.solve(problem, illumination, wavelengths, **{knob: value},
                                 **forwarded, **options)
         except (ValueError, UnsupportedConfiguration) as exc:
-            # Narrow on purpose. A coarse rung below a solver's own floor
+            # Narrow: a coarse rung below a solver's own floor
             # raises ValueError (scalar's Nyquist guard) or refuses outright;
             # a TypeError or AttributeError is a bug in the call and must not
             # be quietly logged as a skipped rung.
@@ -359,7 +359,7 @@ def check_convergence(
 def _rung_progress(solver, progress: "Progress | None", rung: int, rungs: int) -> dict:
     """``{"progress": ...}`` reporting rungs while being called per wavelength.
 
-    The wavelength counter is discarded on purpose -- see
+    The wavelength counter is discarded -- see
     :func:`check_convergence`. What it buys is the call *frequency*: every
     wavelength is a chance for the caller to raise, so cancelling a sweep does
     not have to wait out the rung it is in.

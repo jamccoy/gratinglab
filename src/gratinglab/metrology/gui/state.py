@@ -21,7 +21,7 @@ from ..settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES)
 #: package carried an identical definition of its own until both became
 #: :class:`endstation.forms.FieldError`.
 #:
-#: The two `build()` contracts still differ, deliberately: the main window's
+#: The two `build()` contracts still differ: the main window's
 #: raises, this one returns `(settings, errors)`. Only the duplicated type went.
 FieldError = _FieldError
 

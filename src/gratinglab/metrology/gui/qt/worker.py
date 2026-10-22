@@ -6,7 +6,7 @@ It matters as soon as the window grows a compare mode: eight scans is seconds,
 and retrofitting an event flow around a window that has already frozen is worse
 than building for it once.
 
-**Cancel abandons a result; it does not interrupt one.** `analyze_single_file`
+Cancel abandons a result; it does not interrupt one. `analyze_single_file`
 reaches NumPy-bound loops with no check point, and a Python thread cannot be
 killed, so there is nothing to interrupt from out here. Cancelling bumps a
 token: the in-flight result still arrives, is recognised as stale, and is

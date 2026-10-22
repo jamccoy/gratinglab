@@ -6,7 +6,7 @@ fused with the file writing. Splitting it lets the GUI preview a profile - and
 recompute it as controls move - without touching the disk, while the CLI mode
 writes exactly what the panel showed.
 
-The flattening here is deliberately *not* the profile flattening used for
+The flattening here is *not* the profile flattening used for
 blaze-angle work. ``flatten_endpoints`` forces the ends of the trace to zero so
 one groove tiles seamlessly into the next; profile flattening removes a fitted
 background so a facet can be measured. Different jobs, and swapping one for the
@@ -46,7 +46,7 @@ class BoundaryProfile:
     metrics: dict
     period_nm: float
     n_grooves: int          # detected, after edge exclusion
-    n_used: int             # actually averaged; the rest were too near an edge
+    n_used: int             # averaged; the rest were too near an edge
     n_edge_rejected: int
 
     #: The full flattened trace and its detected groove centres, so a caller can
@@ -91,7 +91,7 @@ class BoundaryProfile:
                 which for a sawtooth at grazing incidence is off by the whole
                 blaze angle.
 
-        **On roughness.** `Problem.roughness` means high-spatial-frequency
+        On roughness. `Problem.roughness` means high-spatial-frequency
         surface roughness, the quantity Nevot-Croce damps a Fresnel
         coefficient with. This class computes no such number. `y_std_nm` is
         the groove-to-groove *form* spread and `metrics['rms_slope']` is a
@@ -116,7 +116,7 @@ class BoundaryProfile:
             coating=coating,
             substrate=substrate,
             roughness=roughness,
-            # Measured, and free to carry. The scalar solver deliberately does
+            # Measured, and free to carry. The scalar solver does
             # not apply an interference factor to order efficiencies, so this
             # is metadata rather than an input -- but it is the real count, and
             # a later method that wants it should not have to guess.

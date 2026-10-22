@@ -28,7 +28,7 @@ the flank angle is the marginal case -- an 18 deg tip has a 72 deg flank,
 almost parallel to a 70.5 deg anti-blaze facet. That near-parallelism, not
 the nanometre apex, is what rounds the troughs of blazed gratings.
 
-**One dimension, deliberately.** The operations run along the fast-scan axis
+One dimension only. The operations run along the fast-scan axis
 (rows), not over the full 2-D image. For a grating the surface is invariant
 along the grooves, and dilating an invariant surface with a cone reduces
 exactly to dilating each cross-section with the cone's cross-section -- the
@@ -135,7 +135,7 @@ def dilate(data, scan_x_size, *, radius_nm, half_angle_deg):
 
 @dataclass(frozen=True)
 class TipCorrection:
-    """An eroded image, and how much of it is actually the surface.
+    """An eroded image, and how much of it is the surface.
 
     ``data`` is the least upper bound on the true surface: equal to it at
     every certain pixel, above it (by an unknowable amount) elsewhere. The

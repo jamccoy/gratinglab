@@ -7,7 +7,7 @@ metrics file has no counterpart there and is metrology's own output, so it
 stays here.
 
 It is a human-readable sidecar, not an interchange format: nothing parses it
-back. The numbers that a solver actually needs travel through
+back. The numbers that a solver needs travel through
 :meth:`~gratinglab.metrology.boundary.BoundaryProfile.to_problem`.
 """
 

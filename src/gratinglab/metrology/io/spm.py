@@ -7,10 +7,10 @@ and Peak Force Error, each recorded in both scan directions - and each plane's
 header section says where its bytes are and how to turn them into nanometres.
 
 Written rather than taken from a library because the format is small, this
-project deliberately depends on nothing beyond numpy/scipy/matplotlib, and the
-conversion has one trap (below) that is worth owning explicitly.
+project depends on nothing beyond numpy/scipy/matplotlib, and the
+conversion has one pitfall (below) worth handling here.
 
-**The trap.** The height scale comes from a line like::
+The pitfall: the height scale comes from a line like::
 
     \\@2:Z scale: V [Sens. ZsensSens] (0.0000000001872337 V/LSB) 0.804163 V
 

@@ -9,7 +9,7 @@ from matplotlib.lines import Line2D
 
 def plot_analyzed_regions_overlay(raw_x, flat_y, groove_centers, period_nm, quality_list, facet_trim):
     """
-    Create an overlay plot showing which portions of each groove are actually analyzed.
+    Create an overlay plot showing which portions of each groove are analyzed.
     
     Parameters:
         raw_x: x-axis positions (µm)

@@ -17,7 +17,7 @@ one wavelength's peak on the other's first zero -- then gives
 so the closed form and the numeric profile are one implementation checking the
 other, exactly the pattern the scalar solver uses for its sawtooth closed forms.
 
-**Scope, deliberately staged.** This module answers the ideal-grating question:
+Scope. This module answers the ideal-grating question:
 :math:`N` identical grooves at exact spacing. The successor -- resolving power
 degraded by groove placement and period errors, computed from a measured groove
 ensemble -- is roadmap work and is *not* approximated here. An
@@ -27,7 +27,7 @@ rather than silently treated as infinite, because "R is undefined" and
 
 ``n_grooves`` is the **illuminated** groove count, not the total count on the
 part -- :meth:`BoundaryProfile.to_problem` fills it with the number of grooves
-the scan actually measured, which is what makes a measured surface flow through
+the scan measured, which is what makes a measured surface flow through
 to a spectrograph number in-process.
 """
 

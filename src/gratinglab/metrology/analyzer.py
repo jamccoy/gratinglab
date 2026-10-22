@@ -545,7 +545,7 @@ def _calculate_statistics(blaze_angles, quality, all_local_angles, angle_uncerta
     
     Separates two sources of uncertainty:
     1. Measurement uncertainty: How well can we measure each groove?
-    2. Physical variation: How much do grooves actually differ?
+    2. Physical variation: How much do grooves differ?
     """
     mean_angle = np.mean(blaze_angles)
     

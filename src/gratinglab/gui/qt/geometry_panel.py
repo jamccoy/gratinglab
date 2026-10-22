@@ -45,7 +45,7 @@ class GeometryPanel(QWidget):
     #: enough that one might be wanted; `MainWindow` connects it to `solve()`.
     solve_requested = Signal()
 
-    #: The form was edited *by a user*. Deliberately distinct from
+    #: The form was edited *by a user*. Distinct from
     #: `solve_requested`: Enter still means solve, and this means only that
     #: the geometry drawing is now stale. `MainWindow` debounces it and
     #: redraws; nothing here reaches a solver.
@@ -184,7 +184,7 @@ class GeometryPanel(QWidget):
             )
 
     def _on_profile_change(self) -> None:
-        """Show only the parameters the selected profile actually uses."""
+        """Show only the parameters the selected profile uses."""
         needed = PROFILE_FIELDS.get(
             self._fields["profile_kind"].currentText(), frozenset()
         )
@@ -229,7 +229,7 @@ def _value(widget: QWidget) -> str:
     """The *value* of an input, whichever kind it is.
 
     A combo's value is its `userData` when it has one, not its label. The
-    coating combo shows "(none — relative efficiency)" for the empty choice,
+    coating combo shows "(none)" for the empty choice,
     and `FormState` wants "" -- putting the label in would make the empty
     coating an unknown material name.
     """

@@ -49,7 +49,7 @@ class Provenance:
         governs accuracy for the method. ``None`` where not applicable.
     converged
         ``True``/``False`` if a convergence study was run, ``None`` if not.
-        **A result with ``converged=None`` has not been shown to be correct**
+        A result with ``converged=None`` has not been shown to be correct
         and must not be presented as a rigorous value.
     wall_time_s
         Seconds of wall clock, for method-cost comparisons.
@@ -73,7 +73,7 @@ class Provenance:
 
     @property
     def is_defensible(self) -> bool:
-        """True only if convergence was actually demonstrated."""
+        """True only if convergence was demonstrated."""
         return self.converged is True
 
     def with_warning(self, message: str) -> "Provenance":

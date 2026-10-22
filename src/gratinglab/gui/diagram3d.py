@@ -23,7 +23,7 @@ At the reference geometry (315.15 nm, :math:`\alpha = 25°`,
  +3   +41.94°    (+0.01749, +0.01947, **0.99966**)
 ===  ==========  ============================================
 
-**Polar spread: exactly 0.0°. Azimuth spread: 93.8°.** The cone is a needle
+Polar spread: exactly 0.0°. Azimuth spread: 93.8°. The cone is a needle
 *and* the fan around it is nearly a right angle. Both at once, and that
 combination is precisely what a dispersion-plane drawing cannot convey.
 
@@ -34,7 +34,7 @@ off-plane mount from a classical one. Looking down the cone axis instead, and
 zooming uniformly to the rim, makes the 93.8° fan fully readable -- at true
 scale, since uniform zoom is a similarity transform and preserves every angle.
 
-**Nothing here exaggerates γ.** Legibility comes from viewpoint and
+Nothing here exaggerates γ. Legibility comes from viewpoint and
 magnification only.
 
 Two scales in one box
@@ -122,7 +122,7 @@ CONE_AXIS = -G_HAT
 #: patch is in nm; this is the ratio between those two scales, and it is a
 #: drawing choice that a caption declares.
 #:
-#: Small on purpose. At gamma = 1.5 deg the rays lie within 1.5 deg of the
+#: Small, because at gamma = 1.5 deg the rays lie within 1.5 deg of the
 #: groove axis, so a patch as long as the rays swallows them; keeping it well
 #: under a ray length lets the bundle emerge and be seen for what it is.
 PATCH_SPAN: float = 0.5
@@ -382,7 +382,7 @@ def view_direction(elev_deg: float, azim_deg: float) -> NDArray[np.float64]:
 
 def scene_title(gamma: float) -> str:
     """Always states γ, and always states that it is to scale."""
-    return f"Conical diffraction — γ = {np.degrees(gamma):g}°, to scale"
+    return f"Conical diffraction: γ = {np.degrees(gamma):g}°, to scale"
 
 
 def captions3d(
@@ -437,7 +437,7 @@ def captions3d(
         )
         lines.append(
             Line(
-                "The orders differ in azimuth, never in polar angle — they all "
+                "The orders differ in azimuth, never in polar angle: they all "
                 "sit on this one cone. That is why a cone this narrow can still "
                 "carry a wide fan.\n",
                 "dim",

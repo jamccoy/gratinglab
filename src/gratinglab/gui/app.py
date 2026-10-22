@@ -38,7 +38,7 @@ def _bring_to_front(window) -> None:
     """Put the window in front on launch.
 
     There used to be an `osascript`/System Events fallback here, inherited
-    from the Tk window. M10-H measured what it actually bought, and the answer
+    from the Tk window. M10-H measured what it bought, and the answer
     was nothing:
 
     ============================  =============  ==============

@@ -146,7 +146,7 @@ def print_pairwise_comparisons(results):
                 else:
                     print("      (not significant)")
                 
-                # Effect size (Cohen's d). Deliberately on the raw counts, not
+                # Effect size (Cohen's d), on the raw counts, not
                 # the effective ones: this is a standardised mean difference - a
                 # description of how far apart the samples are in units of their
                 # own spread - not an inference statistic. Correlation belongs in

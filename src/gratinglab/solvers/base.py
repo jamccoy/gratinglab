@@ -70,7 +70,7 @@ class SolveCancelled(Exception):
 
 @dataclass(frozen=True, slots=True)
 class Capabilities:
-    """What a backend can actually do, declared rather than discovered.
+    """What a backend can do, declared rather than discovered.
 
     Attributes
     ----------
@@ -139,7 +139,7 @@ class Capabilities:
 class Solver(Protocol):
     """What every backend provides.
 
-    **The progress contract**, for a backend declaring
+    The progress contract, for a backend declaring
     ``Capabilities.reports_progress``. ``solve`` takes a keyword-only
     ``progress: Progress | None = None`` and:
 
