@@ -52,8 +52,13 @@ def build_profile(edge_exclusion):
     if len(centers) > 1:
         period_nm = np.mean(np.diff(centers) * (raw_x[1] - raw_x[0]) * 1000)
 
+    # require_full_period=False is the retired script's behaviour: on this
+    # scan its last groove sits 38 samples from the edge against a half-width
+    # of 40, so the reference itself carries the stretch that guard now
+    # prevents. Kept off here so this stays a test of the port, not of the fix.
     x_avg, y_avg, _, n_used = average_grooves(raw_x, flat_y, centers, period_nm,
-                                              margin=0.0, n_points=2000)
+                                              margin=0.0, n_points=2000,
+                                              require_full_period=False)
     x_norm, y_norm, _ = normalize_profile(x_avg, y_avg, period_nm)
     return x_norm, y_norm, period_nm, n_used
 

@@ -30,16 +30,24 @@ def flatten_endpoints(x, y):
 
 
 def average_grooves(x, y, groove_centers, period_nm, margin=0.0, n_points=2000,
-                    min_half_width=10):
+                    min_half_width=10, require_full_period=True):
     """
     Extract each groove symmetrically and average them onto a common axis.
 
     Parameters:
         min_half_width: skip grooves whose symmetric half-extent is at or below
-            this many samples. A groove near a scan edge cannot be extracted
-            symmetrically - the scan stops part-way through it - so including it
-            would distort the average. This is the boundary-profile equivalent of
-            EDGE_EXCLUSION_PERIODS in the blaze-angle path.
+            this many samples, a floor on how coarsely a groove may be sampled.
+        require_full_period: skip any groove whose full one-period window does
+            not fit inside the scan. The common axis below is the narrowest
+            window in the set, and normalize_profile stretches that window to a
+            full period, so a single groove the scan edge cuts into would
+            truncate every other groove to its window and then stretch the
+            result. On the synthetic sawtooth one partial groove narrowed the
+            window to 0.66 of a period, turned a 70 degree anti-blaze facet
+            into 58 and took 13% off the depth. EDGE_EXCLUSION_PERIODS upstream
+            usually keeps such grooves out, but it is a user setting, so this
+            check does not rely on it. False reproduces the retired rev3
+            script, which tests/metrology/test_ggp_equivalence.py pins.
 
     Returns:
         x_common, y_avg, y_std, n_used
@@ -50,6 +58,8 @@ def average_grooves(x, y, groove_centers, period_nm, margin=0.0, n_points=2000,
 
     for center in groove_centers:
         L = min(half_width, center, len(x) - 1 - center)
+        if require_full_period and L < half_width:
+            continue  # the scan edge cuts into this groove's period
         if L > min_half_width:
             x_g, y_g = extract_single_groove(x, y, center, period_nm, margin,
                                              allow_asymmetric=False)
@@ -59,7 +69,9 @@ def average_grooves(x, y, groove_centers, period_nm, margin=0.0, n_points=2000,
             grooves.append((x_g, y_g))
 
     if len(grooves) == 0:
-        raise ValueError("No grooves could be extracted.")
+        raise ValueError(
+            "No grooves could be extracted: none has a full period inside the "
+            "scan, or the sampling is coarser than min_half_width allows.")
 
     # Common symmetric extent = most restrictive of the set
     max_left = min(-g[0][0] for g in grooves)

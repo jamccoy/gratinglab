@@ -351,3 +351,40 @@ def test_depth_and_facet_fit_agree_on_a_sharp_groove():
     assert abs(fit['mean_angle'] - implied) < 1.0, (
         f"a sharp groove must agree with itself: fitted {fit['mean_angle']:.2f} "
         f"deg against {implied:.2f} deg implied by the depth")
+
+
+# -- a groove the scan edge cuts into --------------------------------------------
+
+def _window_periods(profile):
+    """The averaged window as a fraction of the measured period."""
+    return (profile.x_avg_um[-1] - profile.x_avg_um[0]) * 1000 / profile.period_nm
+
+
+def test_a_partial_groove_cannot_reach_the_average_whatever_the_edge_setting():
+    """Reported by a user: an averaged groove thrown off by a partial one.
+
+    With edge exclusion lowered, a sixth groove the scan edge cuts into is
+    detected. It used to shrink every groove's window to its own and then be
+    stretched to a full period. Now it is skipped, so the profile matches the
+    default setting's and the window is a full period."""
+    default = _profile()
+    lowered = _profile(edge_exclusion_periods=0.0)
+    assert lowered.n_grooves == default.n_grooves + 1, "the partial groove is detected"
+    assert lowered.n_used == default.n_used, "and skipped"
+    assert _window_periods(lowered) > 0.98
+    assert lowered.metrics['groove_depth'] == pytest.approx(
+        default.metrics['groove_depth'], rel=0.005)
+
+
+def test_without_the_guard_the_partial_groove_collapses_the_window():
+    """Non-vacuity: the guard above is what prevents this, not the fixture."""
+    from gratinglab.metrology.boundary import average_grooves
+
+    profile = _profile(edge_exclusion_periods=0.0)
+    x, y = profile.profile_x_um, profile.profile_y_nm
+    centers = profile.groove_centers
+    with_guard = average_grooves(x, y, centers, profile.period_nm)
+    without = average_grooves(x, y, centers, profile.period_nm, require_full_period=False)
+    span = lambda result: (result[0][-1] - result[0][0]) * 1000 / profile.period_nm  # noqa: E731
+    assert without[3] == with_guard[3] + 1
+    assert span(without) < 0.8 < 0.98 < span(with_guard)
