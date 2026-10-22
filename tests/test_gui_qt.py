@@ -1217,6 +1217,13 @@ class TestLiveGeometry:
             original(parsed)
 
         win.geometry_tab.show_geometry = counted
+        # Free earlier tests' windows now. Freeing one can take hundreds of ms,
+        # and since gc_guard runs the collector on this thread, a collection
+        # landing mid-burst would outlast the debounce and count as a redraw:
+        # a measurement of garbage, not of the debounce.
+        import gc
+
+        gc.collect()
         try:
             field = win.geometry._fields["period"]
             for text in ("3", "31", "315", "315.", "315.1", "315.15"):
@@ -1634,3 +1641,21 @@ class TestGarbageCollectionStaysOnTheGuiThread:
         qtbot.waitUntil(lambda: gc_guard._holders == before, timeout=5000)
         QApplication.processEvents()
         assert gc.isenabled() == (before == 0)
+
+
+def test_exit_restores_collection_even_with_a_window_still_open(qtbot, win):
+    """A closed-but-undeleted window never releases the guard; the atexit hook
+    must still hand collection back, or Python's final pass frees Qt garbage
+    after Qt is gone (the py3.11 bool_dealloc abort)."""
+    import gc
+
+    from gratinglab.gui.qt import gc_guard
+
+    assert gc_guard.is_active() and not gc.isenabled()
+    try:
+        gc_guard._restore_at_exit()
+        assert gc.isenabled()
+    finally:
+        # Put back what a live window expects, or the rest of the session
+        # runs with collection on while windows still hold the guard.
+        gc.disable()

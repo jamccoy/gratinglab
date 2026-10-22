@@ -386,6 +386,9 @@ class BoundaryView(QWidget):
             write_profile_metrics(metrics_path, self._profile.metrics)
         return path, metrics_path
 
+    def _forget_efficiency_window(self, *_):
+        self._efficiency_window = None
+
     def send_to_efficiency(self):
         """Open this groove in the main efficiency window, period included.
 
@@ -414,6 +417,10 @@ class BoundaryView(QWidget):
 
         if self._efficiency_window is None:
             self._efficiency_window = MainWindow()
+            # Forget it once Qt destroys it, so a later send opens a fresh one
+            # rather than touching a deleted C++ object, and no dangling
+            # wrapper outlives the window into interpreter shutdown.
+            self._efficiency_window.destroyed.connect(self._forget_efficiency_window)
         window = self._efficiency_window
         window.open_boundary(path)
         window.show()
