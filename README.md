@@ -42,7 +42,8 @@ problem = profile.to_problem(coating="Au", blaze_angle=29.5)
 
 Pre-alpha. The scalar and integral solvers, the comparison harness, the convergence
 harness and the materials layer work end to end — efficiencies are absolute when a
-coating is named. RCWA is contributed and not yet integrated.
+coating is named, from an optical constant table of your own (see Install). RCWA is
+contributed and not yet integrated.
 
 ## Scope
 

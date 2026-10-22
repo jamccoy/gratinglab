@@ -36,8 +36,8 @@ and one substantive difference from the ISSI chapter are recorded in
 **McCoy, J. A.** *On X-ray Reflection*, PhD thesis Appendix C.
 
 Fresnel reflectivity, the soft-X-ray index of refraction, penetration depth, and
-§C.1.4 surface roughness — the basis for the Névot–Croce and Debye–Waller
-factors once the materials layer lands.
+§C.1.4 surface roughness — the basis for the materials layer's Névot–Croce and
+Debye–Waller factors.
 
 **Harvey, J. E. & Pfisterer, R. N.** *Understanding diffraction grating
 behavior.* Opt. Eng. **58**(8), 087105 (2019); part II, **59**(1), 017103 (2020).
@@ -174,6 +174,30 @@ regime.* Appl. Phys. B **127**, 72 (2021).
 
 Measured data on where scalar theory stops working — the empirical basis for a
 scalar validity map.
+
+---
+
+## Optical constants
+
+None ship with the package; these are the sources its readers are written for.
+
+**Henke, B. L., Gullikson, E. M. & Davis, J. C.** *X-ray interactions:
+photoabsorption, scattering, transmission, and reflection at E = 50–30000 eV,
+Z = 1–92.* At. Data Nucl. Data Tables **54**(2), 181–342 (1993).
+
+The compilation behind CXRO's tables, the X-ray reader's format.
+
+**Polyanskiy, M. N.** *Refractiveindex.info database of optical constants.*
+Sci. Data **11**, 94 (2024).
+
+The ultraviolet-to-infrared reader's format and its nine dispersion formulas.
+The database is CC0.
+
+**Malitson, I. H.** *Interspecimen comparison of the refractive index of fused
+silica.* J. Opt. Soc. Am. **55**(10), 1205–1209 (1965).
+
+The fused silica the reader's tests hold to its published n_d = 1.4585, a value
+neither the reader nor the database's own code produced.
 
 ---
 

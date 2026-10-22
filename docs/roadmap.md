@@ -57,19 +57,19 @@ Deliberate consequence: RCWA is a *reference backend*, not the product.
 | Convergence harness ([`convergence.py`](../src/gratinglab/convergence.py)) | done |
 | Progress + cancellation on the `Solver` protocol | done |
 | Mutation testing ([`mutation-testing.md`](mutation-testing.md)) | done, on demand; `checks.py` and `geometry.py` at 100% |
-| Materials — CXRO constants, Fresnel, roughness, absolute efficiency | done |
+| Materials: readers, user libraries, Fresnel, roughness, absolute efficiency | done. Three formats: CXRO/Henke exports (X-ray), refractiveindex.info YAML (ultraviolet to infrared, all nine dispersion formulas, read over the whole 3,720-file database) and PCGrate `.ari`. A coating comes from the user's own library, `~/.gratinglab/materials` or `GRATINGLAB_MATERIALS`. **No tables ship** with the package until CXRO's redistribution terms are settled ([`SOURCES.md`](../src/gratinglab/materials/data/SOURCES.md)) |
 | Resolving power ([`resolution.py`](../src/gratinglab/resolution.py)) | done: `R = |m|·N` plus the finite-N line profile from ISSI eq. (8), each testing the other; measured `N` flows in from metrology via `to_problem`. Groove-error-degraded R is the named successor |
 | **Tip deconvolution** ([`core/tip.py`](../src/gratinglab/metrology/core/tip.py), [theory §4b](theory/metrology.md)) | done at M22: Villarrubia erosion with the certainty map, opt-in via `tip_correction='erosion'`, validated pointwise on a committed dilated fixture. Ran on the real TASTE scan and narrowed the rounded-groove open question: a nominal tip is excluded ([`findings.md`](findings.md)) |
 | GUI (Qt/PySide6) — tabs, geometry dock, 3D conical view | done |
-| CI (Linux + macOS, py3.11/3.12) | green |
+| CI (Linux py3.11/3.12, macOS and Windows py3.12) | green. Runs with `PYTHONWARNDEFAULTENCODING=1`, so a text `open()` that leaves its encoding to the platform fails everywhere, not only on Windows |
 | RCWA | **contributed, not yet integrated** |
 | C-method | not started |
 | **Integral method** ([theory](theory/integral.md)) | **perfect-conductivity and finite-conductivity milestones done**: conical from day one, undercut-capable, GUI tab, validated against M&P Table 4.1 and orderwise against PCGrate to 8e-4 (which also identified the TASTE profile). M20 added `conductivity="tabulated"` — the coupled conical system of Goray & Schmidt (2010), absolute efficiencies with absorption recorded, flat limit = Fresnel to 6e-5, their Table 3 reproduced per order, and both boundary conditions selectable in the GUI. Graded corner mesh is the named successor |
 
-Roughly 1300 tests, 11 skipped (the skips need the private reference corpus).
-Rounded on purpose: this line previously claimed 328 and was wrong by 400, so
-`pytest -q` is the authority and this is only the order of magnitude. The jump
-from ~945 is the metrology suite arriving with its package, not new coverage.
+Roughly 1450 tests; the skips are the ones that need the private reference
+corpus or the AFM scans. Rounded on purpose: this line once claimed 328 and was
+wrong by 400, so `pytest -q` is the authority and this is only the order of
+magnitude.
 
 ---
 
@@ -244,10 +244,22 @@ direction.
 
 ### 6. First release + JOSS
 
-Shipping something citable and correct early is what recruits collaborators.
-The release story is stronger now, not weaker, for the reordering above: a
-rigorous open solver validated orderwise against the commercial standard is a
-headline, and the scalar/integral comparison plots need no PCGrate licence.
+**0.1.0 is the first release**, published to PyPI by Trusted Publishing from
+`.github/workflows/release.yml` on a `v*` tag. That workflow refuses a tag that
+does not match `pyproject.toml`, checks the wheel and sdist carry no optical
+constant table, and installs the wheel into a clean environment to check that a
+missing coating is refused helpfully and that a user library resolves.
+
+Still to do: a Zenodo DOI (it archives only releases made after it is switched
+on, so it starts from the next one) and the JOSS submission. Shipping something
+citable and correct early is what recruits collaborators, and the story is
+stronger for the reordering above: a rigorous open solver validated orderwise
+against the commercial standard is a headline, and the scalar/integral
+comparison plots need no PCGrate licence.
+
+Bundled optical constants are an open question rather than a gap.
+refractiveindex.info is CC0 and could ship; CXRO's terms are unconfirmed, so
+for now nothing ships and every coating is the user's own table.
 
 ### Later
 
