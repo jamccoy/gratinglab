@@ -275,9 +275,9 @@ missing coating is refused helpfully and that a user library resolves.
 Still to do: a Zenodo DOI (it archives only releases made after it is switched
 on, so it starts from the next one) and the JOSS submission. Shipping something
 citable and correct early is what recruits collaborators, and the story is
-stronger for the reordering above: a rigorous open solver validated orderwise
-against the commercial standard is a headline, and the scalar/integral
-comparison plots need no PCGrate licence.
+stronger for the reordering above: an open integral-method solver checked order
+by order against an established code gives a reviewer something to trust, and
+the scalar/integral comparison plots need no PCGrate licence to reproduce.
 
 Bundled optical constants are an open question rather than a gap.
 refractiveindex.info is CC0 and could ship; CXRO's terms are unconfirmed, so
