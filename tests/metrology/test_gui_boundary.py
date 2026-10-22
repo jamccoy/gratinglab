@@ -109,7 +109,7 @@ else:
     raise SystemExit("importing the parent package did not check for matplotlib")
 """
     probe = subprocess.run([sys.executable, "-c", script],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding="utf-8")
     assert probe.returncode == 0, probe.stderr
     assert "matplotlib" in probe.stdout
     assert ".[metrology]" in probe.stdout, probe.stdout

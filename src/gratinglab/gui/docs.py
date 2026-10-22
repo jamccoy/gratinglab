@@ -140,7 +140,7 @@ def _load_page(
     if path.is_file():
         return TheoryPage(
             name=name, title=title, available=True, path=path,
-            text=path.read_text(), rigorous=rigorous,
+            text=path.read_text(encoding="utf-8"), rigorous=rigorous,
         )
     return TheoryPage(
         name=name, title=title, available=False, path=path,

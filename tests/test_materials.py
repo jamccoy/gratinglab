@@ -33,7 +33,7 @@ CXRO_TEXT = """\
 @pytest.fixture
 def cxro_file(tmp_path) -> Path:
     path = tmp_path / "Xx_CXRO.txt"
-    path.write_text(CXRO_TEXT)
+    path.write_text(CXRO_TEXT, encoding="utf-8")
     return path
 
 
@@ -71,7 +71,7 @@ class TestTheCxroReader:
 
     def test_a_file_with_too_few_columns_is_refused(self, tmp_path):
         path = tmp_path / "bad.txt"
-        path.write_text("h1\nh2\n1.0 2.0\n3.0 4.0\n")
+        path.write_text("h1\nh2\n1.0 2.0\n3.0 4.0\n", encoding="utf-8")
         with pytest.raises(ValueError, match="three numbers"):
             read_cxro(path)
 
@@ -81,9 +81,9 @@ class TestTheCxroReader:
         *longest* wavelength. Both variants must read identically, and neither
         may lose a row."""
         two = tmp_path / "two.txt"
-        two.write_text(CXRO_TEXT)
+        two.write_text(CXRO_TEXT, encoding="utf-8")
         three = tmp_path / "three.txt"
-        three.write_text(" extra provenance line\n" + CXRO_TEXT)
+        three.write_text(" extra provenance line\n" + CXRO_TEXT, encoding="utf-8")
 
         a, b = read_cxro(two), read_cxro(three)
         assert len(a.wavelength_nm) == 2

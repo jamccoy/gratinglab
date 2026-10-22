@@ -222,7 +222,7 @@ def read_cxro(path: "str | Path", name: str | None = None) -> OpticalConstants:
     path = Path(path)
     rows = [
         parsed
-        for line in path.read_text().splitlines()
+        for line in path.read_text(encoding="utf-8").splitlines()
         if (parsed := _numeric_row(line)) is not None
     ]
     if len(rows) < 2:
@@ -261,7 +261,7 @@ def read_ari(path: "str | Path", name: str | None = None) -> OpticalConstants:
     instead of ~1.
     """
     path = Path(path)
-    data = np.genfromtxt(path)
+    data = np.genfromtxt(path, encoding="utf-8")
     if data.ndim != 2 or data.shape[1] < 3:
         raise ValueError(
             f"{path}: expected three columns "

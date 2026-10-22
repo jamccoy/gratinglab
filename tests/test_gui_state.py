@@ -98,7 +98,7 @@ class TestProfiles:
 
     def test_a_corrupt_file_reports_the_readers_message(self, tmp_path):
         bad = tmp_path / "bad.ggp"
-        bad.write_text("3 0 - Polygonal type\nPeriod: 1 PSC: 1\n0.0 0.0\n0.5\n1.0 0.0\n")
+        bad.write_text("3 0 - Polygonal type\nPeriod: 1 PSC: 1\n0.0 0.0\n0.5\n1.0 0.0\n", encoding="utf-8")
         errors = validate(FormState(profile_kind="From file", profile_path=str(bad)))
         assert errors and errors[0].field == "profile_path"
         assert "x y" in errors[0].message
@@ -245,6 +245,7 @@ class TestNoWidgetDependency:
              "import gratinglab.gui.state as s; "
              "assert s.validate(s.FormState()) == (); print('ok')"],
             capture_output=True, text=True, env={"PATH": "/usr/bin:/bin"},
+            encoding="utf-8",
         )
         assert result.returncode == 0, result.stderr
         assert "ok" in result.stdout

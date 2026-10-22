@@ -123,7 +123,7 @@ def write(path: Path, data: np.ndarray) -> Path:
     """
     height_um = SCAN_X_UM * data.shape[0] / data.shape[1]
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as handle:
+    with path.open("w", encoding="utf-8") as handle:
         handle.write("# Channel: ZSensor\n")
         handle.write(f"# Width: {SCAN_X_UM:.3f} µm\n")
         handle.write(f"# Height: {height_um:.3f} µm\n")

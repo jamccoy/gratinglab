@@ -18,7 +18,7 @@ POINTS = "0.0 0.0\n0.25 0.2\n0.5 0.3\n0.75 0.1\n1.0 0.0\n"
 
 def write_variant(tmp_path, header, name="p.ggp"):
     path = tmp_path / name
-    path.write_text(header + POINTS)
+    path.write_text(header + POINTS, encoding="utf-8")
     return path
 
 
@@ -61,36 +61,53 @@ class TestHeaderVariants:
             assert np.allclose(datasets[0], other)
 
 
+class TestEncoding:
+    """PCGrate writes cp1252 and `write_ggp` writes UTF-8, and which one a
+    reader assumed used to be the platform's locale. A degree sign in a header
+    is where the two differ."""
+
+    HEADER = "3 0 - Polygonal type\nPeriod: 1 PSC: 1 blaze 29.5°\n"
+
+    @pytest.mark.parametrize("encoding", ["utf-8", "cp1252"])
+    def test_a_non_ascii_header_reads_the_same_either_way(self, tmp_path, encoding):
+        path = tmp_path / "p.ggp"
+        path.write_bytes((self.HEADER + POINTS).encode(encoding))
+        reference = tmp_path / "ascii.ggp"
+        reference.write_text(CANONICAL + POINTS, encoding="utf-8")
+        np.testing.assert_array_equal(read_ggp(path).t, read_ggp(reference).t)
+        np.testing.assert_array_equal(read_ggp(path).y, read_ggp(reference).y)
+
+
 class TestRejection:
     def test_rejects_a_truncated_data_line(self, tmp_path):
         """A silently dropped point would shift the profile and change every
         efficiency computed from it."""
         path = tmp_path / "bad.ggp"
-        path.write_text(CANONICAL + "0.0 0.0\n0.25 0.2\n0.5\n0.75 0.1\n")
+        path.write_text(CANONICAL + "0.0 0.0\n0.25 0.2\n0.5\n0.75 0.1\n", encoding="utf-8")
         with pytest.raises(ValueError, match="expected an .x y. pair"):
             read_ggp(path)
 
     def test_rejects_non_numeric_data(self, tmp_path):
         path = tmp_path / "bad.ggp"
-        path.write_text(CANONICAL + "0.0 0.0\n0.25 abc\n0.5 0.3\n")
+        path.write_text(CANONICAL + "0.0 0.0\n0.25 abc\n0.5 0.3\n", encoding="utf-8")
         with pytest.raises(ValueError, match="expected an .x y. pair"):
             read_ggp(path)
 
     def test_rejects_empty_file(self, tmp_path):
         path = tmp_path / "empty.ggp"
-        path.write_text(CANONICAL)
+        path.write_text(CANONICAL, encoding="utf-8")
         with pytest.raises(ValueError, match="no data points"):
             read_ggp(path)
 
     def test_rejects_too_few_points(self, tmp_path):
         path = tmp_path / "short.ggp"
-        path.write_text(CANONICAL + "0.0 0.0\n1.0 0.0\n")
+        path.write_text(CANONICAL + "0.0 0.0\n1.0 0.0\n", encoding="utf-8")
         with pytest.raises(ValueError, match="at least 3"):
             read_ggp(path)
 
     def test_rejects_header_appearing_after_data(self, tmp_path):
         path = tmp_path / "mixed.ggp"
-        path.write_text(CANONICAL + "0.0 0.0\n0.5 0.3\nPeriod: 1\n1.0 0.0\n")
+        path.write_text(CANONICAL + "0.0 0.0\n0.5 0.3\nPeriod: 1\n1.0 0.0\n", encoding="utf-8")
         with pytest.raises(ValueError, match="must precede all data"):
             read_ggp(path)
 
@@ -98,8 +115,8 @@ class TestRejection:
 class TestWriting:
     def test_writes_the_canonical_header(self, tmp_path):
         path = write_ggp(tmp_path / "out.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.3, 0.0])
-        assert path.read_text().startswith(GGP_HEADER + "\n")
-        assert not path.read_text().startswith("#")
+        assert path.read_text(encoding="utf-8").startswith(GGP_HEADER + "\n")
+        assert not path.read_text(encoding="utf-8").startswith("#")
 
     def test_round_trip_preserves_points(self, tmp_path):
         profile = FromProfileData(t=(0.0, 0.3, 0.6, 1.0), y=(0.0, 0.2, 0.35, 0.0))
@@ -134,7 +151,7 @@ class TestWriting:
         is still a fact about PCGrate, and still worth pinning.
         """
         path = write_ggp(tmp_path / "fmt.ggp", t=[0.0, 0.5], y=[0.0, 0.25])
-        assert path.read_text() == GGP_HEADER + "\n0.000000 0.000000\n0.500000 0.250000\n"
+        assert path.read_text(encoding="utf-8") == GGP_HEADER + "\n0.000000 0.000000\n0.500000 0.250000\n"
 
 
 class TestProfileIntegration:

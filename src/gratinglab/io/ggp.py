@@ -102,7 +102,7 @@ def read_ggp(path: str | Path) -> GgpFile:
         efficiency computed from it.
     """
     path = Path(path)
-    lines = path.read_text().splitlines()
+    lines = _read_text(path).splitlines()
 
     header_lines: list[str] = []
     points: list[tuple[float, float]] = []
@@ -148,6 +148,25 @@ def read_ggp(path: str | Path) -> GgpFile:
         format_valid=compatible,
         source=path,
     )
+
+
+def _read_text(path: Path) -> str:
+    """UTF-8, then PCGrate's own cp1252, then latin-1, which cannot fail.
+
+    `write_ggp` writes UTF-8 and PCGrate runs on Windows and writes cp1252, so
+    both are real. UTF-8 goes first because valid UTF-8 is almost never valid
+    by accident, while cp1252 accepts nearly anything and would quietly misread
+    a UTF-8 header. The same chain as `efficiency_table`, which reads the other
+    file PCGrate writes. Before this the platform's locale decided, so a header
+    that loaded on Linux could raise on Windows.
+    """
+    raw = path.read_bytes()
+    for encoding in ("utf-8", "cp1252"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode("latin-1")
 
 
 def _numeric_pair(line: str) -> tuple[float, float] | None:
@@ -222,7 +241,7 @@ def write_ggp(
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("w") as handle:
+    with path.open("w", encoding="utf-8") as handle:
         handle.write(GGP_HEADER + "\n")
         for x_value, height in zip(t_values, y_values):
             handle.write(f"{fmt % x_value} {fmt % height}\n")

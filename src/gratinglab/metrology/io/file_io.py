@@ -36,7 +36,7 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
     # ===== DETAILED TEXT SUMMARY =====
     txt_filename = os.path.join(output_dir, f'analysis_summary_{timestamp}.txt')
     
-    with open(txt_filename, 'w') as f:
+    with open(txt_filename, 'w', encoding="utf-8") as f:
         f.write("="*80 + "\n")
         f.write("AFM BLAZE ANGLE ANALYSIS SUMMARY\n")
         f.write("="*80 + "\n")
@@ -174,7 +174,7 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
     # ===== CSV FILE FOR DATA ANALYSIS =====
     csv_filename = os.path.join(output_dir, f'analysis_data_{timestamp}.csv')
     
-    with open(csv_filename, 'w') as f:
+    with open(csv_filename, 'w', encoding="utf-8") as f:
         # Header
         f.write("Sample,File,N_scans,N_grooves,Mean_angle_deg,Std_angle_deg,Min_angle_deg,Max_angle_deg,")
         f.write("Mean_slope,Period_nm,Period_std_nm,Mean_depth_nm,Mean_facet_width_nm,")
@@ -231,7 +231,7 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
             return [''] * len(scan['all_angles'])
         return list(groups)
 
-    with open(detailed_csv, 'w') as f:
+    with open(detailed_csv, 'w', encoding="utf-8") as f:
         f.write("Sample,Scan_file,Row_group,Groove_number,Blaze_angle_deg,Groove_depth_nm,")
         f.write("Blaze_width_nm,Steep_width_nm,R2,Local_period_nm\n")
 
