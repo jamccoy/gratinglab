@@ -23,6 +23,7 @@ from PySide6.QtWidgets import (
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 
 from ...core.processing import raw_data, raw_data_multi_group
+from ...core.tip import VALID_TIP_CORRECTIONS
 from ...settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES)
 from ..state import FormState, build, summarize_result
 from .canvas import PlotCanvas
@@ -43,6 +44,11 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.setWindowTitle("AFM Blaze Angle Analysis")
         self.resize(1280, 760)
+        # The analysis runs on a worker thread, and a cycle collection there
+        # once destroyed Qt objects off the GUI thread: a segfault on macOS.
+        from gratinglab.gui.qt.gc_guard import guard
+
+        guard(self)
 
         self._defaults = AnalysisSettings.from_config()
         self._data = None
@@ -204,6 +210,19 @@ class MainWindow(QMainWindow):
         n_layout.addWidget(self.n_groups_spin)
         layout.addLayout(n_layout)
 
+        self._build_tip_controls(layout)
+
+        # The Boundary tab works from these settings too. Without this it kept
+        # whatever was current when the scan was loaded, so changing a setting
+        # here moved the blaze angles at the next Run and never the exported
+        # groove shape.
+        for signal in (self.period_spin.valueChanged, self.trim_spin.valueChanged,
+                       self.side_combo.currentTextChanged, self.edge_spin.valueChanged,
+                       self.row_groups_check.toggled, self.n_groups_spin.valueChanged,
+                       self.tip_combo.currentTextChanged, self.tip_radius_spin.valueChanged,
+                       self.tip_angle_spin.valueChanged):
+            signal.connect(self._settings_changed)
+
         self.run_btn = QPushButton("Run Analysis")
         self.run_btn.setEnabled(False)
         font = QFont()
@@ -245,6 +264,60 @@ class MainWindow(QMainWindow):
         group.setMaximumHeight(130)
         return group
 
+    def _build_tip_controls(self, layout):
+        """Tip deconvolution: which correction, and the tip it assumes.
+
+        The radius and half-angle describe a cone with a spherical apex and are
+        only read when a correction is chosen, so they are disabled otherwise
+        rather than hidden: the values a user typed stay visible.
+        """
+        layout.addWidget(QLabel("Tip correction:"))
+        self.tip_combo = QComboBox()
+        self.tip_combo.addItems(list(VALID_TIP_CORRECTIONS))
+        self.tip_combo.setCurrentText(self._defaults.tip_correction)
+        self.tip_combo.setToolTip(
+            "erosion undoes the tip's broadening where the apex touched the\n"
+            "surface (Villarrubia 1997) and marks the rest as upper bounds.\n"
+            "It changes measured depths, so it is off by default. Applies to\n"
+            "the blaze angles at the next Run and to the Boundary profile now.")
+        layout.addWidget(self.tip_combo)
+
+        row = QHBoxLayout()
+        row.addWidget(QLabel("R (nm):"))
+        self.tip_radius_spin = QDoubleSpinBox()
+        self.tip_radius_spin.setRange(0.1, 1000.0)
+        self.tip_radius_spin.setDecimals(1)
+        self.tip_radius_spin.setValue(self._defaults.tip_radius_nm)
+        self.tip_radius_spin.setToolTip(
+            "Apex radius. A new probe is a few nm; a worn one can be tens.")
+        row.addWidget(self.tip_radius_spin)
+        row.addWidget(QLabel("Half angle (deg):"))
+        self.tip_angle_spin = QDoubleSpinBox()
+        self.tip_angle_spin.setRange(0.5, 89.5)
+        self.tip_angle_spin.setDecimals(1)
+        self.tip_angle_spin.setValue(self._defaults.tip_half_angle_deg)
+        self.tip_angle_spin.setToolTip(
+            "Cone half-angle measured from the tip's axis, so an 18 deg tip has\n"
+            "flanks at 72 deg from the surface.")
+        row.addWidget(self.tip_angle_spin)
+        layout.addLayout(row)
+
+        self.tip_combo.currentTextChanged.connect(self._sync_tip_controls)
+        self._sync_tip_controls()
+
+    def _sync_tip_controls(self, *_):
+        on = self.tip_combo.currentText() != 'none'
+        self.tip_radius_spin.setEnabled(on)
+        self.tip_angle_spin.setEnabled(on)
+
+    def _settings_changed(self, *_):
+        """Re-send valid settings to the Boundary tab; invalid ones wait for Run."""
+        if getattr(self, "_data", None) is None:
+            return
+        settings, errors = build(self.form_state())
+        if settings is not None:
+            self.boundary.set_scan(self._data, self._scan_size, self._filename, settings)
+
     # ── Form ─────────────────────────────────────────────────────────────────
 
     def form_state(self) -> FormState:
@@ -264,6 +337,9 @@ class MainWindow(QMainWindow):
             flatten_poly_order=overrides['flatten_poly_order'],
             flatten_feature=overrides['flatten_feature'],
             flatten_exclude_edges=overrides['flatten_exclude_edges'],
+            tip_correction=self.tip_combo.currentText(),
+            tip_radius_nm=self.tip_radius_spin.value(),
+            tip_half_angle_deg=self.tip_angle_spin.value(),
         )
 
     # ── Actions ──────────────────────────────────────────────────────────────
@@ -351,7 +427,12 @@ class MainWindow(QMainWindow):
         self._result, self._settings = result, settings
         for b in self._result_buttons:
             b.setEnabled(True)
-        self.results_label.setText(summarize_result(result))
+        text = summarize_result(result)
+        if settings.tip_correction != 'none':
+            text += (f"\nTip correction   : {settings.tip_correction}, "
+                     f"R = {settings.tip_radius_nm:g} nm, "
+                     f"half angle {settings.tip_half_angle_deg:g} deg")
+        self.results_label.setText(text)
         self.show_angles()
         self._set_status(f"Analysis complete: {result['n_grooves']} measurements, "
                          f"mean {result['mean_angle']:.2f}°")

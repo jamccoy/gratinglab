@@ -103,6 +103,10 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self.setWindowTitle("GratingLab")
         self.resize(1180, 820)
+        # Solves run on a worker thread; keep the cycle collector off it.
+        from .gc_guard import guard
+
+        guard(self)
 
         self._parsed = None
         self._token = 0

@@ -381,3 +381,95 @@ class TestEfficiencyDialog:
         dialog.compute()
         assert dialog._scan is None
         assert dialog.status.text()
+
+
+class TestTipCorrectionControls:
+    """Tip deconvolution, from the window rather than config.py."""
+
+    def test_the_tip_fields_follow_the_choice(self, qtbot, window):
+        assert window.tip_combo.currentText() == 'none'
+        assert not window.tip_radius_spin.isEnabled()
+        window.tip_combo.setCurrentText('erosion')
+        assert window.tip_radius_spin.isEnabled() and window.tip_angle_spin.isEnabled()
+
+    def test_the_form_carries_them_into_the_settings(self, qtbot, window):
+        from gratinglab.metrology.gui.state import build
+        window.tip_combo.setCurrentText('erosion')
+        window.tip_radius_spin.setValue(20.0)
+        window.tip_angle_spin.setValue(18.0)
+        settings, errors = build(window.form_state())
+        assert errors == ()
+        assert (settings.tip_correction, settings.tip_radius_nm,
+                settings.tip_half_angle_deg) == ('erosion', 20.0, 18.0)
+
+    def test_choosing_erosion_corrects_the_boundary_profile_now(self, qtbot, window):
+        """The dilated fixture is the sawtooth seen through a 20 nm, 18 deg tip.
+
+        Choosing erosion must reach the Boundary profile without a re-load and
+        report how much of the image it recovered. It does NOT assert the depth
+        recovers: the trough the tip never reached is exactly the part erosion
+        cannot give back (core/tip.py), which an earlier draft of this test got
+        wrong. The pointwise recovery is tests/metrology/test_tip.py's job.
+        """
+        import numpy as np
+        from scans import SYNTHETIC_DILATED
+        window.load(str(SYNTHETIC_DILATED))
+        before = window.boundary.profile.y_norm.copy()
+        window.tip_radius_spin.setValue(20.0)
+        window.tip_angle_spin.setValue(18.0)
+        window.tip_combo.setCurrentText('erosion')
+        after = window.boundary.profile
+        assert after.metrics['tip_correction'] == 'erosion'
+        assert 0.5 < after.metrics['tip_certain_fraction'] < 1.0
+        assert not np.array_equal(after.y_norm, before)
+        assert "recovered exactly" in window.boundary.metrics_label.text()
+
+    def test_any_analysis_setting_now_reaches_the_boundary_tab(self, qtbot, window):
+        """It used to keep the settings current at load time."""
+        window.load(SAMPLE)
+        window.edge_spin.setValue(0.0)
+        assert window.boundary._settings.edge_exclusion_periods == 0.0
+
+    def test_the_results_say_the_scan_was_corrected(self, qtbot, window):
+        window.load(SAMPLE)
+        window.tip_combo.setCurrentText('erosion')
+        _run_and_wait(qtbot, window)
+        assert "Tip correction   : erosion" in window.results_label.text()
+
+
+class TestGarbageCollectionStaysOnTheGuiThread:
+    """CI run 39835186938 segfaulted on macOS with "Garbage-collecting" at the
+    top of the analysis worker's stack: the cycle collector ran on the worker
+    thread and destroyed Qt objects there. gratinglab.gui.qt.gc_guard keeps it
+    on the GUI thread while a window exists."""
+
+    def test_no_collection_runs_on_the_worker_during_an_analysis(self, qtbot, window):
+        import gc
+        import threading
+
+        gui_thread = threading.get_ident()
+        seen = []
+
+        def record(phase, info):
+            if phase == "start":
+                seen.append(threading.get_ident())
+
+        window.load(SAMPLE)
+        gc.callbacks.append(record)
+        try:
+            # Plenty of cyclic garbage, so the collector has reason to run
+            # somewhere while the worker allocates.
+            for _ in range(3):
+                junk = [[] for _ in range(5000)]
+                for a, b in zip(junk, junk[1:]):
+                    a.append(b)
+                    b.append(a)
+                del junk
+                _run_and_wait(qtbot, window)
+            qtbot.wait(1200)  # let the GUI-thread collector take its turns
+        finally:
+            gc.callbacks.remove(record)
+        assert seen, "no collection ran at all, so the test proves nothing"
+        assert set(seen) == {gui_thread}, (
+            f"{sum(t != gui_thread for t in seen)} of {len(seen)} collections "
+            "ran off the GUI thread")

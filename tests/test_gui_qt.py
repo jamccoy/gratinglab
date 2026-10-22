@@ -1568,3 +1568,69 @@ class TestOpeningASavedBoundary:
         with qtbot.waitSignal(win.solved, timeout=SOLVE_TIMEOUT_MS):
             win.open_boundary(self._saved(tmp_path))
         assert "from the file" in win.geometry._path_label.text()
+
+
+class TestGarbageCollectionStaysOnTheGuiThread:
+    """See gratinglab.gui.qt.gc_guard: a collection on a worker thread can
+    destroy Qt objects there, which segfaulted the macOS CI leg."""
+
+    def test_solves_never_collect_on_the_worker(self, qtbot, win):
+        import gc
+        import threading
+
+        gui_thread = threading.get_ident()
+        seen = []
+
+        def record(phase, info):
+            if phase == "start":
+                seen.append(threading.get_ident())
+
+        gc.callbacks.append(record)
+        try:
+            for _ in range(3):
+                junk = [[] for _ in range(5000)]
+                for a, b in zip(junk, junk[1:]):
+                    a.append(b)
+                    b.append(a)
+                del junk
+                resolve(qtbot, win)
+            qtbot.wait(1200)
+        finally:
+            gc.callbacks.remove(record)
+        assert seen, "no collection ran at all, so the test proves nothing"
+        assert set(seen) == {gui_thread}
+
+    def test_automatic_collection_is_off_while_a_window_exists(self, win):
+        import gc
+
+        from gratinglab.gui.qt import gc_guard
+
+        assert gc_guard.is_active()
+        assert not gc.isenabled()
+
+    def test_the_last_window_going_restores_it(self, qtbot):
+        import gc
+
+        from PySide6.QtWidgets import QApplication
+
+        from gratinglab.gui.qt import gc_guard
+        from gratinglab.gui.qt.main_window import MainWindow
+
+        from PySide6.QtCore import QCoreApplication, QEvent
+
+        # An earlier test's window may still be queued for deletion; let it
+        # go first, or it releases the guard mid-test and the count races.
+        QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+        QCoreApplication.processEvents()
+        before = gc_guard._holders
+        window = MainWindow()
+        with qtbot.waitSignal(window.solved, timeout=SOLVE_TIMEOUT_MS):
+            pass
+        assert gc_guard._holders == before + 1
+        # close() first: it joins the solve thread, and deleting a window
+        # whose QThread is still running aborts the process.
+        window.close()
+        window.deleteLater()
+        qtbot.waitUntil(lambda: gc_guard._holders == before, timeout=5000)
+        QApplication.processEvents()
+        assert gc.isenabled() == (before == 0)
