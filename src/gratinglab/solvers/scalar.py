@@ -500,18 +500,36 @@ class ScalarSolver:
             # optical constants there is nothing to compare against. That is
             # not a validity concern to warn about, it is a check that does not
             # apply -- the M8 distinction.
+            #
+            # Only where n is near 1, too. That is the regime in which a
+            # critical angle exists and reflectivity collapses above it; from
+            # the UV to the IR there is usually no critical angle at all, a
+            # glass or a metal reflects without grazing, and a near-normal
+            # design is ordinary rather than outside anything. Warning there
+            # fired on every visible design, so it is the same M8 distinction
+            # a second time: a check that does not apply.
             critical = coating.critical_angle(wavelengths)
-            past = graze > critical
+            regime = coating.near_unity(wavelengths)
+            past = regime & (graze > critical)
             if past.any():
                 lam = wavelengths[past]
+                no_edge = past & (critical == 0.0)
+                where = (
+                    f"theta_c falls to {np.degrees(critical[past].min()):.4g} "
+                    "deg there"
+                    if not no_edge.any()
+                    else "theta_c is 0 at "
+                    f"{no_edge.sum()} of them, where the real part of n is not "
+                    "below 1 and there is no total external reflection at all"
+                )
                 warnings.append(
                     f"facet graze {np.degrees(graze):.4g} deg exceeds the "
                     f"critical angle for {coating.name} over "
-                    f"{lam.min():.4g}-{lam.max():.4g} nm "
-                    f"(theta_c falls to {np.degrees(critical[past].min()):.4g} "
-                    "deg there); reflectivity collapses above it, so these "
-                    "wavelengths are outside the regime a grazing-incidence "
-                    "design operates in -- see docs/theory/scalar.md section 7"
+                    f"{lam.min():.4g}-{lam.max():.4g} nm ({where}); n is near 1 "
+                    "there, so reflectivity collapses above the critical angle "
+                    "and these wavelengths are outside the regime a "
+                    "grazing-incidence design operates in -- see "
+                    "docs/theory/scalar.md section 7"
                 )
 
             # The waived polarization mapping, priced. Every reflectivity

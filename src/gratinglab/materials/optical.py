@@ -45,6 +45,7 @@ from numpy.typing import ArrayLike, NDArray
 
 __all__ = [
     "HC_EV_NM",
+    "NEAR_UNITY",
     "OpticalConstants",
     "read_cxro",
     "read_ari",
@@ -56,6 +57,17 @@ __all__ = [
 #: (``panter1.py``), kept identical so a re-conversion of the corpus tables
 #: reproduces them.
 HC_EV_NM = 1239.84193
+
+#: How far from 1 the index may sit, as :math:`|n - 1|`, and still be in the
+#: regime where a critical angle means something. Every X-ray and EUV table
+#: this project has met sits well inside it (the shipped Au peaks at 0.015, and
+#: Mo or Ru at 13.5 nm are near 0.1); ordinary UV-to-IR materials sit well
+#: outside it (a glass at 0.3 to 1, a visible metal at several). It is also the
+#: regime where reflectivity has nothing else to stand on: at
+#: :math:`|n - 1| = 0.2` normal-incidence reflectivity is about 1%, so above
+#: the critical angle it genuinely collapses, which is what makes losing total
+#: external reflection worth a warning at all.
+NEAR_UNITY = 0.2
 
 
 @dataclass(frozen=True, slots=True)
@@ -150,22 +162,67 @@ class OpticalConstants:
     def critical_angle(self, wavelength_nm: ArrayLike) -> NDArray[np.float64]:
         r"""Total-external-reflection critical graze angle, radians.
 
-        :math:`\theta_c \approx \sqrt{2\,\text{decrement}}`, measured from the
+        :math:`\theta_c = \arccos(1 - \text{decrement})`, measured from the
         **surface** -- the same sense as `geometry.facet_graze`, so the two are
         directly comparable. That comparison is the validity guard
         ``docs/theory/scalar.md`` §7 has carried as "needs a materials layer to
         evaluate".
 
-        **Zero where the decrement is not positive.** Just below an absorption
-        edge anomalous dispersion drives it negative (Cr near 574 eV, Ni near
-        853 eV), the real part of n rises above 1, and there is no total
-        external reflection at any graze. A bare square root returned NaN
-        there, and ``graze > nan`` is False, so the scalar solver's guard
-        passed silently at exactly the wavelengths it should warn about most.
-        Zero makes every graze exceed it, which is the physics.
+        **The exact lossless edge, not the small-angle one.** Snell's law
+        from the surface, :math:`\cos\theta = n'\cos\theta_t`, has no real
+        transmitted angle once :math:`\cos\theta > n'`, which is the arccos.
+        :math:`\sqrt{2\,\text{decrement}}` is its leading term, and for the
+        :math:`10^{-3}` decrements of the soft X-ray the two differ by a
+        relative :math:`\text{decrement}/12`, about 1e-4. The exact form costs
+        nothing and stays right at EUV, where the decrement reaches 0.1.
+        Absorption does not move the edge, only softens it, which is why the
+        imaginary part takes no part in the value.
+
+        **Zero means there is no critical angle**, and there are two ways not
+        to have one:
+
+        - the real part of n is not below 1. Just below an X-ray absorption
+          edge anomalous dispersion drives the decrement negative (Cr near
+          574 eV, Ni near 853 eV), and every glass in the visible is there
+          anyway. A bare square root returned NaN for the first, and
+          ``graze > nan`` is False, so the scalar solver's guard passed
+          silently at exactly the wavelengths it should warn about most.
+        - the index is not near 1 (see :meth:`near_unity`), which is nearly
+          all of the UV to IR. Au at 600 nm has :math:`n \approx 0.25 + 3.1i`,
+          real part below 1, and the arccos would say 76 degrees; its Fresnel
+          reflectivity stays between 0.90 and 0.93 from 10 degrees to normal
+          incidence, so there is no edge to be on either side of.
+
+        Zero is safe to compare against either way. Whether a graze above it
+        is worth a *warning* is a separate question, :meth:`near_unity`
+        answers it, and the scalar solver asks both.
         """
-        decrement, _ = self.at(wavelength_nm)
-        return np.sqrt(2.0 * np.clip(decrement, 0.0, None))
+        n = self.n(wavelength_nm)
+        has_edge = (n.real < 1.0) & self._near_unity(n)
+        # The clip only keeps arccos in its domain where has_edge is False and
+        # the value is discarded; near unity it never changes a kept one.
+        return np.where(has_edge, np.arccos(np.clip(n.real, -1.0, 1.0)), 0.0)
+
+    def near_unity(self, wavelength_nm: ArrayLike) -> NDArray[np.bool_]:
+        r"""Where :math:`|n - 1| \le` ``NEAR_UNITY``: the X-ray-like regime.
+
+        Here reflectivity is only appreciable at grazing incidence, so a facet
+        past the critical angle, or a wavelength with no critical angle at all,
+        loses its reflectivity and is worth warning about. Outside it, a glass
+        or a metal from the UV to the IR, reflectivity does not hinge on
+        grazing, a near-normal design is ordinary, and :meth:`critical_angle`
+        is zero for want of an edge rather than because anything is wrong.
+
+        The test is on :math:`|n - 1|` and not on absorption against
+        decrement, deliberately: the shipped Au table has absorption above its
+        decrement over a third of its range, where the edge is soft but
+        reflectivity still collapses above it.
+        """
+        return self._near_unity(self.n(wavelength_nm))
+
+    @staticmethod
+    def _near_unity(n: NDArray[np.complex128]) -> NDArray[np.bool_]:
+        return np.abs(n - 1.0) <= NEAR_UNITY
 
     def _require_in_range(self, values: NDArray[np.float64]) -> None:
         outside = ~self.covers(values)

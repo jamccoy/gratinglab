@@ -21,11 +21,11 @@ from gratinglab.materials.fresnel import (
 )
 
 #: A lossless material with a convenient critical angle: decrement 2e-3 gives
-#: exactly theta_c = sqrt(2 * 2e-3) = 0.0632 rad = 3.62 deg. No absorption, so
-#: reflection below theta_c must be *exactly* total -- the sharpest available
-#: check, and one a real material cannot provide.
+#: exactly theta_c = arccos(1 - 2e-3) = 0.0632 rad = 3.62 deg. No absorption,
+#: so reflection below theta_c must be *exactly* total -- the sharpest
+#: available check, and one a real material cannot provide.
 LOSSLESS = 1.0 - 2e-3 + 0j
-LOSSLESS_THETA_C = np.sqrt(2 * 2e-3)
+LOSSLESS_THETA_C = np.arccos(1.0 - 2e-3)
 
 
 @pytest.fixture(scope="module")
@@ -67,6 +67,27 @@ class TestTheCriticalAngle:
 
     def test_critical_angle_matches_the_decrement_it_came_from(self):
         assert critical_angle(2e-3) == pytest.approx(LOSSLESS_THETA_C)
+
+    def test_the_amplitudes_put_the_edge_at_the_arccos_not_the_square_root(self):
+        r"""Which formula is the definition, settled by the exact amplitudes.
+        At a decrement of 0.1 the two differ by 0.8%, and a graze between them
+        reflects *totally*: the square root put it above critical. Just past
+        the arccos the reflection stops being total, so the edge is there."""
+        decrement = 0.1
+        n = 1.0 - decrement + 0j
+        exact = float(critical_angle(decrement))
+        small_angle = np.sqrt(2.0 * decrement)
+        assert small_angle < exact
+        between = 0.5 * (small_angle + exact)
+        assert reflectivity(n, between) == pytest.approx(1.0, abs=1e-12)
+        assert reflectivity(n, exact * (1.0 - 1e-6)) == pytest.approx(1.0, abs=1e-12)
+        assert reflectivity(n, exact * (1.0 + 1e-3)) < 1.0 - 1e-3
+
+    def test_a_decrement_above_one_is_refused(self):
+        """A negative real part has no lossless edge; arccos would return NaN,
+        which is the silent comparison e7bad12 removed."""
+        with pytest.raises(ValueError, match="exceed 1"):
+            critical_angle(1.5)
 
     def test_a_negative_decrement_is_refused(self):
         """It would put the real part of n above 1 and delete total external
