@@ -10,11 +10,10 @@
 An open platform for diffraction grating groove metrology and efficiency analysis,
 from an AFM scan of a real grating to its diffraction efficiency, in one package.
 
-Rigorous grating efficiency analysis today means either paying for PCGrate (integral
-method) or assembling a patchwork of open RCWA codes that each carry their own
-conventions, normalizations, and blind spots. No open code runs the *same* physical
-problem through several methods for a fair comparison, and none connects a *measured*
-surface to any of them.
+The rigorous methods for grating efficiency are well established, and open codes exist
+for several of them, but each carries its own conventions, normalizations and blind
+spots. No open code runs the *same* physical problem through several methods for a fair
+comparison, and none connects a *measured* surface to any of them.
 
 `gratinglab` is built around one idea: **the physical problem and the numerical method
 are separate, and the problem spec is serializable.** One `Problem` goes to every solver,
@@ -77,7 +76,7 @@ Planned method backends, in order:
 | Method | Status |
 |---|---|
 | Scalar (Kirchhoff, X-ray blaze form) | **done**, validated |
-| Integral method (boundary integral, conical, undercut-capable) | **done**: perfect conductivity validated orderwise against PCGrate, and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010) with absolute efficiencies and recorded absorption |
+| Integral method (boundary integral, conical, undercut-capable) | **done**: perfect conductivity validated order by order against PCGrate, the commercial integral-method code, and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010) with absolute efficiencies and recorded absorption |
 | RCWA (in-plane, conical, off-plane; Li factorization, S-matrix) | contributed, not yet integrated |
 | C-method (Chandezon) | planned |
 
