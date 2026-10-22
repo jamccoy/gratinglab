@@ -75,6 +75,10 @@ $$n = n' + i k, \qquad k > 0$$
 The opposite time convention `exp(+iωt)` would require `n = n' - ik`. Optical constant
 tables must be checked against this on import. CXRO/Henke tables give δ and β with
 `n = 1 - δ + iβ`, which is already correct for `exp(-iωt)` with β > 0.
+refractiveindex.info gives `n` and `k` with `k ≥ 0`, also already in this
+convention; the few negative `k` values in its database (round-off, or
+Kramers-Kronig artifacts) are clipped to zero on import and recorded in the
+table's `source`.
 
 ---
 
@@ -462,6 +466,7 @@ convention may appear.
 |---|---|---|
 | PCGrate-SX `.txt` efficiency tables | import | 7 header lines; tab-separated; quoted `"Eff.TE(m,R)"` headers carry the order index and R/T flag; `--` marks missing/evanescent. Order mapping comes from the headers, never from a column offset |
 | CXRO / Henke optical constants | import | `(energy_eV, δ, β)` → `n = 1 − δ + iβ` on a wavelength grid |
+| refractiveindex.info YAML | import | Wavelength in **µm**. `n` and `k` tabulated, or `n` from one of nine dispersion formulas sampled adaptively to 1e-7; stored as `decrement = 1 − n`, `absorption = k`, so a glass has a negative decrement. `tabulated n2` is the nonlinear Kerr index and is refused |
 | PCGrate `.ari` refractive index | export | `wavelength_nm  δ  β`, space-delimited |
 | PCGrate `.ggp` polygonal border | import + export | Normalised: `t` on [0,1], `y` as a fraction of the period. **Carries no period, no provenance, no version.** Three header variants exist on disk; all are read, only the canonical one is written. A measured profile should reach a solver through `BoundaryProfile.to_problem` instead, which keeps the period |
 | Nanoscope `.spm` (AFM) | import | Binary. Heights in metres. The `Sens. Zsens` / `Sens. ZsensSens` distinction is load-bearing — the wrong one gives heights 5.13× too small |
