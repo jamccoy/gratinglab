@@ -1,5 +1,12 @@
 # gratinglab
 
+[![PyPI](https://img.shields.io/pypi/v/gratinglab)](https://pypi.org/project/gratinglab/)
+[![Python](https://img.shields.io/pypi/pyversions/gratinglab)](https://pypi.org/project/gratinglab/)
+[![tests](https://github.com/jamccoy/gratinglab/actions/workflows/test.yml/badge.svg)](https://github.com/jamccoy/gratinglab/actions/workflows/test.yml)
+[![License: BSD-3-Clause](https://img.shields.io/badge/license-BSD--3--Clause-blue)](https://github.com/jamccoy/gratinglab/blob/master/LICENSE)
+
+**[PyPI](https://pypi.org/project/gratinglab/)** · **[Documentation](https://github.com/jamccoy/gratinglab/wiki)** · **[Releases](https://github.com/jamccoy/gratinglab/releases)** · **[Issues](https://github.com/jamccoy/gratinglab/issues)**
+
 An open platform for diffraction grating groove metrology and efficiency analysis —
 from an AFM scan of a real grating to its diffraction efficiency, without leaving the
 package.
