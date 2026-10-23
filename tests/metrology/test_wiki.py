@@ -90,6 +90,17 @@ class TestContentStaysTrue:
         assert found is not None, f"{slug} missing"
         return found.markdown
 
+    def _prose(self, slug):
+        """
+        The page with its line wrapping collapsed.
+
+        These pages are hard-wrapped at about 80 columns, so a phrase long
+        enough to be worth pinning usually straddles a newline. Asserting
+        against the raw markdown would then fail when someone reflows a
+        paragraph, which is not a content change.
+        """
+        return re.sub(r'\s+', ' ', self._markdown(slug))
+
     def test_icc_page_states_the_measured_range(self):
         text = self._markdown('icc-correction')
         assert '0.097' in text and '0.429' in text, "measured ICC range not stated"
@@ -117,6 +128,59 @@ class TestContentStaysTrue:
         text = self._markdown('reading-outputs')
         assert 'SEM_deg' in text and 'SEM_corrected_deg' in text
         assert 'Row_group' in text, "the column that makes ICC computable is unlisted"
+
+    def test_flattening_page_separates_the_free_stage_from_the_costly_one(self):
+        """
+        The whole point of the page. Image flattening is free, profile
+        flattening is not, and the two numbers that say so are 0.49 deg across
+        the profile methods and 0.0003 deg for a non-affine image method.
+        """
+        text = self._markdown('flattening')
+        assert '0.49' in text, "the profile-flattening span is not stated"
+        assert '0.0003' in text, "the non-affine image-flattening effect is not stated"
+        assert '30.8524' in text, "the level_grooves angle is not stated"
+
+    def test_flattening_page_states_the_shipped_defaults(self):
+        """
+        `FLATTEN_FEATURE` defaults to `peaks`, not `both`.
+
+        An earlier version of this page marked `level_grooves` as the default
+        in a row that also listed the three features, which read as though
+        `both` were the default feature. The page now says which it is, and
+        this pins it to settings.py.
+        """
+        from gratinglab.metrology.settings import AnalysisSettings
+
+        text = self._prose('flattening')
+        defaults = AnalysisSettings()
+        assert defaults.flatten_feature == 'peaks'
+        assert defaults.flatten_method == 'level_grooves'
+        assert '`peaks`, not `both`' in text, (
+            "the page does not say which feature set is the default")
+        assert 'FLATTEN_EXCLUDE_EDGES' in text and '0.05' in text, (
+            "the edge-exclusion default is unlisted")
+
+    def test_flattening_page_gives_the_feature_detection_criteria(self):
+        """The two magic numbers in level_grooves, which live nowhere else."""
+        text = self._prose('flattening')
+        assert 'half a period' in text, "the separation criterion is not stated"
+        assert '20%' in text, "the prominence criterion is not stated"
+
+    def test_flattening_page_covers_all_three_flattenings(self):
+        """
+        There are three, and the export one is the easiest to get wrong.
+
+        Endpoint flattening is what keeps a .ggp profile from carrying a step
+        at the period boundary. The page used to describe two stages.
+        """
+        text = self._prose('flattening')
+        assert 'Endpoint flattening' in text, "the export levelling is undocumented"
+        assert 'three separate points' in text, "the page still claims two stages"
+
+    def test_flattening_page_records_the_period_dependency(self):
+        """level_grooves needs a period, so the period is not independent of it."""
+        text = self._prose('flattening')
+        assert 'period estimate' in text, "the ordering dependency is not stated"
 
 
 def test_markdown_files_are_package_data():
