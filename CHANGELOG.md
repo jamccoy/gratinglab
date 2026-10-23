@@ -12,6 +12,25 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+### Fixed
+
+- `flatten_profile`'s `level_grooves` method no longer fits its background to
+  whatever survived edge exclusion while reporting that it had used every
+  feature. Edge exclusion runs after feature detection, and on a trace whose
+  features sit near the ends it could leave one point, or none; the arrays had
+  already been overwritten, so the fit used the remnant and the message saying
+  otherwise was wrong. The exclusion is now skipped, with an accurate warning,
+  whenever it would leave fewer features than the requested order needs.
+- The same method no longer asks numpy for a polynomial the feature set cannot
+  determine. The guard admitted two features while `FLATTEN_POLY_ORDER`
+  defaults to 2, and a degree-k fit needs k+1 points, so the background came
+  back rank-deficient behind a `RankWarning` that nothing was reading. The
+  order is reduced to what the features support and the reduction is reported.
+  Both paths produced a background that looked like a fit and was not one,
+  which matters because flattening sets the plane every blaze angle on the
+  scan is quoted against. `tests/metrology/test_flatten_profile.py` covers
+  them; the four tests that pin the fixes fail against the previous code.
+
 ### Changed
 
 - The metrology window's Flattening page explains the levelling it documents
