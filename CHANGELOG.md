@@ -10,7 +10,13 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
-## Unreleased
+## 0.1.8 (2026-10-22)
+
+### Added
+
+- This changelog, linked from the README and the PyPI project page, and a
+  versioning policy in `docs/roadmap.md` saying what 0.2 and 1.0 will mean.
+  `tests/test_changelog.py` fails if the current version has no section.
 
 ### Changed
 
