@@ -2,6 +2,8 @@
 Core data processing functions for AFM analysis
 """
 import warnings
+from dataclasses import dataclass
+from typing import Optional
 
 import numpy as np
 from scipy.signal import find_peaks
@@ -180,8 +182,77 @@ def raw_data_multi_group(data, scan_x_size, n_groups=10):
     return disp_um, profiles_nm, group_info
 
 
+@dataclass(frozen=True)
+class FlatteningReport:
+    """
+    What `flatten_profile` did, as against what it was asked to do.
+
+    Flattening sets the plane every blaze angle on a scan is quoted against, so
+    a row group whose background was fitted by a fallback is not comparable with
+    one that got the method asked for. The warnings say so at the time; this is
+    the same information in a form the caller can store beside the result.
+
+    ``residual_rms_nm`` is the scatter of the fitted features about the
+    background, in nanometres: how far from a smooth low-order surface the lands
+    actually lie, and so how much the reference can be trusted. It is ``None``
+    for `linear` and `polynomial`, which fit the whole trace rather than
+    features -- their residual would be dominated by the groove depth and would
+    say nothing about flatness.
+
+    Read it with ``n_features`` beside it. A fit through exactly
+    ``poly_order + 1`` points passes through them all and reports a residual of
+    zero, which is arithmetic rather than a flat surface; ``dof`` is how many
+    points beyond that the fit had, and a residual with ``dof == 0`` means
+    nothing.
+    """
+
+    method_requested: str
+    method_used: str
+    poly_order_requested: int
+    poly_order_used: int
+    n_features: int
+    edge_exclusion_skipped: bool
+    residual_rms_nm: Optional[float]
+
+    @property
+    def dof(self) -> int:
+        """Features beyond the minimum the fitted order needed."""
+        if not self.n_features:
+            return 0
+        return max(0, self.n_features - (self.poly_order_used + 1))
+
+    @property
+    def fell_back(self) -> bool:
+        """True when the background is not the one that was asked for."""
+        return (self.method_used != self.method_requested
+                or self.poly_order_used != self.poly_order_requested
+                or self.edge_exclusion_skipped)
+
+    def summary(self) -> str:
+        """One line for a log or a summary file."""
+        text = self.method_used
+        if self.method_used != self.method_requested:
+            text += f" (asked for {self.method_requested})"
+        if self.poly_order_used != self.poly_order_requested:
+            text += f", degree {self.poly_order_used} not {self.poly_order_requested}"
+        if self.edge_exclusion_skipped:
+            text += ", edge exclusion skipped"
+        if self.residual_rms_nm is not None:
+            text += (f", {self.n_features} features, residual "
+                     f"{self.residual_rms_nm:.3f} nm")
+            if not self.dof:
+                text += " (exact fit, meaningless)"
+        return text
+
+
+def _feature_residual_rms(feature_x, feature_y, coeffs):
+    """RMS of the fitted features about the background they produced, in nm."""
+    residual = np.asarray(feature_y, dtype=float) - np.polyval(coeffs, feature_x)
+    return float(np.sqrt(np.mean(residual ** 2)))
+
+
 def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0, 
-                   feature='both', period_nm=None):
+                   feature='both', period_nm=None, return_report=False):
     """
     Remove background tilt/curvature from AFM profile
     
@@ -193,15 +264,29 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
             the edges would leave too few features to fit the requested order.
         feature: for 'level_grooves': 'peaks', 'troughs', or 'both'
         period_nm: estimated period for finding grooves (for 'level_grooves')
+        return_report: also return a :class:`FlatteningReport` describing what
+            was actually done, following the `return_n_edge_rejected` keyword
+            on `find_groove_positions`. Off by default so existing two-value
+            unpacking keeps working.
     
     Returns:
         y_flat: flattened profile
         background: the removed background
+        report: a FlatteningReport, only when `return_report` is true
     """
-    
+    # What was actually done, for the report. Each branch narrows these.
+    method_used = method
+    order_used = poly_order
+    n_features = 0
+    edge_exclusion_skipped = False
+    residual_rms = None
+
     if method == 'linear':
         poly_coeffs = np.polyfit(x, y, 1)
         background = np.polyval(poly_coeffs, x)
+        # `linear` is degree 1 by definition, so poly_order was never a request
+        # here and reporting a reduction would make every call look degraded.
+        order_used = poly_order
         
     elif method == 'polynomial':
         if exclude_edges > 0:
@@ -224,9 +309,12 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
                 UserWarning, stacklevel=2)
             poly_coeffs = np.polyfit(x, y, poly_order)
             background = np.polyval(poly_coeffs, x)
+            method_used = 'polynomial'
         else:
             poly_coeffs = np.polyfit(x[peaks], y[peaks], poly_order)
             background = np.polyval(poly_coeffs, x)
+            n_features = len(peaks)
+            residual_rms = _feature_residual_rms(x[peaks], y[peaks], poly_coeffs)
             
     elif method == 'level_grooves':
         if period_nm is None:
@@ -264,6 +352,8 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
                 UserWarning, stacklevel=2)
             poly_coeffs = np.polyfit(x, y, 1)
             background = np.polyval(poly_coeffs, x)
+            method_used = 'linear'
+            order_used = 1
         else:
             feature_x = np.array(feature_x)
             feature_y = np.array(feature_y)
@@ -286,6 +376,7 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
                         f"edge exclusion leaves {kept} feature(s), too few for a "
                         f"degree-{poly_order} background; using all of them",
                         UserWarning, stacklevel=2)
+                    edge_exclusion_skipped = True
 
             # A degree-k polynomial needs k+1 points to be determined. Reaching
             # here guarantees two, so the order is reduced rather than letting
@@ -299,11 +390,26 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
 
             poly_coeffs = np.polyfit(feature_x, feature_y, order)
             background = np.polyval(poly_coeffs, x)
+            order_used = order
+            n_features = len(feature_x)
+            residual_rms = _feature_residual_rms(feature_x, feature_y, poly_coeffs)
     else:
         raise ValueError(f"Unknown flattening method: {method}")
     
     y_flat = y - background
-    
+
+    if return_report:
+        report = FlatteningReport(
+            method_requested=method,
+            method_used=method_used,
+            poly_order_requested=poly_order,
+            poly_order_used=order_used,
+            n_features=n_features,
+            edge_exclusion_skipped=edge_exclusion_skipped,
+            residual_rms_nm=residual_rms,
+        )
+        return y_flat, background, report
+
     return y_flat, background
 
 
