@@ -1,21 +1,21 @@
 """The Setup tab: what optical constants are installed, and where from.
 
-It was a stub until the materials layer existed, saying so plainly rather than
-offering a coating field that did nothing -- an error or a no-op must never be
-dressed as a real choice (`docs/theory/scalar.md` §5, on why the obliquity
-factor was removed rather than kept as an "opt-in variant").
+Until the materials layer existed, this tab was a stub that stated as much
+instead of offering a coating field that did nothing, because an error or a
+no-op must never be presented as a real choice (`docs/theory/scalar.md` §5,
+on why the obliquity factor was removed instead of being kept as an "opt-in
+variant").
 
-The layer exists now, and the control it was waiting for did **not** land
+The layer now exists, but the control it was waiting for was not placed
 here. `coating` and `roughness` are :class:`~gratinglab.problem.Problem`
 fields, so they belong in the geometry dock beside the period: one `Problem`
 feeds every solver tab, and a second place to set it would be a second source
 of truth for the same value.
 
-What this tab owns instead is the *library* -- which materials are available,
-what they were derived from, and how to add one. That is genuinely tab-shaped
-(it is reference material, not an input), it duplicates no state, and it is
-the thing a user needs when the coating dropdown offers one entry and
-they wanted nickel.
+This tab instead owns the library: which materials are available, what they
+were derived from, and how to add one. That content suits a tab, since it is
+reference material and not an input, it duplicates no state, and it is what a
+user needs when the coating dropdown offers one entry and they wanted nickel.
 """
 
 from __future__ import annotations
@@ -31,9 +31,9 @@ __all__ = ["SetupTab", "library_page"]
 def library_page() -> str:
     """The tab's markdown, built from the installed tables.
 
-    Generated rather than written out, so it cannot drift from what
-    `materials.available()` returns -- the failure mode of a
-    hand-maintained list is that it is right on the day it is written.
+    It is generated instead of written out by hand, so it cannot drift from
+    what `materials.available()` returns, whereas a hand-maintained list is
+    correct only on the day it is written.
     """
     from ...materials import LIBRARY_ENV, available, library_dirs, lookup
 
@@ -180,10 +180,10 @@ mistaken for an order passing off.
 
 
 class SetupTab(QWidget):
-    """Reference material, not a form.
+    """Reference material, presented as a page instead of a form.
 
-    Has no ``solve_requested`` or ``build_options`` -- it is not
-    part of the solve/cancel contract every solver tab implements, and
+    It has no ``solve_requested`` or ``build_options``, because it is not
+    part of the solve/cancel contract that every solver tab implements, and
     ``MainWindow`` never routes to it.
     """
 

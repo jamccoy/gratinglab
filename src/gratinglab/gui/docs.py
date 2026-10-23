@@ -1,27 +1,28 @@
-"""Locating each solver's theory page.
+"""Locate each solver's theory page.
 
-Pure and toolkit-free, like :mod:`gratinglab.gui.state`, because this is the one
-piece of "which page goes with which solver" logic worth testing on its own.
+This module is pure and independent of any toolkit, like
+:mod:`gratinglab.gui.state`, because the logic that matches pages to solvers
+is worth testing on its own.
 
-``docs/theory/`` lives at the **repo root**, outside ``src/gratinglab/``, so it
-ships in a development checkout but not in a built wheel. That is a real
-limitation of a pre-alpha, locally-run tool -- not something to paper over by
-duplicating markdown into package data before there is a second solver to
-justify it. :func:`theory_pages` degrades to an explanatory, unavailable entry
-rather than raising when the directory cannot be found.
+``docs/theory/`` lives at the repository root, outside ``src/gratinglab/``, so
+it ships in a development checkout but not in a built wheel. This is a real
+limitation of a pre-alpha tool that is run locally. It is not worked around by
+duplicating the markdown into package data, since there is not yet a second
+solver to justify that. When the directory cannot be found,
+:func:`theory_pages` returns an unavailable entry with an explanation instead
+of raising.
 
-Every *registered* solver gets an entry, available or not, so the Help menu
-always reflects what solvers exist. A solver with no page yet still shows up
-and says so, rather than silently vanishing from the menu until someone
-remembers to write it.
+Every registered solver receives an entry, whether or not its page is
+available, so the Help menu always reflects which solvers exist. A solver
+without a page still appears in the menu and states that its page is missing.
 
 Alongside the per-solver pages, :func:`general_pages` returns entries that are
-not tied to any solver -- currently just the normative ``conventions.md``,
-which every solver's page cross-references for shared geometry (the
-generalized grating equation, the angle conventions) rather than duplicating
-it. Kept as a separate function rather than folded into :func:`theory_pages`
-so that function's existing contract -- one entry per registered solver, no
-more, no less -- stays exactly true; a test asserts it.
+not tied to any solver. At present this includes the normative
+``conventions.md``, which every solver's page cross-references for the shared
+geometry (the generalized grating equation and the angle conventions) instead
+of duplicating it. These entries are returned by a separate function so that
+the contract of :func:`theory_pages`, exactly one entry per registered solver,
+continues to hold; a test asserts it.
 """
 
 from __future__ import annotations
@@ -79,7 +80,7 @@ class TheoryPage:
         The theory file, if found.
     text
         The page content if available, otherwise a short explanation of why
-        not -- always something the viewer can show, never ``None``.
+        it is not. It is always text the viewer can show, and never ``None``.
     rigorous
         The solver's own ``Capabilities.rigorous``. Used to decide whether the
         viewer prefixes an approximate-method banner.
@@ -97,9 +98,9 @@ def display_title(name: str) -> str:
     """A solver's human-readable name, e.g. ``"scalar"`` -> ``"Scalar
     (Kirchhoff)"``.
 
-    Public so both the Help menu and a solver's own tab label read the same
-    name -- there is exactly one place that decides what a solver is called,
-    not two that could quietly drift apart.
+    It is public so that the Help menu and a solver's own tab label read the
+    same name. A solver's display name is therefore decided in one place, and
+    the two cannot drift apart.
     """
     return _TITLES.get(name, name)
 
@@ -107,9 +108,9 @@ def display_title(name: str) -> str:
 def find_theory_root(start: Path | None = None) -> Path | None:
     """Search upward from ``start`` for a ``docs/theory`` directory.
 
-    Returns ``None`` rather than raising if none is found within
-    :data:`_MAX_SEARCH_DEPTH` levels -- e.g. running from an installed wheel,
-    where ``docs/`` was never packaged.
+    Returns ``None`` instead of raising if none is found within
+    :data:`_MAX_SEARCH_DEPTH` levels, as happens when running from an installed
+    wheel, where ``docs/`` was never packaged.
     """
     here = (start or Path(__file__)).resolve()
     for candidate in [here, *here.parents][: _MAX_SEARCH_DEPTH + 1]:
@@ -152,9 +153,9 @@ def _load_page(
 def theory_pages() -> tuple[TheoryPage, ...]:
     """One entry per registered solver, in registration order.
 
-    Exactly one entry per name in ``available_solvers()`` -- a solver with no
-    page yet still appears, marked unavailable, rather than being silently
-    omitted until someone remembers to write it.
+    There is exactly one entry per name in ``available_solvers()``. A solver
+    with no page yet still appears, marked unavailable, so that it is not
+    silently omitted from the menu.
     """
     root = find_theory_root()
     return tuple(
@@ -172,9 +173,9 @@ def theory_pages() -> tuple[TheoryPage, ...]:
 def general_pages() -> tuple[TheoryPage, ...]:
     """Reference pages not tied to any one solver.
 
-    ``rigorous=True`` throughout: these are geometry/convention references,
-    not a solver's approximation, so the viewer's approximate-method banner
-    never applies to them.
+    ``rigorous=True`` is set for all of them. They are references on geometry
+    and conventions and describe no solver's approximation, so the viewer's
+    approximate-method banner never applies to them.
     """
     root = find_theory_root()
     return tuple(

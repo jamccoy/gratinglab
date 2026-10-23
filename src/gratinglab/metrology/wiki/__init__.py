@@ -1,14 +1,15 @@
 """
 The wiki: how this analysis works, in prose.
 
-Pure - no Qt, no plotting, no file writing. The GUI displays these pages, but it
-does not own them: they describe the analysis rather than the interface, so a
-command-line ``--explain`` could print exactly the same text.
+The module is pure, with no Qt, no plotting and no file writing. The GUI
+displays these pages but does not own them: they describe the analysis and not
+the interface, so a command-line ``--explain`` could print exactly the same
+text.
 
-Pages are markdown files sitting next to this module and shipped as package data,
-so they are present in an installed copy and not only in a checkout. Ordering is
-explicit rather than alphabetical, because a reader should meet the overview
-before the correction it motivates.
+Pages are markdown files sitting next to this module and shipped as package
+data, so they are present in an installed copy and not only in a checkout. The
+ordering is explicit instead of alphabetical, because a reader should meet the
+overview before the correction it motivates.
 """
 from __future__ import annotations
 
@@ -72,9 +73,10 @@ def pages() -> tuple[WikiPage, ...]:
     """
     Every wiki page, in reading order.
 
-    Read from disk at call time rather than cached at import, so editing a page
-    and reopening the tab shows the edit - the pages are prose under active
-    revision, and a stale cache would be a confusing thing to debug.
+    The pages are read from disk at call time instead of being cached at
+    import, so editing a page and reopening the tab shows the edit. The pages
+    are prose under active revision, and a stale cache would be confusing to
+    debug.
     """
     found = {path.stem: path for path in sorted(WIKI_DIR.glob("*.md"))}
 

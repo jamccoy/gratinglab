@@ -1,21 +1,23 @@
-"""The app icon, drawn rather than stored.
+"""The app icon, which is drawn in code and not stored as an image.
 
-Rendered from matplotlib because this machine has no SVG rasteriser
-(``rsvg-convert`` / ``inkscape``), and generating the artwork keeps it
-reproducible and editable in the same language as the rest of the project.
+The icon is rendered with matplotlib because this machine has no SVG
+rasteriser (``rsvg-convert`` / ``inkscape``), and generating the artwork keeps
+it reproducible and editable in the same language as the rest of the project.
 
-The motif is a blazed sawtooth with an AFM cantilever and tip riding across it --
-the measurement this software performs. Few, thick elements, so it
-stays legible at 16 px, which is where most icons fail.
+The motif is a blazed sawtooth with an AFM cantilever and tip riding across
+it, which depicts the measurement this software performs. It uses few, thick
+elements so that it stays legible at 16 px, the size at which most icons
+become illegible.
 
-Sibling project GratingLab uses a sawtooth with diffracted orders fanning out of
-it. Keeping the tip here rather than the orders is what distinguishes the two in
-a Dock at small sizes: this one measures the groove, that one models what the
-groove does to light.
+The sibling project GratingLab uses a sawtooth with diffracted orders fanning
+out of it. Showing the tip here in place of the orders is what distinguishes
+the two in a Dock at small sizes: this one measures the groove, and the other
+models what the groove does to light.
 
-matplotlib is imported inside ``render`` rather than at module level: importing
-``gratinglab.metrology.gui`` must stay cheap, since that is what raises the friendly
-"PySide6 is an optional extra" message. ``tests/test_gui_boundary.py`` checks it.
+matplotlib is imported inside ``render`` and not at module level, because
+importing ``gratinglab.metrology.gui`` must stay cheap, since that is what
+raises the friendly "PySide6 is an optional extra" message.
+``tests/test_gui_boundary.py`` checks it.
 
 ``tools/make_icon.py`` turns this into a macOS ``.icns``.
 """

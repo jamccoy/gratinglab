@@ -1,8 +1,8 @@
 """
-Analysis settings as a value, rather than as module state.
+Analysis settings held as a value instead of as module state.
 
 `config.py` remains the file a user edits, and is still the default source of
-every value here. What this module adds is the ability to *pass* a different
+every value here. What this module adds is the ability to pass a different
 configuration without mutating anything.
 
 Before this existed, the only way to run an analysis with different parameters
@@ -11,8 +11,9 @@ was to rebind names inside `analyzer` itself:
     analyzer.FACET_TRIM = 0.2
 
 which worked because `analyzer` binds its configuration at import time. The GUI
-did exactly that. It is also why a CLI, a test, or two analyses with different
-settings in one process were all impossible. Settings now travel as an argument.
+did exactly that. The same binding made a CLI, a test, or two analyses with
+different settings in one process impossible. Settings now travel as an
+argument.
 """
 from dataclasses import dataclass, replace
 from typing import Optional
@@ -39,7 +40,7 @@ VALID_FLATTEN_FEATURES = ('peaks', 'troughs', 'both')
 
 @dataclass(frozen=True)
 class AnalysisSettings:
-    """Every knob the blaze-angle analysis reads. Immutable by design."""
+    """Every parameter the blaze-angle analysis reads, immutable by design."""
 
     # Scan
     scan_x_size: float = 2.0
@@ -149,7 +150,7 @@ class AnalysisSettings:
         )
 
     def with_(self, **changes):
-        """A copy with some fields replaced - the frozen equivalent of setattr"""
+        """A copy with some fields replaced: the frozen equivalent of setattr."""
         return replace(self, **changes)
 
     def validate(self):

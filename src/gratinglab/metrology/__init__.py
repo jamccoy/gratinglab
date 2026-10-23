@@ -1,20 +1,21 @@
 """
-Groove metrology: measured surfaces, not modelled ones.
+Groove metrology: the analysis of measured grating surfaces.
 
-Reads AFM scans of a diffraction grating and produces two things: blaze angles
-per groove with row-group statistics, and one averaged groove normalised to a
-period -- the boundary profile that
-:class:`gratinglab.profiles.FromProfileData` consumes and every solver can be
-driven from.
+This subpackage reads AFM scans of a diffraction grating and produces two
+outputs: blaze angles per groove with row-group statistics, and one averaged
+groove normalised to a period. The averaged groove is the boundary profile
+that :class:`gratinglab.profiles.FromProfileData` consumes and from which
+every solver can be driven.
 
-This is the half of the project that measures. The rest of :mod:`gratinglab`
-computes what a given geometry would do; here the geometry arrives from an
-instrument, with an uncertainty attached. Conventions are shared and normative:
-see ``docs/conventions.md``, particularly §1 on units -- metres at the
-instrument boundary, microns laterally, nanometres in profile space, and a
-dimensionless fraction of the period at the boundary-file boundary.
+This is the part of the project that performs measurement. The rest of
+:mod:`gratinglab` computes what a given geometry would do, whereas here the
+geometry arrives from an instrument with an uncertainty attached. The
+conventions are shared and normative; see ``docs/conventions.md``,
+particularly §1 on units, which specifies metres at the instrument boundary,
+microns laterally, nanometres in profile space, and a dimensionless fraction
+of the period at the boundary-file boundary.
 
-Requires the ``metrology`` extra::
+The subpackage requires the ``metrology`` extra::
 
     pip install -e '.[metrology]'
 """

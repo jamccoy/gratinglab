@@ -1,9 +1,9 @@
 """Solver output, and the provenance that makes it citable.
 
-A bare efficiency number is not a result. Comparison plots across methods are
-only credible if every point carries the method, the version, the truncation it
-was computed at, and the evidence that it converged -- so :class:`Provenance` is
-mandatory, not optional.
+An efficiency number alone does not constitute a result. Comparison plots across
+methods are credible only if every point carries the method, the version, the
+truncation it was computed at, and the evidence that it converged, and for that
+reason :class:`Provenance` is mandatory.
 """
 
 from __future__ import annotations
@@ -21,10 +21,10 @@ __all__ = ["Provenance", "OrderEfficiency", "EfficiencyScan"]
 def _frozen_array(values: Any, dtype: Any) -> np.ndarray:
     """Return an independent, read-only copy of ``values``.
 
-    Copying matters: freezing the caller's array in place would silently make
-    *their* object read-only, a nasty surprise if they meant to reuse the
-    buffer. Freezing matters because reference data that can be mutated after
-    construction is reference data that cannot be trusted.
+    The copy is needed because freezing the caller's array in place would
+    silently make the caller's object read-only, which is unexpected if the
+    buffer was meant to be reused. The freeze is needed because reference data
+    that can be mutated after construction cannot be trusted.
     """
     array = np.array(values, dtype=dtype, copy=True)
     array.setflags(write=False)
@@ -55,8 +55,8 @@ class Provenance:
         Seconds of wall clock, for method-cost comparisons.
     warnings
         Validity-guard breaches (e.g. scalar theory used past its regime).
-        Recorded rather than suppressed -- mapping where a model breaks down is
-        a deliverable.
+        These are recorded and not suppressed, because mapping where a model
+        breaks down is one of the project's deliverables.
     notes
         Free-form extras: solver options, boundary conditions, anything needed
         to reproduce.
@@ -84,10 +84,10 @@ class Provenance:
         """Hash over the identifying fields only, skipping ``notes``.
 
         ``notes`` is a free-form dict and therefore unhashable, but provenance
-        needs to work as a dict key -- the comparison harness groups results by
-        it. Two records differing only in ``notes`` collide on hash and are
-        still distinguished by ``__eq__``, which is exactly what the hash
-        contract permits.
+        needs to work as a dict key, since the comparison harness groups
+        results by it. Two records differing only in ``notes`` collide on hash
+        and are still distinguished by ``__eq__``, which the hash contract
+        permits.
         """
         return hash(
             (
@@ -130,7 +130,7 @@ class OrderEfficiency:
         return self.orders[self.propagating]
 
     def energy_balance_error(self) -> float:
-        """``|total - 1|`` -- the lossless self-check. Meaningless if absorbing."""
+        """``|total - 1|``, the lossless self-check. Meaningless if absorbing."""
         return abs(self.total - 1.0)
 
 
@@ -142,8 +142,8 @@ class EfficiencyScan:
     comparison harness works in.
 
     ``efficiency`` is ``(n_wavelengths, n_orders)``. Orders that do not
-    propagate at a given wavelength carry ``0.0`` with ``propagating=False`` --
-    never ``NaN``, and never dropped, so that column *j* means order
+    propagate at a given wavelength carry ``0.0`` with ``propagating=False``.
+    They are never ``NaN`` and are never dropped, so that column j means order
     ``orders[j]`` at every wavelength (``docs/conventions.md`` 4).
 
     ``absorption`` is the per-wavelength absorbed fraction for solvers that

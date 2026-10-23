@@ -1,9 +1,9 @@
 """Core grating geometry: the generalized grating equation and order bookkeeping.
 
-All angles in this module are in **radians**. Degrees are converted once, at the
+All angles in this module are in radians. Degrees are converted once, at the
 public API boundary (see :mod:`gratinglab.illumination`).
 
-Symbols follow ``docs/conventions.md`` -- in particular ``period`` and ``depth``
+Symbols follow ``docs/conventions.md``. In particular, ``period`` and ``depth``
 are always spelled out, because the two primary source references use ``d`` to
 mean opposite things.
 """
@@ -45,14 +45,14 @@ def sin_beta(
 
     ``sin_gamma = 1`` is the in-plane (classical) case. Values with
     ``|sin_beta| > 1`` correspond to evanescent orders; they are returned as-is
-    rather than clipped, so callers can test them with :func:`is_propagating`.
+    without clipping, so callers can test them with :func:`is_propagating`.
 
     Parameters
     ----------
     order
         Diffraction order index :math:`m`. Scalar or array.
     wavelength, period
-        Both in nm (any consistent unit works -- only the ratio enters).
+        Both in nm (any consistent unit works, since only the ratio enters).
     sin_alpha
         Sine of the azimuthal incidence angle.
     sin_gamma
@@ -78,7 +78,7 @@ def cos_beta(sin_beta_m: ArrayLike, transmitted: bool = False) -> NDArray[np.flo
     r"""Return :math:`\cos\beta_m`, signed by branch.
 
     Reflected orders have :math:`\cos\beta_m > 0`; transmitted orders have
-    :math:`\cos\beta_m < 0` (``docs/conventions.md`` §4 -- we do not flip the
+    :math:`\cos\beta_m < 0` (``docs/conventions.md`` §4; we do not flip the
     sign of :math:`\sin\beta_m` for transmission).
 
     Evanescent orders yield ``nan``; they carry no propagation direction.
@@ -112,9 +112,10 @@ def order_range(
     Solves :math:`|\sin\alpha + m\lambda/(p\sin\gamma)| \le 1` for integer
     :math:`m`. Always includes ``m = 0``.
 
-    The result is contiguous, so it is safe to use as a column index basis --
-    but do not: order mapping should come from an explicit index array, never
-    from a positional offset (``docs/conventions.md`` §4).
+    The result is contiguous, so it would be safe to use as a column index
+    basis. It should not be used that way, however: order mapping should come
+    from an explicit index array and never from a positional offset
+    (``docs/conventions.md`` §4).
     """
     scale = period * sin_gamma / wavelength
     lo = int(np.ceil((sin_alpha - 1.0) * scale))
@@ -141,34 +142,36 @@ def flux_obliquity(cos_alpha: ArrayLike, cos_beta_m: ArrayLike) -> NDArray[np.fl
     .. math::
         O_m = \frac{4\cos\alpha\,\cos\beta_m}{(\cos\alpha + \cos\beta_m)^2}
 
-    Multiplying :math:`|G_m|^2` by this is what makes scalar theory agree with
-    **first-order Rayleigh perturbation theory** in the shallow-groove limit,
+    Multiplying :math:`|G_m|^2` by this factor makes scalar theory agree with
+    first-order Rayleigh perturbation theory in the shallow-groove limit,
     where both are valid and must therefore give the same answer. Perturbation
-    theory says :math:`\eta_m = 4k_{z,0}k_{z,m}|\hat{g}_m|^2`; the bare Fourier
-    coefficient gives :math:`k_{z,0}` and :math:`k_{z,m}` only through their
-    *sum*, and this is exactly the ratio between the two. See
+    theory gives :math:`\eta_m = 4k_{z,0}k_{z,m}|\hat{g}_m|^2`; the bare Fourier
+    coefficient contains :math:`k_{z,0}` and :math:`k_{z,m}` only through their
+    sum, and this factor is exactly the ratio between the two. See
     ``tests/test_perturbation.py``, which derives it from two closed forms with
     no solver in the loop.
 
-    Three properties, all of them required:
+    The factor has three properties, all of which are required:
 
-    - **Symmetric** under :math:`\alpha \leftrightarrow \beta_m`, so Lorentz
-      reciprocity survives it untouched. That is what makes it admissible at
-      all: the obliquity factor of thesis Appendix D,
-      :math:`\cos\beta_m/\cos\alpha`, is the *asymmetric* one and breaks
-      reciprocity, which is why ``docs/theory/scalar.md`` rejected it. The
-      rejection was right; the conclusion that no flux factor belongs was not.
-    - **At most 1**, by AM-GM, with equality exactly when
-      :math:`\cos\alpha = \cos\beta_m` -- Littrow, specular, and every
-      :math:`m = 0` (where :math:`\beta_0 = -\alpha`). So it can only reduce an
-      efficiency, and it leaves the shallow-groove energy identity alone.
-    - **Vanishes at grazing exit**, :math:`\cos\beta_m \to 0`. An order about to
-      pass off carries no flux through a plane parallel to the surface, and the
-      unfactored :math:`|G_m|^2` claimed it did.
+    - Symmetric: under :math:`\alpha \leftrightarrow \beta_m` it is unchanged,
+      so Lorentz reciprocity survives it untouched, and this is what makes it
+      admissible. The obliquity factor of thesis Appendix D,
+      :math:`\cos\beta_m/\cos\alpha`, is asymmetric and breaks reciprocity,
+      which is why ``docs/theory/scalar.md`` rejected it. That rejection was
+      correct, but the conclusion drawn from it, that no flux factor belongs,
+      was mistaken.
+    - Bounded: it is at most 1, by AM-GM, with equality exactly when
+      :math:`\cos\alpha = \cos\beta_m` (Littrow, specular, and every
+      :math:`m = 0`, where :math:`\beta_0 = -\alpha`). It can therefore only
+      reduce an efficiency, and it leaves the shallow-groove energy identity
+      alone.
+    - Vanishing at grazing exit, :math:`\cos\beta_m \to 0`. An order about to
+      pass off carries no flux through a plane parallel to the surface,
+      whereas the unfactored :math:`|G_m|^2` assigned it some.
 
-    Both arguments are cosines, not angles -- the callers already have them from
+    Both arguments are cosines. The callers already have them from
     :func:`cos_beta` and :attr:`Illumination.cos_alpha`, and converting to
-    angles and back would be a chance to lose a sign.
+    angles and back would be an opportunity to lose a sign.
     """
     cos_alpha = np.asarray(cos_alpha, dtype=np.float64)
     cos_beta_m = np.asarray(cos_beta_m, dtype=np.float64)
@@ -180,21 +183,22 @@ def sin_facet_graze(
 ) -> NDArray[np.float64]:
     r"""":math:`\sin\zeta = \sin\gamma\,\cos(\text{tilt} - \text{angle})`, unclipped.
 
-    The vector form of :func:`facet_graze`, and **not** wrapped in
-    ``arcsin``. Two reasons:
+    This is the vector form of :func:`facet_graze`, and it is deliberately not
+    wrapped in ``arcsin``, for two reasons:
 
-    - A **negative** value is the meaningful signal that the facet is turned
-      away from the direction in question -- back-facing, and contributing
-      nothing. ``arcsin`` of a negative number is a perfectly good angle and
-      would hide that; clipping to zero would hide it too. A caller resolving
-      reflectivity across a groove tests this sign to build its visibility mask.
+    - A negative value is the meaningful signal that the facet is turned away
+      from the direction in question, that is, back-facing and contributing
+      nothing. ``arcsin`` of a negative number is a valid angle and would hide
+      that signal, and clipping to zero would hide it as well. A caller
+      resolving reflectivity across a groove tests this sign to build its
+      visibility mask.
     - ``tilt`` varies point by point along a groove, so this is called on whole
       arrays where :func:`facet_graze` takes scalars.
 
     ``angle`` is :math:`\alpha` for the incident direction and :math:`\beta_m`
-    for a diffracted one. It is spelled generically because the two uses are the
-    same formula: reflection off a tilted facet does not care which way the
-    light is going, which is the symmetry that keeps a groove-resolved
+    for a diffracted one. It is named generically because the two uses share
+    one formula: reflection off a tilted facet is independent of the direction
+    in which the light travels, and that symmetry keeps a groove-resolved
     reflectivity model reciprocal.
     """
     tilt = np.asarray(tilt, dtype=np.float64)
@@ -207,32 +211,33 @@ def horizon_visible(
 ) -> NDArray[np.bool_]:
     r"""Which points on the groove a ray at ``angle`` can reach.
 
-    The mask for **cast** shadows -- the ones the groove apex throws across
-    the trough onto surface that faces the ray perfectly well. The local
-    orientation test (:func:`sin_facet_graze` ``> 0``) sees only
-    *self*-shadowing, a facet turned away from the ray; on the reference
-    sawtooth at its working angles the two differ by a fraction of a percent
-    of the period on the incident side and by 10-50% on the exit side, which
-    is why this function exists (``docs/findings.md``).
+    This is the mask for cast shadows, which the groove apex throws across the
+    trough onto surface that otherwise faces the ray. The local orientation
+    test (:func:`sin_facet_graze` ``> 0``) detects only self-shadowing, a
+    facet turned away from the ray. On the reference sawtooth at its working
+    angles the two differ by a fraction of a percent of the period on the
+    incident side and by 10-50% on the exit side, which is why this function
+    exists (``docs/findings.md``).
 
-    The half-cone angle is absent. The surface is invariant
-    along the grooves, so a 3D ray occludes exactly as its projection into the
-    transverse plane does, and ``angle`` is the transverse azimuth --
-    :math:`\alpha` for the incident direction, :math:`\beta_m` for a
+    The half-cone angle does not appear. The surface is invariant along the
+    grooves, so a 3D ray occludes exactly as its projection into the
+    transverse plane does, and ``angle`` is the transverse azimuth:
+    :math:`\alpha` for the incident direction and :math:`\beta_m` for a
     diffracted one, measured from the normal. :math:`\gamma` scales the ray's
-    groove-parallel component, which slides *along* the invariant direction
+    groove-parallel component, which slides along the invariant direction
     and can neither create nor remove an occlusion.
 
-    The travel direction is easy to get wrong. The profile parameter runs against
-    the dispersion direction (``docs/findings.md``, "The profile parameter
-    runs backwards"; conventions section 3), so a ray with ``angle > 0``
-    travels toward **+t** and its occluders sit at *smaller* ``t``. Getting
-    this backwards does not fail loudly -- it reports shadows on the wrong
-    facet, which on a sawtooth mostly coincides with the self-shadowing mask
-    and looks plausible. The anchor that pins it: on an ideal sawtooth with
-    blaze slope :math:`s_b`, anti-blaze slope :math:`s_a` and apex at
-    :math:`t_a`, a ray at ``angle`` :math:`> \operatorname{arccot} s_a`
-    (19.5 deg for the 29.5/70.5 reference groove) throws a shadow of width
+    The travel direction is easy to get wrong. The profile parameter runs
+    against the dispersion direction (``docs/findings.md``, "The profile
+    parameter runs backwards"; conventions section 3), so a ray with
+    ``angle > 0`` travels toward +t and its occluders sit at smaller ``t``.
+    Getting this backwards does not produce an obvious failure. It reports
+    shadows on the wrong facet, which on a sawtooth mostly coincides with the
+    self-shadowing mask and looks plausible. The convention is fixed by the
+    following anchor: on an ideal sawtooth with blaze slope :math:`s_b`,
+    anti-blaze slope :math:`s_a` and apex at :math:`t_a`, a ray at ``angle``
+    :math:`> \operatorname{arccot} s_a` (19.5 deg for the 29.5/70.5 reference
+    groove) throws a shadow of width
 
     .. math::
         \Delta = (1 - t_a)\,\frac{s_a - s_r}{s_b + s_r}, \qquad
@@ -245,18 +250,18 @@ def horizon_visible(
     :math:`O(n)`: with :math:`u(t) = g(t) + p\,\cot|\theta|\,t` (sign of the
     linear term following the travel direction), a point is lit iff
     :math:`u` at that point matches the running maximum of :math:`u` over
-    everything upstream of it. Upstream whole periods enter in closed form --
+    everything upstream of it. Upstream whole periods enter in closed form:
     each sits exactly :math:`p\cot|\theta|` lower than the last, so only the
-    nearest one can ever compete -- which is what removes any need to tile.
+    nearest one can ever compete, and this removes any need to tile.
 
     Parameters
     ----------
     height_nm
-        Groove height in nm on a **uniform** grid over one period,
-        ``t = arange(n)/n``. Uniformity is required: the linear term is
-        built from the index.
+        Groove height in nm on a uniform grid over one period,
+        ``t = arange(n)/n``. Uniformity is required because the linear term
+        is built from the index.
     period
-        Groove period in nm -- the same unit as ``height_nm``, because the
+        Groove period in nm, in the same unit as ``height_nm``, because the
         ray's run-to-drop ratio compares the two directly.
     angle
         Transverse azimuth of the ray in radians, from the grating normal.
@@ -271,17 +276,17 @@ def horizon_clearance(
 ) -> NDArray[np.float64]:
     r"""Signed height (nm) of each point above the ray horizon at ``angle``.
 
-    The continuous function behind :func:`horizon_visible`: how far each
-    point sits above (positive, lit) or below (negative, cast-shadowed) the
-    highest upstream obstruction, measured along the ray direction. Exposed
-    separately because a quadrature that wants sub-cell shadow boundaries
-    needs the crossing, and a boolean mask has already thrown it away --
-    the sign of the clearance IS the mask.
+    This is the continuous function behind :func:`horizon_visible`: how far
+    each point sits above (positive, lit) or below (negative, cast-shadowed)
+    the highest upstream obstruction, measured along the ray direction. It is
+    exposed separately because a quadrature that wants sub-cell shadow
+    boundaries needs the crossing, which a boolean mask has already
+    discarded. The sign of the clearance is the mask.
 
-    The horizon here is **exclusive** -- built from strictly-upstream points
-    -- so the clearance is genuinely positive on lit terrain (each lit point
-    clears the point before it) rather than identically zero, and crosses
-    zero transversally at a shadow boundary. ``clearance >= 0`` is exactly
+    The horizon here is exclusive, built from strictly-upstream points, so the
+    clearance is strictly positive on lit terrain (each lit point clears the
+    point before it) instead of identically zero, and it crosses zero
+    transversally at a shadow boundary. ``clearance >= 0`` is exactly
     the inclusive-prefix mask of :func:`horizon_visible`, whose docstring
     carries the derivation, the sign conventions, and the closed-form anchor.
     """
@@ -318,36 +323,36 @@ def horizon_weights(
     every shadow boundary to the nearest grid point, which puts an
     :math:`O(1)` error in one cell per boundary and drags an integral over
     the lit region down to :math:`O(n^{-1})` convergence. Here each boundary
-    is located *inside* its cell and the nearest lit-facet sample absorbs the
+    is located inside its cell and the nearest lit-facet sample absorbs the
     sub-cell lit length: interior samples keep weight 1 or 0, and a boundary
     sample carries :math:`\tfrac12 + x` of a cell, where :math:`x` is the
-    crossing's offset from it. Shadow-side samples are never weighted -- past
-    the boundary the integrand's value is the occluded facet's, and no
-    fraction of it belongs in a lit-region integral.
+    crossing's offset from it. Shadow-side samples are never weighted, because
+    past the boundary the integrand's value is that of the occluded facet,
+    and no fraction of it belongs in a lit-region integral.
 
-    The boundary locations come from the geometry, not from interpolating
-    the mask, and three facts make them exact for **polygonal profiles**
+    The boundary locations are computed from the geometry instead of by
+    interpolating the mask. Three facts make them exact for polygonal profiles
     (``Blazed``, ``Lamellar``, and every measured boundary) and
-    :math:`O(n^{-2})`-accurate for smooth ones -- each learned by measuring
-    a failed simpler scheme, see ``docs/findings.md``:
+    :math:`O(n^{-2})`-accurate for smooth ones; each was learned by measuring
+    a simpler scheme that failed (see ``docs/findings.md``):
 
-    - A shadow *begins* at a crest of the ray-adapted height
+    - A shadow begins at a crest of the ray-adapted height
       :math:`u = g + p\cot|\theta|\,t`, usually a profile corner that sits
-      between samples. The corner is recovered by intersecting the secant
-      through the two samples on each side -- and the lit-side pair must be
+      between samples. The corner is recovered by intersecting the secants
+      through the two samples on each side, and the lit-side pair must be
       ``(i-2, i-1)``, because the last discretely-lit sample can already
       sit past the corner (its running-max status can come from an
       increment that spans the crest).
-    - Every shadow stretch is occluded by **its own entry crest**: a lit
+    - Every shadow stretch is occluded by its own entry crest: a lit
       point is at its running maximum, so nothing upstream stands higher.
-      The stretch therefore *ends* where :math:`u` climbs back to the entry
+      The stretch therefore ends where :math:`u` climbs back to the entry
       corner's height, extrapolated from the last two shadow samples.
     - A stretch that wraps through :math:`t = 0` has its level reduced by
       one period's run :math:`p\cot|\theta|`, exactly as whole upstream
       periods enter the mask.
 
     Negative ``angle`` mirrors the profile, runs the same scan, and mirrors
-    back. Same arguments and conventions as :func:`horizon_visible`; the sum
+    back. The arguments and conventions are those of :func:`horizon_visible`; the sum
     of weights over :math:`n` is the lit fraction of the period, to machine
     precision on a polygon.
     """
@@ -420,8 +425,9 @@ def facet_graze(gamma: float, blaze_angle: float, alpha: float) -> float:
     This is the angle that must stay below the critical angle for total
     external reflection, :math:`\theta_c \approx \sqrt{2\delta_n}`.
 
-    The scalar case of :func:`sin_facet_graze`, and defined in terms of it so
-    there is one formula rather than two that have to be kept agreeing.
+    This is the scalar case of :func:`sin_facet_graze`, and it is defined in
+    terms of that function so that there is one formula to maintain instead of
+    two that must be kept in agreement.
     """
     return float(np.arcsin(sin_facet_graze(gamma, blaze_angle, alpha)))
 
@@ -449,7 +455,7 @@ def blaze_wavelength(
 
     This is ISSI eq. following (15). It agrees exactly with the thesis form
     :math:`\lambda_b = 2 p \sin\gamma \sin\delta \cos(\delta-\alpha)/m`
-    (Appendix-D.tex:666) -- the two were cross-checked and match.
+    (Appendix-D.tex:666); the two were cross-checked and match.
 
     ``order = 0`` yields ``inf``: zeroth order has no blaze condition.
     """
@@ -469,10 +475,10 @@ def interference_factor(s: ArrayLike, n_grooves: int) -> NDArray[np.float64]:
 
     This is not applied to order efficiencies. At an exact
     diffraction order ``s = mπ`` and the factor equals 1, so multiplying by it
-    would change nothing. Its role is the *angular line shape* around each
-    order -- the link to resolving power, which is a different question from
-    how much power lands in order ``m``. :mod:`gratinglab.resolution` is the
-    consumer that asks it.
+    would change nothing. Its role is to give the angular line shape around
+    each order, which is the link to resolving power and is a different
+    question from how much power lands in order ``m``.
+    :mod:`gratinglab.resolution` is the module that uses it.
     """
     s = np.asarray(s, dtype=np.float64)
     numerator = np.sin(n_grooves * s)

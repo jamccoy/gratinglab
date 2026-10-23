@@ -1,7 +1,7 @@
 r"""Scalar (Kirchhoff / thin-element) diffraction efficiency.
 
-Implemented as the **general Fourier integral**, not as the closed-form sawtooth
-result:
+The efficiency is computed from the general Fourier integral, and the
+closed-form sawtooth result is not used:
 
 .. math::
     G_m = \int_0^1 e^{i\Phi_m(t)}\, e^{-2\pi i m t}\,dt, \qquad
@@ -10,20 +10,22 @@ result:
 where ``t`` is position normalised to the period and ``g(t)`` is the groove
 height in nm. Efficiency is :math:`\mathscr{E}_m = |G_m|^2`.
 
-Two consequences of doing it this way are worth stating plainly.
+This approach has two consequences.
 
-It accepts any profile, including a measured AFM boundary, which the closed
-forms cannot. That is what lets a scalar calculation and a PCGrate run be driven
-from the identical geometry.
+First, it accepts any profile, including a measured AFM boundary, which the
+closed forms cannot. This allows a scalar calculation and a PCGrate run to be
+driven from identical geometry.
 
-The closed forms become tests, not code paths. The Appendix D results --
-sawtooth ``sinc²(φ/2 − mπ)``, square wave, sinusoid -- are exact answers we
-already trust, so they check the numerics rather than duplicating them.
+Second, the closed forms serve as tests instead of code paths. The Appendix D
+results (sawtooth ``sinc²(φ/2 − mπ)``, square wave, sinusoid) are exact
+answers that are already trusted, so they check the numerics instead of
+duplicating them.
 
 The phase depends on the order through :math:`\cos\beta_m` (ISSI eq. 15;
-thesis Appendix-D.tex:651), so this is one integral per order rather than a
-single FFT. That choice is deliberate and carries a known cost, because no
-scalar formulation can satisfy all three of the following at once:
+thesis Appendix-D.tex:651), so the method requires one integral per order
+instead of a single FFT. This choice is deliberate and carries a known cost,
+because no scalar formulation can satisfy all three of the following at
+once:
 
 ==================  ==================================  =========================
 Property            order-dependent (this)              beta-free alternative
@@ -33,21 +35,22 @@ Reciprocity         exact, 1e-17                        violated, 0.44 measured
 Blaze direction     exact at every alpha                exact at Littrow only
 ==================  ==================================  =========================
 
-The conflict is structural: reciprocity *requires* the phase to be symmetric
-under :math:`\alpha \leftrightarrow \beta_m`, which forces both angles in;
-Parseval *requires* a single fixed function, which forbids :math:`\beta_m`.
-Physical optics is reciprocal but not energy-conserving; the pure
-transmittance-function picture is the reverse.
+The conflict is structural. Reciprocity requires the phase to be symmetric
+under :math:`\alpha \leftrightarrow \beta_m`, which brings both angles in,
+whereas Parseval requires a single fixed function, which excludes
+:math:`\beta_m`. Physical optics is reciprocal but not energy-conserving, and
+the pure transmittance-function picture is the reverse.
 
-Reciprocity is the invariant this solver keeps. The energy deviation is
-therefore expected, is reported rather than hidden, and is never renormalised
-away. It is not an implementation defect: in the shallow-groove limit the sum
-is 1.00000 exactly, degrading smoothly as groove depth grows (0.0001 -> 1.00000,
-0.10 -> 0.92902). The deviation scales with **phase excursion across the
-groove** -- depth relative to wavelength, hence working diffraction order --
-not with lambda/period or the number of propagating orders.
+This solver keeps reciprocity as its invariant. The energy deviation is
+therefore expected; it is reported openly and is never renormalised away. It
+is not an implementation defect: in the shallow-groove limit the sum is
+1.00000 exactly, and it degrades smoothly as groove depth grows
+(0.0001 -> 1.00000, 0.10 -> 0.92902). The deviation scales with the phase
+excursion across the groove, that is, with depth relative to wavelength and
+hence with the working diffraction order. It does not scale with
+lambda/period or with the number of propagating orders.
 
-``docs/theory/scalar.md`` §5 carries the full derivation and evidence;
+``docs/theory/scalar.md`` §5 gives the full derivation and evidence, and
 ``docs/conventions.md`` §9 is the reference for every formula here.
 """
 
@@ -154,117 +157,120 @@ class ScalarSolver:
     ) -> EfficiencyScan:
         r"""Efficiency over a wavelength scan.
 
-        Efficiency is :math:`\mathscr{E}_m = O_m |G_m|^2` -- the norm-squared
-        Fourier coefficient times the **symmetric** flux obliquity
-        :math:`4\cos\alpha\cos\beta_m/(\cos\alpha+\cos\beta_m)^2`, and **no
-        renormalisation**. Thesis Appendix D carries the *asymmetric* obliquity
+        Efficiency is :math:`\mathscr{E}_m = O_m |G_m|^2`, the norm-squared
+        Fourier coefficient multiplied by the symmetric flux obliquity
+        :math:`4\cos\alpha\cos\beta_m/(\cos\alpha+\cos\beta_m)^2`, with no
+        renormalisation. Thesis Appendix D carries the asymmetric obliquity
         :math:`\cos\beta_m/\cos\alpha`, which breaks reciprocity, and a
         renormalisation to :math:`\sum_m \mathscr{E}_m = 1`, which destroys the
-        model's own error signal; both of those are removed. See
-        :func:`~gratinglab.geometry.flux_obliquity` for why a flux factor
-        nonetheless belongs, and ``tests/test_perturbation.py`` for the
-        independent theory that fixes which one.
+        model's own error signal; both have been removed. See
+        :func:`~gratinglab.geometry.flux_obliquity` for the reason a flux
+        factor is nonetheless included, and ``tests/test_perturbation.py`` for
+        the independent theory that determines which factor.
 
         Parameters
         ----------
         quadrature_points
             Samples per period for the Fourier integral. The integrand is
             periodic, so the rectangle rule converges spectrally and the
-            default is generous. Must exceed twice the highest order to satisfy
-            Nyquist; this is checked.
+            default is generous. The value must exceed twice the highest order
+            to satisfy Nyquist, and this is checked.
         roughness_model
             How ``Problem.roughness`` damps the reflectivity: ``"nevot-croce"``
-            (default), ``"debye-waller"``, or ``"none"``. Both are legitimate
-            and they differ, so the choice is exposed rather than buried --
-            Debye-Waller is the more pessimistic near the critical angle
-            because it knows nothing about the transmitted wave. Ignored
-            without a coating, since there is no reflectivity to damp.
+            (default), ``"debye-waller"``, or ``"none"``. Both models are
+            legitimate and they differ, so the choice is exposed to the
+            caller. Debye-Waller is the more pessimistic near the critical
+            angle because it takes no account of the transmitted wave. The
+            setting is ignored without a coating, since there is then no
+            reflectivity to damp.
         reflectivity_model
-            How reflectivity is resolved **across the groove cycle**. Ignored
+            How reflectivity is resolved across the groove cycle. Ignored
             without a coating.
 
             ``"local"`` (default) evaluates the complex Fresnel amplitude at
             every quadrature point, from the local facet tilt, and carries it
-            *inside* the diffraction integral. A groove whose reflectivity
+            inside the diffraction integral. A groove whose reflectivity
             varies across the cycle is an amplitude grating as well as a phase
-            grating, so this makes reflectivity **order-dependent** -- see the
-            note below, which corrects the module docstring's earlier claim
-            that no such mechanism exists.
+            grating, so this makes reflectivity order-dependent. The note
+            below corrects the earlier claim in the module docstring that no
+            such mechanism exists.
 
-            ``"average"`` takes the groove-cycle mean of the *intensity*,
+            ``"average"`` takes the groove-cycle mean of the intensity,
             :math:`\langle R(\zeta(t))\rangle`, and applies it as one factor
-            per wavelength. It sees the shadowing and the varying local angle
-            but not the interference between them, so it stays
-            order-independent -- and, like ``"facet"``, it **breaks
-            reciprocity**, because its :math:`\zeta(t)` is built from
-            :math:`\alpha` alone. Resolving the groove is not what repairs
-            reciprocity; symmetrising in the exit direction is, and only
-            ``"local"`` does that. Offered as the diagnostic that separates
-            shadowing from interference, not as a physical model.
+            per wavelength. It accounts for the shadowing and the varying
+            local angle but not for the interference between them, so it
+            remains order-independent. Like ``"facet"``, it breaks
+            reciprocity, because its :math:`\zeta(t)` is built from
+            :math:`\alpha` alone. Reciprocity is restored by symmetrising in
+            the exit direction, which only ``"local"`` does; resolving the
+            groove alone does not restore it. This model is offered as a
+            diagnostic that separates shadowing from interference, and it is
+            not intended as a physical model.
 
             ``"facet"`` is the M15 treatment: one :math:`R` per wavelength at
-            the active-facet angle, applied to every order alike. Kept so a
-            prior result can be reproduced exactly, and so the size of the
-            change is measurable rather than asserted.
+            the active-facet angle, applied to every order alike. It is kept
+            so that a prior result can be reproduced exactly and the size of
+            the change can be measured.
 
             Both resolved models zero the reflection where a facet is
-            back-facing, in either direction. That is honest geometry and it
-            can drive a weak order to exactly zero; when it does, the order is
-            named in a provenance warning rather than left to look like a
-            passing-off.
+            back-facing, in either direction. This follows from the geometry,
+            and it can drive a weak order to exactly zero. When it does, the
+            order is named in a provenance warning so that it is not mistaken
+            for a passing-off.
         visibility
             Which shadows the masks above can see.
 
             ``"facet-normal"`` (default) is the local orientation test alone:
             a point is shadowed iff its own facet is turned away from the
-            direction in question. That misses **cast** shadows -- the groove
-            apex blocking surface beyond the trough that faces the ray
-            perfectly well -- which on the reference sawtooth is a fraction
-            of a percent of the period on the incident side but 10-50% per
-            order on the exit side, moving the blaze order by ~-30%
+            direction in question. This test misses cast shadows, in which the
+            groove apex blocks surface beyond the trough that otherwise faces
+            the ray. On the reference sawtooth these amount to a fraction of a
+            percent of the period on the incident side but 10-50% per order on
+            the exit side, moving the blaze order by ~-30%
             (``docs/findings.md``).
 
-            ``"horizon"`` adds them, via
+            ``"horizon"`` adds cast shadows, via
             :func:`~gratinglab.geometry.horizon_visible` in the transverse
             plane, for the incident direction and each diffracted one.
             Occlusion along a straight ray is the same from either end, so
             this keeps the :math:`\alpha \leftrightarrow \beta_m` symmetry
-            and reciprocity survives. It is ray optics: near passing-off it
-            overestimates blocking because diffraction bends around the apex
-            (the vanishing flux obliquity already suppresses those orders).
-            Kept opt-in for now so existing results reproduce bit-for-bit;
-            like the geometric-mean weight it awaits validation against a
-            rigorous finite-conductivity method.
+            and reciprocity is preserved. The treatment is ray optics, and
+            near passing-off it overestimates blocking because diffraction
+            bends around the apex (the vanishing flux obliquity already
+            suppresses those orders). It remains opt-in for now so that
+            existing results reproduce bit-for-bit, and, like the
+            geometric-mean weight, it awaits validation against a rigorous
+            finite-conductivity method.
 
-            With ``"horizon"`` and **no coating**, the masks are applied at
-            unit amplitude inside the integral -- geometric shadowing on an
-            otherwise perfect reflector, the configuration directly
+            With ``"horizon"`` and no coating, the masks are applied at unit
+            amplitude inside the integral. This gives geometric shadowing on
+            an otherwise perfect reflector, the configuration directly
             comparable to the integral solver on deep grooves. The default
-            uncoated run remains the untouched pure phase integral. The
+            uncoated run remains the unmodified pure phase integral. The
             ``"average"`` model sees the horizon only on the incident side
-            (its exit side is order-blind by construction), and
-            ``"facet"`` -- which has no masks at all -- refuses the
-            combination rather than ignoring it.
+            (its exit side is order-blind by construction), and ``"facet"``,
+            which has no masks at all, refuses the combination instead of
+            ignoring it.
         progress
             Called ``(0, n)`` before the first wavelength and ``(k, n)`` after
             each one, per the contract in
-            :class:`~gratinglab.solvers.base.Solver`. Exceptions from it are
-            **not** caught, which is what lets a caller raise
+            :class:`~gratinglab.solvers.base.Solver`. Exceptions raised by it
+            are not caught, which allows a caller to raise
             :class:`~gratinglab.solvers.base.SolveCancelled` and stop
-            this loop. A scan cancelled that way returns nothing at all: a
-            partially filled efficiency array with the remaining rows still
-            zero is indistinguishable from a scan whose orders all passed off,
-            and handing one back would be the silent-wrong-number failure this
-            project is arranged against.
+            this loop. A scan cancelled in this way returns nothing. A
+            partially filled efficiency array, with the remaining rows still
+            zero, would be indistinguishable from a scan whose orders all
+            passed off, and returning one would produce the silently wrong
+            number that this project is designed to prevent.
 
         Notes
         -----
-        Summed efficiency will not equal 1, and can exceed it. That is expected
-        -- see the module docstring for the three-way tension that makes it
-        unavoidable, and why reciprocity is the invariant kept instead. The sum
-        is **reported, never rescaled**: renormalising by it (as Appendix D
-        does) would erase the model's own signal about how far it has strayed
-        from its regime.
+        Summed efficiency will not equal 1, and can exceed it. This is
+        expected; the module docstring describes the three-way tension that
+        makes it unavoidable and explains why reciprocity is the invariant
+        kept. The sum is reported and never rescaled, because renormalising by
+        it (as Appendix D does) would erase the model's own signal about how
+        far it has strayed from its regime.
         """
         self.capabilities.check(problem, illumination)
         # Before any work. An unknown material must fail loudly rather than
@@ -673,14 +679,14 @@ class ScalarSolver:
 class _Reflection:
     r"""Everything the reflectivity treatment knows about one solve.
 
-    Built once, before the wavelength loop, because the geometry it holds --
-    which parts of the groove face the light, and at what local angle -- depends
-    on :math:`\alpha` and the profile but not on wavelength or order. Only the
-    optical constants vary down the scan.
+    It is built once, before the wavelength loop, because the geometry it
+    holds (which parts of the groove face the light, and at what local angle)
+    depends on :math:`\alpha` and the profile but not on wavelength or order.
+    Only the optical constants vary down the scan.
 
-    Carries the provenance material too, so the reporting and the arithmetic
-    cannot drift apart: ``shadowed_fraction`` and ``suppressed`` are what the
-    solve did, not a second estimate of it.
+    It also carries the provenance material, so that the reporting and the
+    arithmetic cannot drift apart: ``shadowed_fraction`` and ``suppressed``
+    record what the solve did and are not a second estimate of it.
     """
 
     model: ReflectivityModel
@@ -719,10 +725,10 @@ class _Reflection:
     def guard_graze(self) -> float:
         """The angle the validity guards should be measured against.
 
-        The **worst** local graze when the model resolves the groove, because
-        total external reflection fails first wherever the surface is steepest
-        toward the beam; the single facet angle when the model only knows one.
-        A guard should describe the model that ran.
+        This is the worst local graze when the model resolves the groove,
+        because total external reflection fails first wherever the surface is
+        steepest toward the beam, and the single facet angle when the model
+        knows only one. A guard should describe the model that ran.
         """
         if self.model == "facet" or self.local_graze.size == 0:
             return self.graze
@@ -732,24 +738,25 @@ class _Reflection:
 def _facet_tilt(profile, t: NDArray[np.float64]) -> NDArray[np.float64]:
     r"""Local facet tilt :math:`\delta(t)`, radians, from the groove slope.
 
-    :math:`\tan\delta = +\,dy/dt` in normalised units. **The sign is the whole
-    content of this function.** ``docs/findings.md`` records that the profile
-    parameter runs against the periodicity direction, which makes the opposite
-    sign look equally plausible; it is wrong. The check that settles it is that
-    an ideal sawtooth must come back with :math:`\delta` equal to its own blaze
-    angle everywhere, so that ``sin_facet_graze`` reproduces
+    :math:`\tan\delta = +\,dy/dt` in normalised units. The sign is the
+    essential content of this function. ``docs/findings.md`` records that the
+    profile parameter runs against the periodicity direction, which makes the
+    opposite sign look equally plausible, but the opposite sign is wrong. The
+    deciding check is that an ideal sawtooth must return :math:`\delta` equal
+    to its own blaze angle everywhere, so that ``sin_facet_graze`` reproduces
     :func:`~gratinglab.geometry.facet_graze` exactly. At
-    :math:`\gamma = 1.25°,\ \alpha = 19.99°` on a 29.5° blaze the right sign
-    gives 1.2328° and the wrong one gives 0.8119°, and both look like angles.
+    :math:`\gamma = 1.25°,\ \alpha = 19.99°` on a 29.5° blaze the correct sign
+    gives 1.2328° and the incorrect one gives 0.8119°, and both values are
+    plausible angles.
 
-    Uses the profile's analytic slope where it has one. ``Blazed`` with a
-    vertical anti-blaze facet and ``Lamellar`` both *refuse* to supply one --
-    correctly, since the C-method cannot represent a discontinuity -- so this
-    falls back to a periodic central difference on ``height``. That is
-    legitimate here in a way it would not be there: a vertical wall has zero
-    horizontal extent, so it carries zero weight in an integral over ``dt``, and
-    the finite-difference smear touches the two samples either side of the
-    discontinuity and shrinks with the grid.
+    The profile's analytic slope is used where it exists. ``Blazed`` with a
+    vertical anti-blaze facet and ``Lamellar`` both refuse to supply one,
+    correctly, since the C-method cannot represent a discontinuity, so this
+    function falls back to a periodic central difference on ``height``. That
+    is legitimate here although it would not be for the C-method: a vertical
+    wall has zero horizontal extent, so it carries zero weight in an integral
+    over ``dt``, and the finite-difference smear touches only the two samples
+    on either side of the discontinuity and shrinks with the grid.
     """
     from ..profiles import ProfileRepresentationError
 
@@ -851,9 +858,10 @@ def _groove_average_reflectivity(
 ) -> float:
     r""":math:`\langle R(\zeta(t))\rangle` over the whole period.
 
-    Over the **whole** period, not just the lit part: a shadowed facet reflects
-    nothing, and averaging only over what is visible would quietly delete the
-    shadowing this model exists to see. Under ``"horizon"`` the shadow
+    The average is taken over the whole period, including the unlit part. A
+    shadowed facet reflects nothing, and averaging only over the visible part
+    would quietly remove the shadowing that this model is intended to capture.
+    Under ``"horizon"`` the shadow
     boundary enters at sub-cell precision through the mask weights
     (:func:`~gratinglab.geometry.horizon_weights`).
     """
@@ -888,40 +896,42 @@ def _local_reflected_efficiency(
             \left|\int r_s(t)\,e^{i\Phi_m(t)}e^{-2\pi i m t}dt\right|^2 +
             \left|\int r_p(t)\,\cdots\right|^2\right)
 
-    Why a geometric mean. The obvious local coefficient,
-    :math:`r(\zeta_i(t))`, depends on :math:`\alpha` alone, which destroys the
-    :math:`\alpha\leftrightarrow\beta_m` symmetry and breaks Lorentz
-    reciprocity -- by 82% on the reference geometry, measured. Weighting a facet
-    by both the angle it receives at and the angle it emits at,
+    A geometric mean is used for the following reason. The obvious local
+    coefficient, :math:`r(\zeta_i(t))`, depends on :math:`\alpha` alone, which
+    destroys the :math:`\alpha\leftrightarrow\beta_m` symmetry and breaks
+    Lorentz reciprocity, by 82% as measured on the reference geometry.
+    Weighting a facet by both the angle at which it receives and the angle at
+    which it emits,
 
     .. math:: r^{\text{gm}}(t) = \sqrt{r(\zeta_i(t))}\,\sqrt{r(\zeta_{d,m}(t))}
 
     is symmetric by construction, holds reciprocity to :math:`6\times10^{-15}`,
-    and collapses to plain :math:`r(\zeta)` wherever the facet is at specular --
+    and reduces to plain :math:`r(\zeta)` wherever the facet is at specular,
     so a perfectly blazed groove is unaffected by the change.
 
-    The square roots are taken separately, rather than as
+    The square roots are taken separately, instead of as
     :math:`\sqrt{r_i r_d}`, so that the only discontinuities left in the weight
     are the ones :math:`r` itself has.
 
-    How much that is worth was measured rather than assumed, and it is less than
-    it first appears. Where the product's argument wraps *uniformly* across the
-    groove -- which is the grazing case, since :math:`\arg r` is then nearly the
-    same at every :math:`t` -- the two forms differ by a **global** sign, and a
+    The benefit of this was measured, and it is smaller than it first
+    appears. Where the argument of the product wraps uniformly across the
+    groove, which is the grazing case because :math:`\arg r` is then nearly
+    the same at every :math:`t`, the two forms differ by a global sign, and a
     global sign cancels out of :math:`|\int\cdots|^2`. On Au at 1-6 nm they
     agree to :math:`10^{-15}`.
 
-    They part company only where the wrap is *non-uniform*: near normal
+    The two forms differ only where the wrap is non-uniform, near normal
     incidence on a deep groove, where :math:`\arg r_p` sweeps through the
     Brewster jump and different parts of the same groove land on opposite sides
-    of the cut. There the difference reaches 12% -- on orders carrying
-    :math:`10^{-9}`, and in a regime `_brewster_crossing` already reports as
-    outside what this symmetrisation can carry.
+    of the cut. There the difference reaches 12%, on orders carrying
+    :math:`10^{-9}`, and in a regime that `_brewster_crossing` already reports
+    as beyond what this symmetrisation can carry.
 
-    So this is the cheap defensive choice, not an essential one. Stated that
-    way because the first draft of this docstring claimed the product wrapped in
-    the grazing regime and that the separate roots were therefore essential;
-    the measurement says otherwise.
+    Separate roots are therefore an inexpensive defensive choice and are not
+    essential. This is stated explicitly because the first draft of this
+    docstring claimed that the product wrapped in the grazing regime and that
+    the separate roots were therefore essential, which the measurement does
+    not support.
     """
     n_c = coating.n(wavelength)
     common = dict(
@@ -971,9 +981,9 @@ def _exit_weights(
     """Exit-side mask weights, one row per order: orientation, and under
     ``"horizon"`` the cast shadows toward each diffracted direction.
 
-    The same scans the incident side ran, at each :math:`\\beta_m` --
-    occlusion along a straight ray reads the same from either end, which is
-    what keeps the horizon model reciprocal.
+    These are the same scans the incident side ran, at each
+    :math:`\\beta_m`. Occlusion along a straight ray reads the same from
+    either end, and this is what keeps the horizon model reciprocal.
     """
     if reflection.visibility == "horizon":
         # The horizon alone, for the same two reasons as the incident side:
@@ -999,13 +1009,13 @@ def _shadow_masked_efficiency(
 ) -> NDArray[np.float64]:
     r"""The visibility masks at unit amplitude: shadowing without a material.
 
-    The uncoated ``visibility="horizon"`` branch. Same geometry as the
-    ``"local"`` model -- a point contributes only if it faces, and is not
-    cast-shadowed from, both the incident and the diffracted direction -- but
-    with :math:`r \equiv 1` in place of a Fresnel amplitude. That makes it a
-    perfect reflector with shadows, the configuration a perfect-conductor
-    cross-check against the integral solver wants on grooves deep
-    enough to shadow themselves.
+    This is the uncoated ``visibility="horizon"`` branch. It uses the same
+    geometry as the ``"local"`` model (a point contributes only if it faces,
+    and is not cast-shadowed from, both the incident and the diffracted
+    direction), but with :math:`r \equiv 1` in place of a Fresnel amplitude.
+    The result is a perfect reflector with shadows, which is the
+    configuration needed for a perfect-conductor cross-check against the
+    integral solver on grooves deep enough to shadow themselves.
     """
     sin_out = sin_facet_graze(
         illumination.gamma, reflection.tilt[None, :], betas[:, None]
@@ -1030,10 +1040,11 @@ def _sp_split(
 ) -> float:
     r"""Worst fractional s/p intensity split, :math:`|R_s - R_p| / R_s`.
 
-    Evaluated at the guarded graze and the scan's wavelength extremes only --
-    the split grows monotonically with graze in this regime, so the angle the
-    validity guards already watch is the right single point, and two
-    wavelengths bound a table that varies smoothly between them. Roughness is
+    The split is evaluated only at the guarded graze and at the extremes of
+    the scan's wavelengths. It grows monotonically with graze in this regime,
+    so the angle the validity guards already watch is the right single point,
+    and two wavelengths bound a table that varies smoothly between them.
+    Roughness is
     left out because the damping factors apply to s and p alike and
     would cancel from the ratio.
     """
@@ -1053,10 +1064,11 @@ def _brewster_crossing(r_p: NDArray[np.complex128]) -> bool:
     :math:`\pi` and the half-phase the geometric mean takes jumps by
     :math:`\pi/2`. The jump is real physics, but the geometric-mean
     symmetrisation is not built to carry it, so the result is reported as
-    suspect rather than quietly returned.
+    suspect instead of being returned without comment.
 
-    Only reachable with steep grooves near normal incidence -- at the grazing
-    angles this project is aimed at, :math:`r_p` stays well away from zero.
+    The condition is reachable only with steep grooves near normal incidence.
+    At the grazing angles this project is aimed at, :math:`r_p` stays well
+    away from zero.
     """
     if r_p.size == 0:
         return False
@@ -1065,36 +1077,38 @@ def _brewster_crossing(r_p: NDArray[np.complex128]) -> bool:
 
 
 def _reflecting_graze(problem: Problem, illumination: Illumination):
-    r"""``(zeta, description)`` -- the angle the surface reflects at.
+    r"""``(zeta, description)``: the angle at which the surface reflects.
 
     A blazed profile has one flat active facet tilted by ``blaze_angle``, and
     :math:`\sin\zeta = \sin\gamma\,\cos(\delta - \alpha)` is exact for it.
 
-    Nothing else has a single facet angle, so the reflection is evaluated on
-    the **mean surface** -- which is `facet_graze` with a zero tilt, not a
-    separate formula:
+    No other profile has a single facet angle, so the reflection is evaluated
+    on the mean surface, which is `facet_graze` with a zero tilt and requires
+    no separate formula:
 
     >>> facet_graze(gamma, 0.0, alpha)          # doctest: +SKIP
     ...                                          # == arcsin(|k_i . n|)
 
-    How good that is depends on the profile, and the description says which:
+    The accuracy of this depends on the profile, and the description records
+    which case applies:
 
-    - **Lamellar** tops and bottoms genuinely *are* parallel to the mean
-      surface, so this is exact for them. What it omits is the vertical walls,
-      which at grazing incidence are nearly edge-on.
-    - **Sinusoidal** and measured profiles have a local slope that varies
-      across the groove, so the mean is an approximation and is recorded as
-      one.
+    - Lamellar tops and bottoms are parallel to the mean surface, so the
+      result is exact for them. It omits the vertical walls, which at grazing
+      incidence are nearly edge-on.
+    - Sinusoidal and measured profiles have a local slope that varies across
+      the groove, so the mean is an approximation and is recorded as one.
 
-    A measured profile is the one case that can escape this. If it arrived from
-    metrology with a fitted ``blaze_angle`` it takes the exact facet branch
-    above, marked ``fitted`` rather than ``declared``. Without one it falls back
-    to the mean surface -- which for a sawtooth at grazing incidence is wrong by
-    the whole blaze angle, so the fallback is a real loss and not a formality.
+    A measured profile is the one case that can avoid this. If it arrived from
+    metrology with a fitted ``blaze_angle``, it takes the exact facet branch
+    above, marked ``fitted`` instead of ``declared``. Without one it falls
+    back to the mean surface, which for a sawtooth at grazing incidence is
+    wrong by the whole blaze angle, so the fallback is a real loss of
+    accuracy.
 
-    The alternative -- refusing any profile without a facet angle -- would be
-    worse than approximating: a sinusoid at grazing incidence does reflect,
-    and a solver that declines to say how much has not become more honest.
+    The alternative, refusing any profile without a facet angle, would be
+    worse than approximating. A sinusoid at grazing incidence does reflect,
+    and a solver that declined to estimate how much would be less useful
+    without being more accurate.
     """
     kind = type(problem.profile).__name__
 
@@ -1126,16 +1140,16 @@ def _reflecting_graze(problem: Problem, illumination: Illumination):
 def _resolve_coating(problem: Problem) -> "OpticalConstants | None":
     """Turn ``Problem.coating`` into optical constants, or refuse.
 
-    ``coating`` is a material *name*, so that a benchmark case stays a small
-    serialisable file rather than embedding a 500-row table. Resolving it here
-    rather than in ``Problem.__init__`` keeps a saved case loadable on a
-    machine whose vendored tables have been trimmed -- it only has to resolve
-    when someone solves.
+    ``coating`` is a material name, so that a benchmark case remains a small
+    serialisable file instead of embedding a 500-row table. Resolving it here,
+    and not in ``Problem.__init__``, keeps a saved case loadable on a machine
+    whose vendored tables have been trimmed, since the name has to resolve
+    only when someone solves.
 
-    An unknown name **raises**, because the string used to be
-    read by nothing, so ``coating="unobtanium"`` silently relabelled a result
-    as absolute. A name that cannot be resolved is a question this solver
-    cannot answer, not a default to fall back on.
+    An unknown name raises an error. The string was formerly read by
+    nothing, so ``coating="unobtanium"`` silently relabelled a result as
+    absolute. A name that cannot be resolved poses a question this solver
+    cannot answer, and the solver does not substitute a default for it.
     """
     if problem.coating is None:
         return None

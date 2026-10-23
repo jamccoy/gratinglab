@@ -5,15 +5,16 @@ Previously one line in the widget layer::
     if values.max() < 1e-4:
         continue
 
-An untested, unoverridable, invisible rule: an order below the threshold
-vanished from the plot with nothing to say it had. That is the wrong shape for
-this project -- the same objection as renormalising away an energy defect. The
-threshold survives as a *default*, because it is a sensible one, but it is now
-listed, labelled with the peak it was judged on, and overridable.
+That rule was untested, could not be overridden and was not visible: an
+order below the threshold disappeared from the plot with no indication that
+it had. This is unacceptable in this project for the same reason that
+renormalising away an energy defect is. The threshold is retained as a
+default, because it is a sensible one, but each order is now listed, labelled
+with the peak it was judged on, and can be shown or hidden by the user.
 
-The logic lives here rather than in the panel so the default can be tested
-without a window, and so the rule is written down somewhere a reader will find
-it.
+The logic lives in this module instead of in the panel, so that the default
+can be tested without a window and the rule is documented where a reader will
+find it.
 """
 
 from __future__ import annotations
@@ -54,15 +55,17 @@ class OrderSummary:
     order
         The diffraction order `m`.
     column
-        Its column in ``scan.efficiency``. Carried explicitly so a caller never
-        has to search ``scan.orders`` again, and cannot get the mapping wrong.
+        Its column in ``scan.efficiency``. It is carried explicitly so that a
+        caller never has to search ``scan.orders`` again and cannot get the
+        mapping wrong.
     peak
-        Largest efficiency over the scanned wavelengths. What the default rule
-        judges, and what the panel shows next to each entry.
+        Largest efficiency over the scanned wavelengths. The default rule is
+        applied to this value, and the panel shows it next to each entry.
     ever_propagating
         Whether the order propagates at any wavelength in the scan. An order
-        that is evanescent throughout has nothing to plot; it is listed anyway,
-        greyed, because "this order exists and carries nothing" is information.
+        that is evanescent throughout has nothing to plot. It is listed anyway,
+        greyed out, because the fact that the order exists and carries no
+        power is itself informative.
     """
 
     order: int
@@ -94,14 +97,14 @@ def default_visible(
 ) -> frozenset[int]:
     """The orders worth drawing before the user says otherwise.
 
-    Two rules, in this sequence: peak at or above ``threshold``, then the
-    ``limit`` largest of those. Ties are broken by order index so the result is
-    deterministic -- a plot that redrew differently for the same scan would be
-    its own small bug.
+    Two rules are applied in sequence: the peak must be at or above
+    ``threshold``, and then the ``limit`` largest of those are kept. Ties are
+    broken by order index so that the result is deterministic, since a plot
+    that redrew differently for the same scan would be a bug.
 
-    Returning a set of *orders* rather than columns means the choice survives a
-    re-solve that changes how many orders propagate, which is what
-    :func:`carry_over` relies on.
+    The function returns a set of orders instead of columns, so the choice
+    survives a re-solve that changes how many orders propagate;
+    :func:`carry_over` relies on this.
     """
     candidates = [s for s in summaries if s.peak >= threshold]
     candidates.sort(key=lambda s: (-s.peak, s.order))
@@ -118,17 +121,18 @@ def carry_over(
 ) -> frozenset[int]:
     """Reapply a user's choices to a freshly solved scan.
 
-    Nudging the blaze angle and re-solving must not silently re-check the
-    orders someone deliberately unchecked. So: an order that existed before
-    keeps whatever it was, shown or hidden; an order that has only just
-    appeared gets the default rule; an order that no longer exists is dropped
-    rather than remembered, since a stale selection would resurrect on the next
-    unrelated re-solve.
+    Adjusting the blaze angle and re-solving must not silently re-check the
+    orders that a user deliberately unchecked. An order that existed before
+    therefore keeps its previous state, shown or hidden. An order that has
+    only just appeared receives the default rule. An order that no longer
+    exists is dropped instead of remembered, since a stale selection would
+    reappear on the next unrelated re-solve.
 
-    ``previous_orders`` -- every order the last scan had, not just the visible
-    ones -- is what separates "hidden on purpose" from "not seen before". With
-    only the visible set the two are indistinguishable, and an unchecked order
-    would silently re-check itself on the next solve.
+    ``previous_orders`` contains every order the last scan had, including the
+    hidden ones, and it is what distinguishes an order hidden on purpose from
+    one not seen before. With only the visible set the two cases are
+    indistinguishable, and an unchecked order would silently re-check itself
+    on the next solve.
 
     Pass empty iterables for the first solve; everything is then new and the
     result is exactly :func:`default_visible`.
@@ -143,9 +147,9 @@ def carry_over(
 def describe(summary: OrderSummary) -> str:
     """One entry's label, e.g. ``m=+3   peak 0.4127``.
 
-    Signed, always, because the sign of the order is the physics -- `+3` and
-    `-3` diffract to opposite sides -- and an unsigned `3` in a list next to
-    `-3` reads as ambiguous rather than positive.
+    The order is always signed, because its sign is physically meaningful
+    (`+3` and `-3` diffract to opposite sides), and an unsigned `3` in a list
+    next to `-3` would read as ambiguous instead of positive.
     """
     if not summary.ever_propagating:
         return f"m={summary.order:+d}   evanescent"

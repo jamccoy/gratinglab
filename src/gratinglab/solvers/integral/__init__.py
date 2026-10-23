@@ -1,37 +1,37 @@
 r"""The integral method: rigorous efficiency from a boundary integral equation.
 
-Two boundary conditions, one solver. With ``conductivity="perfect"`` (the
-default) the grating is a **perfect conductor** in any mount: the conical
-(off-plane) problem decouples exactly into an in-plane problem at the
+The solver supports two boundary conditions. With ``conductivity="perfect"``
+(the default) the grating is a perfect conductor in any mount. The conical
+(off-plane) problem then decouples exactly into an in-plane problem at the
 reduced wavelength ``lambda / sin(gamma)`` (M&P eq. 4.65; thesis
-Chapter-2.tex:931), TE stays a Dirichlet problem, TM a Neumann problem,
+Chapter-2.tex:931): TE remains a Dirichlet problem and TM a Neumann problem,
 cross-polarization conversion is identically zero, and efficiencies are
-**relative to a perfect reflector** -- the sum over orders is exactly 1 in
+relative to a perfect reflector, so that the sum over orders is exactly 1 in
 the continuum (M&P eqs. 4.34/4.42; thesis eq:prop_order_unity). This
-matches the convention of the perfect-conductivity reference tables the
-solver is checked against; a named coating is ignored, with a provenance
-warning.
+matches the convention of the perfect-conductivity reference tables against
+which the solver is checked. A named coating is ignored, and a provenance
+warning records this.
 
-With ``conductivity="tabulated"`` the grating is one interface into a
+With ``conductivity="tabulated"`` the grating is a single interface into a
 semi-infinite material whose complex index is read per wavelength from the
 named ``coating`` (falling back to ``substrate``) through
-``materials.lookup`` -- the coupled conical system of Goray & Schmidt
-(JOSA A 27, 585, 2010), assembled in ``_finite``. Efficiencies are
-**absolute**: TE and TM couple through the cone angle, and each solve also
-returns the absorbed fraction from an independent boundary integral, so
-the recorded scan satisfies ``R + A = 1`` as a theorem (the successor of
-the perfect-conductor sum rule, and what
-:func:`gratinglab.checks.check_energy_balance` then checks). Folding a
-Fresnel reflectivity onto the perfect-conductivity result is **not**
-equivalent and remains the error catalogued in ``docs/conventions.md``
-section 10 item 5.
+``materials.lookup``. The problem is then the coupled conical system of
+Goray & Schmidt (JOSA A 27, 585, 2010), assembled in ``_finite``.
+Efficiencies are absolute. TE and TM couple through the cone angle, and each
+solve also returns the absorbed fraction from an independent boundary
+integral, so the recorded scan satisfies ``R + A = 1`` as a theorem. This
+relation succeeds the perfect-conductor sum rule and is what
+:func:`gratinglab.checks.check_energy_balance` checks. Folding a Fresnel
+reflectivity onto the perfect-conductivity result is not equivalent, and
+doing so remains the error catalogued in ``docs/conventions.md`` section 10
+item 5.
 
-Known limitation, measured and documented rather than hidden: profile
-corners make the TM solve (and with finite conductivity, both
-polarizations) converge at first order -- the Meixner edge condition meets
-a plain equal-arc mesh -- so energy balance on cornered profiles carries a
-percent-level deficit at moderate ``boundary_points``. The deviation is
-reported in provenance; a graded corner mesh is the known follow-up.
+One limitation has been measured and is documented here. Profile corners
+make the TM solve (and, with finite conductivity, both polarizations)
+converge at first order, because the Meixner edge condition is sampled by a
+plain equal-arc mesh. Energy balance on cornered profiles therefore carries
+a percent-level deficit at moderate ``boundary_points``. The deviation is
+reported in provenance, and a graded corner mesh is the planned follow-up.
 """
 
 from __future__ import annotations
@@ -79,11 +79,12 @@ _ANOMALY_COS = 1e-3
 def _resolve_index(problem: Problem) -> "tuple[str, OpticalConstants]":
     """Resolve the material the tabulated boundary condition reads.
 
-    ``coating`` first, else ``substrate`` -- the model is a single interface
-    into a semi-infinite material, so whichever is named is that material.
-    Naming neither is a refusal, not a default: there is no rigorous answer
-    without an index. An unknown name raises ``UnknownMaterial`` listing
-    what is available (same policy as ``scalar._resolve_coating``).
+    ``coating`` is used first, and ``substrate`` otherwise. The model is a
+    single interface into a semi-infinite material, so whichever is named is
+    that material. Naming neither is refused, since there is no rigorous
+    answer without an index. An unknown name raises ``UnknownMaterial``,
+    listing what is available (the same policy as
+    ``scalar._resolve_coating``).
     """
     from ...materials import lookup
 
@@ -132,8 +133,8 @@ class IntegralSolver:
         Parameters
         ----------
         boundary_points
-            Number of equal-arc-length nodes on one groove period -- the
-            accuracy knob the convergence harness sweeps. Kernels are
+            Number of equal-arc-length nodes on one groove period. This is
+            the accuracy knob the convergence harness sweeps. Kernels are
             assembled as separable BLAS products (``_kernels``): a few
             ``(P, 2M+1)`` GEMMs per wavelength plus the dense solve, after
             a one-time ``O(P^2 M)`` geometry pass amortised over the scan.
@@ -148,12 +149,12 @@ class IntegralSolver:
             for the tabulated condition; override only for truncation
             studies.
         conductivity
-            ``"perfect"`` -- perfectly conducting boundary, efficiencies
-            relative to a perfect reflector. ``"tabulated"`` -- the
-            finite-conductivity system of Goray & Schmidt (2010) with the
-            complex index read from ``problem.coating`` (or ``substrate``)
-            per wavelength; efficiencies absolute, absorption recorded on
-            the scan. Anything else raises
+            ``"perfect"`` selects a perfectly conducting boundary, with
+            efficiencies relative to a perfect reflector. ``"tabulated"``
+            selects the finite-conductivity system of Goray & Schmidt (2010),
+            with the complex index read from ``problem.coating`` (or
+            ``substrate``) per wavelength; efficiencies are then absolute and
+            absorption is recorded on the scan. Any other value raises
             :class:`UnsupportedConfiguration`.
         progress
             Per-wavelength callback under the contract in

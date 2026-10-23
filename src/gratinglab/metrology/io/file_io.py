@@ -1,6 +1,7 @@
 """
-File I/O operations for AFM analysis
-Handles saving results to text and CSV files
+File I/O operations for AFM analysis.
+
+This module saves results to text and CSV files.
 """
 import numpy as np
 import os
@@ -222,9 +223,9 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
         Row group of each measurement, or blanks when not applicable.
 
         Traditional (non row-group) analysis has no such label, and older result
-        dicts predate the field, so fall back to empty strings rather than
-        guessing - a wrong group label would silently corrupt any ICC computed
-        from this file.
+        dicts predate the field, so these cases fall back to empty strings
+        instead of a guessed label, since a wrong group label would silently
+        corrupt any ICC computed from this file.
         """
         groups = scan.get('groove_row_groups')
         if groups is None or len(groups) != len(scan['all_angles']):

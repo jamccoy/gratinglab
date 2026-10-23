@@ -1,16 +1,16 @@
 """The 3D conical-diffraction view.
 
-Thin, like every widget here. :mod:`gratinglab.gui.diagram3d` decides every
-direction, every surface and every caption; this positions them. It computes no
-angle and picks no colour.
+Like every widget here, this panel is thin. :mod:`gratinglab.gui.diagram3d`
+decides every direction, surface and caption, and this panel positions them.
+It computes no angle and picks no colour.
 
-No navigation toolbar on this axes. `NavigationToolbar2QT`'s
-zoom rescales an `Axes3D`'s data limits, which breaks the cube bounding box
-`set_box_aspect((1, 1, 1))` depends on -- and then the angles this view exists
-to show would silently stop being true. A control that can make the picture lie
-must not be offered, the same rule that removed the obliquity factor. The 2D
-figures keep their toolbars, where pan and zoom cannot distort an angle that
-isn't being claimed.
+These axes have no navigation toolbar. The zoom of `NavigationToolbar2QT`
+rescales the data limits of an `Axes3D`, which breaks the cubic bounding box
+that `set_box_aspect((1, 1, 1))` depends on, and the angles this view is meant
+to show would then silently become incorrect. A control that can make the
+picture misleading must not be offered; the same rule led to the removal of
+the obliquity factor. The 2D figures keep their toolbars, because there pan
+and zoom cannot distort an angle that the figure claims to show true.
 
 Rotation needs no wiring: `Axes3D.__init__` calls `mouse_init()` and connects
 its own mouse handlers.
@@ -43,19 +43,19 @@ def _display(v) -> tuple:
     r"""Physical :math:`(\hat{d}, \hat{n}, -\hat{g})` to the frame matplotlib
     draws.
 
-    `Axes3D` always puts *its* z axis vertical, and the axis a reader expects
-    to point up is the grating normal -- a grating lies flat. The scene is in
-    conventions.md §3's frame, where :math:`\hat{n}` is the *second*
-    component, so the widget permutes to
+    `Axes3D` always draws its own z axis vertically, while the axis a reader
+    expects to point up is the grating normal, since a grating lies flat. The
+    scene is in the frame of conventions.md §3, where :math:`\hat{n}` is the
+    second component, so the widget permutes to
     :math:`(\hat{d}, \hat{g}, \hat{n})`.
 
-    That ordering and not :math:`(\hat{d}, -\hat{g}, \hat{n})` because
-    :math:`\hat{d} \times \hat{g} = \hat{n}` -- the alternative is left-handed,
-    and a left-handed set would mirror the whole picture.
+    This ordering is used instead of :math:`(\hat{d}, -\hat{g}, \hat{n})`
+    because :math:`\hat{d} \times \hat{g} = \hat{n}`; the alternative is
+    left-handed, and a left-handed set would mirror the whole picture.
 
-    A view choice, not a physical one: no length or angle changes under a
-    permutation of orthonormal axes, which is why it lives here rather than in
-    the scene.
+    The permutation is a choice of view with no physical content, since no
+    length or angle changes under a permutation of orthonormal axes, and for
+    that reason it lives here and not in the scene.
     """
     x, y, z = v
     return x, -z, y
@@ -65,16 +65,17 @@ def _view_angles(physical) -> tuple[float, float]:
     """A physical look-direction to matplotlib's ``(elev, azim)``, degrees.
 
     The inverse of :func:`gratinglab.gui.diagram3d.view_direction`, after the
-    display permutation. View math, not physics, so it lives here -- and the
-    round trip through `view_direction` is directly assertable, which is what
-    a test uses to prove a preset points where its name says.
+    display permutation. It concerns the view and not the physics, so it
+    lives here. The round trip through `view_direction` can be asserted
+    directly, and a test uses it to show that each preset points where its
+    name says.
     """
     dx, dy, dz = _display(np.asarray(physical, dtype=float))
     return float(np.degrees(np.arcsin(-dz))), float(np.degrees(np.arctan2(-dy, -dx)))
 
 
 class Scene3DPanel(QWidget):
-    """One `Axes3D`, and what it takes to keep it honest."""
+    """One `Axes3D`, with the controls needed to keep its angles true."""
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -135,7 +136,7 @@ class Scene3DPanel(QWidget):
     # -- reactions ----------------------------------------------------
 
     def _apply_preset(self, name: str) -> None:
-        """Point the camera along a preset's *physical* direction."""
+        """Point the camera along a preset's physical direction."""
         if name not in diagram3d.PRESET_VIEWS:
             return
         elev, azim = _view_angles(diagram3d.PRESET_VIEWS[name])
@@ -159,8 +160,8 @@ class Scene3DPanel(QWidget):
 
         `get_navigate_mode() is None` is the exact predicate matplotlib itself
         uses at axes3d.py:1787 to decide whether a drag will rotate. There is
-        no toolbar on this axes, so it is always true -- it documents the
-        coupling and survives someone adding one.
+        no toolbar on these axes, so it is always true, but the test documents
+        the coupling and remains correct if a toolbar is added later.
         """
         if (
             event.inaxes is self._axes
@@ -182,7 +183,7 @@ class Scene3DPanel(QWidget):
         self._canvas.draw_idle()
 
     def save_image(self) -> None:
-        """The one toolbar function worth having, offered on its own."""
+        """Save the figure, the one toolbar function worth offering on its own."""
         path, _ = QFileDialog.getSaveFileName(
             self, "Save 3D view", "geometry.png", "PNG (*.png);;PDF (*.pdf)"
         )
@@ -194,18 +195,20 @@ class Scene3DPanel(QWidget):
     # -- the contract GeometryTab uses --------------------------------
 
     def show_scene(self, scene) -> None:
-        """Draw a scene. The panel keeps it so a caller can read back what was
-        drawn without re-deriving it."""
+        """Draw a scene.
+
+        The panel keeps the scene, so a caller can read back what was drawn
+        without re-deriving it."""
         self._scene = scene
         self._sync_focus_button(scene)
         self._paint(scene)
 
     def _sync_focus_button(self, scene) -> None:
-        """Enabled when it can act; disabled *with its reason* when it cannot.
+        """Enable the button when it can act, and otherwise disable it with its reason.
 
-        At γ = 90° the rim already is the whole scene, so focusing on it would
-        zoom out. A disabled control that explains itself is honest; an
-        enabled one that silently does nothing is not.
+        At γ = 90° the rim is already the whole scene, so focusing on it would
+        zoom out. A disabled control that states why it is disabled is
+        preferable to an enabled one that silently does nothing.
         """
         self._focus_button.setEnabled(scene.rim_available)
         self._focus_button.setToolTip(scene.rim_reason)
@@ -216,10 +219,10 @@ class Scene3DPanel(QWidget):
         """Frame either the whole scene or the cone rim.
 
         Both are cubes, and both get ``set_box_aspect((1, 1, 1))``, so moving
-        between them is a uniform scale plus a translation -- a similarity
-        transform. Every angle in the picture survives it exactly; only which
-        part of the geometry fills the frame changes. That is why the
-        magnification can simply be stated rather than disclaimed.
+        between them is a uniform scale plus a translation, i.e. a similarity
+        transform. Every angle in the picture is preserved exactly, and only
+        the part of the geometry that fills the frame changes. For this reason
+        the magnification can be stated without any disclaimer.
         """
         use_rim = self._focus == "rim" and scene.rim_available
         (x0, x1), (y0, y1), (z0, z1) = scene.rim_limits if use_rim else scene.limits
@@ -243,10 +246,10 @@ class Scene3DPanel(QWidget):
         """Hide primitives with no point inside the current box.
 
         `Axes3D` does not clip its artists to the axes limits, so at 27x the
-        grating patch -- which lies entirely outside the rim frame -- smears
-        across the edges instead of disappearing. This is a purely geometric
-        test on coordinates already computed; it hides nothing that would have
-        been visible, and decides no physics.
+        grating patch, which lies entirely outside the rim frame, would be
+        smeared across the edges instead of disappearing. This is a purely
+        geometric test on coordinates that are already computed; it hides
+        nothing that would have been visible and decides no physics.
         """
         for artist, bounds in self._bounds.items():
             (ax0, ax1), (ay0, ay1), (az0, az1) = bounds

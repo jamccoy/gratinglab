@@ -1,6 +1,7 @@
 """
-Statistical analysis functions
-Comparisons, pairwise tests, and temperature analysis
+Statistical analysis functions.
+
+This package provides comparisons, pairwise tests, and temperature analysis.
 """
 
 from .analysis import (

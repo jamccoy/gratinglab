@@ -2,17 +2,17 @@
 Building a boundary profile, separated from writing one.
 
 The computation used to live inside ``workflows.run_boundary_profile_export``,
-fused with the file writing. Splitting it lets the GUI preview a profile - and
-recompute it as controls move - without touching the disk, while the CLI mode
-writes exactly what the panel showed.
+fused with the file writing. Separating the two lets the GUI preview a profile,
+and recompute it as controls move, without touching the disk, while the CLI
+mode writes exactly what the panel showed.
 
-The flattening here is *not* the profile flattening used for
-blaze-angle work. ``flatten_endpoints`` forces the ends of the trace to zero so
-one groove tiles seamlessly into the next; profile flattening removes a fitted
-background so a facet can be measured. Different jobs, and swapping one for the
-other would produce a profile with a step at the period boundary - which is
-exactly the defect that makes a PCGrate efficiency curve wrong while the file
-still looks fine.
+The flattening here differs from the profile flattening used for blaze-angle
+work. ``flatten_endpoints`` forces the ends of the trace to zero so one groove
+tiles seamlessly into the next; profile flattening removes a fitted background
+so a facet can be measured. The two serve different purposes, and substituting
+one for the other would produce a profile with a step at the period boundary.
+That defect makes a PCGrate efficiency curve wrong while the file still looks
+correct.
 """
 from __future__ import annotations
 
@@ -66,39 +66,41 @@ class BoundaryProfile:
                    blaze_angle=None):
         """This measured groove as an efficiency problem.
 
-        The in-process handoff to the rest of gratinglab, and the reason the
-        two halves are one package. Writing a .ggp and reading it back gets
-        the same *shape* but loses the scale: the file format is normalised
-        and carries no period, so the period has to be supplied again from
-        somewhere -- which is what `benchmarks/corpus.toml` is, a sidecar of
-        periods recovered by hand after the fact. Here `period_nm` is the one
-        this scan measured, from the spacing of the grooves it detected.
+        This is the in-process handoff to the rest of gratinglab, and the
+        reason the two halves are one package. Writing a .ggp and reading it
+        back preserves the shape but loses the scale: the file format is
+        normalised and carries no period, so the period has to be supplied
+        again from elsewhere. `benchmarks/corpus.toml` serves that purpose, as
+        a sidecar of periods recovered by hand after the fact. Here
+        `period_nm` is the period this scan measured, from the spacing of the
+        grooves it detected.
 
-        That matters beyond bookkeeping. `y_norm` is a fraction of the period,
-        so the solver's phase term is `(2*pi/lambda) * y_norm * period * ...`
-        and an error in the period scales the groove depth with it. The period
-        is not a label on the result; it is inside the physics.
+        The period therefore enters the result physically. `y_norm` is a
+        fraction of the period, so the solver's phase term is
+        `(2*pi/lambda) * y_norm * period * ...` and an error in the period
+        scales the groove depth with it.
 
         Parameters:
             coating, substrate: material names, resolved by
                 `gratinglab.materials` at solve time.
-            roughness: RMS surface roughness in nm. See the note below --
-                this class does not measure it, and 0.0 means "not supplied",
-                not "smooth".
+            roughness: RMS surface roughness in nm. As the note below
+                explains, this class does not measure it, and 0.0 means "not
+                supplied", not "smooth".
             blaze_angle: fitted facet angle in degrees, if the same scan was
                 also run through `core.analysis.extract_blaze_angle`. Without
                 it the scalar solver evaluates reflection on the mean surface,
                 which for a sawtooth at grazing incidence is off by the whole
                 blaze angle.
 
-        On roughness. `Problem.roughness` means high-spatial-frequency
-        surface roughness, the quantity Nevot-Croce damps a Fresnel
-        coefficient with. This class computes no such number. `y_std_nm` is
-        the groove-to-groove *form* spread and `metrics['rms_slope']` is a
-        slope statistic; neither is surface microroughness, and passing either
-        one in here would produce a confident, wrong efficiency rather than an
-        obviously missing one. The honest quantity -- the RMS residual of each
-        groove about this average -- is not computed yet.
+        A note on roughness: `Problem.roughness` means high-spatial-frequency
+        surface roughness, the quantity with which Nevot-Croce damps a Fresnel
+        coefficient. This class computes no such number. `y_std_nm` is the
+        groove-to-groove form spread and `metrics['rms_slope']` is a slope
+        statistic; neither is surface microroughness, and passing either one
+        in here would produce an efficiency that appears valid but is wrong,
+        where an omitted value would at least be visibly missing. The
+        appropriate quantity, the RMS residual of each groove about this
+        average, is not computed yet.
         """
         # Imported here rather than at module scope: `boundary` is reachable
         # from the GUI preview, which has no reason to pull the solver stack in

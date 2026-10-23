@@ -1,9 +1,10 @@
 """
 Groove averaging and normalisation for PCGrate boundary profiles
 
-Ported from afm_scan_avg_profile_rev3.py. The arithmetic is unchanged - the
-port is verified by reproducing that script's output byte-for-byte - but the
-profile front-end now comes from gratinglab.metrology.core instead of a private copy.
+Ported from afm_scan_avg_profile_rev3.py. The arithmetic is unchanged, and the
+port is verified by reproducing that script's output byte-for-byte, but the
+profile front-end now comes from gratinglab.metrology.core instead of a private
+copy.
 """
 import numpy as np
 from scipy.interpolate import interp1d
@@ -19,8 +20,8 @@ def flatten_endpoints(x, y):
     This is not the same as core.processing.flatten_profile. That
     one removes a fitted background to measure facet angles accurately; this one
     forces the endpoints to zero so a single groove tiles seamlessly into a
-    periodic boundary. Different jobs, different maths - they are not
-    interchangeable.
+    periodic boundary. The two serve different purposes with different
+    mathematics and are not interchangeable.
     """
     x0, x1 = x[0], x[-1]
     y0, y1 = y[0], y[-1]
@@ -94,7 +95,7 @@ def normalize_profile(x_avg, y_avg, period_nm, apply_smoothing=True,
     """
     Turn an averaged groove into a period-normalised, seamlessly tiling profile.
 
-    Four steps, in the order the original performed them:
+    The four steps below are performed in the order the original used:
       1. flatten endpoints, then shift so the groove edges sit at zero
       2. scale x to [0, 1] over one period; express y as a fraction of the period
       3. roll the array so the minimum lands on the boundary, and force the

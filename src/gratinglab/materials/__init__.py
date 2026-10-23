@@ -21,11 +21,11 @@ Lookup is by name, because that is what a
 case a small serialisable file instead of embedding a 500-row table in it, and
 keeps `Problem` free of any dependency on which tables happen to be installed.
 
-An unknown name **raises and lists what is available**. That matters more here
-than it looks: `Problem.coating` was a free-form string that nothing read, so
-setting it to anything at all silently relabelled a result as "absolute" while
-changing no number. Resolution is what turns that string into a claim something
-has to honour.
+An unknown name raises an error that lists what is available. This is more
+important than it may appear. `Problem.coating` was formerly a free-form string
+that nothing read, so setting it to any value silently relabelled a result as
+"absolute" while changing no number. Resolving the name turns that string into
+a claim that the code has to honour.
 """
 
 from __future__ import annotations
@@ -85,9 +85,10 @@ _READERS = {
 class UnknownMaterial(KeyError):
     """A material name with no table behind it.
 
-    A ``KeyError`` because that is what a failed lookup is, but its own type so
-    a caller can distinguish "you asked for a material I do not have" from any
-    other missing key -- the GUI wants to say the first differently.
+    It is a ``KeyError`` because a failed lookup is one, and it has its own
+    type so that a caller can distinguish "you asked for a material I do not
+    have" from any other missing key. The GUI reports the first case
+    differently.
     """
 
     def __str__(self) -> str:  # pragma: no cover - KeyError quotes its arg
@@ -103,9 +104,9 @@ def data_dir() -> Path:
 def user_dir() -> Path:
     """Your default library, used when ``GRATINGLAB_MATERIALS`` is unset.
 
-    Under the home directory rather than beside the package, because an
-    install's own directory is site-packages: a table dropped there is lost on
-    the next upgrade, and may not be writable at all.
+    It sits under the home directory and not beside the package, because an
+    install's own directory is site-packages: a table placed there is lost on
+    the next upgrade, and the directory may not be writable at all.
     """
     return Path.home() / ".gratinglab" / "materials"
 
@@ -113,10 +114,11 @@ def user_dir() -> Path:
 def library_dirs() -> tuple[Path, ...]:
     """Every directory searched for a material, in the order searched.
 
-    Yours first, then the bundled one, so a table of your own replaces a
-    bundled one of the same name. The table's ``source`` names the file it was
-    read from, so a result's provenance says which one was used. Directories
-    that do not exist are listed anyway, since they are where a lookup looked.
+    Your own directories come first, then the bundled one, so a table of your
+    own replaces a bundled one of the same name. The table's ``source`` names
+    the file it was read from, so a result's provenance says which one was
+    used. Directories that do not exist are listed anyway, since they are
+    where a lookup looked.
     """
     configured = os.environ.get(LIBRARY_ENV)
     if configured:
@@ -130,8 +132,8 @@ def _tables(directory: Path) -> dict[str, Path]:
     """The tables in one library directory, by material name.
 
     Two files for one name in the same directory (``Pt.txt`` and ``Pt.ari``)
-    are refused rather than one being picked: neither suffix outranks the
-    other, so any choice would be a guess about which the user meant.
+    are refused instead of one being picked, because neither suffix outranks
+    the other and any choice would be a guess about which the user meant.
     """
     if not directory.is_dir():
         return {}
@@ -151,9 +153,10 @@ def _tables(directory: Path) -> dict[str, Path]:
 def available() -> tuple[str, ...]:
     """Material names across every library, sorted.
 
-    Reads the directories rather than a hardcoded list, so adding a material is
-    a file drop. Empty is a supported configuration, not an error: it is what
-    an install starts with.
+    The directories are read in place of a hardcoded list, so adding a
+    material only requires adding a file. An empty result is a supported
+    configuration and not an error, since it is the state an install starts
+    in.
     """
     names: set[str] = set()
     for directory in library_dirs():
@@ -180,11 +183,11 @@ def lookup(name: str) -> OpticalConstants:
 
 @lru_cache(maxsize=None)
 def _read(path: Path, mtime_ns: int, name: str) -> OpticalConstants:
-    """Cached by file and modification time, not by name.
+    """Cached by file and modification time instead of by name.
 
     The tables are immutable (`OpticalConstants` freezes its arrays) and a
     solve may resolve the same coating once per wavelength grid, so parsing
-    500 rows each time is waste. Keying on the name alone would keep serving a
+    500 rows each time would be wasteful. Keying on the name alone would keep serving a
     table after its file was edited or a library was added in front of it.
     """
     table = _READERS[path.suffix.lower()](path, name=name)
@@ -213,6 +216,6 @@ def from_ari_file(path: "str | Path", name: str | None = None) -> OpticalConstan
     """Read a PCGrate ``.ari`` table.
 
     Note the columns are ``(wavelength_nm, decrement, absorption)`` despite the
-    ``_n_k`` in the corpus filenames -- see :func:`~.optical.read_ari`.
+    ``_n_k`` in the corpus filenames; see :func:`~.optical.read_ari`.
     """
     return read_ari(path, name=name)

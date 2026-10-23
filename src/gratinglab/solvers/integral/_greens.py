@@ -1,10 +1,11 @@
 r"""Quasi-periodic Green's function and its normal-derivative kernel.
 
-Everything here lives in the transverse plane of the conical reduction:
-``x`` along the dispersion direction, ``y`` along the grating normal, both in
-nm, with the transverse wavenumber ``k = 2 pi sin(gamma) / wavelength``. The
-Green's function for a grating of period ``d`` illuminated with incident
-x-wavenumber ``alpha0`` is the spectral (Rayleigh) sum
+Everything in this module lives in the transverse plane of the conical
+reduction, with ``x`` along the dispersion direction and ``y`` along the
+grating normal, both in nm, and with the transverse wavenumber
+``k = 2 pi sin(gamma) / wavelength``. The Green's function for a grating
+of period ``d`` illuminated with incident x-wavenumber ``alpha0`` is the
+spectral (Rayleigh) sum
 
 .. math::
     G(X, Z) = \frac{1}{2 i d} \sum_m \frac{1}{\gamma_m}
@@ -15,9 +16,10 @@ x-wavenumber ``alpha0`` is the spectral (Rayleigh) sum
 (Maystre & Popov eq. 4.76, in pseudo-periodic form), with ``K = 2 pi / d``
 and the branch ``Im(gamma_m) >= 0`` so evanescent terms decay upward.
 
-The raw sum converges like ``1/m`` -- uselessly slowly near ``X = Z = 0``.
-Following M&P section 4.6.2 we subtract the large-``|m|`` asymptote, whose sum
-is a closed-form logarithm (the Kummer trick, eqs. 4.82-4.85):
+The raw sum converges like ``1/m``, which is far too slowly to be useful
+near ``X = Z = 0``. Following M&P section 4.6.2 we subtract the
+large-``|m|`` asymptote, whose sum is a closed-form logarithm (the Kummer
+trick, eqs. 4.82-4.85):
 
 .. math::
     G_\infty = \frac{1}{4\pi}\left[
@@ -27,7 +29,7 @@ is a closed-form logarithm (the Kummer trick, eqs. 4.82-4.85):
 leaving a remainder series whose +m/-m pairs decay like ``m^{-3}`` on the
 diagonal (eq. 4.87) and at worst ``m^{-2}`` elsewhere. The remaining
 ``ln`` singularity of ``G_\infty`` at coincident points is integrable and is
-handled by the quadrature layer (``_nystrom``), not here.
+handled by the quadrature layer (``_nystrom``) instead of in this module.
 
 The Neumann kernel is the normal derivative at the source point,
 
@@ -36,12 +38,13 @@ The Neumann kernel is the normal derivative at the source point,
     = -\frac{1}{2d} \sum_m e^{i\alpha_m X + i\gamma_m |Z|}
       \left[\frac{\alpha_m}{\gamma_m} n'_x + \mathrm{sgn}(Z)\, n'_y\right],
 
-derived directly from the spectral form (M&P eq. 4.77 states the same kernel;
-the derivation here is independent so the signs rest on this module's tests,
-not on transcription). Its asymptote sums to closed-form geometric terms
-(eq. 4.91) and the paired remainder again decays fast.
+derived directly from the spectral form. M&P eq. 4.77 states the same
+kernel, but the derivation here is independent, so the signs rest on this
+module's tests instead of on transcription. Its asymptote sums to
+closed-form geometric terms (eq. 4.91), and the paired remainder again
+decays fast.
 
-``k`` may be complex: the same code serves the metal-side Green's function of
+``k`` may be complex, so that the same code serves the metal-side Green's function of
 the planned finite-conductivity milestone (Goray & Schmidt 2010), where the
 transverse wavenumber carries the complex refractive index.
 """
@@ -115,10 +118,10 @@ def greens_function(
 ) -> NDArray[np.complex128]:
     """Accelerated ``G(X, Z)`` at separations ``x = X``, ``z = Z`` (nm).
 
-    ``terms`` is the spectral truncation ``M``: the remainder series keeps
-    orders ``-M..M``; the asymptotic logs carry the rest to infinity in
+    ``terms`` is the spectral truncation ``M``. The remainder series keeps
+    orders ``-M..M``, and the asymptotic logs carry the rest to infinity in
     closed form. Coincident points (``X = Z = 0`` modulo the period) are the
-    kernel's genuine logarithmic singularity -- the quadrature layer supplies
+    kernel's genuine logarithmic singularity. The quadrature layer supplies
     the diagonal, so this function is only called off-diagonal.
     """
     x = np.asarray(x, dtype=np.float64)
@@ -179,11 +182,11 @@ def neumann_function(
 ) -> NDArray[np.complex128]:
     """Accelerated ``N(s, s') = dG/dn'`` off-diagonal.
 
-    ``source_nx, source_ny`` is the outward unit normal at the *source* point
-    ``s'``; ``x = x(s) - x(s')``, ``z = y(s) - y(s')``. The kernel is
-    continuous through coincident points on a smooth curve (the limit picks up
-    the local curvature, M&P eq. 4.92), but this function is only valid off
-    the diagonal -- the quadrature layer supplies the diagonal as the
+    ``source_nx, source_ny`` is the outward unit normal at the source point
+    ``s'``, with ``x = x(s) - x(s')`` and ``z = y(s) - y(s')``. The kernel is
+    continuous through coincident points on a smooth curve (the limit picks
+    up the local curvature, M&P eq. 4.92), but this function is valid only
+    off the diagonal. The quadrature layer supplies the diagonal as the
     numerical principal-value limit, by averaging the kernel at the two
     physically adjacent nodes. That estimate was measured to converge as
     O(spacing^2) against the exact limit, which keeps it below the spectral

@@ -1,9 +1,10 @@
 """Run one problem through several methods and line the answers up.
 
-This is the point of the project. A comparison is only honest if every method
-saw the same physics, so :func:`sweep` takes one :class:`~gratinglab.problem.Problem`
-and one :class:`~gratinglab.illumination.Illumination` and hands them to each
-backend unchanged.
+This is the central purpose of the project. A comparison is meaningful only if
+every method saw the same physics, so :func:`sweep` takes one
+:class:`~gratinglab.problem.Problem` and one
+:class:`~gratinglab.illumination.Illumination` and hands them to each backend
+unchanged.
 
 Precomputed results are first-class participants. An imported PCGrate table is
 passed in exactly like a live solver, so scalar-versus-integral-method plots are
@@ -45,20 +46,20 @@ def sweep(
     methods
         Registered solver names (``"scalar"``), or :class:`EfficiencyScan`
         objects for precomputed data such as an imported PCGrate table. A
-        precomputed scan is **resampled onto** ``wavelengths`` -- see
+        precomputed scan is resampled onto ``wavelengths``; see
         :func:`align` for how, and for the caveat.
     options
         Per-method keyword arguments, keyed by method name, e.g.
         ``{"scalar": {"quadrature_points": 8192}}``.
     progress
-        Called ``(done, total)`` over the **whole sweep**, not per method, so
-        a bar driven by it never restarts at a method boundary. Units are
+        Called ``(done, total)`` over the whole sweep instead of per method,
+        so a bar driven by it never restarts at a method boundary. Units are
         wavelengths, and ``total`` is ``len(methods) * len(wavelengths)``.
 
-        Raising from it aborts the sweep -- see
-        :class:`~gratinglab.solvers.base.SolveCancelled`. A keyword of its own
-        rather than an entry in ``options``, so it can never collide with a
-        solver's own parameter name.
+        Raising from it aborts the sweep (see
+        :class:`~gratinglab.solvers.base.SolveCancelled`). It is a keyword of
+        its own instead of an entry in ``options``, so that it can never
+        collide with a solver's own parameter name.
     """
     wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=np.float64))
     options = options or {}
@@ -100,11 +101,11 @@ def _progress_option(
 ) -> dict[str, Any]:
     """``{"progress": ...}`` for a solver that declared it, else ``{}``.
 
-    A backend that has not been updated -- including a third-party one
-    arriving through the ``gratinglab.solvers`` entry point -- has an explicit
-    signature that would raise ``TypeError`` on an unexpected keyword, which
-    is why :attr:`~gratinglab.solvers.base.Capabilities.reports_progress` is
-    declared rather than assumed.
+    A backend that has not been updated, including a third-party one arriving
+    through the ``gratinglab.solvers`` entry point, has an explicit signature
+    that would raise ``TypeError`` on an unexpected keyword. For that reason
+    :attr:`~gratinglab.solvers.base.Capabilities.reports_progress` is declared
+    by each solver and is not assumed.
     """
     if progress is None or not solver.capabilities.reports_progress:
         return {}
@@ -114,10 +115,11 @@ def _progress_option(
 def _resample(scan: EfficiencyScan, wavelengths: NDArray[np.float64]) -> EfficiencyScan:
     """Put a precomputed scan on ``wavelengths`` by nearest-neighbour lookup.
 
-    Nearest-neighbour rather than interpolation, because efficiency curves
-    have sharp features at order passing-off, and interpolating across one
-    invents a value that no method produced. Points outside the source range
-    are marked non-propagating rather than extrapolated.
+    Nearest-neighbour lookup is used in place of interpolation because
+    efficiency curves have sharp features at order passing-off, and
+    interpolating across one invents a value that no method produced. Points
+    outside the source range are marked non-propagating and are not
+    extrapolated.
     """
     source = scan.wavelengths
     index = np.abs(wavelengths[:, None] - source[None, :]).argmin(axis=1)
@@ -168,8 +170,8 @@ class Comparison:
     def summary(self, a: str, b: str) -> dict[str, float]:
         """Where and how much two methods disagree.
 
-        The headline number of the whole project: not "do they agree" but
-        "by how much, and where".
+        This is the headline number of the project. It answers the question
+        "by how much, and where" in place of "do they agree".
         """
         delta = self.difference(a, b)
         flat = int(np.abs(delta).argmax())
@@ -185,10 +187,10 @@ class Comparison:
 def align(scans: Iterable[EfficiencyScan]) -> Comparison:
     """Put several scans on a shared order set.
 
-    All scans must already share a wavelength grid -- :func:`sweep` arranges
-    that. Orders are unioned, so a method that resolves fewer orders reports
-    zero for the rest rather than being silently truncated to the smallest
-    common set.
+    All scans must already share a wavelength grid, which :func:`sweep`
+    arranges. Orders are unioned, so a method that resolves fewer orders
+    reports zero for the rest; the comparison is not truncated to the
+    smallest common set.
     """
     scans = tuple(scans)
     if not scans:

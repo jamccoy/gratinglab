@@ -10,29 +10,29 @@ decrement is ~1e-3, so ``n`` differs from 1 in the fourth decimal place and
 total external reflection below the critical angle is the only reason grazing
 optics work at all.
 
-Why ``decrement`` and ``absorption`` and not the usual symbols
-=============================================================
+Why the names ``decrement`` and ``absorption`` are used
+=======================================================
 
 The literature calls these :math:`\delta` and :math:`\beta`. This codebase
-already uses :math:`\delta` for the **blaze angle** and :math:`\beta` for the
-**diffracted-order angle**, everywhere, and ``conventions.md`` §8 exists
-because exactly this kind of collision has bitten the two primary references
-already (they use ``d`` for opposite things).
+already uses :math:`\delta` for the blaze angle and :math:`\beta` for the
+diffracted-order angle, everywhere, and ``conventions.md`` §8 exists because
+this kind of collision has already caused trouble in the two primary
+references (they use ``d`` for opposite things).
 
 `fresnel.reflectivity` will be called within a few lines of
 `geometry.facet_graze(gamma, blaze_angle, alpha)`. Two meanings of
-:math:`\delta` in one call stack is how a sign error gets written and not
-noticed, so the names here are unambiguous words rather than the conventional
-letters. §8 carries the mapping.
+:math:`\delta` in one call stack make it easy to write a sign error without
+noticing it, so the names here are unambiguous words in place of the
+conventional letters. §8 carries the mapping.
 
-Range is enforced, not extrapolated
-===================================
+The tabulated range is enforced
+===============================
 
-A table covers what it covers -- the shipped Au data runs 200 eV to 2 keV. Ask
-for 20 nm and this raises, because a linearly extrapolated optical constant is
-a plausible number with nothing behind it, which is the failure mode this
-project is arranged against. `EfficiencyScan` refuses to carry efficiency on a
-non-propagating order for the same reason.
+A table is valid only over the range it covers; the shipped Au data runs
+200 eV to 2 keV. A request for 20 nm raises an error, because a linearly
+extrapolated optical constant is a plausible number with nothing behind it,
+which is the failure mode this project is arranged to prevent. `EfficiencyScan`
+refuses to carry efficiency on a non-propagating order for the same reason.
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ class OpticalConstants:
     wavelength_nm
         Ascending. The table's own sampling; no resampling is done on load.
     decrement, absorption
-        :math:`\\delta` and :math:`\\beta` in the usual notation --  see the
+        :math:`\\delta` and :math:`\\beta` in the usual notation. See the
         module docstring for why they are not called that here.
     source
         Free text naming the file and its provenance. Ends up on
@@ -147,10 +147,11 @@ class OpticalConstants:
     ) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
         """``(decrement, absorption)``, linearly interpolated.
 
-        Linear rather than spline: the shipped tables are sampled ~500 points
-        per decade, so the interpolation error is far below the tabulated
-        precision, and a spline can overshoot near an absorption edge -- which
-        would invent structure the data does not have.
+        Linear interpolation is used in preference to a spline. The shipped
+        tables are sampled ~500 points per decade, so the interpolation error
+        is far below the tabulated precision, and a spline can overshoot near
+        an absorption edge, which would invent structure the data does not
+        have.
         """
         values = np.asarray(wavelength_nm, dtype=np.float64)
         self._require_in_range(values)
@@ -163,23 +164,23 @@ class OpticalConstants:
         r"""Total-external-reflection critical graze angle, radians.
 
         :math:`\theta_c = \arccos(1 - \text{decrement})`, measured from the
-        **surface** -- the same sense as `geometry.facet_graze`, so the two are
-        directly comparable. That comparison is the validity guard
+        surface, in the same sense as `geometry.facet_graze`, so the two are
+        directly comparable. That comparison is the validity guard that
         ``docs/theory/scalar.md`` §7 has carried as "needs a materials layer to
         evaluate".
 
-        The exact lossless edge, not the small-angle one. Snell's law
-        from the surface, :math:`\cos\theta = n'\cos\theta_t`, has no real
-        transmitted angle once :math:`\cos\theta > n'`, which is the arccos.
-        :math:`\sqrt{2\,\text{decrement}}` is its leading term, and for the
-        :math:`10^{-3}` decrements of the soft X-ray the two differ by a
+        This is the exact lossless edge, in place of the small-angle one.
+        Snell's law from the surface, :math:`\cos\theta = n'\cos\theta_t`, has
+        no real transmitted angle once :math:`\cos\theta > n'`, which gives the
+        arccos. :math:`\sqrt{2\,\text{decrement}}` is its leading term, and for
+        the :math:`10^{-3}` decrements of the soft X-ray the two differ by a
         relative :math:`\text{decrement}/12`, about 1e-4. The exact form costs
-        nothing and stays right at EUV, where the decrement reaches 0.1.
-        Absorption does not move the edge, only softens it, which is why the
+        nothing and remains correct at EUV, where the decrement reaches 0.1.
+        Absorption softens the edge without moving it, which is why the
         imaginary part takes no part in the value.
 
-        Zero means there is no critical angle, and there are two ways not
-        to have one:
+        Zero means there is no critical angle, and this can arise in two
+        ways:
 
         - the real part of n is not below 1. Just below an X-ray absorption
           edge anomalous dispersion drives the decrement negative (Cr near
@@ -193,9 +194,9 @@ class OpticalConstants:
           reflectivity stays between 0.90 and 0.93 from 10 degrees to normal
           incidence, so there is no edge to be on either side of.
 
-        Zero is safe to compare against either way. Whether a graze above it
-        is worth a *warning* is a separate question, :meth:`near_unity`
-        answers it, and the scalar solver asks both.
+        Zero is safe to compare against in either case. Whether a graze above
+        it warrants a warning is a separate question, which :meth:`near_unity`
+        answers, and the scalar solver asks both.
         """
         n = self.n(wavelength_nm)
         has_edge = (n.real < 1.0) & self._near_unity(n)
@@ -208,10 +209,10 @@ class OpticalConstants:
 
         Here reflectivity is only appreciable at grazing incidence, so a facet
         past the critical angle, or a wavelength with no critical angle at all,
-        loses its reflectivity and is worth warning about. Outside it, a glass
-        or a metal from the UV to the IR, reflectivity does not hinge on
+        loses its reflectivity and warrants a warning. Outside it, for a glass
+        or a metal from the UV to the IR, reflectivity does not depend on
         grazing, a near-normal design is ordinary, and :meth:`critical_angle`
-        is zero for want of an edge rather than because anything is wrong.
+        is zero because there is no edge, without anything being wrong.
 
         The test is on :math:`|n - 1|` and not on absorption against
         decrement, because the shipped Au table has absorption above its
@@ -259,21 +260,22 @@ def read_cxro(path: "str | Path", name: str | None = None) -> OpticalConstants:
          Energy(eV), Delta, Beta
           200.  0.0112813823  0.00951793324
 
-    **Two** header lines, then whitespace-separated columns in ascending
-    energy -- so descending wavelength, which is reversed here.
+    The file has two header lines, then whitespace-separated columns in
+    ascending energy, and therefore descending wavelength, which is reversed
+    here.
 
-    A port of ``CXRO_to_n_k`` from the prototype
+    This is a port of ``CXRO_to_n_k`` from the prototype
     (``~/Documents/diffraction_efficiency/panter1.py``), with one correction.
     The prototype hardcodes ``skip_header=3`` against a file with two header
-    lines, so it silently discards the first data row -- the lowest energy,
-    which is the *longest* wavelength. On the Au table that truncates the range
+    lines, so it silently discards the first data row: the lowest energy,
+    which is the longest wavelength. On the Au table that truncates the range
     from 6.199 nm to 6.171 nm, and the ``.ari`` files in the corpus carry the
     truncation because they were written by that code.
 
-    So the header is detected rather than counted: a line is data when its
-    first three whitespace-separated fields all parse as floats. That is
-    robust to the two- and three-line variants both, and to an export format
-    that grows a line -- and no row is dropped for being at an end of the
+    The header is therefore detected instead of counted: a line is data when
+    its first three whitespace-separated fields all parse as floats. This is
+    robust to both the two- and three-line variants and to an export format
+    that gains a line, and no row is dropped for being at an end of the
     table, which is where a range guard will later be at its most sensitive.
     """
     path = Path(path)
@@ -306,16 +308,16 @@ def read_cxro(path: "str | Path", name: str | None = None) -> OpticalConstants:
 def read_ari(path: "str | Path", name: str | None = None) -> OpticalConstants:
     """Read a PCGrate ``.ari`` table.
 
-    Three whitespace-separated columns, **already in ascending wavelength**::
+    Three whitespace-separated columns, already in ascending wavelength::
 
         0.619921 0.000510 0.000106
 
-    Worth stating because the name misleads: the prototype's writer is called
-    ``CXRO_to_n_k`` and its output files are named ``*_optical_constants_n_k``,
-    but the columns are ``(wavelength_nm, decrement, absorption)`` -- *not*
-    ``n`` and ``k``. The conversion ``n = 1 - delta`` appears only in a comment
-    there. Reading these as ``n`` and ``k`` would put the index at ~5e-4
-    instead of ~1.
+    The column meaning is stated because the name is misleading: the
+    prototype's writer is called ``CXRO_to_n_k`` and its output files are named
+    ``*_optical_constants_n_k``, but the columns are
+    ``(wavelength_nm, decrement, absorption)`` and are not ``n`` and ``k``.
+    The conversion ``n = 1 - delta`` appears only in a comment there. Reading
+    these as ``n`` and ``k`` would put the index at ~5e-4 instead of ~1.
     """
     path = Path(path)
     data = np.genfromtxt(path, encoding="utf-8")
@@ -356,8 +358,8 @@ def write_ari(constants: OpticalConstants, path: "str | Path") -> Path:
 def _numeric_row(line: str) -> "list[float] | None":
     """The first three fields as floats, or ``None`` if this is not a data row.
 
-    Not a regex: "does it parse as a float" is exactly the
-    question, and `float` answers it for every spelling a table might use --
+    No regex is used, because "does it parse as a float" is the question
+    being asked, and `float` answers it for every spelling a table might use:
     ``200.``, ``1e-3``, and the ``3.55e-006`` three-digit exponents the
     Windows-written ``.ari`` files carry.
     """

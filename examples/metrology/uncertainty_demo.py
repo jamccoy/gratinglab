@@ -1,6 +1,6 @@
 """
-Test script to demonstrate Priority 1 improvements
-Shows what the new uncertainty tracking provides
+Test script demonstrating the Priority 1 improvements.
+It shows what the new uncertainty tracking provides.
 """
 import numpy as np
 

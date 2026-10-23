@@ -3,12 +3,13 @@ r"""Nystrom discretisation of the boundary integral operators.
 The rectangular rule on equally spaced arc-length nodes is spectrally
 accurate for periodic integrands (M&P section 4.6.1), which is why
 ``Profile.boundary`` resamples at equal arc length. Four operators are
-built -- the shared vocabulary of the perfectly conducting solve and the
-finite-conductivity coupled system (Goray & Schmidt 2010):
+built, and together they form the shared vocabulary of the perfectly
+conducting solve and the finite-conductivity coupled system (Goray & Schmidt
+2010).
 
-**Single layer** ``V`` -- ``\int G(s,s') sigma(s') ds'`` as a dense matrix.
-``G`` has an integrable log singularity at ``s' = s``, handled per M&P
-section 4.6.3: subtract the periodic comparison function
+Single layer ``V``: ``\int G(s,s') sigma(s') ds'`` as a dense matrix.
+``G`` has an integrable log singularity at ``s' = s``, which is handled
+following M&P section 4.6.3 by subtracting the periodic comparison function
 
 .. math::
     \tilde G_\infty(u) = \frac{1}{2\pi}
@@ -18,7 +19,8 @@ section 4.6.3: subtract the periodic comparison function
 whose bracket with the unknown is continuous (its diagonal limit is
 ``\ln(2 \pi L / d) / 2\pi`` plus the remainder diagonal of eq. 4.86) and whose
 own integral is exactly ``-L / \pi`` (eq. 4.100). Off the diagonal the matrix
-entry is simply ``spacing * G``; everything singular lands on the diagonal:
+entry is ``spacing * G``, and every singular contribution falls on the
+diagonal:
 
 .. math::
     A_{jj} = \Delta s \left[R(0,0) + \frac{\ln(2\pi L/d)}{2\pi}
@@ -29,45 +31,47 @@ entry is simply ``spacing * G``; everything singular lands on the diagonal:
 with ``\tilde S`` the (node-independent) rectangular-rule sum of
 ``\tilde G_\infty`` over the off-diagonal nodes.
 
-**Double layer** ``K`` -- ``\int N(s,s') psi(s') ds'`` with ``N = dG/dn'``,
-the normal at the *source* point (the sign follows from the double-layer
-jump relation for our kernel orientation; the flat-mirror and Table 4.1
-tests pin it). The kernel is continuous on a smooth curve, so the plain
-rectangular rule applies; the diagonal is the numerical principal-value
-limit, taken as the average of the kernel evaluated at the two physically
-adjacent nodes (through the period wrap), which converges as O(spacing^2).
+Double layer ``K``: ``\int N(s,s') psi(s') ds'`` with ``N = dG/dn'``, the
+normal being taken at the source point. The sign follows from the
+double-layer jump relation for our kernel orientation, and the flat-mirror
+and Table 4.1 tests pin it. The kernel is continuous on a smooth curve, so
+the plain rectangular rule applies. The diagonal is the numerical
+principal-value limit, taken as the average of the kernel evaluated at the
+two physically adjacent nodes (through the period wrap), which converges as
+O(spacing^2).
 
-**Adjoint double layer** ``L`` -- the same kernel machinery with the normal
-moved from source to observation point and the sign flipped
-(``dG/dn = -N``-form with ``n`` taken at ``s``), same principal-value
-diagonal. It is the principal value of the normal derivative of the
-single-layer potential: the jump relation reads
-``d(V phi)/dn |_pm = (L pm I/2) phi``, the ``+`` side being the one the
-outward normal points into. The finite-conductivity system needs it to
-match normal derivatives across the interface.
+Adjoint double layer ``L``: the same kernel machinery with the normal moved
+from the source to the observation point and the sign flipped
+(``dG/dn = -N``-form with ``n`` taken at ``s``), and the same
+principal-value diagonal. It is the principal value of the normal
+derivative of the single-layer potential. The jump relation reads
+``d(V phi)/dn |_pm = (L pm I/2) phi``, where the ``+`` side is the one into
+which the outward normal points. The finite-conductivity system needs this
+operator to match normal derivatives across the interface.
 
-**Tangential layer** ``D_t V`` -- ``d/ds`` of a single-layer trace, as one
+Tangential layer ``D_t V``: ``d/ds`` of a single-layer trace, as one
 operator. The tangential derivative is continuous across the boundary, so
 this is a plain principal-value integral of ``t(s) . grad_s G`` with no jump
-term. It is built as a single kernel rather than as a discrete ``d/ds``
-applied to an assembled ``V``: that composition multiplies ``V``'s
-quadrature error by the differentiation matrix's ``O(N)`` norm, leaving an
-``O(1)`` error that refinement does not remove. The kernel is genuinely
-Cauchy-singular (unlike ``K`` and ``L``, whose normal component cancels the
-singularity), so the rectangular rule is only ``O(h)`` on it; the
-singularity is removed with a Bloch-phased periodic Hilbert comparison
-kernel whose principal value is exact in the Fourier basis, leaving a
-continuous remainder for the usual rule.
+term. It is built as a single kernel instead of as a discrete ``d/ds``
+applied to an assembled ``V``, because that composition multiplies the
+quadrature error of ``V`` by the ``O(N)`` norm of the differentiation
+matrix, leaving an ``O(1)`` error that refinement does not remove. The
+kernel is genuinely Cauchy-singular (unlike ``K`` and ``L``, whose normal
+component cancels the singularity), so the rectangular rule is only
+``O(h)`` on it. The singularity is therefore removed with a Bloch-phased
+periodic Hilbert comparison kernel whose principal value is exact in the
+Fourier basis, leaving a continuous remainder for the usual rule.
 
-**Tangential derivative** ``D_t`` -- ``d/ds`` along the boundary of an
-``alpha0``-quasi-periodic trace, as a dense differentiation matrix: strip
-the Bloch phase ``exp(i alpha0 x(s))``, differentiate the now-periodic
-factor spectrally on the uniform arc-length grid, restore the phase (the
-product rule contributes ``i alpha0 x'(s)``, and ``x'(s) = n_y`` is the
-tangent's x-component for our orientation: nodes ordered by increasing
-``x``, outward normal up). Geometry-only. Valid only for a trace that is
-smooth as a function of arc length -- it is *not* the way to differentiate
-a single-layer trace, which is what ``tangential_layer_matrix`` is for.
+Tangential derivative ``D_t``: ``d/ds`` along the boundary of an
+``alpha0``-quasi-periodic trace, as a dense differentiation matrix. The
+Bloch phase ``exp(i alpha0 x(s))`` is stripped, the now-periodic factor is
+differentiated spectrally on the uniform arc-length grid, and the phase is
+restored. The product rule contributes ``i alpha0 x'(s)``, and
+``x'(s) = n_y`` is the x-component of the tangent for our orientation
+(nodes ordered by increasing ``x``, outward normal up). The matrix depends
+on geometry only. It is valid only for a trace that is smooth as a function
+of arc length, and so it is not suitable for differentiating a single-layer
+trace; ``tangential_layer_matrix`` serves that purpose.
 
 The perfectly conducting solve keeps its milestone-1 names as thin
 compositions: ``dirichlet_matrix`` (TE) is ``V`` itself and
@@ -125,7 +129,7 @@ def _wrapped_neighbours(
     """Separations to the two physically adjacent nodes, through the wrap.
 
     The wrapped neighbours cross the period boundary, so their x separation
-    carries the period explicitly rather than picking up a spurious Bloch
+    carries the period explicitly and does not pick up a spurious Bloch
     phase from the kernel's quasi-periodicity.
     """
     x, y = boundary.x, boundary.y
@@ -139,13 +143,14 @@ def _wrapped_neighbours(
 class OperatorAssembler:
     """One boundary's kernel machinery, shared across a whole scan.
 
-    Owns the wavelength-independent half of the separable kernel assembly
-    (``_kernels.KernelGeometry``, built once) and memoizes the per-(k,
-    alpha0) spectral factors and Neumann cores, so the operators that share
-    a medium at one wavelength -- ``V``/``K`` on the vacuum side, ``V``/
-    ``L``/``D_t V`` on the metal side -- pay for each spectral sum once.
-    The solver clears the memo every wavelength to keep memory flat; the
-    geometry (and its cached Kummer tails) persists for the scan.
+    The assembler owns the wavelength-independent half of the separable
+    kernel assembly (``_kernels.KernelGeometry``, built once) and memoizes
+    the per-(k, alpha0) spectral factors and Neumann cores. The operators
+    that share a medium at one wavelength (``V``/``K`` on the vacuum side,
+    ``V``/ ``L``/``D_t V`` on the metal side) therefore pay for each
+    spectral sum once. The solver clears the memo at every wavelength to
+    keep memory flat, while the geometry (and its cached Kummer tails)
+    persists for the scan.
     """
 
     def __init__(
@@ -173,16 +178,16 @@ class OperatorAssembler:
         return self._factors[key]
 
     def greens(self, *, k: complex, alpha0: float) -> NDArray[np.complex128]:
-        """The full Green's-function matrix, diagonal garbage (overwritten
-        by the caller's analytic limit)."""
+        """The full Green's-function matrix, with a meaningless diagonal
+        (overwritten by the caller's analytic limit)."""
         return greens_matrix(self.geometry, self.factors(k=k, alpha0=alpha0))
 
     def neumann(
         self, *, k: complex, alpha0: float
     ) -> tuple[NDArray[np.complex128], NDArray[np.complex128]]:
-        """The Neumann kernel's ``(A, B)`` components, memoized: the double,
-        adjoint, and tangential layers at one (k, alpha0) all compose from
-        this single evaluation."""
+        """The Neumann kernel's ``(A, B)`` components, memoized. The double,
+        adjoint, and tangential layers at one (k, alpha0) are all composed
+        from this single evaluation."""
         key = (complex(k), float(alpha0))
         if key not in self._cores:
             self._cores[key] = neumann_core(
@@ -191,8 +196,9 @@ class OperatorAssembler:
         return self._cores[key]
 
     def hilbert(self) -> NDArray[np.complex128]:
-        """The periodic Hilbert-multiplier matrix (geometry-only): Fourier
-        mode ``p`` times ``-i sgn(p) / 2``, Nyquist zeroed."""
+        """The periodic Hilbert-multiplier matrix, which depends on geometry
+        only. Fourier mode ``p`` is multiplied by ``-i sgn(p) / 2``, and the
+        Nyquist mode is zeroed."""
         if self._hilbert is None:
             points = len(self.boundary.x)
             modes = np.fft.fftfreq(points, d=1.0 / points)
@@ -292,7 +298,7 @@ def adjoint_layer_matrix(
 ) -> NDArray[np.complex128]:
     """The discretised adjoint double-layer operator ``L``.
 
-    The kernel is the normal derivative of ``G`` at the *observation* point:
+    The kernel is the normal derivative of ``G`` at the observation point:
     ``n(s) . grad G = -``\\ [the ``N``-form with the normal taken at ``s``],
     so the same accelerated kernel serves with the normals broadcast along
     rows instead of columns and the sign flipped. The diagonal is the same
@@ -328,11 +334,11 @@ def tangential_layer_matrix(
     terms: int,
     assembler: OperatorAssembler | None = None,
 ) -> NDArray[np.complex128]:
-    r"""The discretised operator ``D_t V`` -- ``d/ds`` of a single-layer trace.
+    r"""The discretised operator ``D_t V``, which is ``d/ds`` of a single-layer trace.
 
     The tangential derivative of a single-layer potential is continuous
-    across the boundary (only the *normal* derivative jumps), so the trace's
-    arc-length derivative is the plain principal-value integral
+    across the boundary (only the normal derivative jumps), so the
+    arc-length derivative of the trace is the plain principal-value integral
 
     .. math::
         \partial_s (V \sigma)(s)
@@ -340,21 +346,23 @@ def tangential_layer_matrix(
 
     with no jump term, where ``t = (n_y, -n_x)`` is the unit tangent in the
     ``+s`` direction and ``t . grad_s = -``\ [the ``N``-form with the tangent
-    at ``s``] -- the same sign flip :func:`adjoint_layer_matrix` makes.
+    at ``s``], which is the same sign flip that :func:`adjoint_layer_matrix`
+    makes.
 
-    Taking the derivative *analytically on the kernel* is what makes this
-    usable. The alternative -- assembling ``V`` and then applying a discrete
-    ``d/ds`` -- composes an unbounded operator (discrete norm ``O(N)``) with a
-    quadrature carrying ``O(N^{-p})`` error, leaving an ``O(1)`` error that
-    refinement does not remove; on a boundary with any appreciable
-    high-frequency content that destroys the solve outright.
+    The operator is usable because the derivative is taken analytically on
+    the kernel. The alternative, assembling ``V`` and then applying a
+    discrete ``d/ds``, composes an unbounded operator (discrete norm
+    ``O(N)``) with a quadrature carrying ``O(N^{-p})`` error. This leaves an
+    ``O(1)`` error that refinement does not remove, and on a boundary with
+    any appreciable high-frequency content it destroys the solve entirely.
 
     Unlike ``K`` and ``L``, whose normal component cancels the singularity,
     this kernel is genuinely Cauchy-singular: ``t . grad_s G ~ 1/(2 pi u)``
     for ``u = s - s'``. The rectangular rule is only ``O(h)`` on it, so the
-    singularity is removed the way ``single_layer_matrix`` removes its
-    logarithm -- subtract a periodic comparison kernel whose action is known
-    in closed form. Here that is the Bloch-phased periodic Hilbert kernel
+    singularity is removed in the way ``single_layer_matrix`` removes its
+    logarithm, by subtracting a periodic comparison kernel whose action is
+    known in closed form. Here that is the Bloch-phased periodic Hilbert
+    kernel
 
     .. math::
         C(s, s') = e^{i \alpha_0 (x(s) - x(s'))}\,
@@ -362,8 +370,8 @@ def tangential_layer_matrix(
 
     which carries the same quasi-periodicity and the same ``1/(2 pi u)``
     behaviour. Its principal-value integral is diagonal in the Fourier basis
-    of the periodic factor -- mode ``p`` is multiplied by ``-i sgn(p) / 2``
-    -- so it is applied spectrally and exactly. The remainder ``K - C`` is
+    of the periodic factor (mode ``p`` is multiplied by ``-i sgn(p) / 2``),
+    so it is applied spectrally and exactly. The remainder ``K - C`` is
     continuous, so the plain rectangular rule recovers its usual accuracy,
     with the diagonal taken as the adjacent-node average as elsewhere.
     """
@@ -422,11 +430,12 @@ def tangential_derivative_matrix(
     """The discretised tangential derivative ``D_t`` for quasi-periodic traces.
 
     Applied to node values of an ``alpha0``-quasi-periodic function of arc
-    length (such as the trace of a single-layer potential), returns ``d/ds``:
-    the Bloch phase is stripped, the periodic factor differentiated
-    spectrally on the uniform arc-length grid, the phase restored, and the
-    product-rule term ``i alpha0 x'(s)`` added with ``x'(s) = n_y``.
-    Geometry-only: no wavelength enters.
+    length (such as the trace of a single-layer potential), the matrix
+    returns ``d/ds``. The Bloch phase is stripped, the periodic factor is
+    differentiated spectrally on the uniform arc-length grid, the phase is
+    restored, and the product-rule term ``i alpha0 x'(s)`` is added with
+    ``x'(s) = n_y``. The matrix depends on geometry only, and no wavelength
+    enters.
     """
     points = len(boundary.x)
     wavenumber = 2j * np.pi * np.fft.fftfreq(points, d=boundary.spacing)
@@ -451,7 +460,7 @@ def dirichlet_matrix(
     terms: int,
     assembler: OperatorAssembler | None = None,
 ) -> NDArray[np.complex128]:
-    """The TE (Dirichlet) system matrix -- the single-layer operator itself."""
+    """The TE (Dirichlet) system matrix, which is the single-layer operator itself."""
     return single_layer_matrix(
         boundary, k=k, alpha0=alpha0, period=period, terms=terms,
         assembler=assembler,

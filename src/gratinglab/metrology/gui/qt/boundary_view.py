@@ -1,16 +1,18 @@
 """
 The Boundary tab: build and export a PCGrate .ggp profile.
 
-Takes the scan the Import tab loaded, averages its grooves into one, and shows
-what will be written before writing it.
+The tab takes the scan the Import tab loaded, averages its grooves into one,
+and shows what will be written before writing it.
 
-The preview is the point. A boundary profile feeds a grating-efficiency model,
-and the two ways it goes wrong - one groove dragging the average, or a step at
-the period boundary where the profile fails to tile - are obvious in a plot and
-invisible in the file. The numbers alone will not tell you.
+The preview is the main purpose of the tab. A boundary profile feeds a
+grating-efficiency model, and the two ways it goes wrong (one groove dragging
+the average, or a step at the period boundary where the profile fails to tile)
+are obvious in a plot and invisible in the file. The numbers alone do not
+reveal either fault.
 
-Computation lives in ``gratinglab.metrology.boundary.build_boundary_profile``, which the
-CLI mode also uses, so the panel cannot drift from ``ANALYSIS_MODE = 'ggp'``.
+The computation lives in
+``gratinglab.metrology.boundary.build_boundary_profile``, which the CLI mode
+also uses, so the panel cannot drift from ``ANALYSIS_MODE = 'ggp'``.
 """
 from __future__ import annotations
 
@@ -305,7 +307,7 @@ class BoundaryView(QWidget):
         self.canvas.draw()
 
     def _set_actions_enabled(self, enabled: bool) -> None:
-        """Both actions need one thing -- a profile -- so they move together."""
+        """All four actions need only a profile, so they are enabled together."""
         self.export_btn.setEnabled(enabled)
         self.efficiency_btn.setEnabled(enabled)
         self.send_btn.setEnabled(enabled)
@@ -316,8 +318,8 @@ class BoundaryView(QWidget):
     def show_efficiency(self):
         """Hand the previewed profile straight to the scalar solver.
 
-        No file in between, because a .ggp round trip keeps
-        the shape and drops the period, which then has to be retyped from the
+        No file is written in between, because a .ggp round trip keeps the
+        shape and drops the period, which then has to be retyped from the
         metrics panel above.
         """
         if self._profile is None:
@@ -389,7 +391,7 @@ class BoundaryView(QWidget):
 
         The format follows the file's suffix, or the dialog's filter when the
         name has no recognised suffix, in which case that suffix is added.
-        Separate from :meth:`export` so it can be driven without a dialog.
+        It is separate from :meth:`export` so it can be driven without a dialog.
         """
         suffix = os.path.splitext(path)[1].lower()
         known = {sfx for _, sfx in self.EXPORT_FORMATS}
@@ -417,10 +419,11 @@ class BoundaryView(QWidget):
     def send_to_efficiency(self):
         """Open this groove in the main efficiency window, period included.
 
-        Written to a gratinglab .json in the temporary directory first, because
-        the efficiency window's form takes a profile *file*. That also leaves
-        the user a file the period travels with, should they want to keep it.
-        The same window is reused on a second send rather than stacking copies.
+        The groove is written to a gratinglab .json in the temporary directory
+        first, because the efficiency window's form takes a profile file. That
+        also leaves the user a file the period travels with, should they want
+        to keep it. The same window is reused on a second send instead of
+        stacking copies.
         """
         if self._profile is None:
             return

@@ -1,6 +1,8 @@
 """
-Analysis workflow orchestration
-Handles the three main analysis modes: single, multiple, compare
+Analysis workflow orchestration.
+
+This module handles the three main analysis modes: single, multiple and
+compare.
 """
 import glob
 import os
@@ -110,10 +112,10 @@ def run_boundary_profile_export(settings=None, filename=None):
     """
     Average the grooves of one scan into a PCGrate .ggp boundary profile.
 
-    Shares the front-end with the blaze-angle workflows - loading, image
-    flattening, groove detection - then diverges: instead of fitting facets, the
-    grooves are averaged, normalised to one period and exported for
-    grating-efficiency modelling.
+    This shares the front-end (loading, image flattening and groove detection)
+    with the blaze-angle workflows and then diverges from them: instead of
+    fitting facets, it averages the grooves, normalises them to one period and
+    exports them for grating-efficiency modelling.
 
     Parameters:
         settings: AnalysisSettings; defaults to config.py, so the CLI behaves as
@@ -189,11 +191,12 @@ def run_icc_report():
     """
     Measure how correlated the row-group measurements are.
 
-    Diagnostic only - reports numbers, changes nothing. Row-group analysis
-    re-measures the same grooves in each band of a scan, so the measurements are
-    not independent, but the reported SEMs and p-values assume they are. The ICC
-    quantifies that, per scan, and the design effect turns it into the factor by
-    which the current SEMs are understated.
+    This is a diagnostic only: it reports numbers and changes nothing.
+    Row-group analysis re-measures the same grooves in each band of a scan, so
+    the measurements are not independent, but the reported SEMs and p-values
+    assume they are. The ICC quantifies that dependence per scan, and the
+    design effect turns it into the factor by which the current SEMs are
+    understated.
     """
     from .stats.icc import (compute_icc, effective_sample_size,
                             sem_inflation_factor)

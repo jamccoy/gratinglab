@@ -3,7 +3,7 @@
 Both windows do their heavy work on a ``QThread``: the metrology window's
 analysis and the main window's solves. Python's automatic collector runs on
 whichever thread happens to allocate past its threshold, so it regularly ran
-*inside* those workers, and when the garbage it found held Qt objects (a
+inside those workers, and when the garbage it found held Qt objects (a
 closed window, a figure from an earlier preview) it destroyed them off the GUI
 thread. Qt does not allow that, and on macOS it segfaults: CI run 39835186938
 died with ``Fatal Python error: Segmentation fault`` and "Garbage-collecting"

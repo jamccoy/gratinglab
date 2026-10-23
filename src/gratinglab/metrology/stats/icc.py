@@ -6,8 +6,8 @@ re-measure the same physical grooves from different horizontal bands of one scan
 The rest of the statistics in this package divide by sqrt(N) over that full count,
 which is only valid if the measurements are independent.
 
-The intraclass correlation coefficient (ICC) is how that assumption gets tested:
-the fraction of total variance that sits *between* row groups rather than within
+The intraclass correlation coefficient (ICC) tests that assumption. It is the
+fraction of total variance that lies between row groups, as opposed to within
 them.
 
     ICC = 0    groups are indistinguishable; measurements behave independently
@@ -16,7 +16,7 @@ them.
                carry no new information, and the effective sample size is closer
                to the number of groups than the number of measurements
 
-This module only measures. The correction that this measurement sizes is applied
+This module only performs the measurement. The correction it sizes is applied
 in analyzer.py, which uses effective_sample_size() below to compute a
 row-group-corrected SEM.
 """
@@ -52,7 +52,7 @@ def compute_icc(values, group_labels):
     Returns:
         dict with icc, between_var, within_var, n_groups, n_measurements,
         mean_group_size and interpretation. Returns icc = nan when there are
-        fewer than two groups, since between-group variance is undefined - a
+        fewer than two groups, since between-group variance is undefined; a
         caller must not read that as "no correlation".
     """
     values = np.asarray(values, dtype=float)

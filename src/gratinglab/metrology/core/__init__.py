@@ -1,6 +1,7 @@
 """
-Core analysis functions
-Data loading, processing, and blaze angle extraction
+Core analysis functions.
+
+This package covers data loading, processing, and blaze angle extraction.
 """
 
 from .processing import (

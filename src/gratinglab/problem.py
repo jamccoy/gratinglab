@@ -1,11 +1,12 @@
-"""The physical problem: what the grating *is*, independent of how it is solved.
+"""The physical problem: what the grating is, independent of how it is solved.
 
-``Problem`` carries **no solver-specific fields, ever**. That single constraint
-is what makes the comparison harness possible -- every method receives the same
-object, so a disagreement between methods is a disagreement about physics rather
-than about how two codes were configured.
+``Problem`` never carries solver-specific fields. That constraint is what makes
+the comparison harness possible: every method receives the same object, so a
+disagreement between methods is a disagreement about physics and not about how
+two codes were configured.
 
-It is also serializable, so a benchmark case is a file rather than a script.
+It is also serializable, so a benchmark case can be stored as a file instead of
+a script.
 """
 
 from __future__ import annotations
@@ -39,7 +40,7 @@ class Problem(BaseModel):
         Groove shape, normalised to the period. Multiply by ``period`` for
         physical height, or use :attr:`depth`.
     coating, substrate
-        Material identifiers. Optional for now -- scalar theory needs no optical
+        Material identifiers. Optional for now, since scalar theory needs no optical
         constants, and the perfect-conductivity reference data it is first
         compared against needs none either. The materials layer lands next.
     roughness

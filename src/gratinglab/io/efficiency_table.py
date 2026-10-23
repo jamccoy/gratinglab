@@ -1,21 +1,21 @@
 """Reader for efficiency tables exported by external grating codes.
 
-An exported efficiency table is just data, so reference results from a
-commercial solver can be compared against without needing a licence to run it.
+An exported efficiency table is only data, so reference results from a
+commercial solver can be compared against without a licence to run it.
 This module reads the tabular dialect written by PCGrate-SX, which implements
 the integral method and is the de-facto standard for grazing-incidence X-ray
 gratings.
 
 The reader does not label the physics. It cannot know from a file which
 numerical method produced it, so :func:`read_scan` takes a ``method`` argument
-that the caller supplies -- ``method="integral"`` for an integral-method code.
-That keeps comparison legends describing physics ("scalar vs integral") rather
-than products, while :attr:`Provenance.version` still records exactly which
-program and version generated the reference data.
+that the caller supplies, for example ``method="integral"`` for an
+integral-method code. Comparison legends therefore describe physics ("scalar vs
+integral") instead of products, while :attr:`Provenance.version` still records
+exactly which program and version generated the reference data.
 
 Dialects are distinguished by their banner line. Only one is implemented today;
-:func:`read_table` is where a GSolver or RETICOLO dialect would be added, rather
-than as a separate vendor module.
+a GSolver or RETICOLO dialect would be added in :func:`read_table` and not as a
+separate vendor module.
 
 Format, confirmed by inspection of PCGrate-SX 6.7.1 output::
 
@@ -70,8 +70,8 @@ class EfficiencyTable:
     """A parsed PCGrate export, before conversion to an :class:`EfficiencyScan`.
 
     ``scan_values`` is always 2-D, shape ``(n_points, n_scan_variables)``.
-    PCGrate supports multi-variable scans -- an angle scan sweeping polar and
-    azimuthal angle together writes both into one tab-delimited field -- so a
+    PCGrate supports multi-variable scans (an angle scan sweeping polar and
+    azimuthal angle together writes both into one tab-delimited field), so a
     1-D assumption would silently mis-read those files.
     """
 
@@ -322,12 +322,12 @@ def to_scan(table: EfficiencyTable, *, method: str = "imported") -> EfficiencySc
     Parameters
     ----------
     method
-        Label for this data in comparisons -- ``"integral"`` for output from an
-        integral-method code. **The caller supplies it because the file does
-        not say.** A table records efficiencies, not which numerical method
-        produced them, so guessing from the vendor banner would be an
-        inference dressed up as a fact. The exact program and version stay on
-        ``Provenance.version`` regardless.
+        Label for this data in comparisons, for example ``"integral"`` for
+        output from an integral-method code. The caller supplies it because
+        the file does not record it. A table records efficiencies without the
+        numerical method that produced them, so guessing from the vendor
+        banner would present an inference as a fact. The exact program and
+        version stay on ``Provenance.version`` regardless.
     """
     if not table.is_wavelength_scan:
         raise ValueError(

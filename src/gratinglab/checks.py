@@ -1,21 +1,21 @@
-r"""Physics self-checks: validate the *model*, not just the arithmetic.
+r"""Physics self-checks that validate the model as well as the arithmetic.
 
 The closed-form tests in ``tests/test_scalar.py`` confirm that a Fourier
 integral is evaluated correctly. They cannot confirm that the integrand is the
 right one, because the expected values are derived from the same formula the
-solver implements. Two checks here close that gap, and neither needs reference
-data or a closed form:
+solver implements. The two checks in this module address that gap, and neither
+needs reference data or a closed form.
 
-**Reciprocity** (:func:`check_reciprocity`) follows from Lorentz reciprocity and
-constrains the *structure* of the phase function. It is sharp: on the scalar
-solver it holds to ~1e-17, and breaking the :math:`\alpha \leftrightarrow \beta`
-symmetry of :math:`\Phi` pushes the violation to ~4e-1 -- sixteen orders of
-magnitude of discrimination.
+The reciprocity check (:func:`check_reciprocity`) follows from Lorentz
+reciprocity and constrains the structure of the phase function. It is sharp:
+on the scalar solver it holds to ~1e-17, and breaking the
+:math:`\alpha \leftrightarrow \beta` symmetry of :math:`\Phi` pushes the
+violation to ~4e-1, a discrimination of sixteen orders of magnitude.
 
-**Energy balance** (:func:`check_energy_balance`) catches the other class of
-error. Summed efficiency exceeding unity is unphysical for any passive
-structure, whatever method produced it. This is the check that found the
-unphysical finite-conductivity run in the reference corpus.
+The energy-balance check (:func:`check_energy_balance`) catches the other class
+of error. Summed efficiency exceeding unity is unphysical for any passive
+structure, whatever method produced it. This check found the unphysical
+finite-conductivity run in the reference corpus.
 
 Both take a solver rather than a scan where possible, so every backend added
 later inherits them without new code.
@@ -233,22 +233,22 @@ def check_energy_balance(
         Require ``sum == 1`` exactly (within tolerance). Use for a perfectly
         conducting or otherwise lossless structure, where the sum rule is a
         theorem. Default ``False`` only requires ``sum <= 1``, which holds for
-        **any** passive grating by **any** method -- a weaker claim, but one
-        that never has a legitimate exception.
+        any passive grating by any method. That is a weaker claim, but it has
+        no legitimate exception.
 
     Notes
     -----
     When the scan records an absorbed fraction (``scan.absorption``, from a
     solver that computes one independently), the conserved quantity is the
-    sum *plus* the absorption and that is what gets checked: ``R + A = 1``
-    is a theorem for a one-interface absorbing grating, so ``lossless=True``
-    is again the right mode for the finite-conductivity integral method --
-    and it is a genuine two-sided check, because the absorption comes from a
-    boundary integral of the densities, not from ``1 - R``.
+    sum plus the absorption, and that is what is checked. ``R + A = 1`` is a
+    theorem for a one-interface absorbing grating, so ``lossless=True`` is
+    again the right mode for the finite-conductivity integral method. The
+    check is then genuinely two-sided, because the absorption is computed
+    from a boundary integral of the densities and not from ``1 - R``.
 
     The default direction matters. A deficit is ordinary: power goes into
     absorption, into evanescent orders, or is missed by an approximate method.
-    An *excess* is not, and this is the check that identified the unphysical
+    An excess is not ordinary, and this check identified the unphysical
     finite-conductivity run in the reference corpus, where summed efficiency
     reached 3.6.
     """

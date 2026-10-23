@@ -1,4 +1,4 @@
-r"""The in-plane perfectly-conducting solve -- the permanent transverse core.
+r"""The permanent transverse core: the in-plane perfectly-conducting solve.
 
 The conical (off-plane) problem for a perfect conductor decouples exactly
 into this in-plane problem at the reduced wavelength
@@ -23,12 +23,13 @@ carries the equivalent statement in its own sign convention), then
           e^{-i \alpha_m x_j - i \gamma_m y_j}
 
 (eq. 4.41). Efficiencies are ``(gamma_m / gamma_0) |r_m|^2`` and satisfy
-``sum = 1`` exactly in the continuum -- the energy-balance theorem this
-solver is tested against (eqs. 4.34, 4.42; thesis eq:prop_order_unity).
+``sum = 1`` exactly in the continuum. This is the energy-balance theorem
+against which the solver is tested (eqs. 4.34, 4.42; thesis
+eq:prop_order_unity).
 
-Amplitudes are returned alongside efficiencies: the planned
+Amplitudes are returned alongside efficiencies because the planned
 finite-conductivity milestone (Goray & Schmidt 2010) assembles a coupled
-system around this core and needs phases, not just moduli.
+system around this core and needs the phases as well as the moduli.
 """
 
 from __future__ import annotations
@@ -71,11 +72,12 @@ def solve_transverse(
 ) -> TransverseSolution:
     """Solve the in-plane perfectly-conducting problem for one polarization.
 
-    ``wavelength`` is the *transverse* (reduced) wavelength in nm;
-    ``polarization`` is ``"TE"`` or ``"TM"`` (the unpolarized average is two
-    calls, taken by the solver above). ``terms`` is the spectral truncation
-    of the kernels. ``assembler`` shares the kernel machinery across calls
-    (the solver passes one per scan); built fresh when omitted.
+    ``wavelength`` is the transverse (reduced) wavelength in nm, and
+    ``polarization`` is ``"TE"`` or ``"TM"`` (the unpolarized average takes
+    two calls, made by the solver above). ``terms`` is the spectral
+    truncation of the kernels. ``assembler`` shares the kernel machinery
+    across calls (the solver passes one per scan) and is built fresh when
+    omitted.
     """
     k = 2.0 * np.pi / wavelength
     cos_alpha = float(np.sqrt(1.0 - sin_alpha**2))

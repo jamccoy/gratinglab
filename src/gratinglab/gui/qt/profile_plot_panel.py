@@ -1,10 +1,10 @@
 """The groove-profile plot: height vs. position.
 
-Drawn from `Problem.height_nm(...)` alone -- no solver is involved in
-computing a groove's shape, so this plot is shared across every solver a tab
-might run rather than duplicated inside each one. It is redrawn once per
-completed solve (from whichever solver just finished, since the geometry is
-the same either way), not once per tab.
+The plot is drawn from `Problem.height_nm(...)` alone. No solver is involved
+in computing the shape of a groove, so this plot is shared by every solver a
+tab might run instead of being duplicated in each. It is redrawn once per
+completed solve (from whichever solver has just finished, since the geometry
+is the same in either case), not once per tab.
 """
 
 from __future__ import annotations
@@ -37,8 +37,8 @@ class ProfilePlotPanel(QWidget):
     def draw(self, parsed) -> None:
         """Redraw from a solved geometry.
 
-        Two periods shown, exactly as the Tk and first-light Qt windows drew
-        it -- one period alone does not show that the profile repeats.
+        Two periods are shown, as in the Tk window and the first Qt window,
+        because a single period does not show that the profile repeats.
         """
         import numpy as np
 

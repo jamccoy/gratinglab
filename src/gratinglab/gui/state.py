@@ -1,18 +1,18 @@
-"""Turning form fields into a validated problem.
+"""Turn form fields into a validated problem.
 
-This module is the GUI's only interesting logic, and it is kept
-separated from the widgets so it can be tested headlessly. **Nothing here
-imports a GUI toolkit**, and nothing here computes physics -- it parses strings,
-validates ranges, and hands the result to the tested core.
+This module contains the GUI's only substantial logic, and it is kept
+separate from the widgets so that it can be tested headlessly. Nothing here
+imports a GUI toolkit, and nothing here computes physics: the module parses
+strings, validates ranges and passes the result to the tested core.
 
-The split matters: widget code is the least testable part of any project, and
-this project's value is defensible numbers. Keeping parsing and validation here
-means a bug in the untested layer produces a wrong *layout*, never a wrong
-*number*.
+The separation is important because widget code is the least testable part of
+any project, while the value of this project lies in defensible numbers.
+Keeping parsing and validation here means that a bug in the untested layer
+can produce a wrong layout but not a wrong number.
 
-Errors are **collected, not raised on the first failure**, so a form with three
-bad fields reports three problems rather than making the user fix them one at a
-time.
+Errors are collected instead of being raised at the first failure, so a form
+with three bad fields reports three problems and the user need not fix them
+one at a time.
 """
 
 from __future__ import annotations
@@ -90,17 +90,16 @@ class FormErrors(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class FormState:
-    """The grating geometry, exactly as typed. Strings, because that is what a
-    form holds.
+    """The grating geometry, exactly as typed, held as strings as in a form.
 
-    Geometry only -- period, profile, mount, wavelengths -- shared across
-    every solver a tab might run. A solver's own knobs (scalar's
-    ``quadrature_points``, say) live in that solver's own state, e.g.
-    :class:`gratinglab.gui.scalar_options.ScalarOptionsState`, not here; this
-    dataclass has no way to know which solver is about to use it.
+    It holds the geometry only (period, profile, mount, wavelengths), which is
+    shared by every solver a tab might run. A solver's own knobs, such as
+    scalar's ``quadrature_points``, live in that solver's own state, e.g.
+    :class:`gratinglab.gui.scalar_options.ScalarOptionsState`, because this
+    dataclass cannot know which solver is about to use it.
 
-    Defaults describe a soft-X-ray off-plane case, which is the project's
-    primary application and exercises the interesting physics immediately.
+    The defaults describe a soft-X-ray off-plane case, which is the project's
+    primary application and exercises the relevant physics immediately.
     """
 
     period: str = "315.15"
@@ -139,10 +138,10 @@ class FormState:
 class Parsed:
     """A geometry that made sense, ready to hand to any solver.
 
-    No ``options`` field: geometry is shared across every solver a tab might
-    run, but each solver's own options (and their own validation, e.g.
-    scalar's Nyquist guard in :mod:`gratinglab.gui.scalar_options`) are that
-    solver's business, built separately from whichever tab is about to solve.
+    There is no ``options`` field. The geometry is shared by every solver a
+    tab might run, but each solver's options, and their validation (e.g.
+    scalar's Nyquist guard in :mod:`gratinglab.gui.scalar_options`), belong to
+    that solver and are built separately by whichever tab is about to solve.
     """
 
     problem: Problem
@@ -151,7 +150,7 @@ class Parsed:
 
     @property
     def lambda_over_period(self) -> float:
-        """Ratio at the long-wavelength end -- the scalar validity indicator."""
+        """Ratio at the long-wavelength end, used as the scalar validity indicator."""
         return float(self.wavelengths.max() / self.problem.period)
 
 
@@ -312,7 +311,7 @@ def build(form: FormState) -> Parsed:
     Raises
     ------
     FormErrors
-        Carrying **every** problem found, so the UI can mark all bad fields at
+        Carrying every problem found, so the UI can mark all bad fields at
         once instead of revealing them one refresh at a time.
     """
     errors: list[FieldError] = []
@@ -363,10 +362,10 @@ def build(form: FormState) -> Parsed:
 def _material_names() -> tuple[str, ...]:
     """Vendored material names, for validating the coating field.
 
-    Imported inside the function so that importing `state` -- which the
-    headless tests do constantly -- does not go near the data directory, and
-    so that a trimmed `materials/data/` degrades to "none installed" rather
-    than an import error.
+    The import is made inside the function so that importing `state`, which
+    the headless tests do constantly, does not touch the data directory, and
+    so that a trimmed `materials/data/` produces "none installed" instead of
+    an import error.
     """
     from ..materials import available
 
@@ -374,7 +373,7 @@ def _material_names() -> tuple[str, ...]:
 
 
 def validate(form: FormState) -> tuple[FieldError, ...]:
-    """Errors in a form, without raising. For live feedback as fields change."""
+    """Errors in a form, without raising, for live feedback as fields change."""
     try:
         build(form)
     except FormErrors as exc:
