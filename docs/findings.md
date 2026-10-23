@@ -697,7 +697,7 @@ facet angle. This groove therefore diffracts like the shallower blaze its depth
 implies, about 20°, irrespective of the 27.9° its facets report. Whatever the
 mechanism, the facet fit gives the number a person would quote for this
 grating, the depth gives the number the solver uses, and the two disagree by
-3.6σ.
+7.6°.
 
 ### What this establishes
 
