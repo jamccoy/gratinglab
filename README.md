@@ -186,12 +186,14 @@ does not install one. A subpackage that needs an optional extra names it when it
 missing, instead of failing with a bare `ModuleNotFoundError`.
 
 Apart from numpy, scipy and pydantic, the only dependency is
-[endstation](https://github.com/jamccoy/endstation), a library of shared components for
-desktop scientific applications by the same author. gratinglab uses its guards for
-optional extras (the messages described above), form validation, Qt layout sizing,
-test helpers, and the tools that build the icon and the macOS application and publish
-the wiki. The core of endstation has no dependencies of its own, so it adds nothing to
-a solver-only install; its Qt components are installed only with the `gui` extra.
+**[endstation](https://pypi.org/project/endstation/)**
+([source](https://github.com/jamccoy/endstation)), a library of shared components for
+desktop scientific applications by the same author, which gratinglab is built on.
+gratinglab uses its guards for optional extras (the messages described above), form
+validation, Qt layout sizing, test helpers, and the tools that build the icon and the
+macOS application and publish the wiki. The core of endstation has no dependencies of
+its own, so it adds nothing to a solver-only install; its Qt components are installed
+only with the `gui` extra.
 
 ### Where the measurement data lives
 
@@ -377,7 +379,7 @@ and `Provenance` records what a run actually used.
 |---|---|---|
 | core | numpy, scipy | BSD-3-Clause |
 | core | pydantic | MIT |
-| core | [endstation](https://github.com/jamccoy/endstation) | BSD-3-Clause |
+| core | [endstation](https://pypi.org/project/endstation/) | BSD-3-Clause |
 | `[gui]`, `[metrology]` | matplotlib | PSF-based, BSD-compatible |
 | `[gui]` | PySide6-Essentials | LGPL-3.0 |
 | `[refractiveindex]` | PyYAML | MIT |
