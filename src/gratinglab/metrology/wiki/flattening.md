@@ -206,6 +206,14 @@ fallback means the background for that row group was fitted by a method other
 than the one requested, and from the table above that is worth up to a few
 tenths of a degree.
 
+Edge exclusion is checked separately, because it runs *after* detection and can
+starve a fit that detection had already satisfied. If excluding the edges would
+leave fewer features than the requested order needs — three, for the default
+quadratic — the exclusion is skipped and every detected feature is used
+instead. If the feature set is too small for the order even then, the order is
+reduced to what those features support, rather than fitting a polynomial the
+data cannot determine. Both are announced.
+
 The fallback is announced on standard output rather than recorded in the
 summary, so in a batch run over many files it is easy to miss. If a row group's
 angle is an outlier, the console is the place to check whether its background

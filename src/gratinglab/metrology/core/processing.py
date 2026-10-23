@@ -186,7 +186,9 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
     Parameters:
         method: 'linear', 'polynomial', 'groove_peaks', or 'level_grooves'
         poly_order: polynomial order (for 'polynomial' and 'level_grooves' methods)
-        exclude_edges: fraction of data to exclude from edges (0.0 to 0.5)
+        exclude_edges: fraction of data to exclude from edges (0.0 to 0.5).
+            For 'level_grooves' it is skipped, with a warning, when excluding
+            the edges would leave too few features to fit the requested order.
         feature: for 'level_grooves': 'peaks', 'troughs', or 'both'
         period_nm: estimated period for finding grooves (for 'level_grooves')
     
@@ -262,13 +264,29 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
                 x_min = x[0] + exclude_edges * (x[-1] - x[0])
                 x_max = x[-1] - exclude_edges * (x[-1] - x[0])
                 mask = (feature_x >= x_min) & (feature_x <= x_max)
-                feature_x = feature_x[mask]
-                feature_y = feature_y[mask]
-            
-            if len(feature_x) < 2:
-                print("    Warning: Not enough features after edge exclusion, using all")
-            
-            poly_coeffs = np.polyfit(feature_x, feature_y, poly_order)
+                kept = int(np.count_nonzero(mask))
+                # Edge exclusion is meant to improve the fit, so it must not be
+                # allowed to starve it. This used to keep the remnant and fit
+                # that while printing "using all": with two features left and a
+                # quadratic asked for, the background was rank-deficient and
+                # still looked like a fit.
+                if kept >= poly_order + 1:
+                    feature_x = feature_x[mask]
+                    feature_y = feature_y[mask]
+                else:
+                    print(f"    Warning: edge exclusion leaves {kept} feature(s), "
+                          f"too few for a degree-{poly_order} background; "
+                          "using all of them")
+
+            # A degree-k polynomial needs k+1 points to be determined. Reaching
+            # here guarantees two, so the order is reduced rather than letting
+            # polyfit return a rank-deficient answer behind a RankWarning.
+            order = min(poly_order, len(feature_x) - 1)
+            if order < poly_order:
+                print(f"    Warning: {len(feature_x)} feature(s) support only a "
+                      f"degree-{order} background, not degree-{poly_order}")
+
+            poly_coeffs = np.polyfit(feature_x, feature_y, order)
             background = np.polyval(poly_coeffs, x)
     else:
         raise ValueError(f"Unknown flattening method: {method}")
