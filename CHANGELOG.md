@@ -14,6 +14,24 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- `gratinglab-app`, a chooser that asks which window you want, and the single
+  application bundle that launches it. Both halves have always been this one
+  package, but the desktop layer shipped two console scripts and so two icons,
+  the AFM one still called "AFM Blaze Meas" with the bundle id
+  `org.jamccoy.afmblazemeas`, all of it inherited from the repository the
+  metrology was merged from. Spotlight indexed it as `AFMBlazeMeas`, which
+  sorts nowhere near GratingLab and names a project that no longer exists, so
+  the half of the package in regular use was the half that could not be found
+  — including by its author, looking for the AFM analysis inside the
+  efficiency window. `tools/apps.py bundle --app gratinglab` now builds one
+  `GratingLab.app` (`org.gratinglab.app`) that opens the chooser, and the
+  chooser opens either window in the same process. The two direct scripts are
+  unchanged.
+- Bundles that skip the chooser are still available as `--app efficiency` and
+  `--app metrology`, renamed "GratingLab Efficiency" and "GratingLab AFM" with
+  `org.gratinglab.*` identities. Neither is built by default, so the Dock gets
+  one icon.
+
 - `flatten_profile` takes `return_report=True` and returns a
   `FlatteningReport` beside the flattened profile: the method and polynomial
   order actually used, how many features the background was fitted through,
