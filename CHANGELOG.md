@@ -12,6 +12,31 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+### Added
+
+- `flatten_profile` takes `return_report=True` and returns a
+  `FlatteningReport` beside the flattened profile: the method and polynomial
+  order actually used, how many features the background was fitted through,
+  whether edge exclusion was skipped, and the RMS scatter of those features
+  about the background they produced. The keyword follows
+  `find_groove_positions`' `return_n_edge_rejected` and is off by default, so
+  two-value unpacking keeps working and the GUI needed no change.
+- The blaze-angle analysis asks for a report per row group and the per-sample
+  summary records the aggregate. `analysis_data_*.csv` gains `Flatten_method`,
+  `Flatten_fallback_groups`, `Flatten_residual_nm` and
+  `Flatten_residual_groups`, appended so earlier columns keep their positions,
+  and the text summary says whether every row group got the method asked for.
+  A row group levelled by a fallback can now be found in a file afterwards
+  instead of only in the console of the run that produced it.
+- `Flatten_residual_nm` is the new diagnostic: how far the lands lie from the
+  background fitted through them, in nanometres, and so how much the plane
+  every blaze angle is quoted against deserves to be trusted. It is the worst
+  row group's rather than the mean, since the weakest reference is the one that
+  matters. It is absent for `linear` and `polynomial`, whose residual would
+  describe the groove depth rather than the reference, and groups whose fit had
+  no spare features are excluded and counted separately — three lands and a
+  quadratic give zero by arithmetic, not by flatness.
+
 ### Changed
 
 - `flatten_profile`'s fallbacks raise a `UserWarning` instead of printing to

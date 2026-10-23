@@ -222,6 +222,37 @@ site by default, so `python -W always` is what makes every row group's fallback
 visible, and the test suite runs with warnings as errors, which means no test
 can pass on a background fitted by a method it did not ask for.
 
+It is recorded as well as announced, because a warning still has to be seen.
+`flatten_profile(..., return_report=True)` returns a report naming the method
+and polynomial order actually used, how many features the background was
+fitted through, whether edge exclusion was skipped, and how far those features
+lie from the background they produced. The blaze-angle analysis asks for one
+per row group and the per-sample summary carries the aggregate: `Flatten_method`,
+`Flatten_fallback_groups`, `Flatten_residual_nm` and `Flatten_residual_groups`
+in `analysis_data_*.csv`, and a line of prose in the text summary. So a row
+group levelled by a fallback can be found afterwards, in a file, rather than
+only in the console of the run that produced it.
+
+### How flat were the lands
+
+`Flatten_residual_nm` is the scatter of the fitted features about the
+background, in nanometres: how far from a smooth low-order surface the lands
+actually lie, and therefore how much the reference deserves to be trusted. A
+large value does not say the angles are wrong, but it does say the plane they
+are quoted against was fitted through points that disagree with it.
+
+It is the worst row group's rather than the mean, because this is a question of
+trust and the weakest reference is the one that matters.
+
+Two things it is not. It is absent for `linear` and `polynomial`, which fit the
+whole trace rather than features: their residual would be dominated by the
+groove depth and would describe the grating instead of the reference. And it is
+zero whenever a fit had no features to spare — three lands and a quadratic pass
+through all three by arithmetic, not by flatness — so such groups are left out
+of the worst case and counted separately in `Flatten_residual_groups`. A blank
+residual with zero groups means no row group's fit had a degree of freedom to
+measure with.
+
 ### Judge it by eye
 
 The Import tab draws three curves: the averaged profile, the background that is

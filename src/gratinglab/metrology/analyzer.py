@@ -112,12 +112,15 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
         print(f"\n  Processing row group {group_idx + 1}/{settings.n_row_groups}...")
         
         # Flatten this profile
-        flat_y, background = flatten_profile(raw_x, raw_y,
+        flat_y, background, flat_report = flatten_profile(raw_x, raw_y,
                                              method=settings.flatten_method,
                                              poly_order=settings.flatten_poly_order,
                                              exclude_edges=settings.flatten_exclude_edges,
                                              feature=settings.flatten_feature,
-                                             period_nm=period_nm_est)
+                                             period_nm=period_nm_est,
+                                             return_report=True)
+        if flat_report.fell_back:
+            print(f"    Flattening: {flat_report.summary()}")
         
         # Show flattening diagnostic for first group only
         if show_plots and settings.show_flattening_diagnostic and group_idx == 0:
@@ -197,7 +200,10 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
             'n_grooves': len(groove_centers),
             'raw_y': raw_y,
             'flat_y': flat_y,
-            'groove_centers': groove_centers
+            'groove_centers': groove_centers,
+            # How this group's background was actually fitted. A group that
+            # fell back is not comparable with one that did not.
+            'flatten_report': flat_report,
         })
     
     # Check if we got any measurements
@@ -299,7 +305,8 @@ def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
         _plot_2d_image(data, scan_x_size, filename)
     
     # Extract and flatten profile
-    raw_x, raw_y, flat_y, background, period_nm_est = _process_profile(data, scan_x_size, show_plots, settings)
+    (raw_x, raw_y, flat_y, background, period_nm_est,
+     flat_report) = _process_profile(data, scan_x_size, show_plots, settings)
     
     # Find grooves
     groove_centers, n_edge_rejected = find_groove_positions(raw_x, flat_y, period_nm_est,
@@ -355,7 +362,8 @@ def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
     # Combine all results
     return _package_results(filename, blaze_angles, stats, period_nm, period_std,
                            groove_periods, quality, all_local_angles,
-                           raw_x, flat_y, groove_centers)
+                           raw_x, flat_y, groove_centers,
+                           flat_report=flat_report)
 
 
 # ============ HELPER FUNCTIONS ============
@@ -420,12 +428,13 @@ def _process_profile(data, scan_x_size, show_plots, settings):
     print(f"Estimated period: {period_nm_est:.2f} nm")
     
     # Flatten profile
-    flat_y, background = flatten_profile(raw_x, raw_y,
+    flat_y, background, flat_report = flatten_profile(raw_x, raw_y,
                                          method=settings.flatten_method,
                                          poly_order=settings.flatten_poly_order,
                                          exclude_edges=settings.flatten_exclude_edges,
                                          feature=settings.flatten_feature,
-                                         period_nm=period_nm_est)
+                                         period_nm=period_nm_est,
+                                         return_report=True)
     
     # Show flattening diagnostic if requested
     if show_plots and settings.show_flattening_diagnostic:
@@ -435,7 +444,7 @@ def _process_profile(data, scan_x_size, show_plots, settings):
     # Print flattening info
     _print_flattening_info(raw_x, background, settings)
     
-    return raw_x, raw_y, flat_y, background, period_nm_est
+    return raw_x, raw_y, flat_y, background, period_nm_est, flat_report
 
 
 def _print_flattening_info(raw_x, background, settings):
@@ -797,7 +806,7 @@ def _print_summary_row_groups(filename, blaze_angles, stats, period_nm,
 
 def _package_results(filename, blaze_angles, stats, period_nm, period_std,
                      groove_periods, quality, all_local_angles,
-                     raw_x, flat_y, groove_centers):
+                     raw_x, flat_y, groove_centers, flat_report=None):
     """Package all results into a dictionary"""
     return {
         'filename': filename,
@@ -816,6 +825,7 @@ def _package_results(filename, blaze_angles, stats, period_nm, period_std,
         'local_angle_std': stats['local_angle_std'],
         'local_angle_range': stats['local_angle_range'],
         'all_local_angles': all_local_angles,
+        **_aggregate_flattening([flat_report]),
         # Uncertainty metrics
         'total_std': stats['total_std'],
         'sem': stats['sem'],
@@ -826,6 +836,34 @@ def _package_results(filename, blaze_angles, stats, period_nm, period_std,
         'raw_x': raw_x,
         'flat_y': flat_y,
         'groove_centers': groove_centers[:len(quality)]
+    }
+
+
+def _aggregate_flattening(reports):
+    """
+    One sample's flattening, across however many row groups it had.
+
+    Three things a reader of the summary needs: which method was asked for, how
+    many groups did not get it, and how flat the lands actually were. The
+    residual is the worst across the groups rather than the mean, because it is
+    a question of trust and the weakest reference is the one that matters.
+
+    Groups whose fit had no spare features are left out of that worst case: such
+    a fit passes through every point and reports a residual of zero, which would
+    otherwise pull the figure towards a flatness nothing measured.
+    """
+    reports = [r for r in reports if r is not None]
+    if not reports:
+        return {}
+
+    informative = [r for r in reports
+                   if r.residual_rms_nm is not None and r.dof > 0]
+    return {
+        'flatten_method': reports[0].method_requested,
+        'flatten_fallback_groups': sum(1 for r in reports if r.fell_back),
+        'flatten_residual_rms_nm': (max(r.residual_rms_nm for r in informative)
+                                    if informative else None),
+        'flatten_residual_groups': len(informative),
     }
 
 
@@ -857,6 +895,8 @@ def _package_results_row_groups(filename, blaze_angles, stats, period_nm, period
         'local_angle_std': stats['local_angle_std'],
         'local_angle_range': stats['local_angle_range'],
         'all_local_angles': all_local_angles,
+        **_aggregate_flattening([g.get('flatten_report')
+                                 for g in group_results]),
         # Uncertainty metrics
         'total_std': stats['total_std'],
         'sem': stats['sem'],

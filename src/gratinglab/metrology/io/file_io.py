@@ -74,6 +74,19 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
             f.write(f"  Mean blaze angle: {r['mean_angle']:.3f}° ± {r['std_angle']:.3f}°\n")
             f.write(f"  Angle range: {r['min_angle']:.3f}° to {r['max_angle']:.3f}°\n")
 
+            # The header above names the method asked for. This says what the
+            # sample got, which differs whenever a row group fell back.
+            fallbacks = r.get('flatten_fallback_groups')
+            if fallbacks is not None:
+                f.write(f"  Flattening: {r.get('flatten_method', 'unknown')}")
+                f.write(f", {fallbacks} row group(s) fell back\n" if fallbacks
+                        else ", every row group as asked\n")
+                residual = r.get('flatten_residual_rms_nm')
+                if residual is not None and np.isfinite(residual):
+                    f.write(f"    Lands about the background: {residual:.3f} nm "
+                            f"RMS, worst of {r.get('flatten_residual_groups', 0)} "
+                            f"group(s)\n")
+
             icc = r.get('icc')
             if icc is not None and np.isfinite(icc):
                 n_eff = r.get('n_effective', float('nan'))
@@ -182,7 +195,14 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
         f.write("Local_angle_std_deg,Local_angle_range_deg,Temperature_C,")
         # Appended, not inserted: existing columns keep their positions and
         # meanings so baselines recorded before the correction still diff.
-        f.write("ICC,N_eff,SEM_deg,SEM_corrected_deg\n")
+        f.write("ICC,N_eff,SEM_deg,SEM_corrected_deg,")
+        # How the background was fitted. Flattening sets the plane every angle
+        # here is quoted against, so a run with fallbacks is not comparable
+        # with one without. Residual_nm is the worst row group's scatter of
+        # lands about its background, over Residual_groups groups; blank means
+        # no group's fit had a feature to spare, so none could be measured.
+        f.write("Flatten_method,Flatten_fallback_groups,"
+                "Flatten_residual_nm,Flatten_residual_groups\n")
         
         # Data rows
         for i, (r, label) in enumerate(zip(results, labels)):
@@ -211,7 +231,13 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
             f.write(f"{icc:.4f}," if icc is not None and np.isfinite(icc) else ",")
             f.write(f"{n_eff:.1f}," if n_eff is not None and np.isfinite(n_eff) else ",")
             f.write(f"{sem:.4f}," if sem is not None and np.isfinite(sem) else ",")
-            f.write(f"{sem_corr:.4f}\n" if sem_corr is not None and np.isfinite(sem_corr) else "\n")
+            f.write(f"{sem_corr:.4f}," if sem_corr is not None and np.isfinite(sem_corr) else ",")
+
+            residual = r.get('flatten_residual_rms_nm')
+            f.write(f"{r.get('flatten_method', '')},")
+            f.write(f"{r.get('flatten_fallback_groups', '')},")
+            f.write(f"{residual:.4f}," if residual is not None and np.isfinite(residual) else ",")
+            f.write(f"{r.get('flatten_residual_groups', '')}\n")
     
     print(f"✓ CSV data saved to: {csv_filename}")
     

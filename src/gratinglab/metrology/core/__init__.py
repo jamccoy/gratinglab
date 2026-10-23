@@ -7,6 +7,7 @@ This package covers data loading, processing, and blaze angle extraction.
 from .processing import (
     load_afm_data,
     raw_data,
+    FlatteningReport,
     flatten_profile,
     find_groove_positions,
     extract_single_groove
@@ -18,6 +19,7 @@ from .processing import (
 __all__ = [
     'load_afm_data',
     'raw_data',
+    'FlatteningReport',
     'flatten_profile',
     'find_groove_positions',
     'extract_single_groove'
