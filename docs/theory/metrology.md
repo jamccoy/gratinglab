@@ -25,9 +25,9 @@ find them.
 
 The last two assumptions are not mitigated anywhere in this package and have no
 diagnostic. On the one measured grating in this repository both are false: see
-`findings.md`, "The measured groove is rounded, not faceted", where the fitted
+`findings.md`, "The measured groove is rounded rather than faceted", where the fitted
 facet angle (27.91° ± 2.13°) and the angle implied by the depth (20.33°) differ
-by 3.6σ.
+by 7.6°.
 
 The least expensive diagnostic available has not yet been implemented. It would
 compute the blaze angle implied by the measured depth and compare it with the
@@ -76,7 +76,7 @@ order changes the answer.
 Handedness is preserved and never mirrored. The facet orientation matches
 increasing scan-x in the source data. Whether that matches the sense the solver
 expects is a question about the *mount* and lies outside this package; see
-`conventions.md` §3, "Which way the profile parameter runs".
+`conventions.md` §3, "Direction of the profile parameter".
 
 ### The stretch
 

@@ -498,14 +498,17 @@ BLAZE_SIDE = 'positive_slope'  # Switch to other facet
 
 ### Problem: Error Bars Seem Too Small
 
-Small error bars are usually correct. Row-group analysis gives small error bars because:
-- SEM = σ / √N  
-- With N=80 instead of N=4, the SEM is ~4.5× smaller
-- The increase in precision is real and comes from using all of the data
+Small error bars are usually correct. Row-group analysis gives smaller error bars
+than the traditional analysis because it uses all of the data. The naive SEM,
+SEM = σ / √N, would be ~4.5× smaller with N=80 than with N=4, but the row groups
+re-measure the same grooves and are therefore not independent, so the reported
+error does not shrink as fast as that. `SEM_corrected_deg` uses the effective
+sample size from the ICC correction (see "Known limitation" below), and
+comparisons between samples use it together with the effective sample size.
 
 **Verify** that:
 - σ_total is similar between traditional and row-group analysis (~0.2°)
-- the SEM scales as 1/√N
+- `SEM_corrected_deg` is wider than `SEM_deg`, by more when the row groups are strongly correlated
 - σ_total is not unrealistically small (<0.05°); if it is, the data quality should be checked
 
 ---
@@ -636,9 +639,9 @@ regression check on that path.
 
 ### Known limitation
 
-Row-group analysis produces many measurements of the same physical grooves, but
-the statistics treat them as independent samples, so the reported SEMs and
-p-values are optimistic. Mean angles are unaffected.
+Row-group analysis produces many measurements of the same physical grooves, so
+statistics that treated them as independent samples would report optimistic SEMs
+and p-values. Mean angles are unaffected.
 
 This effect has now been measured. It can be reproduced with
 `ANALYSIS_MODE = 'icc'`: across the eight sample scans the intraclass correlation

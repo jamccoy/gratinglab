@@ -396,7 +396,7 @@ into the repository an AFM scan of what is plausibly the same grating
 replaced by a measured groove. The total moved in the wrong direction, from
 0.5420 idealised to 0.3362 measured, against the reference's unit total. The
 groove's facet fit (27.91° ± 2.13°) and its depth (which implies 20.33°) disagree
-by 3.6σ: the groove is rounded and not faceted, and the solver responds to the
+by 7.6°: the groove is rounded and not faceted, and the solver responds to the
 depth. A flat land would explain the same deficit and was excluded (it would need
 25–30% of the period, whereas 2.9% is within 2° of flat), as was smearing from the
 groove averaging (0.4%). The full evidence is in `findings.md`, "The measured
