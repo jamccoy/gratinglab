@@ -14,15 +14,33 @@ readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "BSD-3-Clause" }
 authors = [{ name = "Jake McCoy" }]
-keywords = ["diffraction", "grating", "efficiency", "rcwa", "x-ray", "spectroscopy",
-            "afm", "metrology", "blaze", "pcgrate"]
+# Wavelength-neutral on purpose. The off-plane work this package grew out of is
+# soft x-ray, and that band is still named, but nothing in the solvers or the
+# metrology assumes one: the grating equation carries no band, and the
+# materials layer reads CXRO x-ray tables and refractiveindex.info
+# ultraviolet-to-infrared tables alike. Leading with "x-ray" told a reader the
+# in-plane half of the package was not meant for them.
+#
+# "pcgrate" is deliberately absent. It is a program this project validates
+# against, not a feature of this one, and a search for it should not land here.
+keywords = ["diffraction", "grating", "diffraction grating", "diffraction efficiency",
+            "optics", "rcwa", "integral method", "spectroscopy", "afm", "metrology",
+            "blaze", "groove profile", "ultraviolet", "infrared", "x-ray"]
+# Only classifiers from the trove list, which PyPI rejects uploads over. Note
+# that there is no `Topic :: Scientific/Engineering :: Optics`; Physics is the
+# nearest, with Information Analysis for the metrology and Visualization for
+# the windows. No Qt environment classifier: a classifier cannot be made
+# conditional on an extra, and a default install pulls no toolkit at all.
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: BSD License",
+    "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: Scientific/Engineering :: Visualization",
 ]
 dependencies = [
     "numpy>=1.26",
