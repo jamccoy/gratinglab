@@ -214,10 +214,13 @@ instead. If the feature set is too small for the order even then, the order is
 reduced to what those features support, rather than fitting a polynomial the
 data cannot determine. Both are announced.
 
-The fallback is announced on standard output rather than recorded in the
-summary, so in a batch run over many files it is easy to miss. If a row group's
-angle is an outlier, the console is the place to check whether its background
-was fitted the way the others' were.
+Each fallback raises a `UserWarning` naming what it did and why. It used to be
+printed to standard output, where it scrolled past in a batch run with nothing
+to catch it; a warning can be turned into an error, counted, or routed to a log
+by the code calling the pipeline. Python shows a given warning once per call
+site by default, so `python -W always` is what makes every row group's fallback
+visible, and the test suite runs with warnings as errors, which means no test
+can pass on a background fitted by a method it did not ask for.
 
 ### Judge it by eye
 

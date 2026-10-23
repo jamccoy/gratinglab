@@ -10,6 +10,18 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- `flatten_profile`'s fallbacks raise a `UserWarning` instead of printing to
+  standard output. A print scrolls past in a batch run with nothing able to
+  catch it; a warning can be turned into an error, counted, or routed to a log
+  by whatever drives the pipeline. The suite runs with `filterwarnings =
+  error`, so no test can now pass on a background fitted by a method it did not
+  ask for — which is also how this change was checked: the full suite still
+  passes, so nothing in it was flattening by fallback.
+
 ## 0.1.9 (2026-10-23)
 
 ### Changed
