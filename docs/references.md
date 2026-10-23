@@ -1,9 +1,9 @@
 # References
 
-The literature this implementation is built from, mapped to the part of the
-project each one serves. Where two sources disagree, the resolution is recorded
-in [`conventions.md` §10](conventions.md) and summarised in
-[`findings.md`](findings.md#thesis-and-issi-chapter-reconciled).
+This page lists the literature on which this implementation is based, with the
+part of the project that each source serves. Where two sources disagree, the
+resolution is recorded in [`conventions.md` §10](conventions.md) and summarised
+in [`findings.md`](findings.md#thesis-and-issi-chapter-reconciled).
 
 ---
 
@@ -13,12 +13,13 @@ in [`conventions.md` §10](conventions.md) and summarised in
 *Diffraction Gratings for X-ray Spectroscopy.* Springer ISSI Scientific Reports
 (2024). [arXiv:2409.02297](https://arxiv.org/abs/2409.02297)
 
-§2.1 gives the conical framework — the generalized grating equation, the
-wave-vector construction, the Kirchhoff scalar form. §4 gives the blazed
-reflection-grating scalar efficiency and the validity guards.
+§2.1 gives the conical framework: the generalized grating equation, the
+wave-vector construction and the Kirchhoff scalar form. §4 gives the scalar
+efficiency of the blazed reflection grating and the validity guards.
 
-**This is normative where it disagrees with any other source here**: it is
-published, peer-reviewed, and self-consistent under Parseval.
+This source is normative wherever it disagrees with any other source listed
+here, because it is published, peer-reviewed, and self-consistent under
+Parseval.
 
 ---
 
@@ -27,24 +28,25 @@ published, peer-reviewed, and self-consistent under Parseval.
 **McCoy, J. A.** *Scalar Treatment of Gratings*, PhD thesis Appendix D,
 Pennsylvania State University.
 
-The primary derivation, and the most detailed treatment of the closed forms:
-square wave, sinusoid and sawtooth, with the off-plane substitution
-λ → λ csc γ that lets one module serve both mounts. Four transcription errors
-and one substantive difference from the ISSI chapter are recorded in
-`conventions.md` §10.
+This appendix is the primary derivation and gives the most detailed treatment of
+the closed forms for the square wave, sinusoid and sawtooth, together with the
+off-plane substitution λ → λ csc γ that allows one module to serve both mounts.
+Four transcription errors and one substantive difference from the ISSI chapter
+are recorded in `conventions.md` §10.
 
 **McCoy, J. A.** *On X-ray Reflection*, PhD thesis Appendix C.
 
-Fresnel reflectivity, the soft-X-ray index of refraction, penetration depth, and
-§C.1.4 surface roughness — the basis for the materials layer's Névot–Croce and
-Debye–Waller factors.
+This appendix covers Fresnel reflectivity, the soft-X-ray index of refraction,
+penetration depth, and (in §C.1.4) surface roughness, which forms the basis for
+the Névot–Croce and Debye–Waller factors in the materials layer.
 
 **Harvey, J. E. & Pfisterer, R. N.** *Understanding diffraction grating
 behavior.* Opt. Eng. **58**(8), 087105 (2019); part II, **59**(1), 017103 (2020).
 
-A modern parametric / linear-systems treatment that handles conical diffraction
-natively. Not yet implemented; it is the natural basis for a second scalar
-backend to compare against the Kirchhoff one.
+These papers give a modern parametric, linear-systems treatment that handles
+conical diffraction natively. It has not yet been implemented; it is the natural
+basis for a second scalar backend against which the Kirchhoff one could be
+compared.
 
 **Born, M. & Wolf, E.** *Principles of Optics.*
 
@@ -58,15 +60,15 @@ Kirchhoff diffraction theory and the Fraunhofer limit.
 the diffraction characteristics of binary dielectric gratings.* Appl. Opt.
 (1995).
 
-Benchmark cases, and directly relevant to profile-error sensitivity — the
-question of how much a measured deviation from an ideal profile changes
-efficiency.
+This paper supplies benchmark cases and bears directly on profile-error
+sensitivity, that is, on how much a measured deviation from an ideal profile
+changes the efficiency.
 
-**Li, L.** — Fourier factorization rules.
+**Li, L.** Fourier factorization rules.
 
-Non-negotiable for the RCWA backend. Without the correct factorization, TM
-metallic cases converge badly and cross-method plots would misrepresent RCWA
-rather than reveal anything about physics.
+These rules are required for the RCWA backend. Without the correct
+factorization, TM metallic cases converge badly, and cross-method plots would
+then misrepresent RCWA instead of revealing anything about the physics.
 
 ---
 
@@ -76,7 +78,8 @@ rather than reveal anything about physics.
 diffraction gratings and its application to the study of ghosts.* J. Opt. Soc.
 Am. A **12**(6), 1271 (1995).
 
-From the group that originated the coordinate-transformation method.
+This paper comes from the group that originated the coordinate-transformation
+method.
 
 **Breidne, M. & Maystre, D.** *Variational theory of diffraction gratings and
 its application to the study of ghosts.* J. Opt. Soc. Am. **72**(4), 499 (1982).
@@ -89,128 +92,136 @@ its application to the study of ghosts.* J. Opt. Soc. Am. **72**(4), 499 (1982).
 (ed.), *Gratings: Theory and Numeric Applications*, Institut Fresnel / CNRS /
 AMU (2012). Freely available.
 
-**The implementation guide — now the implemented guide.** 59 pages, including
-§4.5 on conical mounting and §4.6 on the numerical tooling. The
-perfect-conductivity solver follows it directly; the anchors actually used:
-eqs. (4.31)–(4.34) TE, (4.37)–(4.42) TM, (4.65) the conical invariance
-theorem, (4.70)–(4.74) the equal-arc rectangular rule, (4.82)–(4.87) the
-Kummer kernel acceleration, (4.95)–(4.100) the log-singularity split, and
-Tables 4.1/4.2 as literature benchmarks (Table 4.1 is reproduced in
-`tests/test_integral_core.py`). Caveats worth knowing before extending:
-§4.6.5 on edges (the measured first-order TM corner convergence), §4.6.6 on
-graded meshes (the fix). One transcription warning: the printed sgn/sign
-placement in eqs. (4.33)/(4.40)/(4.41) did not survive PDF text extraction —
-the implementation derives the kernels from the spectral form and pins every
-sign with the flat-mirror and Table 4.1 tests instead.
+This chapter served as the implementation guide, and the solver now follows it.
+It runs to 59 pages, including §4.5 on conical mounting and §4.6 on
+the numerical tooling, and the perfect-conductivity solver follows it directly.
+The anchors used are eqs. (4.31)–(4.34) for TE, (4.37)–(4.42) for TM, (4.65)
+for the conical invariance theorem, (4.70)–(4.74) for the equal-arc rectangular
+rule, (4.82)–(4.87) for the Kummer kernel acceleration, (4.95)–(4.100) for the
+log-singularity split, and Tables 4.1/4.2 as literature benchmarks (Table 4.1
+is reproduced in `tests/test_integral_core.py`). Two caveats apply before the
+solver is extended: §4.6.5 on edges, which accounts for the measured
+first-order TM corner convergence, and §4.6.6 on graded meshes, which is the
+fix. The printed sgn/sign placement in eqs. (4.33)/(4.40)/(4.41) did not
+survive PDF text extraction, so the implementation derives the kernels from the
+spectral form and pins every sign with the flat-mirror and Table 4.1 tests.
 
 **Goray, L. I. & Schmidt, G.** *Solving conical diffraction grating problems
 with integral equations.* J. Opt. Soc. Am. A **27**, 585 (2010).
 
-Conical plus integral equations is exactly the off-plane X-ray case. Goray is
-the author of the standard commercial implementation; Schmidt supplied the
-rigorous analysis. **Implemented at M20** (`conductivity="tabulated"`;
-[`theory/integral.md`](theory/integral.md) §8) with the anchors: eq. (6) the
-conical jump conditions, eqs. (15)–(21) the potential operators, eq. (23) the
-coupled system (re-derived in project conventions — their normal points into
-the metal and their potentials carry a factor 2, so transcription is a sign
-trap; the flat-interface Fresnel tests pin every sign instead), §2.C the
-energy balance, eq. (26) the absorption integral, §3 the numerical-option
-note that `V⁺∂ₜV⁻` may be discretised by numerical differentiation (the
-option taken, via the spectral `D_t` matrix). Their comparison Tables 3/5/6
-are usable validation data; **Table 4 is a publisher's duplication of
-Table 3** — see [`findings.md`](findings.md). Table 2's incident state needs
-Li's polarization-angle convention (δ measured so tan δ = |E_s/E_p|, ψ the
-relative phase — decoded from the Table 3/4 footnotes) and its deep lamellar
-profile is corner-limited on the current mesh, so it is left to the
-graded-mesh milestone.
+The combination of conical mounting and integral equations is exactly the
+off-plane X-ray case. Goray is the author of the standard commercial
+implementation, and Schmidt supplied the rigorous analysis. The method was
+implemented at M20 (`conductivity="tabulated"`;
+[`theory/integral.md`](theory/integral.md) §8) with the following anchors:
+eq. (6) for the conical jump conditions, eqs. (15)–(21) for the potential
+operators, eq. (23) for the coupled system, §2.C for the energy balance,
+eq. (26) for the absorption integral, and the numerical-option note in §3 that
+`V⁺∂ₜV⁻` may be discretised by numerical differentiation (the option taken here,
+via the spectral `D_t` matrix). The coupled system was re-derived in project
+conventions, because their normal points into the metal and their potentials
+carry a factor 2, which makes transcription a sign trap; the flat-interface
+Fresnel tests pin every sign instead. Their comparison Tables 3/5/6 are usable
+as validation data. Table 4 is a publisher's duplication of Table 3 (see
+[`findings.md`](findings.md)). The incident state of Table 2 requires Li's
+polarization-angle convention, in which δ is measured so that tan δ = |E_s/E_p|
+and ψ is the relative phase (decoded from the Table 3/4 footnotes). Its deep
+lamellar profile is corner-limited on the current mesh, so that case is left to
+the graded-mesh milestone.
 
 **Li, L.** *Multilayer modal method for diffraction gratings of arbitrary
 profile, depth, and permittivity* (and the conical-mount companion data).
 J. Opt. Soc. Am. A **10**, 2581 (1993).
 
-The independent cross-method source behind Goray & Schmidt's comparison
-tables — what makes their Table 3 a genuine two-code anchor rather than a
-self-comparison.
+This is the independent cross-method source behind the comparison tables of
+Goray & Schmidt, and it is what makes their Table 3 a genuine anchor between two
+codes instead of a self-comparison.
 
 **Maystre, D.** *Analytic Properties of Diffraction Gratings*, ch. 2 of the same
 volume.
 
-Anomalies and analytic structure — directly relevant to the Rayleigh-anomaly
-instability documented in [`findings.md`](findings.md#a-reference-file-violates-energy-conservation).
+This chapter treats anomalies and analytic structure, and is directly relevant
+to the Rayleigh-anomaly instability documented in
+[`findings.md`](findings.md#a-reference-file-violates-energy-conservation).
 
 **Kalhor, H. A. & Neureuther, A. R.** *Effects of conductivity, groove shape,
 and physical phenomena on the design of diffraction gratings.* J. Opt. Soc. Am.
 **62** (1972).
 
-Early integral-equation treatment; useful for the perfectly-conducting limit.
+This is an early integral-equation treatment and is useful for the
+perfectly-conducting limit.
 
 **McCoy, J. A.** *Modeling Diffraction Efficiency*, PhD thesis Chapter 2 §2.2.
 
-The same derivation in this project's notation: boundary value problem →
-Helmholtz with boundary conditions → Green's function → Dirichlet enforcement →
-the perfectly-conducting limit, with Σℰ = 1 proved via Green's theorem. §2.1
-documents the ALS beamline 6.3.2 measurement method.
+This section gives the same derivation in the notation of this project, proceeding
+from the boundary value problem to the Helmholtz equation with boundary
+conditions, then to the Green's function, Dirichlet enforcement and the
+perfectly-conducting limit, with Σℰ = 1 proved via Green's theorem. §2.1
+documents the measurement method used at ALS beamline 6.3.2.
 
-> §2.2.3 is **outdated** and should not be ported as written — it describes the
+> §2.2.3 is outdated and should not be ported as written. It describes the
 > commercial code as internally multiplying by Fresnel reflectivity in
 > perfect-conductivity mode, which contradicts the Σℰ = 1 result proved
-> immediately above it. See `conventions.md` §10, item 5.
+> immediately before it. See `conventions.md` §10, item 5.
 
 ---
 
 ## Validation
 
-**Moharam, M. G. & Gaylord, T. K.** — canonical RCWA test cases.
+**Moharam, M. G. & Gaylord, T. K.** Canonical RCWA test cases.
 
-**Li, L.** — crossed-grating benchmarks.
+**Li, L.** Crossed-grating benchmarks.
 
-These live in the visible and near-IR, which is why that regime is the
-project's *validation* regime even though soft X-ray is the application. See
-[`roadmap.md`](roadmap.md#two-regimes-two-roles).
+These cases lie in the visible and near-IR, which is why that regime serves as
+the project's *validation* regime even though the application is in the soft
+X-ray. See [`roadmap.md`](roadmap.md#two-regimes-two-roles).
 
 **Heuberger, G., Klepp, J., Guo, J., Tomita, Y. & Fally, M.** *Light diffraction
 from a phase grating at oblique incidence in the intermediate diffraction
 regime.* Appl. Phys. B **127**, 72 (2021).
 
-Measured data on where scalar theory stops working — the empirical basis for a
-scalar validity map.
+This paper provides measured data on where scalar theory ceases to hold, and is
+the empirical basis for a map of scalar validity.
 
 ---
 
 ## Optical constants
 
-None ship with the package; these are the sources its readers are written for.
+No optical constants ship with the package; these are the sources whose formats
+its readers are written for.
 
 **Henke, B. L., Gullikson, E. M. & Davis, J. C.** *X-ray interactions:
 photoabsorption, scattering, transmission, and reflection at E = 50–30000 eV,
 Z = 1–92.* At. Data Nucl. Data Tables **54**(2), 181–342 (1993).
 
-The compilation behind CXRO's tables, the X-ray reader's format.
+This is the compilation behind the CXRO tables, whose format the X-ray reader
+reads.
 
 **Polyanskiy, M. N.** *Refractiveindex.info database of optical constants.*
 Sci. Data **11**, 94 (2024).
 
-The ultraviolet-to-infrared reader's format and its nine dispersion formulas.
-The database is CC0.
+This database defines the format of the ultraviolet-to-infrared reader and its
+nine dispersion formulas. The database is CC0.
 
 **Malitson, I. H.** *Interspecimen comparison of the refractive index of fused
 silica.* J. Opt. Soc. Am. **55**(10), 1205–1209 (1965).
 
-The fused silica the reader's tests hold to its published n_d = 1.4585, a value
-neither the reader nor the database's own code produced.
+This is the source for the fused silica that the reader's tests hold to its
+published value of n_d = 1.4585, a value that neither the reader nor the
+database's own code had produced.
 
 ---
 
 ## Application context
 
-**Tutt, J. et al.** — diffraction efficiency testing of sinusoidal and blazed
+**Tutt, J. et al.** Diffraction efficiency testing of sinusoidal and blazed
 off-plane reflection gratings. J. Astron. Instrum. (2016).
 
-**Marlowe, H. et al.** — polarization dependence at grazing incidence. The
-justification for treating soft-X-ray reflectivity as polarization-independent,
-which is why the reference corpus carries only TE.
+**Marlowe, H. et al.** Polarization dependence at grazing incidence. This work
+justifies treating soft-X-ray reflectivity as polarization-independent, which is
+why the reference corpus carries only TE.
 
-**McCoy, J. A. et al.** — J. Vac. Sci. Technol. B (2018); ApJ **891**, 114
+**McCoy, J. A. et al.** J. Vac. Sci. Technol. B (2018); ApJ **891**, 114
 (2020); OSA Continuum **3**(11), 3141 (2020).
 
 ---
@@ -221,24 +232,26 @@ which is why the reference corpus carries only TE.
 simulation, surface reconstruction, and tip estimation.* J. Res. Natl. Inst.
 Stand. Technol. **102**(4), 425–454 (1997).
 
-The tip-deconvolution milestone (roadmap §4): morphological dilation/erosion,
-the certainty map that marks unrecoverable points, and blind tip estimation.
-Erosion bounds the true surface; it does not recover it.
+This paper underlies the tip-deconvolution milestone (roadmap §4): morphological
+dilation and erosion, the certainty map that marks unrecoverable points, and
+blind tip estimation. Erosion bounds the true surface but does not recover it.
 
 ---
 
 ## Sibling code
 
 **endstation** ([github.com/jamccoy/endstation](https://github.com/jamccoy/endstation),
-on PyPI). Shared scaffolding for the author's desktop science tools, and
-gratinglab's one non-scientific dependency: the optional-dependency guards behind
-every missing-extra message, form-error collection, Qt layout sizing, the
-toolkit-boundary test and pytest plugin, and the icon, macOS app and wiki-publishing
-tools. Its core declares no dependencies, so it costs a solver-only install
-nothing. A fix to any of those lands there, not here.
+on PyPI). This package is shared scaffolding for the author's desktop science
+tools and is gratinglab's one non-scientific dependency. It provides the
+optional-dependency guards behind every missing-extra message, form-error
+collection, Qt layout sizing, the toolkit-boundary test and pytest plugin, and
+the icon, macOS app and wiki-publishing tools. Its core declares no
+dependencies, so it adds nothing to a solver-only install. Fixes to any of these
+components belong in endstation, not in this repository.
 
-**PyXFocus** — sequential X-ray raytracer (Allured; forks by kbuffo and this
-project's author). Its `grating.py` holds the analytic Littrow-mount formulas
-(`blazeYaw`, `blazeAngle`) slated for a native port (roadmap §3), and its GUI's
-order-centroid/spot-width estimator is the instrument-level cross-check of
-`gratinglab.resolution`. The raytracer itself is deliberately not absorbed.
+**PyXFocus** is a sequential X-ray raytracer (Allured; forks by kbuffo and by
+this project's author). Its `grating.py` holds the analytic Littrow-mount
+formulas (`blazeYaw`, `blazeAngle`) that are slated for a native port
+(roadmap §3), and the order-centroid and spot-width estimator in its GUI serves
+as the instrument-level cross-check of `gratinglab.resolution`. The raytracer
+itself is deliberately not absorbed into this project.

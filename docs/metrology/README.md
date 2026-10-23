@@ -1,56 +1,63 @@
 # AFM Blaze Angle Analysis (in progress)
 
 A Python toolkit for analyzing Atomic Force Microscopy (AFM) data of diffraction
-gratings. One pipeline, two outputs:
+gratings. A single pipeline produces two outputs:
 
-- **Blaze angles** — facet angles measured per groove, with row-group analysis for
-  many measurements per image and statistical comparison across samples
-- **PCGrate boundary profiles** — the averaged groove shape, normalised to one
-  period and exported as `.ggp` for grating-efficiency modelling
+- **Blaze angles**: facet angles measured per groove, with row-group analysis to
+  obtain many measurements per image and statistical comparison across samples.
+- **PCGrate boundary profiles**: the averaged groove shape, normalised to one
+  period and exported as `.ggp` for grating-efficiency modelling.
 
-Both share the same front-end (loading, flattening, groove detection, groove
-windowing) and diverge only at the final step. That sharing is deliberate: these
-were once separate scripts with their own copies of that code, and they drifted
-apart until a bug fixed in one silently persisted in the other.
+Both outputs share the same front-end (loading, flattening, groove detection and
+groove windowing) and diverge only at the final step. The sharing is deliberate.
+The two outputs were once produced by separate scripts, each with its own copy of
+that code, and the copies drifted apart until a bug fixed in one persisted
+unnoticed in the other.
 
 ## Features
 
-- 📊 **High-precision blaze angle extraction** from AFM topography data
-- 🔬 **Row-group analysis**: Extract 50-100+ measurements per image (vs. 4-10 with traditional averaging)
-- 🌡️ **Temperature studies**: Automatic scan aggregation and temperature-dependent analysis
-- 📈 **Comprehensive statistics**: Proper uncertainty quantification with SEM, confidence intervals, and significance tests
-- 📉 **Facet curvature analysis**: Quantify within-facet angle variation (camber) across each blaze facet
-- 🎯 **Quality control**: Automatic filtering to avoid measuring groove tops and ensure accurate facet detection
-- 💾 **Rich outputs**: Detailed reports, CSV data, publication-ready visualizations
+- **High-precision blaze angle extraction** from AFM topography data.
+- **Row-group analysis**: 50-100+ measurements are extracted per image, compared
+  with 4-10 from traditional averaging.
+- **Temperature studies**: scans are aggregated automatically and analyzed as a
+  function of temperature.
+- **Comprehensive statistics**: uncertainty is quantified with SEM, confidence
+  intervals and significance tests.
+- **Facet curvature analysis**: the variation of angle within each blaze facet
+  (camber) is quantified.
+- **Quality control**: automatic filtering avoids measuring groove tops and
+  ensures accurate facet detection.
+- **Rich outputs**: detailed reports, CSV data and publication-ready
+  visualizations.
 
 ## Key Capabilities
 
 ### 1. Row-Group Analysis for More Measurements
-Traditional AFM analysis averages all rows into a single profile, extracting only 4-10 measurements per image. This package uses **row-group analysis** to divide the image into multiple horizontal bands, giving you:
+Traditional AFM analysis averages all rows into a single profile and so extracts only 4-10 measurements per image. This package uses *row-group analysis*, in which the image is divided into multiple horizontal bands. This provides:
 
 - **50-100+ measurements** per image instead of 4-10
 - **Spatial variation mapping** across the sample
-- **Smaller error bars** — but not by √N, see below
+- **Smaller error bars**, although the reduction is not by √N (see below)
 
-**The bands are not independent**, and the statistics account for that. Each band
-re-measures the same physical grooves, so SEM does *not* scale as 1/√N. Measured
-intraclass correlation is 0.097–0.429 (median 0.244), which puts the effective
-sample size at 37–70 rather than 78–102.
+The bands are not independent, and the statistics account for this. Each band
+re-measures the same physical grooves, so the SEM does not scale as 1/√N. The
+measured intraclass correlation is 0.097–0.429 (median 0.244), which places the
+effective sample size at 37–70 instead of 78–102.
 
 Every standard error, confidence interval and p-value is computed on the
-**effective** sample size, `N_eff = N / (1 + (m−1)·ICC)`. Reported SEMs are
-1.17–1.65× wider than the naive value as a result. `ANALYSIS_MODE = 'icc'`
-reproduces the diagnostic; `ICC`, `N_eff`, `SEM_deg` and `SEM_corrected_deg` are
-columns in every `analysis_data_*.csv`.
+effective sample size, `N_eff = N / (1 + (m−1)·ICC)`. As a result, the reported
+SEMs are 1.17–1.65× wider than the naive value. `ANALYSIS_MODE = 'icc'`
+reproduces the diagnostic, and `ICC`, `N_eff`, `SEM_deg` and `SEM_corrected_deg`
+are columns in every `analysis_data_*.csv`.
 
-Applying it changed no conclusion on the bundled samples: master-vs-treated and
-the 500°C step stay highly significant, and the adjacent-temperature steps stay
-null — slightly more clearly so. Effect sizes (Cohen's d) deliberately keep the
-raw counts, since a standardised mean difference describes spread rather than
-inferring from it.
+Applying the correction changed no conclusion on the bundled samples. The
+master-versus-treated comparison and the 500°C step remain highly significant,
+and the steps between adjacent temperatures remain null, slightly more clearly
+than before. Effect sizes (Cohen's d) deliberately retain the raw counts, since a
+standardised mean difference describes spread and is not used for inference.
 
 ### 2. Facet Curvature (Camber) Quantification
-Beyond measuring the overall blaze angle of each groove, the software quantifies **within-facet angle variation** by analyzing local slopes along each facet. This reveals:
+In addition to the overall blaze angle of each groove, the software quantifies the *within-facet angle variation* by analyzing local slopes along each facet. This reveals:
 
 - Facet curvature/camber (how much the angle varies along the facet)
 - Manufacturing quality (consistent vs. variable facets)
@@ -58,7 +65,7 @@ Beyond measuring the overall blaze angle of each groove, the software quantifies
 - Shown in dedicated histograms and statistics
 
 ### 3. Robust Groove Detection with Top Avoidance
-Ensures accurate measurements by:
+Accurate measurements are ensured by:
 
 - Automatically detecting groove centers via prominence-based peak finding
 - Rejecting grooves clipped by the scan edge, whose facet is only partly present
@@ -66,14 +73,14 @@ Ensures accurate measurements by:
 - Recording a fit R² for every groove, in the console output and the per-groove CSV
 - Visual diagnostics to verify proper flattening and groove detection
 
-Note that R² is **reported, not enforced** — no measurement is currently dropped for
-a poor fit. In practice the edge-exclusion rule removes them anyway: after it, no fit
-in the sample dataset falls below R² 0.95.
+The R² value is reported but not enforced: no measurement is currently dropped
+for a poor fit. In practice the edge-exclusion rule removes such fits anyway;
+after it is applied, no fit in the sample dataset falls below R² 0.95.
 
-### 4. Proper Statistical Analysis
+### 4. Statistical Analysis
 All comparisons include:
 
-- Standard Error of Mean (SEM) - uncertainty in mean estimates
+- Standard Error of Mean (SEM): the uncertainty in the mean estimate
 - 95% confidence intervals
 - Significance tests (p-values) with Welch's t-test
 - Effect sizes (Cohen's d) for practical interpretation
@@ -85,30 +92,30 @@ All comparisons include:
 
 ### Installation
 
-Requires Python 3.12 (pinned in `.python-version`).
+Python 3.12 is required (pinned in `.python-version`).
 
 ```bash
 python3 -m venv .venv
 .venv/bin/pip install -e .
 ```
 
-That installs the analysis, the PCGrate export and the ICC diagnostic, and pulls
-in **no GUI toolkit**. The Qt window is an optional extra:
+This installs the analysis, the PCGrate export and the ICC diagnostic, and it
+installs no GUI toolkit. The Qt window is an optional extra:
 
 ```bash
 .venv/bin/pip install -e '.[dev,gui]'
 ```
 
-PySide6 (LGPL) rather than PyQt (GPL), so this BSD-3 package stays free of a GPL
-dependency. Earlier versions listed PyQt5 as a hard requirement, which put GPL
-code in the install path of anyone who only wanted the analysis.
+The GUI uses PySide6 (LGPL) in place of PyQt (GPL), so that this BSD-3 package
+has no GPL dependency. Earlier versions listed PyQt5 as a hard requirement, which
+placed GPL code in the install path of anyone who wanted only the analysis.
 
-Verified against numpy 2.5.1 / scipy 1.18.0 / matplotlib 3.11.1 — see
-`docs/BASELINES.md` if you need to reproduce a stored result exactly.
+The package has been verified against numpy 2.5.1 / scipy 1.18.0 / matplotlib
+3.11.1; see `docs/BASELINES.md` for how to reproduce a stored result exactly.
 
 ### Basic Usage
 
-1. **Configure your analysis** in `afm_analysis/config.py`:
+1. **Configure the analysis** in `afm_analysis/config.py`:
    ```python
    # Analysis mode
    ANALYSIS_MODE = 'single'  # or 'multiple' or 'compare'
@@ -133,22 +140,23 @@ Verified against numpy 2.5.1 / scipy 1.18.0 / matplotlib 3.11.1 — see
 
    The Qt window is `afm-gui`. It has four tabs: **Import** (load and flatten a
    scan), **Analysis** (the blaze-angle results), **Boundary** (PCGrate `.ggp`
-   export), and a **Wiki** explaining how the statistics work — the correlation
-   correction, why edge grooves are rejected, what each output column means.
+   export), and a **Wiki** that explains how the statistics work, including the
+   correlation correction, the reason edge grooves are rejected, and the meaning
+   of each output column.
 
-   Paths in `config.py` resolve against the project root, so this works from any
-   working directory.
+   Paths in `config.py` resolve against the project root, so the analysis can be
+   run from any working directory.
 
-3. **Review results**:
-   - **Console output**: Statistical summary with SEM, p-values, significance
-   - **Plots**: Bar charts (with SEM error bars), histograms (per-groove and facet curvature)
-   - **Files**: `results/` folder contains detailed reports and CSV data
+3. **Review the results**:
+   - **Console output**: statistical summary with SEM, p-values and significance
+   - **Plots**: bar charts (with SEM error bars) and histograms (per-groove and facet curvature)
+   - **Files**: the `results/` folder contains detailed reports and CSV data
 
 ---
 
 ## Configuration Guide
 
-### Critical Parameters (Set These First!)
+### Parameters to Set First
 
 #### Grating Specifications
 ```python
@@ -160,7 +168,7 @@ SCAN_X_SIZE = 2.0    # um - fallback scan width, used only when the width
                      # cannot be read from the data file header
 ```
 
-#### Row-Group Analysis (Highly Recommended)
+#### Row-Group Analysis (Recommended)
 ```python
 USE_ROW_GROUPS = True   # Enable multi-region analysis
 N_ROW_GROUPS = 20       # Number of spatial regions (10-50 typical)
@@ -181,7 +189,9 @@ FLATTEN_FEATURE = 'peaks'         # For 'level_grooves' only:
                                   # 'peaks' (lands), 'troughs' (groove bottoms), 'both'
 ```
 
-**Key Point**: The flattening diagnostic plot shows the **averaged profile** to verify proper background removal, even when using row-group analysis. This ensures all subsequent measurements are accurate.
+The flattening diagnostic plot shows the averaged profile, so that the
+background removal can be verified even when row-group analysis is used. This
+check ensures that all subsequent measurements are accurate.
 
 #### Groove Detection
 ```python
@@ -200,12 +210,12 @@ EDGE_EXCLUSION_PERIODS = 0.6  # Reject grooves within this many periods of eithe
                               # meaningless. Set to 0 to disable.
 ```
 
-**Why edge exclusion matters**: without it, a groove sitting at the start of a scan line
-is fitted over a 5-6 pixel sliver instead of a full ~50 pixel facet, returning angles
-around 2-3° that are then averaged in with real ~30° measurements. It also equalises
-samples: how many edge grooves a scan has is pure luck of where the scan started
-relative to the grating phase, so leaving them in weights samples differently for no
-physical reason.
+Edge exclusion serves two purposes. Without it, a groove at the start of a scan
+line is fitted over a 5-6 pixel sliver instead of a full ~50 pixel facet, which
+returns angles of around 2-3° that are then averaged together with real ~30°
+measurements. It also places samples on an equal footing: the number of edge
+grooves in a scan depends only on where the scan started relative to the grating
+phase, so retaining them weights samples differently for no physical reason.
 
 ### Analysis Parameters
 
@@ -225,15 +235,15 @@ FACET_TRIM = 0.1         # Fraction to trim from facet edges (0.0-0.28)
                          # Decrease if fits look poor (too little data)
 ```
 
-**Understanding FACET_TRIM**: This is your main defense against measuring groove tops:
-- Too small (0.05): Risk measuring rounded groove tops → low angles
-- Just right (0.10-0.20): Measures clean facet regions → correct angles
-- Too large (0.25+): Few points left to fit → noisy angles
+FACET_TRIM is the main safeguard against measuring groove tops:
+- Too small (0.05): rounded groove tops may be measured, giving low angles
+- Appropriate (0.10-0.20): clean facet regions are measured, giving correct angles
+- Too large (0.25+): few points remain for the fit, giving noisy angles
 
-**Hard limit ~0.286.** The blaze facet is trimmed 2.5× harder on the trough side
-to avoid the flattened groove bottom, so `FACET_TRIM × 3.5` is removed in total.
-Above ~0.286 nothing is left, every groove fit fails, and the analysis returns no
-measurements at all rather than degrading gracefully.
+The parameter has a hard limit of ~0.286. The blaze facet is trimmed 2.5× harder
+on the trough side to avoid the flattened groove bottom, so `FACET_TRIM × 3.5` is
+removed in total. Above ~0.286 nothing remains, every groove fit fails, and the
+analysis returns no measurements at all instead of degrading gradually.
 
 ### Visualization Options
 
@@ -254,7 +264,7 @@ SHOW_LOCAL_ANGLE_DISTRIBUTION = True  # Within-facet curvature histograms
 ## Analysis Modes
 
 ### Single File Analysis
-Analyze one AFM scan with full diagnostic plots - **recommended for first time**:
+This mode analyzes one AFM scan with full diagnostic plots and is recommended for a first analysis:
 
 ```python
 ANALYSIS_MODE = 'single'
@@ -262,12 +272,12 @@ SINGLE_FILE = 'data/master.txt'
 ```
 
 **Outputs:**
-- Console: Detailed statistics with uncertainty breakdown
-- Plots: Diagnostics, histograms (per-groove + facet curvature), spatial variation
+- Console: detailed statistics with an uncertainty breakdown
+- Plots: diagnostics, histograms (per-groove and facet curvature), spatial variation
 - Files: `results/analysis_summary_*.txt`, `analysis_data_*.csv`, `per_groove_data_*.csv`
 
 ### Multiple File Analysis
-Batch process all files matching a pattern:
+This mode processes all files matching a pattern as a batch:
 
 ```python
 ANALYSIS_MODE = 'multiple'
@@ -280,7 +290,7 @@ FILE_PATTERN = '*.txt'   # matched inside data/, so no 'data/' prefix
 - Batch CSV with all samples
 
 ### Comparison Analysis (Temperature Studies)
-Compare specific samples with automatic temperature grouping:
+This mode compares specified samples and groups them by temperature automatically:
 
 ```python
 ANALYSIS_MODE = 'compare'
@@ -295,34 +305,34 @@ SAMPLES_TO_COMPARE = [
 ```
 
 **Features:**
-- Multiple scans at same temperature are automatically combined
+- Multiple scans at the same temperature are combined automatically
 - Temperature-dependent rate calculations with significance tests
 - Master vs. treated comparisons
 - Publication-ready comparison plots
 
 ### ICC Diagnostic (row-group correlation)
 
-Measures how correlated the row-group measurements actually are, and reports how far
-that puts the current standard errors off. Diagnostic only — it changes no reported
-number.
+This mode measures how strongly the row-group measurements are correlated and
+reports how far that correlation places the current standard errors from their
+correct values. It is a diagnostic only and changes no reported number.
 
 ```python
 ANALYSIS_MODE = 'icc'
 ```
 
-It runs every entry in `SAMPLES_TO_COMPARE` and prints a per-scan table of ICC,
-effective sample size and the SEM inflation factor, saving it to
+It runs every entry in `SAMPLES_TO_COMPARE`, prints a per-scan table of ICC,
+effective sample size and SEM inflation factor, and saves the table to
 `results/icc_report_<timestamp>.txt`.
 
-**Output on the bundled sample data**: ICC 0.097–0.429, median 0.244; SEM understated
-by 1.17–1.65×.
+On the bundled sample data the output is an ICC of 0.097–0.429 (median 0.244),
+with the SEM understated by 1.17–1.65×.
 
 ### PCGrate Boundary Profile Export
 
-A different output from the same measurement. Instead of fitting facet angles,
-this averages the detected grooves of one scan into a single representative
-groove, normalises it to one period, and writes a PCGrate `.ggp` boundary profile
-for grating-efficiency modelling.
+This mode produces a different output from the same measurement. In place of
+fitting facet angles, it averages the detected grooves of one scan into a single
+representative groove, normalises it to one period, and writes a PCGrate `.ggp`
+boundary profile for grating-efficiency modelling.
 
 ```python
 ANALYSIS_MODE = 'ggp'
@@ -333,13 +343,13 @@ GGP_SMOOTHING_WINDOW = 5
 ```
 
 **Outputs:**
-- `results/averaged_groove_profile_<sample>.ggp` — the boundary profile
-- `results/groove_analysis_metrics_<sample>.txt` — depth, RMS slope, max sidewall
-  angle and curvature of the normalised profile
+- `results/averaged_groove_profile_<sample>.ggp`: the boundary profile
+- `results/groove_analysis_metrics_<sample>.txt`: depth, RMS slope, maximum
+  sidewall angle and curvature of the normalised profile
 
-**The `.ggp` format** is two header lines then one `x y` pair per line, both
-normalised — x runs 0 to 1 across exactly one period, y is height as a fraction of
-that period:
+The `.ggp` format consists of two header lines followed by one `x y` pair per
+line. Both coordinates are normalised: x runs from 0 to 1 across exactly one
+period, and y is the height as a fraction of that period.
 
 ```
 3 0 - Polygonal type
@@ -348,9 +358,9 @@ Period: 1 PSC: 1
 0.000500 0.000001
 ```
 
-The header must **not** be commented. Writing these with `np.savetxt(header=...)`
-prepends `# `, which PCGrate rejects — the writer in `afm_analysis/io/ggp.py`
-always emits the correct form.
+The header must not be commented. Writing these files with
+`np.savetxt(header=...)` prepends `# `, which PCGrate rejects; the writer in
+`afm_analysis/io/ggp.py` always emits the correct form.
 
 ---
 
@@ -376,42 +386,42 @@ Master vs 150°C:
 ```
 
 **Interpretation:**
-- **Mean ± SEM**: Best estimate of blaze angle with uncertainty
-- **σ_total**: How much individual measurements vary (groove-to-groove + measurement noise)
-- **p < 0.001 (\*\*\*)**: Very confident the difference is real, not random
-- **95% CI**: True difference very likely between 0.114° and 0.226°
-- **Cohen's d > 0.8**: Large practical effect
+- **Mean ± SEM**: the best estimate of the blaze angle, with its uncertainty
+- **σ_total**: the variation of individual measurements (groove-to-groove variation plus measurement noise)
+- **p < 0.001 (\*\*\*)**: high confidence that the difference is real and not due to chance
+- **95% CI**: the true difference very likely lies between 0.114° and 0.226°
+- **Cohen's d > 0.8**: a large practical effect
 
 ### Visualizations
 
 #### 1. Bar Chart (Mean Comparison)
 - **Error bars**: ±1 SEM (uncertainty in the mean)
-- **Bar labels**: Show mean, SEM, and σ_total
-- **Use for**: Comparing mean angles between samples
+- **Bar labels**: mean, SEM and σ_total
+- **Use for**: comparing mean angles between samples
 
 #### 2. Per-Groove Histogram
-- **Distribution**: Individual groove measurements
-- **Red shading**: ±1 SEM (narrow - uncertainty in mean)
-- **Blue shading**: ±1σ (wide - groove-to-groove variation)
-- **Use for**: Understanding measurement spread and precision
+- **Distribution**: individual groove measurements
+- **Red shading**: ±1 SEM (narrow; uncertainty in the mean)
+- **Blue shading**: ±1σ (wide; groove-to-groove variation)
+- **Use for**: understanding the spread and precision of the measurements
 
 #### 3. Facet Curvature Histogram
-- **Distribution**: Local angles along each facet (within-facet variation)
-- **Shows**: How much blaze angle varies along the facet (camber)
+- **Distribution**: local angles along each facet (within-facet variation)
+- **Shows**: how much the blaze angle varies along the facet (camber)
 - **Interpretation**: 
-  - Narrow distribution (σ < 0.5°): Flat, well-made facets
-  - Wide distribution (σ > 1°): Curved/cambered facets
-- **Use for**: Assessing manufacturing quality and thermal effects on facet shape
+  - Narrow distribution (σ < 0.5°): flat, well-made facets
+  - Wide distribution (σ > 1°): curved or cambered facets
+- **Use for**: assessing manufacturing quality and thermal effects on facet shape
 
 #### 4. Flattening Diagnostic
-- **Shows**: Averaged AFM profile before and after background removal
-- **Purpose**: Verify that flattening preserves groove structure
-- **Critical**: Even with row-group analysis, check this plot to ensure proper flattening!
+- **Shows**: the averaged AFM profile before and after background removal
+- **Purpose**: to verify that flattening preserves the groove structure
+- **Note**: this plot should be checked to confirm proper flattening even when row-group analysis is used
 
 #### 5. Spatial Variation (Row-Group Analysis)
-- **Left panel**: Mean angle per row group (bars)
-- **Right panel**: All measurements colored by row group
-- **Use for**: Identifying spatial trends or non-uniformity across sample
+- **Left panel**: mean angle per row group (bars)
+- **Right panel**: all measurements colored by row group
+- **Use for**: identifying spatial trends or non-uniformity across the sample
 
 ---
 
@@ -420,9 +430,9 @@ Master vs 150°C:
 ### Problem: Blaze Angles Too Low (~17° instead of ~30°)
 
 **Causes:**
-1. ❌ **Wrong `PERIOD_EST`**: Using 833 nm instead of actual spacing (e.g., 315 nm)
-2. ❌ **Measuring groove tops**: `FACET_TRIM` too small, measuring rounded peaks
-3. ❌ **Wrong facet**: Measuring steep side instead of blaze side
+1. **Wrong `PERIOD_EST`**: 833 nm is used instead of the actual spacing (e.g., 315 nm)
+2. **Measuring groove tops**: `FACET_TRIM` is too small, so rounded peaks are measured
+3. **Wrong facet**: the steep side is measured instead of the blaze side
 
 **Solutions:**
 ```python
@@ -439,9 +449,9 @@ BLAZE_SIDE = 'positive_slope'  # Try the other facet
 ### Problem: No Grooves Detected
 
 **Causes:**
-1. ❌ Poor flattening - background not removed properly
-2. ❌ `PROMINENCE_FACTOR` too high
-3. ❌ Wrong `PERIOD_EST` - expecting grooves too far apart
+1. Poor flattening: the background has not been removed properly
+2. `PROMINENCE_FACTOR` is too high
+3. Wrong `PERIOD_EST`: grooves are expected too far apart
 
 **Solutions:**
 ```python
@@ -456,14 +466,14 @@ PROMINENCE_FACTOR = 0.2
 PERIOD_EST = 315.15  # Verify this matches your grating
 ```
 
-**Diagnostic**: Check `SHOW_FLATTENING_DIAGNOSTIC = True` to verify grooves are visible after flattening.
+**Diagnostic**: set `SHOW_FLATTENING_DIAGNOSTIC = True` to verify that the grooves are visible after flattening.
 
 ### Problem: High Variability in Measurements
 
 **Causes:**
 1. Noisy AFM data
 2. Poor flattening
-3. Too many row groups for data quality
+3. Too many row groups for the quality of the data
 
 **Solutions:**
 ```python
@@ -479,7 +489,7 @@ SHOW_FLATTENING_DIAGNOSTIC = True
 
 ### Problem: Measuring Wrong Facet
 
-**Symptom**: Angles near 60° instead of 30° (measuring steep side)
+**Symptom**: angles near 60° instead of 30°, indicating that the steep side is being measured
 
 **Solution:**
 ```python
@@ -488,48 +498,48 @@ BLAZE_SIDE = 'positive_slope'  # Switch to other facet
 
 ### Problem: Error Bars Seem Too Small
 
-**This is usually CORRECT!** Row-group analysis gives proper small error bars because:
+Small error bars are usually correct. Row-group analysis gives small error bars because:
 - SEM = σ / √N  
-- With N=80 instead of N=4, SEM is ~4.5× smaller
-- This is real increased precision from using all your data
+- With N=80 instead of N=4, the SEM is ~4.5× smaller
+- The increase in precision is real and comes from using all of the data
 
-**Verify**:
-- σ_total should be similar between traditional and row-group (~0.2°)
-- SEM should scale as 1/√N
-- If σ_total is unrealistically small (<0.05°), check data quality
+**Verify** that:
+- σ_total is similar between traditional and row-group analysis (~0.2°)
+- the SEM scales as 1/√N
+- σ_total is not unrealistically small (<0.05°); if it is, the data quality should be checked
 
 ---
 
 ## Statistical Concepts
 
 ### Standard Error of Mean (SEM)
-**Definition**: Uncertainty in the mean value estimate  
+**Definition**: the uncertainty in the estimate of the mean value  
 **Formula**: `SEM = σ_total / √N`  
-**Use**: Comparing mean values between samples  
-**Shown**: Error bars on bar charts
+**Use**: comparing mean values between samples  
+**Shown**: error bars on bar charts
 
 ### Standard Deviation (σ)
-**Definition**: Spread of individual measurements  
+**Definition**: the spread of individual measurements  
 **Types**:
-- `σ_total`: Includes measurement uncertainty + physical variation
-- `std_angle`: Physical variation only (groove-to-groove)
-**Use**: Describing consistency of measurements  
-**Shown**: Shaded regions in histograms
+- `σ_total`: includes measurement uncertainty and physical variation
+- `std_angle`: physical variation only (groove-to-groove)
+**Use**: describing the consistency of measurements  
+**Shown**: shaded regions in histograms
 
 ### Within-Facet Variation (Facet Curvature/Camber)
-**Definition**: How much the blaze angle varies along a single facet  
-**Calculated**: Local slopes in sliding windows along facet  
+**Definition**: how much the blaze angle varies along a single facet  
+**Calculated**: from local slopes in sliding windows along the facet  
 **Interpretation**:
-- Small (< 0.5°): Flat facets (good manufacturing)
-- Large (> 1°): Curved/cambered facets (thermal stress, manufacturing variation)  
-**Shown**: Dedicated "Facet Curvature" histogram
+- Small (< 0.5°): flat facets (good manufacturing)
+- Large (> 1°): curved or cambered facets (thermal stress, manufacturing variation)  
+**Shown**: a dedicated "Facet Curvature" histogram
 
 ### Significance Testing
 - **p < 0.05 (*)**: Significant
 - **p < 0.01 (**)**: Very significant
 - **p < 0.001 (***)**: Highly significant
 
-**95% Confidence Interval**: Range containing true difference with 95% probability
+**95% Confidence Interval**: the range containing the true difference with 95% probability
 
 **Effect Size (Cohen's d)**:
 - Small: d < 0.2
@@ -548,7 +558,7 @@ BLAZE_SIDE = 'positive_slope'  # Switch to other facet
 - Variance decomposition
 
 ### CSV Data (`results/analysis_data_*.csv`)
-Columns include:
+The columns include:
 - `filename`, `label`, `temperature`
 - `mean_angle`, `sem`, `std_angle`, `total_std`
 - `n_grooves`, `n_groups` (for row-group analysis)
@@ -598,9 +608,9 @@ afm_blaze_meas/
             ├── app.py  main_window.py  canvas.py  worker.py
 ```
 
-The `gui/` vs `gui/qt/` split is enforced by `tests/test_gui_boundary.py`, which
-fails if a Qt binding is imported outside `gui/qt`. It caught a violation on its
-first run.
+The separation between `gui/` and `gui/qt/` is enforced by
+`tests/test_gui_boundary.py`, which fails if a Qt binding is imported outside
+`gui/qt`. The test found a violation on its first run.
 
 ### Running the tests
 
@@ -608,37 +618,38 @@ first run.
 .venv/bin/python -m pytest tests/ -v
 ```
 
-135 tests, including the blaze-angle pipeline (`tests/test_analyzer.py`), the
-ICC correction's wiring (`tests/test_icc_correction.py`), the boundary/PCGrate
-export, and the Qt GUI (skipped automatically if PySide6 isn't installed). CI
-runs the same suite plus `ruff check .` on every push and PR.
+The suite contains 135 tests, covering the blaze-angle pipeline
+(`tests/test_analyzer.py`), the wiring of the ICC correction
+(`tests/test_icc_correction.py`), the boundary/PCGrate export, and the Qt GUI
+(skipped automatically if PySide6 is not installed). CI runs the same suite, plus
+`ruff check .`, on every push and pull request.
 
-`tests/test_ggp_equivalence.py` is the oldest of these: it pins the
-boundary-profile port to the output of the standalone script it replaced, so a
-refactor cannot silently change the exported profile.
+`tests/test_ggp_equivalence.py` is the oldest of these tests. It pins the
+boundary-profile port to the output of the standalone script it replaced, so that
+a refactor cannot change the exported profile without detection.
 
 The blaze-angle path also has a manual baseline-diffing procedure
-(`docs/BASELINES.md`) predating the test suite above. It's still useful for
-proving a refactor changed *nothing* — a diff against a stored CSV is a
-stronger guarantee than any set of assertions — but it's no longer the only
+(`docs/BASELINES.md`) that predates the test suite above. It remains useful for
+proving that a refactor changed nothing, since a diff against a stored CSV is a
+stronger guarantee than any set of assertions, but it is no longer the only
 regression check on that path.
 
 ### Known limitation
 
-Row-group analysis produces many measurements of the *same* physical grooves, but the
-statistics treat them as independent samples, so reported SEMs and p-values are
-optimistic. Mean angles are unaffected.
+Row-group analysis produces many measurements of the same physical grooves, but
+the statistics treat them as independent samples, so the reported SEMs and
+p-values are optimistic. Mean angles are unaffected.
 
-This has now been **measured** rather than merely suspected. Run
-`ANALYSIS_MODE = 'icc'` to reproduce: across the eight sample scans the intraclass
-correlation is 0.097–0.429 (median 0.244), meaning reported standard errors are
-understated by **1.17× to 1.65×** and effective sample sizes are 37–70 rather than
-78–102. Large effects survive this comfortably; differences below a few tenths of a
-degree do not.
+This effect has now been measured. It can be reproduced with
+`ANALYSIS_MODE = 'icc'`: across the eight sample scans the intraclass correlation
+is 0.097–0.429 (median 0.244), which means that the reported standard errors are
+understated by 1.17× to 1.65× and that the effective sample sizes are 37–70
+instead of 78–102. Large effects remain significant under this correction, while
+differences below a few tenths of a degree do not.
 
-The correction is applied: `stats/icc.py` computes the ICC and effective sample
-size, and row-group results carry `icc`, `n_effective`, `design_effect`, and
-`sem_corrected` alongside the uncorrected `sem`.
+The correction is applied: `stats/icc.py` computes the ICC and the effective
+sample size, and row-group results carry `icc`, `n_effective`, `design_effect`
+and `sem_corrected` alongside the uncorrected `sem`.
 
 ---
 
@@ -717,10 +728,10 @@ FACET_TRIM = 0.15
 ```
 
 **Check:**
-1. Flattening diagnostic - grooves should be clear after background removal
-2. Full profile - grooves properly detected
-3. Mean angle - should be near expected (~30°, not ~17°)
-4. Facet regions overlay - trimmed regions should be clean facet portions
+1. Flattening diagnostic: the grooves should be clear after background removal
+2. Full profile: the grooves should be properly detected
+3. Mean angle: it should be near the expected value (~30°, not ~17°)
+4. Facet regions overlay: the trimmed regions should be clean portions of the facet
 
 ### 2. Temperature Study Workflow
 
@@ -749,7 +760,7 @@ BLAZE_SIDE = 'negative_slope'
 - Use row-group analysis for maximum precision
 - Report mean ± SEM for comparisons
 - Include p-values and confidence intervals
-- Show both per-groove and facet curvature distributions
+- Show both the per-groove and the facet curvature distributions
 - Document all parameters in config.py
 - Save all plots and CSV files
 
@@ -761,9 +772,9 @@ BLAZE_SIDE = 'negative_slope'
 ## Requirements
 
 - Python 3.7+
-- NumPy - Numerical computations
-- Matplotlib - Visualization
-- SciPy - Signal processing, peak detection, statistical tests
+- NumPy: numerical computations
+- Matplotlib: visualization
+- SciPy: signal processing, peak detection and statistical tests
 
 ---
 
@@ -786,25 +797,25 @@ If you use this software in your research, please cite:
 ## Support
 
 For questions or issues:
-- Check troubleshooting section above
-- Review diagnostic plots (especially flattening)
-- Verify PERIOD_EST matches your sample
-- Open an issue on GitHub with diagnostic plots attached
+- Consult the troubleshooting section above
+- Review the diagnostic plots (especially flattening)
+- Verify that PERIOD_EST matches the sample
+- Open an issue on GitHub with the diagnostic plots attached
 
 ---
 
 ## Version History
 
 ### v2.0.0 (2025-02)
-- **Major**: Row-group analysis implementation for 10-100× more measurements per image
-- **Major**: Proper statistical analysis (SEM, p-values, confidence intervals, effect sizes)
-- **Major**: Facet curvature (camber) quantification with dedicated histograms
-- **Improved**: Flattening diagnostic uses averaged profile for verification
-- **Fixed**: Updated default PERIOD_EST to 315.15 nm (was incorrectly 833 nm)
-- **Fixed**: Updated expected angles to ~30° (was ~17°)
-- **Added**: Automatic groove top avoidance via FACET_TRIM
-- **Added**: Variance decomposition and uncertainty breakdown
-- **Added**: Publication-ready visualization with clear error bar labels
+- **Major**: row-group analysis implemented, for 10-100× more measurements per image
+- **Major**: statistical analysis (SEM, p-values, confidence intervals, effect sizes)
+- **Major**: facet curvature (camber) quantification with dedicated histograms
+- **Improved**: the flattening diagnostic uses the averaged profile for verification
+- **Fixed**: the default PERIOD_EST was updated to 315.15 nm (it was incorrectly 833 nm)
+- **Fixed**: the expected angles were updated to ~30° (they were ~17°)
+- **Added**: automatic groove top avoidance via FACET_TRIM
+- **Added**: variance decomposition and uncertainty breakdown
+- **Added**: publication-ready visualization with clear error bar labels
 
 ### v1.0.0 (2025-01)
 - Initial release
@@ -814,4 +825,5 @@ For questions or issues:
 
 ---
 
-**Remember**: Always verify that `PERIOD_EST` (groove spacing) matches your actual grating before running analysis! The defaults are examples only.
+Before an analysis is run, `PERIOD_EST` (the groove spacing) should be checked
+against the actual grating. The default values are examples only.
