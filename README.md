@@ -7,23 +7,26 @@
 
 **[PyPI](https://pypi.org/project/gratinglab/)** · **[Documentation](https://github.com/jamccoy/gratinglab/wiki)** · **[Releases](https://github.com/jamccoy/gratinglab/releases)** · **[Issues](https://github.com/jamccoy/gratinglab/issues)**
 
-An open platform for diffraction grating groove metrology and efficiency analysis,
-from an AFM scan of a real grating to its diffraction efficiency, in one package.
+gratinglab is a Python package for measuring the groove profiles of diffraction
+gratings from atomic force microscope (AFM) scans and for computing the diffraction
+efficiency of a grating from such a profile.
 
-The part in regular use today is the **AFM groove metrology**: blaze angles from a
-scan, the averaged groove shape, how much it varies down the scan, and tip
-correction, with the groove exported as a boundary profile. The **efficiency
-solvers are experimental**: they pass their test suite but have not yet been used
-for real analysis, so treat their numbers as provisional.
+The AFM metrology is the part of the package in regular use. It measures blaze angles
+from a scan, averages the grooves into a single profile, reports how much that profile
+varies down the scan, corrects for the shape of the AFM tip where the data allow it,
+and exports the averaged groove as a boundary profile. The efficiency solvers are
+**experimental**: they pass their test suite but have not yet been used for real
+analysis, and their results should be treated as provisional.
 
-The rigorous methods for grating efficiency are well established, and open codes exist
-for several of them, but each carries its own conventions, normalizations and blind
-spots. No open code runs the *same* physical problem through several methods for a fair
-comparison, and none connects a *measured* surface to any of them.
-
-`gratinglab` is built around one idea: **the physical problem and the numerical method
-are separate, and the problem spec is serializable.** One `Problem` goes to every solver,
-so disagreement between methods shows up in the comparison.
+Rigorous methods for computing grating efficiency are well established, and open codes
+exist for several of them, although each carries its own conventions and
+normalizations. gratinglab is intended to fill two gaps that remain: running the same
+physical problem through several methods so that their results can be compared
+directly, and starting that problem from a measured surface rather than an idealised
+one. To this end, the physical problem and the numerical method are kept separate. A
+`Problem` describes the grating and can be saved to a file, and the same `Problem` is
+passed to every solver, so any difference between their results is attributable to
+the methods themselves.
 
 ```
 AFM scan  ->  BoundaryProfile   (gratinglab.metrology)
@@ -36,16 +39,16 @@ Illumination  (wavelength + direction + polarization)
 Solver (plugin)  ->  Result (+ provenance)
 ```
 
-The two halves are one package because a file between them loses information. A
-plain boundary file carries a *shape* and not a grating: it cannot hold the period,
-so the period gets retyped, guessed, or recovered from a sidecar later.
-`BoundaryProfile.to_problem()` carries the period the scan measured, and the fitted
-facet angle with it. To save a profile without losing that, write it as gratinglab's
-own `.json` (`gratinglab.io.boundary.write_boundary_json`): reading it back gives the
-same problem, and the efficiency window's "Load boundary profile" fills in the
-period from it. The metrology window's Boundary tab exports `.json`, `.csv`, or a
-`.ggp` boundary file for PCGrate, and its "Send to efficiency window" button opens the
-groove there directly.
+The metrology and the solvers are distributed as one package so that no information is
+lost between them. A plain boundary file records the groove shape but not the grating
+period, which must then be entered again by hand. `BoundaryProfile.to_problem()`
+carries the period measured from the scan, together with the fitted facet angle. A
+profile can be saved with that information intact in gratinglab's own `.json` format
+(`gratinglab.io.boundary.write_boundary_json`); reading it back gives the same
+problem, and "Load boundary profile" in the efficiency window takes the period from
+it. The Boundary tab of the metrology window exports `.json`, `.csv`, or a `.ggp`
+boundary file for PCGrate, and its "Send to efficiency window" button opens the groove
+in the efficiency window directly.
 
 ```python
 from gratinglab.metrology.boundary import build_boundary_profile
@@ -56,82 +59,91 @@ problem = profile.to_problem(coating="Au", blaze_angle=29.5)
 
 ## Status
 
-Pre-alpha. The AFM metrology is the mature half and the one in use. On the efficiency
-side the scalar and integral solvers, the comparison harness, the convergence harness
-and the materials layer work end to end and are checked against closed forms,
-published benchmarks and their own physics (energy balance, reciprocity), but they are
-**experimental** until they have been used on real problems. Efficiencies are absolute
-when a coating is named, using an optical constant table of your own (see Install).
-RCWA is contributed and not yet integrated.
+The project is at a pre-alpha stage. The AFM metrology is the more mature of its two
+parts. On the efficiency side, the scalar and integral solvers, the comparison and
+convergence harnesses and the materials layer work end to end. They are checked
+against closed-form results, published benchmark tables, energy balance and
+reciprocity, but remain experimental until they have been used on real problems.
+Efficiencies are absolute when a coating is named, using an optical constant table
+supplied by the user (see Install). A rigorous coupled-wave analysis (RCWA) backend
+has been contributed but is not yet integrated.
 
 ## Scope
 
-Two halves. **Metrology** (`gratinglab.metrology`) reads AFM scans (Nanoscope `.spm`
-or Gwyddion text exports) and produces blaze angles per groove with row-group
-statistics and an ICC correction, plus one averaged groove normalised to a period,
-and swath statistics for how much that groove varies down the scan.
-Tip convolution can be undone where the tip reached the surface, and the region it
-never reached is marked rather than smoothed over. **Efficiency** is everything else:
-the problem spec, the solvers, the comparison and convergence harnesses, the materials
-layer, and the resolving power the measured groove count implies.
+The metrology (`gratinglab.metrology`) reads AFM scans, either Nanoscope `.spm` files
+or Gwyddion text exports. It produces blaze angles for each groove with statistics
+over groups of scan rows and a correction for the correlation between those groups,
+an averaged groove normalised to one period, and statistics describing how that
+groove varies between horizontal swaths of the scan. It can also undo the broadening
+introduced by the AFM tip where the tip reached the surface, and it marks the regions
+the tip could not reach instead of estimating them.
 
-Both mounts are supported:
+The efficiency side comprises the problem specification, the solvers, the comparison
+and convergence harnesses, the materials layer, and a calculation of the resolving
+power implied by the number of grooves measured.
 
-- **In-plane / classical:** UV–Vis–NIR optical engineering.
-- **Extreme off-plane (conical), grazing incidence:** soft X-ray spectroscopy, where
-  the integral method is the method of record and general-purpose open RCWA codes are
-  weakest.
+Two mounting geometries are supported:
 
-Planned method backends, in order:
+- **In-plane (classical):** ultraviolet to near-infrared optical engineering.
+- **Extreme off-plane (conical) at grazing incidence:** soft x-ray spectroscopy, where
+  the integral method is the established approach and general-purpose RCWA codes are
+  least reliable.
+
+The method backends, in order of development:
 
 | Method | Status |
 |---|---|
-| Scalar (Kirchhoff, X-ray blaze form) | **experimental**: checked against closed forms |
-| Integral method (boundary integral, conical, undercut-capable) | **experimental**: perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with recorded absorption; checked against published benchmark tables (Maystre & Popov, Goray & Schmidt), energy balance and reciprocity |
+| Scalar (Kirchhoff, x-ray blaze form) | experimental; checked against closed-form results |
+| Integral method (boundary integral, conical, undercut-capable) | experimental; perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with the absorbed fraction recorded; checked against published benchmark tables (Maystre & Popov; Goray & Schmidt), energy balance and reciprocity |
 | RCWA (in-plane, conical, off-plane; Li factorization, S-matrix) | contributed, not yet integrated |
 | C-method (Chandezon) | planned |
 
-The comparison harness accepts an efficiency table already computed by an external code
-as one of its methods, so scalar-vs-RCWA-vs-integral plots need no licence for the code
-that produced the reference data:
+The comparison harness also accepts an efficiency table already computed by an
+external program as one of its methods, so that comparison plots can be made without
+a licence for the program that produced the reference data:
 
 ```python
 reference = read_scan("run.txt", method="integral")
 align(sweep(problem, illumination, wavelengths, ["scalar", reference]))
 ```
 
-The caller declares what physics produced an imported file, because the file itself does
-not say. Comparison legends then read `scalar vs integral` rather than naming a product,
-while `Provenance.version` still records which program and version generated it.
+Because the file does not record the physics behind it, the caller states which method
+produced an imported table. Comparison legends then name the method, for example
+`scalar vs integral`, while `Provenance.version` records the program and version that
+generated the file.
 
-### From a measured surface to a spectrograph number
+### Resolving power from a measured surface
 
-The scan carries its own groove count, so resolving power needs nothing retyped:
+A scan records the number of grooves it covers, so resolving power can be computed
+without entering anything by hand:
 
 ```python
 problem = profile.to_problem(coating="Au")     # n_grooves = the grooves averaged
 resolving_power(problem, illumination, wavelength=2.0, order=3).r
 ```
 
-`R = |m|·N` by the Rayleigh criterion, with `line_profile` giving the finite-*N* line
-shape it is derived from. A problem whose `n_grooves` is unset is **refused** rather
-than treated as infinite: "R is undefined" and "R is very large" are different answers.
-Resolving power degraded by real groove-placement error is planned next, and the ideal
-formula is not used to approximate it.
+The resolving power follows from the Rayleigh criterion as `R = |m|·N`, and
+`line_profile` gives the line shape for a finite number of grooves from which that
+result is derived. A problem whose `n_grooves` is not set is refused rather than
+treated as having infinitely many grooves. Resolving power degraded by errors in groove
+placement is planned; until it is implemented, the ideal formula is not used as an
+approximation for it.
 
-### The tip is not the surface
+### Correcting for the AFM tip
 
-An AFM image is the surface dilated by the tip. `tip_correction='erosion'` inverts that
-where the inversion exists (a spherical apex on two flanks that may differ, so a
-pyramid such as Bruker's ScanAsyst-Air can be modelled; Villarrubia 1997) and
-reports a **certainty map** for where it does not. No algorithm can recover a trough
-the tip never entered, and a correction that filled it in silently would be worse than
-no correction.
+An AFM image is the true surface dilated by the shape of the tip.
+`tip_correction='erosion'` reverses this dilation where it can be reversed (Villarrubia
+1997) and reports a certainty map showing where it cannot. The tip is modelled as a
+spherical apex on two flanks whose angles may differ, so a pyramidal probe such as
+Bruker's ScanAsyst-Air can be represented. No method can recover the bottom of a
+trough the tip did not enter, and the correction leaves such regions as upper bounds
+instead of filling them in.
 
-It has already been useful. On the one real scan whose depth and facet angle disagree
-by 7.6°, erosion with the nominal probe recovers *nothing*, and reproducing the deficit
-forward takes an apex worn to about 80 nm, which rules out the nominal tip as the
-explanation ([findings](https://github.com/jamccoy/gratinglab/blob/master/docs/findings.md)).
+On one real scan, the groove depth and the fitted facet angle disagree by 7.6°.
+Erosion with the probe at its nominal radius recovers none of that difference, and
+reproducing it by simulation requires an apex worn to about 80 nm, which excludes the
+nominal tip as the cause
+([findings](https://github.com/jamccoy/gratinglab/blob/master/docs/findings.md)).
 
 ## Install
 
@@ -150,52 +162,52 @@ uv add gratinglab                               # into a uv project
 uv tool install "gratinglab[gui]"               # gratinglab-gui as a standalone command
 ```
 
-From a checkout, `pip install -e ".[dev,gui,metrology,refractiveindex]"` instead.
+From a checkout, use `pip install -e ".[dev,gui,metrology,refractiveindex]"` instead.
 
-No optical constant tables ship with the package, so absolute efficiencies need
-your own. A library is a directory of them, one material per file, named for
-the material:
+No optical constant tables are distributed with the package, so absolute efficiencies
+require tables supplied by the user. A library is a directory of such tables, one
+material per file, each named after its material:
 
 | File | From | Range |
 |---|---|---|
-| `Pt.txt` | a [CXRO](https://henke.lbl.gov/optical_constants/) export | X-ray |
+| `Pt.txt` | a [CXRO](https://henke.lbl.gov/optical_constants/) export | x-ray |
 | `Pt.yml` | a [refractiveindex.info](https://refractiveindex.info) file, renamed from its author's name | ultraviolet to infrared |
 | `Pt.ari` | a PCGrate table | whatever it covers |
 
-Save one as `~/.gratinglab/materials/Pt.yml` and `coating="Pt"` works.
-`GRATINGLAB_MATERIALS` points elsewhere, and `materials.from_cxro_file(path)`
-or `from_refractiveindex_file(path)` reads a file without a library. The YAML
-files need the `refractiveindex` extra. See
+Saving one as `~/.gratinglab/materials/Pt.yml` makes `coating="Pt"` available.
+`GRATINGLAB_MATERIALS` points to a different directory, and
+`materials.from_cxro_file(path)` or `from_refractiveindex_file(path)` reads a single
+file without a library. The YAML files require the `refractiveindex` extra.
 [`SOURCES.md`](https://github.com/jamccoy/gratinglab/blob/master/src/gratinglab/materials/data/SOURCES.md)
-for why none ship.
+explains why no tables are distributed.
 
-The core install has no plotting stack, so a user who only runs solvers never installs
-one. Each subpackage that needs an extra names it when it is missing, rather than
-failing with a bare `ModuleNotFoundError`.
+The core install does not include a plotting stack, so a user who only runs the solvers
+does not install one. A subpackage that needs an optional extra names it when it is
+missing, instead of failing with a bare `ModuleNotFoundError`.
 
-Besides numpy, scipy and pydantic, the one dependency is
-[endstation](https://github.com/jamccoy/endstation), shared scaffolding for desktop
-science tools by the same author. gratinglab uses its optional-extra guards (the
-messages above), form validation, Qt layout sizing, test helpers, and the tools that
-build the icon and the macOS app and publish the wiki. endstation's own core has no
-dependencies, so it adds nothing to a solver-only install; its Qt parts arrive only
-with the `gui` extra.
+Apart from numpy, scipy and pydantic, the only dependency is
+[endstation](https://github.com/jamccoy/endstation), a library of shared components for
+desktop scientific applications by the same author. gratinglab uses its guards for
+optional extras (the messages described above), form validation, Qt layout sizing,
+test helpers, and the tools that build the icon and the macOS application and publish
+the wiki. The core of endstation has no dependencies of its own, so it adds nothing to
+a solver-only install; its Qt components are installed only with the `gui` extra.
 
 ### Where the measurement data lives
 
-Scans are **not** in the repository. They are research data, and the same rule already
-applies to the private reference corpus of efficiency tables:
+AFM scans are not included in the repository, because they are research data. The
+same applies to the private reference corpus of efficiency tables:
 
 | Data | Environment variable | Default |
 |---|---|---|
 | AFM scans | `GRATINGLAB_AFM_DIR` | `~/Documents/afm_scans` |
 | Reference efficiency tables | `GRATINGLAB_REF_DIR` | `~/Documents/diffraction_efficiency` |
 
-Tests that need either **skip cleanly** when it is absent, so the suite is green on a
-fresh clone. Most of the metrology suite does not need it at all: it runs against a
-committed synthetic scan of a *known* grating
-(`tools/metrology/make_synthetic_scan.py`), which also lets a test check that the
-pipeline recovers the period and blaze angle it was given.
+Tests that need either are skipped when it is absent, so the suite passes on a fresh
+clone. Most of the metrology tests do not need it: they run against a committed
+synthetic scan of a grating with known geometry
+(`tools/metrology/make_synthetic_scan.py`), which also allows a test to check that the
+pipeline recovers the period and blaze angle used to generate it.
 
 ## GUI
 
@@ -205,70 +217,72 @@ gratinglab-gui                 # geometry, solvers, comparison
 gratinglab-metrology-gui       # AFM import, blaze angles, boundary profiles
 ```
 
-Qt (PySide6), so `pip install "gratinglab[gui]"` is self-sufficient, with no system
-toolkit to install first. PySide6 is LGPLv3 and an optional, dynamically-linked extra,
-which leaves this package BSD-3.
+The windows are built with Qt (PySide6), so `pip install "gratinglab[gui]"` needs no
+system toolkit to be installed first. PySide6 is licensed under the LGPLv3 and is an
+optional, dynamically linked extra, so this package remains under the BSD-3 licence.
 
-Grating geometry lives in a dock on the left (Ctrl+G closes it and hands the width back),
-and there is one tab per concern:
+The grating geometry is set in a dock on the left of the efficiency window (Ctrl+G
+hides it), and the window has one tab for each task:
 
-- **Grating Geometry:** a rotatable 3D view of the diffraction cone, with every wave
-  vector drawn as an exact unit vector. The orders separate in *azimuth* rather than
-  polar angle (93.8° of fan at 0.0° of polar spread for the reference off-plane
-  geometry), so the "down the cone axis" preset plus a uniform 27× zoom makes them
-  readable at true scale. γ is never exaggerated: uniform zoom is a similarity
-  transform, so every angle in the view is preserved exactly, and the magnification is
-  stated on the canvas. Beside it are the dispersion-plane cross-section, a `sin β`
-  ladder that includes evanescent orders, and the groove profile. The picture updates
-  as you type.
-- **Scalar (Kirchhoff):** the solve, efficiency per order with per-order visibility, and
-  the **provenance panel**: every validity warning verbatim, the summed-efficiency check,
-  and whether convergence was demonstrated. A result that violates energy conservation
-  says so. **Check convergence…** runs the sweep and reports the coarsest defensible
-  setting, with a progress bar and a Cancel button. Solvers report per wavelength, so
-  Cancel stops the computation, not only the display.
-- **Integral method:** the rigorous backend, with the same panel and the same
-  provenance, plus its own boundary condition control (perfect conductivity or
-  tabulated optical constants). It takes minutes where scalar takes milliseconds, so the
-  window opens on the fast solver and this tab solves when you ask it to.
-- **Setup:** the material library: which optical constants are installed, what range
-  each covers, where they came from, and how to add your own. The coating *control*
-  lives in the geometry dock, because it is a `Problem` field like the period and one
-  `Problem` feeds every tab.
+- **Grating Geometry:** a rotatable 3D view of the diffraction cone, in which every wave
+  vector is drawn as an exact unit vector. In the reference off-plane geometry the
+  orders separate in azimuth rather than in polar angle (93.8° of azimuthal spread at
+  0.0° of polar spread), so the view looking down the cone axis, combined with a uniform
+  27× zoom, makes them distinguishable at true scale. The grazing angle γ is not
+  exaggerated: a uniform zoom preserves every angle in the view, and the magnification
+  is stated on the canvas. Alongside it are the cross-section in the dispersion plane, a
+  `sin β` diagram that includes the evanescent orders, and the groove profile. The view
+  updates as values are typed.
+- **Scalar (Kirchhoff):** the scalar solution, the efficiency of each order with
+  per-order visibility, and a provenance panel that lists every validity warning, the
+  summed-efficiency check, and whether convergence was demonstrated. A result that
+  violates energy conservation is flagged. "Check convergence…" runs a convergence
+  sweep and reports the coarsest setting that meets the criterion, with a progress bar
+  and a Cancel button. Because solvers report progress for each wavelength, Cancel
+  stops the computation itself.
+- **Integral method:** the rigorous backend, with the same panel and provenance and its
+  own boundary-condition control (perfect conductivity or tabulated optical
+  constants). It takes minutes where the scalar solver takes milliseconds, so the
+  window opens on the scalar solver and this tab computes only when asked to.
+- **Setup:** the material library, showing which optical constants are installed, the
+  range each covers, where each came from, and how to add others. The coating itself is
+  chosen in the geometry dock, because it is a `Problem` field, like the period, and the
+  same `Problem` is used by every tab.
 
-Each registered solver gets a tab generated from the registry, so a contributed backend
-gets its panel by registering rather than by editing the window.
+Each registered solver receives a tab generated from the solver registry, so a
+contributed backend appears in the window once it is registered.
 
-Help carries the theory pages, rendered with typeset math and real tables.
+The Help menu contains the theory pages, rendered with typeset equations and tables.
 
-A macOS `.app` can be built with `python tools/make_app.py` (macOS 13+, which is the
-PySide6 wheel's own floor); the icon is regenerated by `python tools/make_icon.py`.
+A macOS `.app` can be built with `python tools/make_app.py` (macOS 13 or later, the
+minimum supported by the PySide6 wheels), and the icon is regenerated with
+`python tools/make_icon.py`.
 
 ## Documentation
 
-| Document | What it holds |
+| Document | Contents |
 |---|---|
-| [`docs/roadmap.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/roadmap.md) | **Where the project is, what is next, and the open questions.** Start here |
-| [`docs/conventions.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/conventions.md) | **Normative.** Signs, units, normalizations, and the reference errata |
-| [`docs/theory/scalar.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/theory/scalar.md) | Full derivation for the scalar solver, its closed forms and its limits |
+| [`docs/roadmap.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/roadmap.md) | The current state of the project, planned work and open questions; the place to start |
+| [`docs/conventions.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/conventions.md) | The normative definitions: signs, units, normalizations, and errata in the references |
+| [`docs/theory/scalar.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/theory/scalar.md) | The derivation of the scalar solver, its closed-form results and its limits |
 | [`docs/theory/integral.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/theory/integral.md) | The boundary-integral solver: conical formulation, perfect and finite conductivity |
-| [`docs/theory/metrology.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/theory/metrology.md) | What the AFM pipeline assumes, what it measures, and what it does not, including what tip erosion can and cannot give back |
-| [`docs/findings.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/findings.md) | Empirical results, each with the evidence that established it |
-| [`docs/references.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/references.md) | The literature each part is built from, mapped to the part it serves |
-| [`docs/mutation-testing.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/mutation-testing.md) | What is mutated, what is not, and how to read a survivor |
+| [`docs/theory/metrology.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/theory/metrology.md) | The assumptions of the AFM pipeline, what it measures and what it does not, including what tip erosion can recover |
+| [`docs/findings.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/findings.md) | Empirical results, each with the evidence for it |
+| [`docs/references.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/references.md) | The literature each part of the package is based on |
+| [`docs/mutation-testing.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/mutation-testing.md) | What is mutated, what is not, and how to interpret a surviving mutant |
 | [`benchmarks/corpus.toml`](https://github.com/jamccoy/gratinglab/blob/master/benchmarks/corpus.toml) | Geometry for the reference corpus, most of it recovered from the data |
 
-Read `conventions.md` before writing a solver or filing a bug about a sign. The short
-version is time convention `exp(-iωt)`, lossy *n* = n′ + ik, grating equation
-`sin α + sin β_m = mλ/(p sin γ)`, efficiencies **absolute**, lengths in nm, angles in
-degrees at the API boundary.
+`conventions.md` should be read before writing a solver or reporting a bug involving a
+sign. In brief: the time convention is `exp(-iωt)`, the complex refractive index is
+*n* = n′ + ik, the grating equation is `sin α + sin β_m = mλ/(p sin γ)`, efficiencies
+are absolute, lengths are in nm, and angles are in degrees at the API boundary.
 
-Each solver has a theory page stating its assumptions, its derivation in the code's own
-notation, and the conditions under which it stops being trustworthy.
+Each solver has a theory page stating its assumptions, its derivation in the notation
+of the code, and the conditions under which its results cease to be reliable.
 
-The [wiki](https://github.com/jamccoy/gratinglab/wiki) is a published copy of `docs/`,
-not a second source. Edit `docs/` and republish, or the copy people read becomes the
-one nobody edits:
+The [wiki](https://github.com/jamccoy/gratinglab/wiki) is a published copy of `docs/`
+and of the metrology window's own help pages, which appear there with an "AFM" prefix.
+Changes are made to the sources in the repository and then republished:
 
 ```bash
 git clone https://github.com/jamccoy/gratinglab.wiki.git ../gratinglab.wiki
@@ -283,18 +297,17 @@ git clone https://github.com/jamccoy/gratinglab.wiki.git ../gratinglab.wiki
 .venv/bin/ruff check .
 ```
 
-Three practices this project relies on:
+The test suite relies on three practices in particular:
 
-- **Physics self-checks over reference data.** `checks.check_reciprocity` and
-  `checks.check_energy_balance` constrain the *model* rather than comparing against a
-  formula derived the same way the solver computes it. They need no reference data and
-  apply to every backend.
-- **Convergence demonstrated, not assumed.** `convergence.check_convergence` sweeps
-  whatever a solver declares as its accuracy knob and reports the coarsest setting it
-  can defend, or reports that it found none, which is itself a result. It requires
-  *three* consecutive values to agree, because quadrature error is measurably
-  non-monotone for a blazed profile and one agreement can be an accident the next
-  refinement contradicts
+- **Physical self-checks.** `checks.check_reciprocity` and `checks.check_energy_balance`
+  test properties that any correct model must satisfy, independently of how the
+  solver computes its result. They require no reference data and apply to every
+  backend.
+- **Demonstrated convergence.** `convergence.check_convergence` varies whatever a
+  solver declares as its accuracy parameter and reports the coarsest setting that
+  meets the criterion, or reports that none did. It requires three consecutive values
+  to agree, because the quadrature error of a blazed profile does not decrease
+  monotonically, so a single agreement can be coincidental
   ([findings](https://github.com/jamccoy/gratinglab/blob/master/docs/findings.md#quadrature-error-is-not-monotone-in-the-number-of-points)).
 
   ```python
@@ -302,9 +315,10 @@ Three practices this project relies on:
   report.converged_at           # 4096 -- what a production run should use
   report.scan.provenance.converged   # True
   ```
-- **Mutation testing.** The suite is run against deliberately broken copies of the
-  physics to check that it notices. Coverage says a line ran; this asks whether any test
-  would fail if the line were wrong. It has found real gaps both times it was run; see
+- **Mutation testing.** The suite is run against deliberately altered copies of the
+  physics code to check that the changes are detected. Coverage shows that a line was
+  executed; mutation testing shows whether any test would fail if that line were wrong.
+  Both runs so far have found real gaps in the tests; see
   [findings](https://github.com/jamccoy/gratinglab/blob/master/docs/findings.md#mutation-testing-found-a-real-gap)
   and [docs/mutation-testing.md](https://github.com/jamccoy/gratinglab/blob/master/docs/mutation-testing.md)
   for how to run it.
