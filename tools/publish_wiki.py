@@ -61,20 +61,21 @@ _LOCAL_LINK = re.compile(
 #: page that tries to be the documentation is the copy that goes stale.
 HOME = """# gratinglab
 
-An open platform for diffraction grating groove metrology and efficiency
-analysis — from an AFM scan of a real grating to its diffraction efficiency,
-without leaving the package.
+gratinglab is a Python package for measuring the groove profiles of
+diffraction gratings from AFM scans and for computing the diffraction efficiency
+of a grating from such a profile. The AFM metrology is the part in regular use;
+the efficiency solvers are experimental.
 
-These pages are published from [`docs/`]({blob}/docs) in the repository, which
-is the source of truth. Edit them there; edits made here are overwritten by the
-next publish.
+These pages are published from [`docs/`]({blob}/docs) and from the metrology
+window's help pages in the repository, which is the source of truth. Edit them
+there; edits made here are overwritten by the next publish.
 
 ## Start here
 
 | If you want to | Read |
 |---|---|
 | Know where the project is and what is next | **[roadmap](roadmap)** |
-| Write a solver, or file a bug about a sign | **[conventions](conventions)** — normative |
+| Write a solver, or file a bug about a sign | **[conventions](conventions)** (normative) |
 | See what has actually been established, with evidence | **[findings](findings)** |
 | Find the literature behind a method | **[references](references)** |
 | Run or read a mutation-testing sweep | **[mutation-testing](mutation-testing)** |
@@ -88,7 +89,7 @@ next publish.
 AFM scan  ->  BoundaryProfile   (gratinglab.metrology)
                       |          measured period, averaged groove, facet fit
                       v
-Problem       (period + profile + materials — no solver fields, ever)
+Problem       (period + profile + materials; no solver fields)
 Illumination  (wavelength + direction + polarization)
                       |
                       v
