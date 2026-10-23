@@ -76,6 +76,7 @@ gratinglab-metrology = "gratinglab.metrology.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/jamccoy/gratinglab"
+Changelog = "https://github.com/jamccoy/gratinglab/blob/master/CHANGELOG.md"
 
 # Solver backends register here. A backend may live in its own distribution.
 [project.entry-points."gratinglab.solvers"]
