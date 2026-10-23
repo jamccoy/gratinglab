@@ -1,26 +1,26 @@
-"""Solving off the UI thread.
+"""Solve off the UI thread.
 
-The scalar solver takes about 70 ms, so today this buys nothing a user would
-notice. RCWA at N ≈ 200–400 and the integral method will take seconds to
-minutes, and retrofitting an event flow around a window that has already
-frozen is worse than building for it once.
+The scalar solver takes about 70 ms, so at present this gives no benefit a
+user would notice. RCWA at N ≈ 200–400 and the integral method will take
+seconds to minutes, and retrofitting an event flow onto a window that already
+freezes is harder than designing for it from the start.
 
-Cancel now stops the work, not merely the waiting. It used to do only the
-latter -- ``sweep`` reaches a NumPy-bound call with no check point and a
-Python thread cannot be killed, so there was nothing to interrupt from out
-here. `Capabilities.reports_progress` changed that: the solver calls back once
-per wavelength, and a callback that raises
+Cancel now stops the work itself, and not only the waiting. Previously it did
+only the latter, because ``sweep`` reaches a NumPy-bound call with no check
+point and a Python thread cannot be killed, so there was nothing to interrupt
+from here. `Capabilities.reports_progress` changed that: the solver calls back
+once per wavelength, and a callback that raises
 :class:`~gratinglab.solvers.base.SolveCancelled` unwinds it.
 
-The token is still needed. Real cancellation does not remove the race it
-was covering for: the worker may already have finished when Cancel is clicked,
-so a result can still be in flight and must still be recognised as stale on
-arrival. Belt and braces, for two different situations.
+The token is still needed, because real cancellation does not remove the race
+it was covering. The worker may already have finished when Cancel is clicked,
+so a result can still be in flight and must still be recognised as stale when
+it arrives. The two mechanisms therefore cover two different situations.
 
-A fresh event per solve, created by the window and carried in the request.
-Not one owned by this object and cleared at the top of `run` -- that has a real
-race, in which a Cancel clicked between the request and the clear is silently
-lost.
+A fresh event is used for each solve, created by the window and carried in
+the request. An event owned by this object and cleared at the top of `run`
+would introduce a real race, in which a Cancel clicked between the request
+and the clear is silently lost.
 """
 
 from __future__ import annotations
@@ -45,8 +45,8 @@ class SolveResult(NamedTuple):
 
     Both cross the thread boundary by reference and neither is copied.
     ``EfficiencyScan`` is a frozen dataclass whose arrays are marked
-    ``write=False``, so there is nothing here another thread could mutate --
-    the immutability work in `result.py` is what makes this safe without a
+    ``write=False``, so there is nothing here that another thread could
+    mutate; the immutability work in `result.py` makes this safe without a
     lock.
     """
 
@@ -57,18 +57,19 @@ class SolveResult(NamedTuple):
 def _energy(scan) -> "EnergyReport":
     """Check energy balance at a tolerance the conserved quantity can meet.
 
-    The 1e-6 default is right for a **one-sided** quantity: a scalar sum, or a
-    perfect conductor's, approaches 1 from below, so any excess at all is a
-    modelling error and worth catching at machine precision. This is the check
-    that found a reference run summing to 3.6.
+    The 1e-6 default is appropriate for a one-sided quantity. A scalar sum, or
+    a perfect conductor's, approaches 1 from below, so any excess at all is a
+    modelling error and should be caught at machine precision. This check
+    found a reference run summing to 3.6.
 
     A scan carrying an absorbed fraction is different in kind. ``R + A = 1`` is
-    a theorem pinned from *both* sides, so the discretisation error lands above
-    unity as often as below -- a converged run measured +2.7e-6 and rendered as
-    "EXCEEDS UNITY" in red, which is exactly the "nothing correct looks wrong"
-    failure `gui/provenance.py` exists to prevent. So it is checked at the same
-    deviation the solver itself considers worth naming, and the panel's red text
-    and the solver's own warning then agree instead of contradicting each other.
+    a theorem constrained from both sides, so the discretisation error falls
+    above unity as often as below. A converged run measured +2.7e-6 and was
+    rendered as "EXCEEDS UNITY" in red, which is the "nothing correct looks
+    wrong" failure that `gui/provenance.py` is written to prevent. Such a scan
+    is therefore checked at the same deviation that the solver itself reports,
+    so that the panel's red text and the solver's own warning agree instead of
+    contradicting each other.
     """
     from ...checks import check_energy_balance
     from ...solvers.integral import _ENERGY_DEVIATION_WARN
@@ -79,15 +80,15 @@ def _energy(scan) -> "EnergyReport":
 
 
 class SolveWorker(QObject):
-    """Runs one solve at a time on a thread of its own, for whichever solver
-    asked.
+    """Run one solve at a time on a dedicated thread, for whichever solver asked.
 
-    Lives on a long-lived ``QThread`` owned by the window, shared by every
-    solver tab -- there is only ever one solve in flight window-wide (see
-    `main_window.py`). ``token`` is echoed back untouched so the window can
-    tell a result it still wants from one it cancelled; ``method`` is echoed
-    the same way so the window knows which tab's result this is, since
-    several tabs share this one worker.
+    The worker lives on a long-lived ``QThread`` owned by the window and is
+    shared by every solver tab, since only one solve is ever in flight in the
+    whole window (see `main_window.py`). ``token`` is echoed back unchanged so
+    that the window can distinguish a result it still wants from one it
+    cancelled, and ``method`` is echoed in the same way so that the window
+    knows which tab the result belongs to, since several tabs share this one
+    worker.
     """
 
     finished = Signal(int, str, object)  # token, method, SolveResult
@@ -146,13 +147,14 @@ class SolveWorker(QObject):
     ) -> None:
         """Sweep the solver's accuracy knob instead of solving once.
 
-        Up to ten solves, which is what makes this the first operation in the
-        project long enough for a progress bar to be worth having -- and the
-        first a user is likely to want out of.
+        A sweep runs up to ten solves, which makes it the first operation in
+        the project long enough to merit a progress bar, and the first that a
+        user is likely to want to cancel.
 
-        The knob is dropped from ``options``: the sweep chooses it. Passing
-        both would be refused by `check_convergence` anyway, and refusing here
-        with a clear reason beats surfacing that as a solver error.
+        The knob is dropped from ``options``, because the sweep chooses it.
+        `check_convergence` would refuse both being passed in any case, and
+        refusing here with a clear reason is preferable to surfacing the
+        refusal as a solver error.
         """
         from ...convergence import check_convergence
         from ...solvers.base import get_solver
@@ -180,14 +182,14 @@ class SolveWorker(QObject):
             self.failed.emit(token, method, f"{type(exc).__name__}: {exc}")
 
     def _reporter(self, token: int, cancel: threading.Event):
-        """The callback handed to the solver: emit, then bail if asked to.
+        """The callback handed to the solver, which emits progress and stops if asked.
 
-        Throttled to whole percent. A 200-wavelength scan otherwise emits 200
-        queued cross-thread signals for a bar that has ~100 distinguishable
-        states, and the ones it drops are the ones nobody could have seen.
-        The *cancellation* check is not throttled -- it runs on every call, so
-        a Cancel click lands at the next wavelength rather than the next
-        percent.
+        Progress is throttled to whole percent. Otherwise a 200-wavelength
+        scan would emit 200 queued cross-thread signals for a bar that has
+        ~100 distinguishable states, and the signals that are dropped are ones
+        that could not have been seen. The cancellation check is not
+        throttled: it runs on every call, so a Cancel click takes effect at
+        the next wavelength instead of the next percent.
         """
         last = -1
 

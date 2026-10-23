@@ -1,8 +1,8 @@
 """
-Statistical analysis functions
-Handles comparisons between samples
+Statistical analysis functions.
 
-UPDATED: Proper uncertainty propagation in all comparisons
+This module handles comparisons between samples. It was updated to propagate
+uncertainty properly in all comparisons.
 """
 import numpy as np
 from scipy import stats as scipy_stats
@@ -13,8 +13,8 @@ def _effective_n(result):
     Sample size to use for inference.
 
     Row-group analysis re-measures the same physical grooves in every band, so
-    the raw count overstates how much independent information there is. Falls
-    back to the raw count for results produced before n_effective existed, and
+    the raw count overstates how much independent information there is. The
+    function falls back to the raw count for results produced before n_effective existed, and
     for traditional (non row-group) analysis where the two are the same thing.
     """
     n_eff = result.get('n_effective')
@@ -82,8 +82,10 @@ def print_comparison_summary(results, labels):
 
 def print_pairwise_comparisons(results):
     """
-    Print pairwise statistical comparisons between samples
-    NOW WITH PROPER UNCERTAINTY PROPAGATION AND SIGNIFICANCE TESTS
+    Print pairwise statistical comparisons between samples.
+
+    The comparisons include proper uncertainty propagation and significance
+    tests.
     
     Parameters:
         results: list of result dictionaries
@@ -274,7 +276,7 @@ def print_uncertainty_breakdown(results, labels):
     """
     Print detailed breakdown of uncertainty components
     
-    This helps understand where your uncertainty comes from:
+    The breakdown shows where the uncertainty comes from:
     - Measurement uncertainty (from fits)
     - Physical variation (groove-to-groove)
     - Within-image variation (between row groups, if applicable)

@@ -1,11 +1,11 @@
 r"""Separable (GEMM) assembly of the accelerated kernels.
 
-``_greens`` evaluates the Kummer-accelerated kernels pointwise, which for a
-full ``(P, P)`` operator means broadcast ``(P, P, orders)`` intermediates hit
-with ``exp`` and complex powers -- measured at 97-99% of the whole solver's
-runtime, dwarfing the dense LU. This module assembles the *same* sums as a
-handful of BLAS-3 products, exploiting that every spectral term separates
-into node factors:
+``_greens`` evaluates the Kummer-accelerated kernels pointwise. For a full
+``(P, P)`` operator this means applying ``exp`` and complex powers to
+broadcast ``(P, P, orders)`` intermediates, which was measured at 97-99% of
+the whole solver's runtime, far exceeding the cost of the dense LU. This
+module assembles the same sums as a handful of BLAS-3 products, using the
+fact that every spectral term separates into node factors:
 
 .. math::
     e^{i \alpha_m (x_j - x_l)} = e^{i \alpha_m x_j}\, e^{-i \alpha_m x_l},
@@ -16,33 +16,35 @@ into node factors:
         e^{-i \gamma_m (y_j - c)}\, e^{+i \gamma_m (y_l - c)} & y_j < y_l
       \end{cases}
 
-so the truncated sum over orders ``-M..M`` is two ``(P, 2M+1) @ (2M+1, P)``
-matrix products -- one per sign branch of ``Z = y_j - y_l``, selected
-entrywise (the height is not monotonic in node index, so the branches form
-no triangle; computing both and selecting doubles the flops but keeps two
-clean GEMMs, still three orders of magnitude below the broadcast form).
+so the truncated sum over orders ``-M..M`` becomes two
+``(P, 2M+1) @ (2M+1, P)`` matrix products, one per sign branch of
+``Z = y_j - y_l``, selected entrywise. The height is not monotonic in node
+index, so the branches do not form a triangle. Computing both and selecting
+doubles the flops but keeps two clean GEMMs, which remain three orders of
+magnitude cheaper than the broadcast form.
 
-Three safeguards make the split exact rather than merely fast:
+Three safeguards make the split exact as well as fast.
 
-- **The reference shift** ``c = (y_min + y_max) / 2`` bounds every factor's
-  exponent by ``Im(gamma_m) h / 2`` with ``h`` the groove height: the split
-  factors individually can overflow where their product cannot, and the
-  midpoint shift is the best any single reference can do.
-- **The hard-order fallback**: orders with ``Im(gamma_m) h / 2 >
+- The reference shift ``c = (y_min + y_max) / 2`` bounds the exponent of
+  every factor by ``Im(gamma_m) h / 2``, where ``h`` is the groove height.
+  The split factors can individually overflow where their product cannot,
+  and the midpoint shift is the best that any single reference can achieve.
+- In the hard-order fallback, orders with ``Im(gamma_m) h / 2 >
   _EXP_GUARD`` (safely under ``log`` of the double-precision max) are
   evaluated by the original broadcast form restricted to those orders,
-  which exponentiates the pair *difference* and never overflows. The set is
+  which exponentiates the pair difference and never overflows. The set is
   empty for realistic meshes (it needs roughly ``pi * terms * h / period >
-  1380``) and deep gratings degrade gracefully instead of returning
+  1380``), and deep gratings degrade gracefully instead of returning
   ``0 * inf``.
-- **Geometry-cached Kummer tails**: the asymptote ratios ``xi_pm =
+- The Kummer tails are cached with the geometry. The asymptote ratios ``xi_pm =
   exp(pm K(iX mp |Z|))`` carry no wavelength (only the prefactors
-  ``pre_pm = exp(alpha0(iX mp |Z|))`` do), so the accelerated series'
-  entire asymptotic content collapses to two per-boundary arrays each:
-  ``sum_{p>M} xi^p / p`` for the Green's function (via ``log1p`` minus a
-  Horner partial sum -- no powers, ``|xi| <= 1`` throughout) and the
-  geometric ``sum_{p>M} xi^p = xi^{M+1} / (1 - xi)`` for the Neumann
-  kernel. Built once per (boundary, terms), reused at every wavelength.
+  ``pre_pm = exp(alpha0(iX mp |Z|))`` do), so the entire asymptotic content
+  of the accelerated series reduces to two per-boundary arrays for each
+  kernel: ``sum_{p>M} xi^p / p`` for the Green's function
+  (computed as ``log1p`` minus a Horner partial sum, with no powers and
+  ``|xi| <= 1`` throughout) and the geometric
+  ``sum_{p>M} xi^p = xi^{M+1} / (1 - xi)`` for the Neumann kernel. These
+  are built once per (boundary, terms) and reused at every wavelength.
 
 The Neumann kernel is served as its two node-factorable pieces,
 
@@ -56,21 +58,24 @@ so one evaluation serves the double layer (vector = source normal, columns),
 the adjoint layer (observation normal, rows, sign flipped) and the
 tangential layer (observation tangent, rows, sign flipped).
 
-Diagonals are garbage here by design -- the quadrature layer (``_nystrom``)
-overwrites them with the analytic and principal-value limits, exactly as it
-does for the pointwise kernels, and the cached tails are zeroed on the
-diagonal so no ``inf`` leaks into the elementwise combines.
+The diagonals computed here are meaningless by design. The quadrature layer
+(``_nystrom``) overwrites them with the analytic and principal-value limits,
+exactly as it does for the pointwise kernels, and the cached tails are
+zeroed on the diagonal so that no ``inf`` leaks into the elementwise
+combinations.
 
-Shared formulation envelope (not introduced here): the Kummer acceleration
--- pointwise and separable alike -- cancels asymptote terms of magnitude
-``exp(|alpha0| |Z|)`` down to O(1), so past ``|alpha0| h ~ 30`` double
-precision retains nothing. Measured against a cancellation-free reference,
-this assembly tracks the pointwise kernels to ``~exp(|alpha0| h) * 1e-16``
-and is, if anything, the slightly *more* accurate of the two throughout the
-degradation window. The regime needs a short transverse wavelength driven
-through a deep groove (an in-plane mount at hard-X-ray wavelengths); the
-grazing-conical mounts the solver targets keep ``alpha0`` small, and the
-energy-balance theorem check fails loudly if the envelope is ever left.
+The formulation has an accuracy envelope that this module shares with the
+pointwise kernels and does not introduce. The Kummer acceleration, in both
+its pointwise and separable forms, cancels asymptote terms of magnitude
+``exp(|alpha0| |Z|)`` down to O(1), so beyond ``|alpha0| h ~ 30`` double
+precision retains no significant digits. Measured against a
+cancellation-free reference, this assembly tracks the pointwise kernels to
+``~exp(|alpha0| h) * 1e-16`` and is, if anything, slightly the more
+accurate of the two throughout the degradation window. The regime requires
+a short transverse wavelength in a deep groove (an in-plane mount at
+hard-X-ray wavelengths). The grazing-conical mounts the solver targets keep
+``alpha0`` small, and the energy-balance theorem check fails visibly if the
+envelope is ever left.
 """
 
 from __future__ import annotations
@@ -105,9 +110,9 @@ _CHUNK = 32
 class KernelGeometry:
     """Everything about one (boundary, terms) pair that no wavelength touches.
 
-    Roughly eleven ``(P, P)`` arrays -- ~20 MB at ``P = 400``, ~500 MB at
-    ``P = 2000`` -- built once per scan and amortised over every wavelength
-    and both media.
+    This is roughly eleven ``(P, P)`` arrays (~20 MB at ``P = 400`` and
+    ~500 MB at ``P = 2000``), built once per scan and amortised over every
+    wavelength and both media.
     """
 
     period: float
@@ -131,7 +136,7 @@ class KernelGeometry:
 class SpectralFactors:
     """The per-(k, alpha0) node factors of the spectral sum.
 
-    ``row/col`` matrices cover the *safe* orders only; the ``hard`` arrays
+    The ``row/col`` matrices cover only the safe orders, and the ``hard`` arrays
     hold the wavenumbers of orders whose split factors would overflow, for
     the broadcast fallback in :func:`_spectral_sum`.
     """
@@ -206,8 +211,8 @@ def spectral_factors(
 ) -> SpectralFactors:
     """Node factors for one medium at one wavelength.
 
-    One :func:`~._greens.wavenumbers` call covers all orders ``-M..M`` --
-    the branch pin lives there and only there.
+    One :func:`~._greens.wavenumbers` call covers all orders ``-M..M``, and
+    the branch pin is applied in that function alone.
     """
     orders = np.arange(-geometry.terms, geometry.terms + 1)
     alpha_m, gamma_m = wavenumbers(k, alpha0, geometry.period, orders)
@@ -236,10 +241,11 @@ def spectral_factors(
 def _spectral_sum(geometry, factors, weight) -> NDArray[np.complex128]:
     """``sum_m weight(alpha_m, gamma_m) exp(i alpha_m X + i gamma_m |Z|)``.
 
-    Safe orders as two branch GEMMs selected on ``sign(Z)``; the discarded
-    branch may overflow harmlessly (each selected entry's own accumulation
-    only ever decays), hence the suppressed warnings. Hard orders take the
-    chunked broadcast form on the pair differences, which cannot overflow.
+    Safe orders are evaluated as two branch GEMMs selected on ``sign(Z)``.
+    The discarded branch may overflow harmlessly (the accumulation of each
+    selected entry only ever decays), hence the suppressed warnings. Hard
+    orders take the chunked broadcast form on the pair differences, which
+    cannot overflow.
     """
     w = weight(factors.alpha_safe, factors.gamma_safe)
     with np.errstate(over="ignore", invalid="ignore"):
@@ -260,12 +266,13 @@ def _spectral_sum(geometry, factors, weight) -> NDArray[np.complex128]:
 def greens_matrix(
     geometry: KernelGeometry, factors: SpectralFactors
 ) -> NDArray[np.complex128]:
-    """The full ``(P, P)`` accelerated Green's function, diagonal garbage.
+    """The full ``(P, P)`` accelerated Green's function, with a meaningless diagonal.
 
-    Algebraically identical to :func:`~._greens.greens_function` on the true
-    separations: the truncated spectral sum minus the tail of the asymptote
-    series (the per-order pairing ``exact - asym`` plus the closed-form logs
-    telescopes to exactly this).
+    The result is algebraically identical to
+    :func:`~._greens.greens_function` on the true separations: the truncated
+    spectral sum minus the tail of the asymptote series (the per-order
+    pairing ``exact - asym`` plus the closed-form logs telescopes to exactly
+    this).
     """
     period = geometry.period
     total = _spectral_sum(
@@ -283,10 +290,11 @@ def neumann_core(
     """The Neumann kernel's two vector components ``(A, B)``.
 
     ``N = A v_x + sgn(Z) B v_y`` for any unit vector ``v`` at source or
-    observation point -- the caller broadcasts ``v`` along columns (double
+    observation point. The caller broadcasts ``v`` along columns (double
     layer) or rows (adjoint and tangential layers, with the sign flip).
     The tail terms carry the large-``|m|`` bracket limits ``alpha_m /
-    gamma_m -> mp i`` exactly as the pointwise kernel's asymptote does.
+    gamma_m -> mp i``, exactly as the asymptote of the pointwise kernel
+    does.
     """
     period = geometry.period
     a_matrix = _spectral_sum(

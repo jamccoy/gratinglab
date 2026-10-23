@@ -1,13 +1,11 @@
-r"""The conical diffraction geometry in three dimensions, decided without a
-toolkit.
+r"""Describe the conical diffraction geometry in 3D, without a GUI toolkit.
 
 The 2D view in :mod:`gratinglab.gui.diagram` is the projection down the groove
-axis. It draws every azimuth truly and hides one thing completely: the
-out-of-plane component :math:`k_z = k\cos\gamma`, which at
-:math:`\gamma = 1.5°` is 99.97% of :math:`|k|`. This module is the view that
-shows it.
+axis. It draws every azimuth true but cannot show the out-of-plane component
+:math:`k_z = k\cos\gamma` at all, and at :math:`\gamma = 1.5°` that component
+is 99.97% of :math:`|k|`. This module provides the view that shows it.
 
-Why a narrow cone still makes a good picture
+Why a narrow cone can still be drawn legibly
 ============================================
 
 At the reference geometry (315.15 nm, :math:`\alpha = 25°`,
@@ -23,29 +21,30 @@ At the reference geometry (315.15 nm, :math:`\alpha = 25°`,
  +3   +41.94°    (+0.01749, +0.01947, **0.99966**)
 ===  ==========  ============================================
 
-Polar spread: exactly 0.0°. Azimuth spread: 93.8°. The cone is a needle
-*and* the fan around it is nearly a right angle. Both at once, and that
-combination is precisely what a dispersion-plane drawing cannot convey.
+The polar spread is exactly 0.0° and the azimuth spread is 93.8°. The cone is
+very narrow, while the fan of orders around it spans nearly a right angle, and
+a drawing in the dispersion plane cannot convey both properties together.
 
-So the default oblique view is not a degenerate picture. The grooves run along
-:math:`\hat{z}` and the rays run at 1.5° to them: a beam *skimming along the
-groove direction* at grazing incidence, which is exactly what distinguishes an
-off-plane mount from a classical one. Looking down the cone axis instead, and
-zooming uniformly to the rim, makes the 93.8° fan fully readable -- at true
-scale, since uniform zoom is a similarity transform and preserves every angle.
+The default oblique view is therefore not a degenerate picture. The grooves
+run along :math:`\hat{z}` and the rays run at 1.5° to them, which shows a beam
+travelling nearly along the groove direction at grazing incidence; this is
+the property that distinguishes an off-plane mount from a classical one.
+Looking down the cone axis instead, and zooming uniformly to the rim, makes
+the 93.8° fan fully readable at true scale, since a uniform zoom is a
+similarity transform and preserves every angle.
 
-Nothing here exaggerates γ. Legibility comes from viewpoint and
-magnification only.
+The value of γ is not exaggerated anywhere in this module. Legibility is
+obtained from the choice of viewpoint and magnification only.
 
 Two scales in one box
 =====================
 
-The grating patch is in nm (~630 nm across); the rays are unit vectors. There
-is no physical ratio between them, so :attr:`Scene.scale_nm` records the one
-chosen and a caption states it. The groove *cross-section* is exact and every
-ray *direction* is exact; only the patch's size relative to the rays is a
-drawing choice -- the same disclaimer the 2D view already carries for ray
-length, narrowed to the one thing still arbitrary.
+The grating patch is in nm (~630 nm across), while the rays are unit vectors.
+There is no physical ratio between the two, so :attr:`Scene.scale_nm` records
+the ratio chosen and a caption states it. The groove cross-section and every
+ray direction are exact; only the size of the patch relative to the rays is a
+drawing choice. This is the same disclaimer that the 2D view carries for ray
+length, restricted to the one quantity that remains arbitrary.
 
 Why a separate module
 =====================
@@ -54,11 +53,12 @@ Why a separate module
 typed as two ranges and the widget unpacks it as such, and
 :attr:`Arrow.azimuth` would silently keep returning a projection angle if a
 ``z`` were defaulted onto it. Adding a third dimension there would make the
-widget branch on shape, which is what the pure/impure split exists to prevent.
-This module reuses :func:`~gratinglab.gui.diagram.direction`,
+widget branch on shape, which the separation of pure and impure code is
+intended to prevent. This module reuses
+:func:`~gratinglab.gui.diagram.direction`,
 :func:`~gratinglab.gui.diagram.order_marks`,
 :func:`~gratinglab.gui.diagram.strike_point` and
-:func:`~gratinglab.gui.diagram.facet_normal` rather than re-deriving anything.
+:func:`~gratinglab.gui.diagram.facet_normal` and re-derives none of them.
 """
 
 from __future__ import annotations
@@ -171,13 +171,13 @@ _CONE_NPHI = {"fine": 289, "coarse": 73}
 
 @dataclass(frozen=True, slots=True)
 class Ray3D:
-    """A wave vector, drawn from ``origin`` along a **unit** ``direction``.
+    """A wave vector, drawn from ``origin`` along a unit ``direction``.
 
-    Unit, always. The 2D view draws every ray at one arbitrary length because
-    only azimuths carry meaning there; here the transverse extent *is* the
-    physics -- it is :math:`\\sin\\gamma`, and at 1.5° that is 0.026. A
-    renormalised ray would erase exactly the quantity this view exists to
-    show.
+    The direction is always a unit vector. The 2D view draws every ray at one
+    arbitrary length because only azimuths carry meaning there. Here the
+    transverse extent is itself physical: it is :math:`\\sin\\gamma`, which is
+    0.026 at 1.5°. A renormalised ray would remove the quantity this view is
+    intended to show.
     """
 
     origin: tuple[float, float, float]
@@ -195,16 +195,19 @@ class Ray3D:
 
     @property
     def azimuth(self) -> float:
-        """Azimuth from :math:`\\hat{n}` toward :math:`\\hat{d}`, radians --
-        the convention every angle in §3 uses. Read back off the drawn vector,
-        which is what lets a test recover the grating equation from the
-        picture rather than recompute it the same way."""
+        """Azimuth from :math:`\\hat{n}` toward :math:`\\hat{d}`, in radians.
+
+        This is the convention used by every angle in §3. It is read back from
+        the drawn vector, which allows a test to recover the grating equation
+        from the picture instead of recomputing it by the same method."""
         return float(np.arctan2(self.direction[0], self.direction[1]))
 
     @property
     def polar_from_cone_axis(self) -> float:
-        """Angle to :math:`-\\hat{g}`. Equals :math:`\\gamma` for every wave
-        vector, which is the cone property stated as one number."""
+        """Angle to :math:`-\\hat{g}`.
+
+        It equals :math:`\\gamma` for every wave vector, which expresses the
+        cone property as a single number."""
         return float(np.arccos(np.dot(self.direction, CONE_AXIS)))
 
 
@@ -236,7 +239,7 @@ class Curve3D:
 
 @dataclass(frozen=True, slots=True)
 class Point3D:
-    """A point with a *named* glyph; the widget owns the name-to-marker map."""
+    """A point with a named glyph; the widget owns the name-to-marker map."""
 
     x: float
     y: float
@@ -279,8 +282,10 @@ class Scene:
         return not self.rim_reason
 
     def ray(self, order: int) -> Ray3D:
-        """The ray for one order. Raises if it has none -- an evanescent order
-        genuinely has no direction, and a default would invent one."""
+        """The ray for one order.
+
+        Raises if the order has no ray, because an evanescent order has no
+        direction and a default value would supply a false one."""
         for entry in self.rays:
             if entry.order == order:
                 return entry
@@ -303,17 +308,17 @@ def wave_vector(azimuth: float, gamma: float) -> NDArray[np.float64]:
     r"""A unit wave vector at the given azimuth, on the cone of half-angle
     :math:`\gamma`.
 
-    ``conventions.md`` §3's :math:`\hat{k}_m`. The :math:`(x, y)` part is
-    literally :func:`~gratinglab.gui.diagram.direction` scaled by
+    This is the :math:`\hat{k}_m` of ``conventions.md`` §3. Its
+    :math:`(x, y)` part is :func:`~gratinglab.gui.diagram.direction` scaled by
     :math:`\sin\gamma`, so the 2D and 3D views cannot disagree about a
-    direction; only :math:`+\cos\gamma\,\hat{z}` is new here, and that is
-    exactly the component the projection drops.
+    direction. Only :math:`+\cos\gamma\,\hat{z}` is new here, and it is the
+    component that the projection drops.
     """
     return np.array([*(direction(azimuth) * np.sin(gamma)), np.cos(gamma)])
 
 
 def incident_vector(alpha: float, gamma: float) -> NDArray[np.float64]:
-    r""":math:`\hat{k}_i`, which travels *toward* the grating (negative
+    r""":math:`\hat{k}_i`, which travels toward the grating (negative
     :math:`\hat{y}`). Equals ``Illumination.direction_cosines``."""
     return np.array([*(-direction(alpha) * np.sin(gamma)), np.cos(gamma)])
 
@@ -327,14 +332,14 @@ def rim_box(
 
     The rim is a circle of radius :math:`\sin\gamma` at height
     :math:`\cos\gamma`, so the box is a cube centred there. At
-    :math:`\gamma = 1.5°` that is a 27x uniform magnification -- which is what
-    turns the 93.8° azimuth fan from a point cluster into something readable,
-    without touching a single angle.
+    :math:`\gamma = 1.5°` this is a 27x uniform magnification, which makes the
+    93.8° azimuth fan readable where it would otherwise appear as a cluster of
+    points, and it leaves every angle unchanged.
 
-    ``reason`` is non-empty **exactly** when the magnification is not worth
-    offering. At :math:`\gamma = 90°` the rim already *is* the whole scene and
-    focusing on it would zoom *out*; a control that did nothing would be the
-    mistake this project has named before.
+    ``reason`` is non-empty exactly when the magnification is not worth
+    offering. At :math:`\gamma = 90°` the rim is already the whole scene and
+    focusing on it would zoom out. Offering a control that did nothing useful
+    would repeat a mistake this project has identified before.
     """
     half = RIM_MARGIN * float(np.sin(gamma))
     magnification = BOX_HALF / half if half > 0.0 else float("inf")
@@ -364,9 +369,10 @@ def rim_box(
 
 
 def view_direction(elev_deg: float, azim_deg: float) -> NDArray[np.float64]:
-    """The unit vector a matplotlib 3D view looks *along*, from the camera
-    toward the origin's far side. Pure, so presets are testable without a
-    figure."""
+    """The unit vector along which a matplotlib 3D view looks.
+
+    It points from the camera toward the far side of the origin. The function
+    is pure, so the presets can be tested without a figure."""
     elev, azim = np.radians(elev_deg), np.radians(azim_deg)
     return np.array(
         [
@@ -381,7 +387,7 @@ def view_direction(elev_deg: float, azim_deg: float) -> NDArray[np.float64]:
 
 
 def scene_title(gamma: float) -> str:
-    """Always states γ, and always states that it is to scale."""
+    """Title the scene, always stating γ and that the drawing is to scale."""
     return f"Conical diffraction: γ = {np.degrees(gamma):g}°, to scale"
 
 
@@ -459,7 +465,7 @@ def captions3d(
 
 
 def _grating_patch(problem: "Problem", scale_nm: float, periods: int, lod: str):
-    """The cross-section extruded along ẑ. Ruled, so two rows is exact."""
+    """The cross-section extruded along ẑ; it is ruled, so two rows are exact."""
     t = np.linspace(-periods, 0.0, _PATCH_NX[lod])
     strike = np.asarray(strike_point(problem))
     px = (x_nm(t, problem.period) - strike[0]) / scale_nm
@@ -478,7 +484,7 @@ def _grating_patch(problem: "Problem", scale_nm: float, periods: int, lod: str):
 
 
 def _cone_mantle(gamma: float, lod: str) -> Surface3D:
-    """The cone of half-angle γ about −ĝ. Ruled along its generators."""
+    """The cone of half-angle γ about −ĝ, ruled along its generators."""
     phi = np.linspace(0.0, 2.0 * np.pi, _CONE_NPHI[lod])
     rim = np.array([np.sin(gamma) * np.cos(phi), np.sin(gamma) * np.sin(phi)])
     s = np.array([0.0, 1.0])
@@ -514,7 +520,7 @@ def build_scene(
     periods: int = 2,
     pad_orders: int = 2,
 ) -> Scene:
-    """Everything one 3D drawing consists of."""
+    """Build every primitive of one 3D drawing."""
     gamma = illumination.gamma
     marks = order_marks(problem, illumination, wavelength, pad=pad_orders)
     scale_nm = periods * problem.period / PATCH_SPAN

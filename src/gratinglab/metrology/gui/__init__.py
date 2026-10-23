@@ -1,20 +1,21 @@
 """
 A PySide6 front-end for the blaze-angle analysis.
 
-This package carries no analysis logic. It computes nothing itself: every
-number it shows comes from :func:`gratinglab.metrology.analyzer.analyze_single_file`,
-which knows nothing about Qt, so behaviour stays testable without a display.
+This package carries no analysis logic and computes nothing itself. Every
+number it shows comes from
+:func:`gratinglab.metrology.analyzer.analyze_single_file`, which knows nothing
+about Qt, so the behaviour stays testable without a display.
 
-Two rules make that boundary real rather than aspirational:
+Two rules enforce that boundary:
 
-1. **Only `gui.qt` may import a toolkit.** Everything else here -- `state.py` in
-   particular -- is pure and tested headlessly. `tests/test_gui_boundary.py`
+1. **Only `gui.qt` may import a toolkit.** Everything else here, `state.py` in
+   particular, is pure and tested headlessly. `tests/test_gui_boundary.py`
    walks this package and fails if PySide6 appears outside `gui/qt`.
 
 2. **Only the main thread may touch a matplotlib figure.** The worker returns
-   the result dictionary; the window draws from it. Drawing from a worker is the
-   classic way a Qt + matplotlib application crashes, usually intermittently and
-   far from the cause.
+   the result dictionary, and the window draws from it. Drawing from a worker
+   is a well-known cause of crashes in Qt + matplotlib applications, which
+   usually occur intermittently and far from the cause.
 
 Importing `gui.qt` requires PySide6, which is an optional extra::
 
@@ -36,12 +37,13 @@ def require_qt() -> None:
     """Raise something useful rather than a bare ImportError.
 
     ``ModuleNotFoundError: No module named 'PySide6'`` tells a user nothing about
-    what to do, and this is the single most likely first-run failure.
+    what to do, and this is the most likely first-run failure.
 
-    Uses find_spec rather than importing: this module sits outside `gui/qt`, and
-    the rule that only `gui/qt` touches a toolkit is enforced by
-    `tests/test_gui_boundary.py`. Checking availability should not cost a full
-    toolkit import either - the point is to fail fast and clearly.
+    The check uses find_spec instead of an import because this module sits
+    outside `gui/qt`, and the rule that only `gui/qt` touches a toolkit is
+    enforced by `tests/test_gui_boundary.py`. Checking availability should
+    also not cost a full toolkit import, since the aim is to fail quickly and
+    clearly.
     """
     from importlib.util import find_spec
 

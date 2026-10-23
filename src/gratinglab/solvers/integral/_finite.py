@@ -1,66 +1,69 @@
 r"""The finite-conductivity transverse solve (Goray & Schmidt 2010).
 
-One interface between vacuum and a semi-infinite material of complex
-refractive index ``n``, in the conical mount. The two coupled scalars are
-``E_z`` and ``B_z = (mu+/eps+)^{1/2} H_z`` (G&S section 2.A); each satisfies
-a transverse Helmholtz equation with its own side's wavenumber
+This module treats a single interface between vacuum and a semi-infinite
+material of complex refractive index ``n``, in the conical mount. The two
+coupled scalars are ``E_z`` and ``B_z = (mu+/eps+)^{1/2} H_z`` (G&S section
+2.A), and each satisfies a transverse Helmholtz equation with the wavenumber
+of its own side,
 
 .. math::
     k_t^{+} = k \sin\gamma, \qquad
     k_t^{-} = k \sqrt{n^2 - \cos^2\gamma},
 
-so the vacuum side is exactly the reduced-wavelength problem the perfectly
-conducting solve already meshes, and the metal side is the same Green's
-function code with complex ``k`` (the branch pin in ``_greens``).
+so the vacuum side is exactly the reduced-wavelength problem that the
+perfectly conducting solve already meshes, and the metal side uses the same
+Green's function code with complex ``k`` (the branch pin in ``_greens``).
 
-The system is derived here independently in this project's conventions
-(outward normal up, unscaled operators of ``_nystrom``, ``exp(-i omega t)``)
-rather than transcribed -- G&S's normal points into the metal and their
-potentials carry a factor 2, and sign-sensitive equations do not survive PDF
-extraction (``docs/references.md``). The construction:
+The system is derived here independently, in this project's conventions
+(outward normal up, the unscaled operators of ``_nystrom``,
+``exp(-i omega t)``), instead of being transcribed. In G&S the normal points
+into the metal and the potentials carry a factor 2, and sign-sensitive
+equations do not survive PDF extraction (``docs/references.md``). The
+construction is as follows.
 
 - The substrate fields are single-layer potentials, ``u^- = S^- w`` and
   ``v^- = S^- tau``, so their traces are ``V^- w`` and their normal
-  derivatives ``(L^- - I/2) w`` (the jump relation ``_nystrom`` tests pin).
+  derivatives ``(L^- - I/2) w`` (the jump relation pinned by the
+  ``_nystrom`` tests).
 - On the vacuum side, Green's representation of the radiating scattered
-  field plus the regularity identity of the incident field give the exact
-  boundary relation ``(I/2 + K^+) psi - V^+ (d psi/dn) = psi_i`` for the
-  *total* field ``psi`` -- whose perfectly conducting limits are literally
-  the two milestone-1 equations (``d psi/dn = 0`` gives the TM equation,
-  ``psi = 0`` the TE one), which is what pins its signs.
-- The jump conditions (G&S eq. 6, mapped) eliminate the vacuum traces:
-  continuity of ``E_z, B_z``, and
+  field together with the regularity identity of the incident field gives
+  the exact boundary relation ``(I/2 + K^+) psi - V^+ (d psi/dn) = psi_i``
+  for the total field ``psi``. Its perfectly conducting limits are exactly
+  the two milestone-1 equations (``d psi/dn = 0`` gives the TM equation and
+  ``psi = 0`` the TE one), and this correspondence fixes its signs.
+- The jump conditions (G&S eq. 6, mapped) eliminate the vacuum traces. They
+  are continuity of ``E_z, B_z``, and
 
   .. math::
      \partial_n E_z^+ = c_E\, \partial_n E_z^- + s\, \partial_t B_z, \qquad
      \partial_n B_z^+ = c_B\, \partial_n B_z^- - s\, \partial_t E_z,
 
   with ``c_E = n^2 k_t^{+2}/k_t^{-2}``, ``c_B = k_t^{+2}/k_t^{-2}``, and
-  ``s = \cos\gamma\,(1 - k_t^{+2}/k_t^{-2})`` -- the tangential derivatives
-  of the *continuous* traces, hence ``D_t V^-`` on the densities. That
+  ``s = \cos\gamma\,(1 - k_t^{+2}/k_t^{-2})``. The tangential derivatives
+  act on the continuous traces, hence ``D_t V^-`` on the densities. That
   product is assembled as one operator (``tangential_layer_matrix``), with
-  the derivative taken analytically on the kernel: differentiating an
+  the derivative taken analytically on the kernel. Differentiating an
   assembled ``V^-`` numerically instead leaves an ``O(1)`` error that
-  refinement does not remove, which destroys the conical solve on any
-  boundary carrying appreciable high-frequency content.
+  refinement does not remove, and this error destroys the conical solve on
+  any boundary carrying appreciable high-frequency content.
 
 The result is a 2x2 block system in ``(w, tau)`` whose diagonal blocks are
 ``(I/2 + K^+)V^- - c\,V^+(L^- - I/2)`` and whose cross blocks are
 ``\mp s\,V^+ D_t V^-``. In-plane (``cos gamma = 0``) the cross blocks
-vanish and the two equations decouple; both incident polarizations share
-the same blocks, differing only in the right-hand side. In the perfectly
+vanish and the two equations decouple. Both incident polarizations share
+the same blocks and differ only in the right-hand side. In the perfectly
 conducting limit ``|n| -> inf`` the system degenerates to the milestone-1
 equations (``V^-, c_B -> 0``), which the tests measure at ``n = 100i``.
 
-Efficiencies are **absolute**: per reflected order
+Efficiencies are absolute: each reflected order carries
 ``(gamma_m/gamma_0)(|E_m|^2 + |B_m|^2)`` for a unit-power incident state
 ``|p_z|^2 + |q_z|^2 = 1``. Absorption is computed from the solved densities
-by an independent boundary integral (G&S eq. 26, mapped and re-derived --
-it reduces exactly to ``1 - |r|^2`` on a flat interface, both
-polarizations), so ``R + A = 1`` is a genuine two-sided check, the
+by an independent boundary integral (G&S eq. 26, mapped and re-derived),
+which reduces exactly to ``1 - |r|^2`` on a flat interface in both
+polarizations. ``R + A = 1`` is therefore a genuine two-sided check and the
 successor of the perfectly conducting ``sum = 1`` theorem. For a lossless
-substrate the same integral equals the transmitted power and ``R + T = 1``
-is a theorem again.
+substrate the same integral equals the transmitted power, and ``R + T = 1``
+is again a theorem.
 """
 
 from __future__ import annotations
@@ -86,14 +89,15 @@ __all__ = ["FiniteSolution", "solve_transverse_finite", "solve_finite_states"]
 
 @dataclass(frozen=True, slots=True)
 class FiniteSolution:
-    """One incident polarization state at one wavelength, absolute units.
+    """One incident polarization state at one wavelength, in absolute units.
 
     ``e_amplitudes`` and ``b_amplitudes`` are the Rayleigh coefficients of
-    ``E_z`` and ``B_z`` for the reflected propagating orders; both carry
+    ``E_z`` and ``B_z`` for the reflected propagating orders. Both carry
     power because conical incidence converts polarization. ``absorption``
-    is the boundary-integral value: the power crossing into the substrate,
-    which for a lossy material is absorbed there and for a lossless one is
-    the transmitted power (then it agrees with ``transmitted_total``).
+    is the boundary-integral value, the power crossing into the substrate.
+    For a lossy material that power is absorbed there, and for a lossless
+    one it is the transmitted power, in which case it agrees with
+    ``transmitted_total``.
     """
 
     orders: NDArray[np.int64]
@@ -127,7 +131,7 @@ def _reflected_amplitudes(
     """Rayleigh coefficients of ``S^+ single - D^+ double`` (M&P 4.33/4.41).
 
     With ``single`` the total field's normal derivative and ``double`` its
-    trace, these are the reflected amplitudes -- the perfectly conducting
+    trace, these are the reflected amplitudes. The perfectly conducting
     extractions in ``_core`` are the special cases ``double = 0`` (TE) and
     ``single = 0`` (TM).
     """
@@ -176,10 +180,10 @@ def solve_transverse_finite(
 ) -> FiniteSolution:
     """Solve one incident state ``incident = (p_z, q_z)`` at one wavelength.
 
-    ``wavelength`` is the *vacuum* wavelength in nm (both sides' transverse
-    wavenumbers derive from it); ``cos_gamma = 0`` is the in-plane mount,
-    where the system decouples and ``(1, 0)``/``(0, 1)`` are the classical
-    TE/TM problems. Efficiencies are normalized to the incident power
+    ``wavelength`` is the vacuum wavelength in nm, from which the transverse
+    wavenumbers of both sides derive. ``cos_gamma = 0`` is the in-plane
+    mount, where the system decouples and ``(1, 0)``/``(0, 1)`` are the
+    classical TE/TM problems. Efficiencies are normalized to the incident power
     ``|p_z|^2 + |q_z|^2``.
     """
     return solve_finite_states(
@@ -208,12 +212,13 @@ def solve_finite_states(
 ) -> "list[FiniteSolution]":
     """Solve several incident states against one assembly.
 
-    Every state shares the same system matrices -- the expensive part (four
-    kernel builds, the operator products, one factorization) is paid once
-    and the states differ only in the right-hand side, which is how the
-    unpolarized average costs two triangular solves rather than two
+    Every state shares the same system matrices. The expensive part (four
+    kernel builds, the operator products and one factorization) is paid
+    once, and the states differ only in the right-hand side, so the
+    unpolarized average costs two triangular solves instead of two
     factorizations. ``assembler`` shares the kernel machinery across
-    wavelengths (the solver passes one per scan); built fresh when omitted.
+    wavelengths (the solver passes one per scan) and is built fresh when
+    omitted.
     """
     index = complex(index)
     if index.imag < 0.0:

@@ -1,55 +1,55 @@
 """
-Tip convolution: simulate it, and undo what can be undone.
+Tip convolution: simulate it, and undo the part of it that can be undone.
 
-An AFM image is not the surface. It is the surface **dilated** by the tip
-shape -- at every pixel the tip descends until it touches, and the recorded
-height is where the *apex* stopped, which is above the true surface anywhere
+An AFM image differs from the surface. It is the surface dilated by the tip
+shape: at every pixel the tip descends until it touches, and the recorded
+height is where the apex stopped, which lies above the true surface wherever
 the contact happened on the tip's flank instead of its apex. Villarrubia
 (1997, J. Res. NIST 102, 425) gives the exact morphological statement and the
 two operations this module implements:
 
-- ``dilate`` -- image formation. What a tip of the given shape would report
-  for a known surface. Exact, and used to *make* test data: dilating the
-  synthetic scan produces an image whose true surface is known, which no real
-  scan allows.
-- ``erode`` -- reconstruction. The **least upper bound** on the true surface
-  consistent with the image and the tip: everywhere the apex made contact the
-  bound *is* the surface, and everywhere else the tip physically could not
-  reach, so no algorithm can recover what is there. The certainty map marks
-  the difference, which is the entire point: a reconstruction without one
-  manufactures exactly the false confidence it exists to remove.
+- ``dilate``: image formation. This gives what a tip of the given shape would
+  report for a known surface. It is exact, and it is used to make test data:
+  dilating the synthetic scan produces an image whose true surface is known,
+  which no real scan allows.
+- ``erode``: reconstruction. This gives the least upper bound on the true
+  surface consistent with the image and the tip. Wherever the apex made
+  contact the bound equals the surface, and everywhere else the tip
+  physically could not reach, so no algorithm can recover what is there. The
+  certainty map marks the difference between the two cases. A reconstruction
+  without one would present every pixel with the same confidence, which is
+  the false confidence the correction is meant to remove.
 
 The tip is a spherical apex cap of ``radius_nm`` on two straight flanks, one
 either side of the apex in the scan direction. Each flank has its own half
-angle, **measured from the tip axis**, so a flank of half angle ``a`` rises at
+angle, measured from the tip axis, so a flank of half angle ``a`` rises at
 ``90 - a`` degrees from the surface. ``half_angle_deg`` is the flank on the
 -x side (towards column 0) and ``half_angle_right_deg`` the one on the +x
 side; leaving the second out gives a symmetric cone, which is what every
 earlier version of this module assumed.
 
-The asymmetry is not a refinement for its own sake. A real tip is a pyramid,
-and which of its faces meet the surface depends on how the cantilever lies
+The asymmetry reflects real probe geometry. A real tip is a pyramid, and
+which of its faces meet the surface depends on how the cantilever lies
 relative to the fast-scan axis. Bruker's ScanAsyst-Air, for instance, has a
 15 deg front face, a 25 deg back face and 17.5 deg sides (each +/- 2.5 deg).
-Scanned across the cantilever the profile sees the two sides, a symmetric 72.5
-deg flank either way. Scanned along it, one flank rises at 75 deg and the other
-at only **65**, which cannot follow a 70 deg anti-blaze facet at all. See
+Scanned across the cantilever, the profile sees the two sides, a symmetric
+72.5 deg flank either way. Scanned along it, one flank rises at 75 deg and the
+other at only 65, which cannot follow a 70 deg anti-blaze facet at all. See
 :data:`TIP_PRESETS`.
 
-The consequence worth knowing before trusting any corrected groove: a facet
-steeper than the flank facing it is touched only at its top corner and is
-**unrecoverable**, and a facet close to the flank angle is the marginal case.
-That near-parallelism, not the nanometre apex, is what rounds the troughs of
-blazed gratings.
+This has a consequence for any corrected groove: a facet steeper than the
+flank facing it is touched only at its top corner and is unrecoverable, and a
+facet close to the flank angle is the marginal case. It is that near-parallelism,
+and not the nanometre apex, that rounds the troughs of blazed gratings.
 
-One dimension only. The operations run along the fast-scan axis (rows), not
-over the full 2-D image. For a grating the surface is invariant along the
-grooves, and dilating an invariant surface with the tip reduces exactly to
-dilating each cross-section with the tip's cross-section in the scan plane --
-the groove-parallel extent of the tip touches nothing the transverse extent
-does not. What a 2-D pass would add is sensitivity to along-groove features,
-and it would need the slow-axis pixel pitch, which the text-export format does
-not record.
+The correction is one-dimensional. The operations run along the fast-scan
+axis (rows), not over the full 2-D image. For a grating the surface is
+invariant along the grooves, and dilating an invariant surface with the tip
+reduces exactly to dilating each cross-section with the tip's cross-section in
+the scan plane, since the groove-parallel extent of the tip touches nothing
+the transverse extent does not. What a 2-D pass would add is sensitivity to
+along-groove features, and it would need the slow-axis pixel pitch, which the
+text-export format does not record.
 
 All heights are in metres (the unit the loaders promise), tip parameters in
 nm, and the pixel pitch comes from the scan width exactly as
@@ -144,9 +144,9 @@ def tip_cross_section(dx_nm, radius_nm, half_angle_deg, max_height_nm,
     ``k in [-K, K]`` (odd length, apex at the centre, ``t[K] == 0``), negative
     offsets on the ``half_angle_deg`` flank and positive ones on
     ``half_angle_right_deg``, which defaults to the same. ``K`` is chosen so
-    the profile just exceeds ``max_height_nm`` on its wider side -- parts of
-    the tip higher than the tallest feature can never make contact and would
-    only widen every window.
+    the profile just exceeds ``max_height_nm`` on its wider side, because
+    parts of the tip higher than the tallest feature can never make contact and
+    would only widen every window.
 
     The sphere of radius ``R`` meets each flank where its tangent matches it,
     at lateral offset ``R cos(theta)`` and height ``R (1 - sin(theta))`` for
@@ -196,12 +196,13 @@ def dilate(data, scan_x_size, *, radius_nm, half_angle_deg,
            half_angle_right_deg=None):
     """Image formation: what this tip reports for the surface ``data``.
 
-    ``img(x) = max_u [ surface(x + u) - tip(u) ]`` -- the apex height when the
+    ``img(x) = max_u [ surface(x + u) - tip(u) ]`` is the apex height when the
     tip, centred at ``x``, rests on whichever point it touches first; ``u`` is
-    the offset from the apex, positive to +x. Always ``>= data`` pointwise: a
-    tip can hide a trough but never dig one.
+    the offset from the apex, positive to +x. The result is always ``>= data``
+    pointwise, since a tip can hide a trough but never dig one.
 
-    Exists for synthesis and testing; the pipeline itself only erodes.
+    This function exists for synthesis and testing; the pipeline itself only
+    erodes.
     """
     dx_nm = _pixel_pitch_nm(data, scan_x_size)
     relief_nm = float(data.max() - data.min()) * 1e9
@@ -221,8 +222,8 @@ class TipCorrection:
 
     ``data`` is the least upper bound on the true surface: equal to it at
     every certain pixel, above it (by an unknowable amount) elsewhere. The
-    parameters are carried so downstream records can state what was assumed
-    rather than that something was.
+    parameters are carried so downstream records can state exactly what was
+    assumed.
     """
 
     data: np.ndarray       #: corrected heights, metres, same shape as input
@@ -261,26 +262,27 @@ def erode(data, scan_x_size, *, radius_nm, half_angle_deg,
           half_angle_right_deg=None) -> TipCorrection:
     """Reconstruct the least upper bound on the surface behind an image.
 
-    ``rec(y) = min_u [ img(y - u) + tip(u) ]`` -- the lowest the surface can
+    ``rec(y) = min_u [ img(y - u) + tip(u) ]`` is the lowest the surface can
     be at ``y`` given that the tip, wherever it stood, stopped where the image
     says: with the apex at ``y - u`` the point ``y`` lies under the tip at
-    offset ``u``. Sits between the truth and the image:
+    offset ``u``. The result lies between the truth and the image:
     ``surface <= rec <= img``.
 
-    Note the ``y - u``. Written as a loop over shifts ``k = -u`` it pairs
-    ``img(y + k)`` with ``tip(-k)``, the tip **reflected**. For a symmetric
-    tip the reflection is invisible, which is why it matters to say so: with
-    an asymmetric one, pairing ``img(y + k)`` with ``tip(k)`` erodes by the
-    mirror image of the tip. On the asymmetric test wall that version is no
-    longer the least upper bound (4.09 nm above the surface on average against
-    3.53) and re-imaging it misses the image by up to 2.7 nm, where the right
-    one reproduces it to 1e-14. ``test_tip.py`` catches it three ways.
+    The sign in ``y - u`` matters. Written as a loop over shifts ``k = -u``,
+    the expression pairs ``img(y + k)`` with ``tip(-k)``, the tip reflected.
+    For a symmetric tip the reflection has no effect, so an error here would
+    go unnoticed until an asymmetric tip is used: with an asymmetric one,
+    pairing ``img(y + k)`` with ``tip(k)`` erodes by the mirror image of the
+    tip. On the asymmetric test wall that version is no longer the least upper
+    bound (4.09 nm above the surface on average against 3.53) and re-imaging
+    it misses the image by up to 2.7 nm, whereas the correct one reproduces it
+    to 1e-14. ``test_tip.py`` detects the error in three ways.
 
     The certainty map re-runs the contact argument: re-dilating ``rec``
     reproduces the image exactly, and for each image pixel the surface point
     achieving that maximum is where the tip touched. A pixel is certain when
-    it is such a contact point for some image pixel **and** the contact is
-    unique -- a tie means the contact cannot be localised (the flank lying
+    it is such a contact point for some image pixel and the contact is
+    unique. A tie means the contact cannot be localised (the flank lying
     flush along a facet, a wedge gripped at both walls), and every tied point
     stays an upper bound. Window-truncated pixels at the scan edges are never
     marked certain.
@@ -325,7 +327,7 @@ def erode(data, scan_x_size, *, radius_nm, half_angle_deg,
 def apply_tip_correction(data, scan_x_size, settings):
     """The pipeline entry point: dispatch on ``settings.tip_correction``.
 
-    Returns ``(data, correction)`` -- the array to analyse and the
+    Returns ``(data, correction)``, the array to analyse and the
     :class:`TipCorrection` behind it, or ``(data, None)`` untouched when the
     setting is ``'none'``. Callers record ``correction.summary`` wherever
     their output lands, because a corrected depth and an uncorrected one are

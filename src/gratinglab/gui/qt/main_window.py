@@ -1,24 +1,24 @@
-"""The window.
+"""The main window.
 
-Thin, as its Tk predecessor was. Every number shown comes from
-:func:`gratinglab.compare.sweep`; every validation from
-:mod:`gratinglab.gui.state`; every line of a tab's provenance panel from
+The window is thin, as its Tk predecessor was. Every number shown comes from
+:func:`gratinglab.compare.sweep`, every validation from
+:mod:`gratinglab.gui.state`, and every line of a tab's provenance panel from
 :mod:`gratinglab.gui.provenance`. Nothing here computes physics, so a bug in
-this file misplaces a widget rather than producing a wrong answer -- and
-`tests/test_gui_qt.py` pins that by comparing what a tab plotted against a
+this file can misplace a widget but cannot produce a wrong answer, and
+`tests/test_gui_qt.py` checks this by comparing what a tab plotted against a
 direct solver call.
 
-Geometry inputs (:class:`~.geometry_panel.GeometryPanel`) live in a closable
-dock, because they apply to every tab but should not tax the window when you
-are not editing them -- Ctrl+G, and the tabs get the full width. The tabs are
-the central widget, and nothing else is.
+The geometry inputs (:class:`~.geometry_panel.GeometryPanel`) live in a
+closable dock, because they apply to every tab but should not take up space
+while they are not being edited; Ctrl+G hides them and gives the tabs the full
+width. The tabs alone form the central widget.
 
-Per tab: whatever genuinely differs by method. A solver tab owns its options,
-its result and its own provenance; the geometry tab owns every picture of the
-grating itself, since a groove's shape and the directions light leaves in owe
-nothing to a solver. Only one solve runs window-wide at a time (see
-`solve`/`_set_running`) -- there is no second, slow solver yet to justify
-concurrent per-tab workers.
+Each tab holds whatever differs by method. A solver tab owns its options, its
+result and its own provenance. The geometry tab owns every picture of the
+grating itself, since the shape of a groove and the directions in which light
+leaves it do not depend on a solver. Only one solve runs in the whole window
+at a time (see `solve`/`_set_running`), because there is not yet a second,
+slow solver to justify concurrent workers per tab.
 """
 
 from __future__ import annotations
@@ -147,10 +147,10 @@ class MainWindow(QMainWindow):
     def _build_dock(self) -> None:
         """Geometry inputs, in a panel the user is allowed to close.
 
-        A `QDockWidget` rather than a splitter pane because this is already a
-        `QMainWindow`, so a title bar, a close button, drag-to-float and a
-        restorable action all come for free -- and the panel is a permanent
-        300 px tax on a 1180 px window otherwise.
+        A `QDockWidget` is used instead of a splitter pane because this is
+        already a `QMainWindow`, so a title bar, a close button, drag-to-float
+        and a restorable action are provided without extra code. Without the
+        dock, the panel would permanently occupy 300 px of a 1180 px window.
         """
         self.geometry = GeometryPanel()
         self.geometry.solve_requested.connect(self._solve_active_tab)
@@ -233,23 +233,24 @@ class MainWindow(QMainWindow):
         return self._tab_widget
 
     def _build_menu(self) -> None:
-        """Two menus, and only two.
+        """Build the two menus, View and Help.
 
-        Help is the original and still the main one: this is not a
-        general-purpose application with File/Edit concerns, and the single
-        thing worth a menu for is explaining the math, which the window itself
-        never does.
+        Help is the original menu and remains the main one. This is not a
+        general-purpose application with File/Edit concerns, and the one thing
+        that merits a menu is the explanation of the mathematics, which the
+        window itself never gives.
 
-        View exists for exactly one reason and holds exactly one action. The
-        geometry panel is closable now -- it costs 300 px of a 1180 px window
-        otherwise -- and a control the user can close with no way to reopen it
-        is a trap. Putting the way back under *Help* would be worse than a
-        View menu: Help here means "explain the math", and diluting that has a
-        real cost.
+        View exists for a single purpose and holds a single action. The
+        geometry panel can now be closed (otherwise it would occupy 300 px of
+        a 1180 px window), and a control that the user can close with no way
+        to reopen it would leave the user stuck. Placing the reopening action
+        under Help would be worse than adding a View menu, since Help here
+        means "explain the math", and diluting that meaning has a real cost.
 
-        `QDockWidget.toggleViewAction()` rather than a hand-rolled checkable
-        action, because a hand-rolled one desynchronises the moment the user
-        clicks the dock's own close button.
+        `QDockWidget.toggleViewAction()` is used instead of a hand-written
+        checkable action, because a hand-written one falls out of
+        synchronisation as soon as the user clicks the dock's own close
+        button.
         """
         from ..docs import general_pages, theory_pages
         from ..richtext import menu_label
@@ -328,25 +329,25 @@ class MainWindow(QMainWindow):
             self.geometry_dock.show()
 
     def _geometry_edited(self) -> None:
-        """A field was edited. Schedule a redraw; solve nothing.
+        """Schedule a redraw after a field was edited, without solving.
 
-        Restarting the timer is the debounce: only a pause in typing reaches
-        `_refresh_geometry_tab`.
+        Restarting the timer implements the debounce, so that only a pause in
+        typing reaches `_refresh_geometry_tab`.
         """
         self._redraw_timer.start()
 
     def _refresh_geometry_tab(self) -> None:
         """Redraw the geometry tab from the form as it stands.
 
-        Not driven off `_on_solved`: the tab holds no solver
-        output, so waiting for a solve to redraw a picture no solver
-        contributed to would be a false dependency. It runs at construction,
-        after each solve, and -- debounced -- on every edit.
+        It is not driven from `_on_solved`. The tab holds no solver output, so
+        waiting for a solve before redrawing a picture to which no solver
+        contributed would introduce a false dependency. It runs at
+        construction, after each solve, and (debounced) on every edit.
 
-        This is **not** the live re-solve ruled out of scope. Nothing here
-        reaches a worker or a solver: `state.build` is microseconds of parsing
-        and the redraw is matplotlib, which the tab defers anyway when it is
-        hidden.
+        This is not the live re-solve that was ruled out of scope. Nothing
+        here reaches a worker or a solver: `state.build` takes microseconds of
+        parsing, and the redraw is done by matplotlib, which the tab defers in
+        any case while it is hidden.
         """
         errors = validate(self.geometry.read_form())
         if errors:
@@ -357,28 +358,29 @@ class MainWindow(QMainWindow):
         self.geometry_tab.show_geometry(build(self.geometry.read_form()))
 
     def _solve_active_tab(self) -> None:
-        """Enter in a geometry field solves whichever tab is showing.
+        """Solve whichever tab is showing, in response to Enter in a geometry field.
 
-        The geometry panel does not know solver names; it only knows
+        The geometry panel does not know solver names; it only knows that
         something changed. A tab with no `name` (Setup, once it exists) is
-        silently not solvable -- there is nothing to solve there.
+        silently skipped, because there is nothing to solve there.
         """
         name = getattr(self._tab_widget.currentWidget(), "name", None)
         if name is not None:
             self.solve(name)
 
     def solve(self, name: str, *, sweep: bool = False) -> None:
-        """Validate here, solve on the worker thread.
+        """Validate here and solve on the worker thread.
 
-        Geometry and the tab's own options are validated as two separate
-        steps, but both are caught before anything reaches the worker: a
-        rejected form is never sent to the worker, whichever kind of error it
-        was.
+        The geometry and the tab's own options are validated in two separate
+        steps, but errors from both are caught before anything reaches the
+        worker, so a rejected form is never sent to it, whatever kind of error
+        it contained.
 
         ``sweep`` runs the convergence harness instead of a single solve. It
-        shares every bit of the machinery below -- one token, one cancel
-        event, one "only one at a time window-wide" rule -- because it is the
-        same kind of thing, only longer. Only the destination slot differs.
+        shares all of the machinery below (one token, one cancel event, and
+        the rule that only one solve runs in the window at a time), because a
+        sweep is the same kind of operation, only longer. Only the destination
+        slot differs.
         """
         if self._running:
             return
@@ -414,14 +416,14 @@ class MainWindow(QMainWindow):
     def cancel(self) -> None:
         """Stop the running solve.
 
-        Setting the event is what stops it: the solver checks it at
-        every wavelength and raises out of its own loop (see `worker.py`).
+        Setting the event stops it: the solver checks the event at every
+        wavelength and raises out of its own loop (see `worker.py`).
 
-        Bumping the token as well is not redundant. The worker may already
-        have finished when Cancel is clicked, in which case a result is
-        already in flight and the event will never be read -- the token is
-        what makes that one stale on arrival. Two different situations, two
-        mechanisms.
+        Incrementing the token as well is not redundant. The worker may
+        already have finished when Cancel is clicked, in which case a result
+        is already in flight and the event will never be read; the token
+        marks that result as stale when it arrives. The two mechanisms handle
+        two different situations.
 
         There is only ever one thing that could be running, so it does not
         matter which tab's Cancel button was clicked.
@@ -450,21 +452,22 @@ class MainWindow(QMainWindow):
     def _on_progress(self, token: int, done: int, total: int) -> None:
         """Advance the originating tab's bar, and nobody else's.
 
-        A stale token means a cancelled solve is still reporting on its way
-        out of its own loop -- a few wavelengths at most, but enough to walk a
-        bar backwards over a result the window has already moved on from.
+        A stale token means that a cancelled solve is still reporting while it
+        leaves its own loop. This lasts a few wavelengths at most, but it would
+        be enough to move a bar backwards over a result the window has already
+        replaced.
         """
         if token != self._token or self._active_name is None:
             return
         self.tabs[self._active_name].show_progress_value(done, total)
 
     def _on_cancelled(self, token: int, method: str) -> None:
-        """The solve really stopped.
+        """Acknowledge that the solve has stopped.
 
-        Nothing to show: `cancel()` already updated the panel and re-enabled
-        the buttons, and the previous result is still on screen. This exists
-        so the worker has somewhere to report to other than `failed` -- a stop
-        the user asked for is not an error.
+        There is nothing to show: `cancel()` has already updated the panel and
+        re-enabled the buttons, and the previous result is still on screen.
+        This slot exists so that the worker can report somewhere other than
+        `failed`, since a stop that the user requested is not an error.
         """
 
     def _on_converged(self, token: int, method: str, result, report) -> None:
@@ -484,18 +487,20 @@ class MainWindow(QMainWindow):
         self.tabs[method].show_error(message)
 
     def _set_running(self, running: bool) -> None:
-        """Every tab's Solve button disables together, not just the one that
-        was pressed -- only one solve can be in flight window-wide."""
+        """Enable or disable every tab's Solve button together.
+
+        All of them change state, not only the one that was pressed, because
+        only one solve can be in flight in the whole window."""
         self._running = running
         for tab in self.tabs.values():
             tab.set_running(running)
 
     def _show_progress_if_still_running(self, tab) -> None:
-        """Progress is shown only on the tab that started the solve.
+        """Show progress, but only on the tab that started the solve.
 
-        Showing it on an idle tab would claim that tab is computing something
-        it isn't -- the same shape of dishonesty a provenance warning must
-        never carry either.
+        Showing it on an idle tab would imply that the tab is computing
+        something when it is not, which is the same kind of false statement
+        that a provenance warning must never make.
         """
         if self._running:
             tab.show_progress()
@@ -519,8 +524,8 @@ class MainWindow(QMainWindow):
         """Join the worker thread.
 
         Without this Qt reports "QThread: Destroyed while thread is still
-        running" and aborts intermittently -- most visibly in the offscreen
-        CI runs, where windows are created and destroyed back to back.
+        running" and aborts intermittently, most visibly in the offscreen CI
+        runs, where windows are created and destroyed in quick succession.
         """
         self._redraw_timer.stop()  # a redraw firing into a closing window
         self._thread.quit()

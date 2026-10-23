@@ -1,15 +1,17 @@
 """
 The Wiki tab: a page list beside a rendered page.
 
-Thin. `gratinglab.metrology.wiki` owns the content and the ordering; this does nothing
-but display what it is given, so the pages stay testable without a window and a
-command-line ``--explain`` could print the same text.
+The view is thin. `gratinglab.metrology.wiki` owns the content and the
+ordering, and this module only displays what it is given, so the pages stay
+testable without a window and a command-line ``--explain`` could print the
+same text.
 
 Markdown is rendered by Qt itself (`QTextBrowser.setMarkdown`), which handles
-headings, tables, lists, code spans and emphasis - everything these pages use.
-GratingLab carries a LaTeX rasteriser for its theory pages because diffraction
-algebra needs typesetting; the formulas here are one-liners and read fine as
-text, so that machinery is not worth the ~670 lines here.
+headings, tables, lists, code spans and emphasis, covering everything these
+pages use. GratingLab carries a LaTeX rasteriser for its theory pages because
+diffraction algebra needs typesetting; the formulas here are one-liners and
+read well as text, so that machinery would not justify the ~670 lines it would
+add here.
 """
 from __future__ import annotations
 

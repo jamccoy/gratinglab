@@ -1,7 +1,7 @@
-"""The boundary curve in physical units, once.
+"""The boundary curve in physical units, computed in a single place.
 
-Mirrors ``Problem.height_nm``: the normalised profile is converted to nm in
-exactly one place, so no other integral-method module multiplies by the
+This mirrors ``Problem.height_nm``: the normalised profile is converted to nm
+in exactly one place, so no other integral-method module multiplies by the
 period.
 """
 
@@ -22,8 +22,8 @@ class PhysicalBoundary:
     """Equal-arc-length boundary samples of one groove period, in nm.
 
     ``spacing`` is the quadrature weight of the rectangular rule,
-    ``arc_length / len(x)`` -- the nodes are equally spaced in arc length by
-    construction (see :meth:`gratinglab.profiles.Profile.boundary`).
+    ``arc_length / len(x)``, because the nodes are equally spaced in arc
+    length by construction (see :meth:`gratinglab.profiles.Profile.boundary`).
     """
 
     x: NDArray[np.float64]

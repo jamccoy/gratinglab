@@ -1,12 +1,12 @@
 """Groove profiles, in the four representations the solver methods need.
 
 Profiles are normalised. Both the coordinate ``t`` and the returned height
-are expressed in units of the period, so a profile is a pure *shape* and the
-period lives once, on :class:`~gratinglab.problem.Problem`. A solver that needs
+are expressed in units of the period, so a profile is a pure shape and the
+period is stored once, on :class:`~gratinglab.problem.Problem`. A solver that needs
 physical height multiplies by ``problem.period``. This also matches PCGrate's
 ``.ggp`` format, which stores ``Period: 1`` and normalised points.
 
-The four methods want genuinely different geometry from the same profile:
+The four methods require different geometry from the same profile:
 
 =================  ==========================================================
 Method             Representation
@@ -18,12 +18,13 @@ Integral           :meth:`Profile.boundary` -- parametrised curve with
                    outward normals and arc-length quadrature weights
 =================  ==========================================================
 
-Designing all four now is deliberate. Retrofitting normals and arc lengths onto
-a shipped API once the integral method arrives would churn every profile type.
+All four were designed together deliberately, because retrofitting normals and
+arc lengths onto a shipped API once the integral method arrived would have
+required changes to every profile type.
 
-A profile that cannot supply a representation raises. ``Blazed`` with a
-vertical anti-blaze facet has no finite slope there, so :meth:`Blazed.slope`
-refuses rather than returning a large number that would quietly poison a
+A profile that cannot supply a representation raises an error. ``Blazed`` with
+a vertical anti-blaze facet has no finite slope there, so :meth:`Blazed.slope`
+refuses instead of returning a large number that would silently corrupt a
 C-method solve.
 """
 
@@ -51,8 +52,9 @@ __all__ = [
 class ProfileRepresentationError(NotImplementedError):
     """A profile cannot be expressed in the representation a solver asked for.
 
-    Raised rather than approximated: a C-method solve fed a silently smoothed
-    vertical facet produces a plausible, wrong answer.
+    The error is raised in place of an approximation, because a C-method solve
+    given a silently smoothed vertical facet produces a plausible but wrong
+    answer.
     """
 
 
@@ -61,7 +63,7 @@ class Layer:
     """One piecewise-constant slab of an RCWA discretisation.
 
     ``intervals`` lists the ``(t_start, t_end)`` spans, normalised to the
-    period, where *grating material* occupies this slab. The complement is the
+    period, where grating material occupies this slab. The complement is the
     incident medium.
     """
 
@@ -197,7 +199,7 @@ class _BaseProfile(BaseModel):
         """Boundary resampled at equal arc length, with outward normals.
 
         Samples ``height`` finely and resamples the polyline at equal arc
-        length -- the node spacing the integral method's rectangular
+        length, which is the node spacing the integral method's rectangular
         quadrature rule needs. Profiles whose geometry is an exact polygon
         (:class:`Blazed`, :class:`Lamellar`) override with their vertices so
         facet corners and vertical segments carry no sampling error.
@@ -217,7 +219,7 @@ def _polyline_boundary(
     ``x`` and ``y`` are the open polygon vertices, normalised to the period;
     the curve is closed by continuing to ``(x[0] + 1, y[0])``, so a trailing
     vertical segment (a lamellar sidewall, an ideal sawtooth's anti-blaze
-    facet) is genuine geometry rather than a steep approximation. Handles
+    facet) is represented as real geometry instead of a steep approximation. Handles
     boundaries that double back in ``x`` (undercut), which is why every
     ``boundary()`` implementation funnels through here.
     """
@@ -356,8 +358,8 @@ class Blazed(_BaseProfile):
     def boundary(self, n: int) -> BoundaryCurve:
         """Exact sawtooth polygon.
 
-        A vertical anti-blaze facet is the closing segment of the polygon --
-        genuine geometry a height function cannot express.
+        A vertical anti-blaze facet is the closing segment of the polygon, a
+        piece of geometry that a height function cannot express.
         """
         if self.has_vertical_facet:
             x, y = np.array([0.0, 1.0]), np.array([0.0, self.depth])
@@ -397,7 +399,7 @@ class Lamellar(_BaseProfile):
 
 
 class Sinusoidal(_BaseProfile):
-    """Holographic (sinusoidal) groove -- smooth, so C-method friendly."""
+    """Holographic (sinusoidal) groove, smooth and therefore suited to the C-method."""
 
     depth_fraction: float = Field(gt=0.0, description="Peak-to-valley / period")
 
@@ -415,7 +417,7 @@ class Sinusoidal(_BaseProfile):
 
 
 class FromProfileData(_BaseProfile):
-    """A measured profile -- AFM, or PCGrate's ``.ggp`` polygonal border.
+    """A measured profile, from AFM or from PCGrate's ``.ggp`` polygonal border.
 
     Points are normalised: ``t`` spans one period on ``[0, 1]`` and ``y`` is in
     units of the period. Use :meth:`from_measurements` to normalise raw nm data.
@@ -426,25 +428,25 @@ class FromProfileData(_BaseProfile):
 
     Undercut profiles are representable. If ``t`` doubles back, the boundary
     is not a function of position and :meth:`height` and
-    :meth:`~_BaseProfile.slice_layers` refuse -- but :meth:`boundary` still
-    works, because an integral-equation solver parametrises the curve rather
-    than assuming a height function. That asymmetry is real physics, not a
-    limitation of this class: RCWA and scalar theory genuinely cannot represent
-    an undercut, and the integral method genuinely can.
+    :meth:`~_BaseProfile.slice_layers` refuse, but :meth:`boundary` still
+    works, because an integral-equation solver parametrises the curve instead
+    of assuming a height function. This asymmetry reflects the physics of the
+    methods and is not a limitation of this class: RCWA and scalar theory
+    cannot represent an undercut, and the integral method can.
 
-    ``blaze_angle`` is optional and means something different here than it does
-    on :class:`Blazed`. There it is a *definition* -- the facet is that angle
-    because it was specified so. Here it is a *measurement*: somebody fitted a
-    line to a real facet and got a number with an uncertainty. Both feed
+    ``blaze_angle`` is optional and has a different meaning here from the one
+    it has on :class:`Blazed`. There it is a definition: the facet has that
+    angle because it was specified so. Here it is a measurement, obtained by
+    fitting a line to a real facet, and it carries an uncertainty. Both feed
     ``solvers.scalar._reflecting_graze`` identically, and the provenance string
-    says which one it had, because a reader deciding whether to trust an
+    records which kind was used, because a reader deciding whether to trust an
     absolute efficiency needs to know.
 
-    Leaving it ``None`` is not neutral. The reflection then falls back to the
-    mean surface -- a zero-tilt facet -- which for a sawtooth measured at
+    Leaving it ``None`` has consequences. The reflection then falls back to
+    the mean surface, a zero-tilt facet, which for a sawtooth measured at
     grazing incidence is the wrong plane by the whole blaze angle. The default
-    is ``None`` because most measured profiles genuinely arrive without a fit,
-    not because ``None`` is the better answer.
+    is ``None`` because most measured profiles arrive without a fit, and not
+    because ``None`` is the better answer.
     """
 
     t: tuple[float, ...]
@@ -521,8 +523,8 @@ class FromProfileData(_BaseProfile):
     def boundary(self, n: int) -> BoundaryCurve:
         """Resample the stored polygon at equal arc length.
 
-        Works from the stored points directly rather than through ``height``,
-        which is what lets this handle an undercut boundary.
+        Works from the stored points directly instead of through ``height``,
+        which allows it to handle an undercut boundary.
         """
         return _polyline_boundary(
             np.asarray(self.t, dtype=np.float64),

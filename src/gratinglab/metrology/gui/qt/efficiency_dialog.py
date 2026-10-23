@@ -1,22 +1,25 @@
 """
 Diffraction efficiency of the groove currently previewed on the Boundary tab.
 
-The point of the two halves being one package, made visible. Everything here
-was reachable before by exporting a .ggp, opening the other window and loading
-it back -- except the period, which the file cannot carry and which a user then
-had to retype from the metrics panel. This path keeps it, because
-`BoundaryProfile.to_problem` carries the number the scan measured.
+This dialog shows in the interface why the two halves are one package.
+Everything here was reachable before by exporting a .ggp, opening the other
+window and loading it back, with the exception of the period, which the file
+cannot carry and which a user then had to retype from the metrics panel. This
+path keeps the period, because `BoundaryProfile.to_problem` carries the number
+the scan measured.
 
-A *preview*, not a second efficiency application. It offers one
-mount, one solver and no convergence check, and says as much: a result whose
-convergence was never demonstrated reports itself as not defensible, and this
-dialog does not demonstrate it. Any result to rely on belongs in the main
-window, where the convergence harness and the comparison view live.
+The dialog is a preview and is not intended as a second efficiency
+application. It offers one mount, one solver and no convergence check, and it
+states this: a result whose convergence was never demonstrated reports itself
+as not defensible, and this dialog does not demonstrate it. Any result to rely
+on belongs in the main window, where the convergence harness and the
+comparison view live.
 
-Synchronous, following the Boundary tab's own reasoning rather than the main
-window's: a scalar solve over a few hundred wavelengths is well under a second
-(3.4 s at the extreme this dialog allows), so a worker thread would buy a
-progress bar nobody waits on. The wait cursor is the whole concession.
+The solve is synchronous, following the Boundary tab's own reasoning instead
+of the main window's: a scalar solve over a few hundred wavelengths is well
+under a second (3.4 s at the extreme this dialog allows), so a worker thread
+would only provide a progress bar that nobody waits on. The only allowance
+made for the delay is the wait cursor.
 """
 from __future__ import annotations
 

@@ -1,17 +1,18 @@
 """The Grating Geometry tab: what the grating and the beams look like.
 
-Thin, like every widget here. :mod:`gratinglab.gui.diagram` decides what to
-draw -- every ray direction, every cutoff, every colour tag, every caption --
+Like every widget here, this tab is thin. :mod:`gratinglab.gui.diagram`
+decides what to draw (every ray direction, cutoff, colour tag and caption),
 and this class only positions the result. It computes no angle, makes no
-comparison against 1.0, and picks no colour, so a bug in this file misplaces a
-line rather than drawing wrong physics.
+comparison against 1.0 and picks no colour, so a bug in this file can
+misplace a line but cannot draw wrong physics.
 
-Not a solver tab: no ``name`` attribute, no ``solve_requested``, no
-``build_options``. `MainWindow._solve_active_tab` reads ``getattr(widget,
-"name", None)`` and therefore skips it, the same way it skips
-:class:`~.setup_tab.SetupTab`. Nothing here needs a solver -- a groove's shape
-and the directions light leaves in are geometry, and geometry is already known
-the moment the form parses.
+This is not a solver tab: it has no ``name`` attribute, no
+``solve_requested`` and no ``build_options``. `MainWindow._solve_active_tab`
+reads ``getattr(widget,
+"name", None)`` and therefore skips it, in the same way that it skips
+:class:`~.setup_tab.SetupTab`. Nothing here needs a solver, since the shape of
+a groove and the directions in which light leaves it are geometry, and the
+geometry is known as soon as the form parses.
 """
 
 from __future__ import annotations
@@ -64,8 +65,8 @@ class GeometryTab(QWidget):
     def showEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
         """Paint on becoming visible, if a redraw happened while hidden.
 
-        See `_redraw`: the figure is the expensive part and there is no point
-        rendering it into a tab nobody is looking at.
+        See `_redraw`: the figure is the expensive part, and rendering it into
+        a tab that is not visible would serve no purpose.
         """
         super().showEvent(event)
         if self._needs_paint and self._diagram is not None:
@@ -75,13 +76,15 @@ class GeometryTab(QWidget):
     # -- construction ------------------------------------------------
 
     def _build(self) -> None:
-        """Hero on the left, supporting panels on the right, controls beneath.
+        """Lay out the main view, the supporting panels and the controls.
 
-        Controls sit in a bottom *strip* rather than the right *column* they
-        had before. Once the profile plot moved in here the tab became
-        width-constrained rather than height-constrained, and a 320 px column
-        was spending the scarce dimension; a ~170 px strip spends the one we
-        now have to spare, handing that width back to the plots.
+        The main view is on the left, the supporting panels on the right and
+        the controls beneath. The controls sit in a strip along the bottom
+        instead of the column on the right that they occupied before. Once
+        the profile plot moved into this tab, the tab became limited by width
+        instead of height, and a 320 px column was using the scarce dimension.
+        A ~170 px strip uses the dimension that is now available and returns
+        the width to the plots.
         """
         hero = self._build_hero()
         self.profile_panel = ProfilePlotPanel()
@@ -114,8 +117,8 @@ class GeometryTab(QWidget):
         layout.addWidget(outer)
 
     def _build_hero(self) -> QWidget:
-        """The 3D conical view -- the one thing a dispersion-plane drawing
-        cannot show."""
+        """The 3D conical view, which shows what a dispersion-plane drawing
+        cannot."""
         self._scene3d = Scene3DPanel()
         self._scene3d.setMinimumWidth(380)
         self._scene3d.setMinimumHeight(320)
@@ -191,7 +194,7 @@ class GeometryTab(QWidget):
     # -- the contract MainWindow uses --------------------------------
 
     def show_geometry(self, parsed) -> None:
-        """Draw a parsed geometry. Needs no solver and no solve."""
+        """Draw a parsed geometry, which needs no solver and no solve."""
         self._parsed = parsed
         count = len(parsed.wavelengths)
 
@@ -210,17 +213,17 @@ class GeometryTab(QWidget):
         self._redraw()
 
     def show_pending(self, errors) -> None:
-        """The form does not parse yet. Keep the last good drawing.
+        """Keep the last good drawing while the form does not yet parse.
 
-        A form mid-edit is not a form with an error: ``"2."`` and ``"-"`` each
-        fail to parse for exactly one keystroke, and blanking the canvas or
-        reddening a label for them would style ordinary typing as a problem.
-        So the picture stays, and a `dim` line says plainly that it is one
-        edit behind -- never `warn`, never `bad`, which are what the panel
-        reserves for something wrong.
+        A form in the middle of an edit is not a form with an error: ``"2."``
+        and ``"-"`` each fail to parse for exactly one keystroke, and blanking
+        the canvas or turning a label red for them would present ordinary
+        typing as a problem. The picture therefore stays, and a `dim` line
+        states that it is one edit behind. The line is never `warn` or `bad`,
+        which the panel reserves for something that is wrong.
 
-        Errors are counted, not listed: naming a half-typed field would be the
-        same accusation in smaller type.
+        The errors are counted but not listed, because naming a half-typed
+        field would also present it as an error.
         """
         if self._parsed is None:
             return  # nothing good to keep; the tab has never drawn
@@ -241,8 +244,10 @@ class GeometryTab(QWidget):
     # -- reactions ----------------------------------------------------
 
     def _on_slider_moved(self, _value: int) -> None:
-        """Moving the slider redraws. It never solves -- the geometry is
-        already known, and nothing here depends on a solver."""
+        """Redraw when the slider moves.
+
+        It never solves, because the geometry is already known and nothing
+        here depends on a solver."""
         self._redraw()
 
     def _jump_to_blaze(self) -> None:
@@ -255,11 +260,12 @@ class GeometryTab(QWidget):
             self._slider.setValue(index)
 
     def _sync_blaze_button(self) -> None:
-        """Enabled when it can act; disabled *with its reason* when it cannot.
+        """Enable the button when it can act, and otherwise disable it with its reason.
 
-        A disabled control that explains itself is honest. An enabled one that
-        silently does nothing is the mistake this project already made once
-        and named -- see `docs/theory/scalar.md` §5.
+        A disabled control that states why it is disabled is preferable to an
+        enabled one that silently does nothing; this project has made and
+        documented the latter mistake once before (see `docs/theory/scalar.md`
+        §5).
         """
         index, reason = diagram_module.blaze_jump(
             self._parsed.wavelengths, self._parsed.problem, self._parsed.illumination
@@ -272,11 +278,11 @@ class GeometryTab(QWidget):
     def _redraw(self) -> None:
         """Rebuild the diagram; paint it only if anyone can see it.
 
-        Building is ~1 ms of numpy and always runs, so `_diagram` is always
-        current and a caller (or a test) can read it without a window. Painting
-        is ~50 ms of matplotlib, so it waits for `showEvent` when the tab is
-        hidden -- rendering a figure into a tab nobody is looking at is time
-        spent for no one.
+        Building takes ~1 ms of numpy and always runs, so `_diagram` is always
+        current and a caller (or a test) can read it without a window.
+        Painting takes ~50 ms of matplotlib, so when the tab is hidden it
+        waits for `showEvent`, since rendering into a tab that is not visible
+        would be wasted time.
         """
         if self._parsed is None:
             return
@@ -303,7 +309,7 @@ class GeometryTab(QWidget):
             self._needs_paint = True
 
     def _paint(self, drawing) -> None:
-        """Position what `diagram` decided. No trig, no cutoffs, no colours."""
+        """Position what `diagram` decided, choosing no angle, cutoff or colour."""
         colors = diagram_module.TAG_COLORS
         self._scene3d.show_scene(self._scene)
 

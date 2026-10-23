@@ -1,21 +1,22 @@
 """The integral solver's own form: boundary condition, points, and their guards.
 
-The second solver's options module, made the way ``scalar_options.py`` said a
-second one should be: its own file, its own frozen state, its own
-``build_options`` raising :class:`~gratinglab.gui.state.FormErrors`, no
-toolkit import anywhere.
+This is the options module for the second solver, written as
+``scalar_options.py`` recommended for a second one: it has its own file, its
+own frozen state and its own ``build_options`` raising
+:class:`~gratinglab.gui.state.FormErrors`, and it imports no toolkit.
 
-Two knobs now, because the solver has two. ``conductivity`` chooses the
-boundary condition -- ``"perfect"`` (relative efficiency, no material) or
-``"tabulated"`` (the finite-conductivity system of Goray & Schmidt 2010,
-absolute efficiency, absorption recorded). The mesh guard follows that
-choice: the boundary field oscillates at the *reduced* wavelength
-``lambda / sin(gamma)`` on the vacuum side, and under ``"tabulated"`` also at
-``lambda / |sqrt(n^2 - cos^2 gamma)|` inside the material, which for anything
-but a soft-X-ray index is the shorter of the two. Both floors mirror the
-solver's own refusals (``solvers/integral``); validating here too means the
-error lands on the field that caused it, alongside every other form error,
-instead of surfacing as a ValueError from the worker thread.
+The form has two settings, because the solver has two. ``conductivity``
+chooses the boundary condition, either ``"perfect"`` (relative efficiency, no
+material) or ``"tabulated"`` (the finite-conductivity system of Goray &
+Schmidt 2010, with absolute efficiency and absorption recorded). The mesh
+guard depends on that choice. The boundary field oscillates at the reduced
+wavelength ``lambda / sin(gamma)`` on the vacuum side, and under
+``"tabulated"`` also at
+``lambda / |sqrt(n^2 - cos^2 gamma)|`` inside the material, which is the
+shorter of the two for any index other than a soft-X-ray one. Both floors
+mirror the solver's own refusals (``solvers/integral``). Validating here as
+well places the error on the field that caused it, alongside every other form
+error, instead of letting it surface as a ValueError from the worker thread.
 """
 
 from __future__ import annotations
@@ -151,7 +152,7 @@ def _tabulated_index(
 
     Mirrors ``solvers.integral._resolve_index``, but returns a
     :class:`~gratinglab.gui.state.FieldError` instead of raising, so a missing
-    or unusable material lands on a form field rather than arriving as a
+    or unusable material is reported on a form field instead of as a
     traceback from the worker thread.
 
     ``lookup`` is called without an :class:`UnknownMaterial` guard because
@@ -201,11 +202,11 @@ def _metal_floor(
 ) -> tuple[int, str]:
     """The mesh floor the material side imposes, and what to say about it.
 
-    Same formula as the solver's own guard, so the two numbers agree: the
-    field inside a conductive material oscillates and decays on the scale
-    ``lambda / |sqrt(n^2 - cos^2 gamma)|``. For the shipped soft-X-ray tables
-    ``|n|`` is within a hair of 1 and this barely moves; for a visible-light
-    index of a few it is the binding constraint by a wide margin.
+    It uses the same formula as the solver's own guard, so the two numbers
+    agree. The field inside a conductive material oscillates and decays on the
+    scale ``lambda / |sqrt(n^2 - cos^2 gamma)|``. For the shipped soft-X-ray
+    tables ``|n|`` is very close to 1 and this floor changes little; for a
+    visible-light index of a few it is by far the binding constraint.
     """
     cos_gamma = float(np.sqrt(1.0 - illumination.sin_gamma**2))
     factors = np.abs(np.sqrt(indices**2 - cos_gamma**2))

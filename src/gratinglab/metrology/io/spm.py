@@ -2,28 +2,29 @@
 Reading Bruker/Veeco Nanoscope files (.spm) directly.
 
 A Nanoscope file is a latin-1 ASCII header of ``\\Key: value`` lines followed by
-the binary image planes. One file holds several planes - typically Height Sensor
-and Peak Force Error, each recorded in both scan directions - and each plane's
+the binary image planes. One file holds several planes (typically Height Sensor
+and Peak Force Error, each recorded in both scan directions), and each plane's
 header section says where its bytes are and how to turn them into nanometres.
 
-Written rather than taken from a library because the format is small, this
-project depends on nothing beyond numpy/scipy/matplotlib, and the
-conversion has one pitfall (below) worth handling here.
+The reader was written here instead of taken from a library because the format
+is small, this project depends on nothing beyond numpy/scipy/matplotlib, and
+the conversion has one pitfall (described below) that is best handled here.
 
-The pitfall: the height scale comes from a line like::
+The pitfall is as follows. The height scale comes from a line like::
 
     \\@2:Z scale: V [Sens. ZsensSens] (0.0000000001872337 V/LSB) 0.804163 V
 
-The name in brackets must be used **verbatim**. A file typically defines both::
+The name in brackets must be used verbatim. A file typically defines both::
 
     \\@Sens. Zsens:     V  32.46000 nm/V
     \\@Sens. ZsensSens: V 166.6319  nm/V
 
-Reaching for ``Zsens`` when the bracket says ``ZsensSens`` - which is easy, since
-one looks like the other with a redundant suffix - yields heights 5.13x too small.
-Nothing about the result looks wrong: the image is the right shape, the grooves
-are in the right places, and every blaze angle is quietly incorrect. Verified
-against a known export: with the right parameter, peak-to-peak matches to 1.0000.
+Using ``Zsens`` when the bracket says ``ZsensSens``, an easy mistake since one
+looks like the other with a redundant suffix, yields heights 5.13x too small.
+The result shows no visible sign of the error: the image is the right shape,
+the grooves are in the right places, and every blaze angle is silently
+incorrect. The reader was verified against a known export: with the right
+parameter, the peak-to-peak height matches to 1.0000.
 """
 from __future__ import annotations
 
@@ -73,9 +74,10 @@ def is_nanoscope_file(path) -> bool:
     """
     True when this looks like a Nanoscope file.
 
-    Checked by content, not by extension. Nanoscope writes companion files with
-    no extension at all (``sample_flatten.0_00003``), and those are the same
-    format - refusing them for want of a suffix would be arbitrary.
+    The check reads the content and ignores the extension. Nanoscope writes
+    companion files with no extension at all (``sample_flatten.0_00003``), and
+    those are the same format, so refusing them for want of a suffix would be
+    arbitrary.
     """
     try:
         with open(path, "rb") as handle:
@@ -98,9 +100,9 @@ def _scan_size_um(section: str, header: str) -> float:
     """
     Scan width in microns.
 
-    The image section carries ``Scan Size: 2.000 2.000 ~m`` - the ``~m`` is a
-    mangled µm - and the scan list carries ``Scan Size: 2000 nm``. Prefer the
-    section, fall back to the file-level value.
+    The image section carries ``Scan Size: 2.000 2.000 ~m`` (the ``~m`` is a
+    mangled µm), and the scan list carries ``Scan Size: 2000 nm``. The section
+    value is preferred, with the file-level value as the fallback.
     """
     for text in (section, header):
         match = re.search(r"\\Scan Size:\s*([\d.]+)(?:\s+[\d.]+)?\s*(~m|um|µm|nm)",
@@ -150,9 +152,9 @@ def read_spm(path, channel: str = DEFAULT_CHANNEL,
         direction: "Retrace" or "Trace".
 
     Returns:
-        (data, scan_x_size_um) - data in **metres**, matching what the text
-        loader returns, so nothing downstream needs to know which format it came
-        from.
+        (data, scan_x_size_um), with data in metres, matching what the text
+        loader returns, so nothing downstream needs to know which format it
+        came from.
     """
     path = Path(path)
     raw = path.read_bytes()

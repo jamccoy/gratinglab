@@ -1,13 +1,15 @@
 """The widget layer, and the only part of the GUI allowed to import a toolkit.
 
-That boundary is a package boundary rather than a convention so a test can
-enforce it: `tests/test_gui_qt.py` walks every module under `gui/` outside this
-subpackage and fails if PySide6 appears. The drift it prevents is the ordinary
-kind -- someone needing "just a QColor" in a module that was pure.
+The boundary is drawn as a package boundary, so that a test can enforce it:
+`tests/test_gui_qt.py` walks every module under `gui/` outside this
+subpackage and fails if PySide6 appears. It guards against the common case of
+a toolkit import, such as a single QColor, being added to a module that was
+pure.
 
-Everything here should be thin. If a question can be answered without a window
-it belongs in `gui/state.py`, `gui/provenance.py`, `gui/richtext.py` or
-`gui/orders.py`, all of which are pure and tested headlessly.
+Everything here should be thin. If a question can be answered without a
+window, its answer belongs in `gui/state.py`, `gui/provenance.py`,
+`gui/richtext.py` or `gui/orders.py`, all of which are pure and tested
+headlessly.
 """
 
 from __future__ import annotations

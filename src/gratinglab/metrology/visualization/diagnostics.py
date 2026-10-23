@@ -1,6 +1,7 @@
 """
-Diagnostic plotting functions
-Shows analysis details like flattening and analyzed regions
+Diagnostic plotting functions.
+
+These plots show analysis details such as flattening and the analyzed regions.
 """
 import matplotlib.pyplot as plt
 from scipy.signal import find_peaks

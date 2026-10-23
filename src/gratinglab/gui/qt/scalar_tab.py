@@ -1,14 +1,14 @@
 """The scalar solver's own tab: its options, its result, its provenance.
 
-Not built against a `SolverTab` base class -- one concrete implementation
-exists and a second doesn't, and formalizing "the shape every solver tab must
-have" from a sample of one would be a guess dressed as an interface.
-`MainWindow` calls a small, duck-typed set of methods on whatever lives in its
-`_tabs` dict (`build_options`, `set_running`, `show_progress`, `show_result`,
-`show_error`, `show_field_errors`, `show_cancelled`); see the comment at
-`main_window.py`'s `_build_tabs` for the documented contract. Formalize a base
-class once RCWA's tab exists and the actual common shape is known rather than
-assumed.
+This tab is not built on a `SolverTab` base class. It was written when it was
+the only solver tab, and defining the structure that every solver tab must have
+from a sample of one would have been a guess presented as an interface. The
+integral tab has since followed the same small set of methods without one. `MainWindow` calls a small, duck-typed set of methods on
+whatever lives in its `_tabs` dict (`build_options`, `set_running`,
+`show_progress`, `show_result`, `show_error`, `show_field_errors`,
+`show_cancelled`); see the comment at `_build_tabs` in `main_window.py` for
+the documented contract. A base class should be formalized once RCWA's tab
+exists and the common structure is known from evidence.
 """
 
 from __future__ import annotations
@@ -61,10 +61,11 @@ _ORDER_ROLE = Qt.ItemDataRole.UserRole
 class ScalarTab(QWidget):
     """Scalar's own controls, result, and provenance.
 
-    Holds the last scan itself (`_scan`/`_energy`), not `MainWindow` -- each
-    solver tab remembers its own last result, the way switching tabs must not
-    lose what the previous one computed. Geometry and the groove-profile plot
-    are *not* here: both are shared across every solver and live one level up.
+    The tab holds the last scan itself (`_scan`/`_energy`), instead of
+    `MainWindow` holding it. Each solver tab remembers its own last result, so
+    that switching tabs does not lose what the previous one computed. The
+    geometry and the groove-profile plot are not held here, because both are
+    shared by every solver and live one level up.
     """
 
     #: Registry key this tab represents. A future RcwaTab sets its own.
@@ -187,9 +188,9 @@ class ScalarTab(QWidget):
     def _build_orders_group(self) -> QWidget:
         """Which orders the efficiency plot draws.
 
-        Replaces the old `if values.max() < 1e-4: continue` -- see
-        `gui/orders.py` for the rule this wires up. Toggling an item redraws
-        the plot from the scan already held; it never re-solves.
+        This replaces the old `if values.max() < 1e-4: continue`; see
+        `gui/orders.py` for the rule it connects to. Toggling an item redraws
+        the plot from the scan already held and never re-solves.
         """
         group = QGroupBox("Orders")
         layout = QVBoxLayout(group)
@@ -281,10 +282,11 @@ class ScalarTab(QWidget):
         return panel
 
     def _check_fields_match_scalar_options(self) -> None:
-        """Refuse to open rather than fail later on one code path.
+        """Refuse to open instead of failing later on one code path.
 
         `build_options` builds `ScalarOptionsState` by keyword from this
-        dict, so a renamed or forgotten field is a TypeError at solve time.
+        dict, so a renamed or forgotten field would otherwise cause a
+        TypeError at solve time.
         """
         declared = {f.name for f in dataclasses.fields(ScalarOptionsState)}
         if self._fields.keys() != declared:
@@ -297,9 +299,10 @@ class ScalarTab(QWidget):
     # -- the MainWindow contract ---------------------------------------
 
     def build_options(self, problem, illumination, wavelengths) -> dict:
-        """Validate this tab's own fields against a shared, already-parsed
-        geometry. Raises `FormErrors` -- caught by `MainWindow` before
-        anything reaches the worker, same as a geometry error would be."""
+        """Validate this tab's own fields against a shared, already-parsed geometry.
+
+        Raises `FormErrors`, which `MainWindow` catches before anything
+        reaches the worker, in the same way as a geometry error."""
         options = ScalarOptionsState(
             quadrature_points=_value(self._fields["quadrature_points"]),
             reflectivity_model=_value(self._fields["reflectivity_model"]),
@@ -350,12 +353,12 @@ class ScalarTab(QWidget):
         self._paint(provenance.provenance_lines(scan, energy, lambda_over_period))
 
     def show_convergence(self, scan, energy, lambda_over_period: float, report) -> None:
-        """A completed sweep, through the ordinary result path.
+        """Show a completed sweep through the ordinary result path.
 
-        No new rendering: `provenance_lines` already reads the study off
-        `scan.provenance.notes["convergence"]` -- that is what M3-C put there
-        -- so the panel says "convergence: yes; quadrature_points=4096 is
-        enough" with no help from here.
+        No new rendering is needed. `provenance_lines` already reads the study
+        from `scan.provenance.notes["convergence"]`, where M3-C placed it, so
+        the panel says "convergence: yes; quadrature_points=4096 is
+        enough" without any help from this method.
         """
         self.show_result(scan, energy, lambda_over_period)
         if report.converged_at is not None:

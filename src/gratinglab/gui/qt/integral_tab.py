@@ -1,15 +1,17 @@
 """The integral solver's own tab: its knob, its result, its provenance.
 
-A parallel construction of ``scalar_tab.py`` rather than a
-shared base class: the roadmap's own warning is that every solver seam was
-designed against a sample of one, and the way to learn the actual common
-shape is to build the second tab and *then* extract what proved common. The
-duplication between these two files is that evidence, kept visible.
+This tab is built in parallel with ``scalar_tab.py`` instead of on a shared
+base class. The roadmap warns that every solver interface was designed from a
+sample of one, and that the common structure is best learned by building the
+second tab first and only then extracting what proves to be common. The
+duplication between the two files is kept visible as the evidence for that
+extraction.
 
-What genuinely differs from scalar: the options group (the boundary
-condition, and the accuracy knob it governs -- no reflectivity or roughness,
-because the material enters through the boundary condition itself rather than
-through a Fresnel factor) and the state type behind ``build_options``.
+Two things differ from scalar. The first is the options group, which holds
+the boundary condition and the accuracy knob it governs; it has no
+reflectivity or roughness setting, because the material enters through the
+boundary condition itself instead of through a Fresnel factor. The second is
+the state type behind ``build_options``.
 """
 
 from __future__ import annotations

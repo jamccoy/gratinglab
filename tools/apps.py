@@ -6,16 +6,16 @@
     .venv/bin/python tools/apps.py check --app gratinglab
 
 The bundling itself lives in :mod:`endstation.tools`, which is shared with the
-other projects here. What stays is the part that is genuinely ours: which
+other projects here. What remains here is specific to this project: which
 windows exist, what they are called, and which artwork belongs to each.
 
-It used to be two builders, then one builder with two tables that a comment had
-to keep in step -- ``make_app.py`` holding names and bundle ids, ``make_icon.py``
-holding icon modules and filenames, each listing the same two keys. Now one
-table holds an entry per window, so adding a third window is one edit and there
-is no second place to forget.
+This was formerly two builders, and then one builder with two tables that a
+comment had to keep in step (``make_app.py`` holding names and bundle ids,
+``make_icon.py`` holding icon modules and filenames, each listing the same two
+keys). Now one table holds an entry per window, so adding a third window is one
+edit and there is no second place to update.
 
-Bundles are **not committed**: the stub hard-codes an absolute path to this
+Bundles are not committed, because the stub hard-codes an absolute path to this
 checkout's virtualenv, which would be wrong on any other machine.
 """
 

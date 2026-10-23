@@ -1,7 +1,7 @@
 """Incident-wave geometry, stored once and expressible in every community's angles.
 
-The canonical internal state is the pair ``(alpha_deg, gamma_deg)`` -- azimuthal
-incidence angle and half-cone angle -- because every mount reduces to it and it
+The canonical internal state is the pair ``(alpha_deg, gamma_deg)``, the azimuthal
+incidence angle and the half-cone angle, because every mount reduces to it and it
 serialises readably. Direction cosines are available as a derived property.
 
 Three constructors exist so that each community can pass the angles it
@@ -29,8 +29,8 @@ Polarization = Literal["TE", "TM", "unpolarized"]
 class Illumination(BaseModel):
     """Direction and polarization of the incident plane wave.
 
-    Wavelength is **not** a field: a single geometry is normally
-    scanned over many wavelengths, so it is passed at solve time instead.
+    Wavelength is not a field. A single geometry is normally scanned over
+    many wavelengths, so the wavelength is passed at solve time instead.
 
     Attributes
     ----------
@@ -45,8 +45,8 @@ class Illumination(BaseModel):
         mounts use small values (soft X-ray work runs ~1.5 deg).
     polarization
         ``TE`` has **E** parallel to the grooves, ``TM`` has **H** parallel to
-        the grooves. In conical mounts these are referenced to the grooves, not
-        to the plane of incidence (``docs/conventions.md`` §7).
+        the grooves. In conical mounts these are referenced to the grooves and
+        not to the plane of incidence (``docs/conventions.md`` §7).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -125,8 +125,8 @@ class Illumination(BaseModel):
         Parameters
         ----------
         graze
-            Half-cone opening angle :math:`\\gamma`, degrees -- the graze angle
-            of the incident wave onto the grating surface.
+            Half-cone opening angle :math:`\\gamma`, degrees, which is the graze
+            angle of the incident wave onto the grating surface.
         azimuth
             Azimuthal angle :math:`\\alpha`, degrees. Near-Littrow blazed
             operation has ``azimuth`` close to the facet angle.
@@ -139,7 +139,7 @@ class Illumination(BaseModel):
     ) -> "Illumination":
         """Build from an incident direction vector (need not be normalised).
 
-        The vector must have ``uy < 0`` -- it travels *toward* the grating.
+        The vector must have ``uy < 0``, so that it travels toward the grating.
         """
         u = np.asarray([ux, uy, uz], dtype=float)
         norm = np.linalg.norm(u)

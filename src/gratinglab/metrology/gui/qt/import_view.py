@@ -1,14 +1,15 @@
 """
 The Import tab: load a scan, flatten it, see what that did.
 
-Owns file loading and both flattening stages. The Analysis tab consumes whatever
-this produces, so there is one place a scan enters the application.
+This tab owns file loading and both flattening stages. The Analysis tab
+consumes whatever this produces, so there is one place a scan enters the
+application.
 
-The preview is the reason this tab exists. Profile flattening moves the mean
-blaze angle by about 0.49 degrees across its four methods - comparable to the
-differences between samples - and until now it was a config-file setting with no
-way to see what it was removing. Here the fitted background is drawn over the
-profile it is about to be subtracted from.
+The tab exists mainly for its preview. Profile flattening moves the mean blaze
+angle by about 0.49 degrees across its four methods, which is comparable to
+the differences between samples, and until now it was a config-file setting
+with no way to see what it was removing. Here the fitted background is drawn
+over the profile it is about to be subtracted from.
 """
 from __future__ import annotations
 

@@ -1,6 +1,7 @@
 """
-Data aggregation functions
-Handles combining multiple scans and grouping by temperature
+Data aggregation functions.
+
+This module combines multiple scans and groups them by temperature.
 """
 import numpy as np
 from collections import defaultdict

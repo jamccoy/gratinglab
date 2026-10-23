@@ -1,39 +1,43 @@
-r"""Theory pages as rich text: markdown structure *and* typeset math.
+r"""Render theory pages as rich text, with markdown structure and typeset math.
 
-M7 got the equations rendering and stopped there -- tables and
-bullet lists stayed as literal pipes and dashes, because real column layout in a
-`tkinter.Text` widget -- the toolkit at the time -- is a great deal of
-engineering for content that is readable enough as-is. That trade has since gone bad: `docs/theory/scalar.md`
-carries the three-way tension table and the shallow-limit evidence table, and
-`docs/conventions.md` carries the angle reconciliation and the errata table.
-The tables *are* the content now, in the one place a user goes to understand
-what the solver does.
+M7 made the equations render but left tables and bullet lists as literal pipes
+and dashes, because real column layout in a `tkinter.Text` widget (the toolkit
+at the time) required a great deal of engineering for content that was
+readable enough without it. That compromise has since become untenable:
+`docs/theory/scalar.md` carries the three-way tension table and the
+shallow-limit evidence table, and `docs/conventions.md` carries the angle
+reconciliation and the errata table. The tables are now central content, on
+the one page a user consults to understand what the solver does.
 
-Qt's rich-text engine parses a small HTML subset, which makes this cheap. So
-this module converts a page to HTML, and the widget layer only displays it.
+Qt's rich-text engine parses a small HTML subset, which makes the conversion
+inexpensive. This module therefore converts a page to HTML, and the widget
+layer only displays it.
 
-Three things worth knowing before editing:
+The following points should be understood before this module is edited.
 
 Math is split out before anything is escaped. Four math spans in the real
 docs contain `<` or `>` (`$t < w$`, `$\zeta < \theta_c$`, `$\lambda > 32 ...$`,
-`$k > 0$`). Escaping first would hand mathtext the string `t &lt; w`, which it
-renders literally. So :func:`~gratinglab.gui.mathtext.split_segments` runs on
-the raw source and only the *text* spans are escaped -- the LaTeX never is.
+`$k > 0$`). Escaping first would pass mathtext the string `t &lt; w`, which it
+renders literally. :func:`~gratinglab.gui.mathtext.split_segments` therefore
+runs on the raw source, and only the text spans are escaped; the LaTeX never
+is.
 
-Images are referenced by key, not embedded. `QTextDocument.loadResource`
-does not handle `data:` URLs, so each image gets a `gratinglab-math:N` src and
-the viewer registers the bytes with `addResource`. That also keeps this module
-free of base64 padding it would only have to undo.
+Images are referenced by key instead of being embedded.
+`QTextDocument.loadResource` does not handle `data:` URLs, so each image is
+given a `gratinglab-math:N` src and the viewer registers the bytes with
+`addResource`. This also spares the module from base64 encoding that would
+only have to be undone.
 
-A render failure still degrades rather than crashing, exactly as the Tk
-viewer did: the raw `$...$` source appears in a distinct colour, so a future
-edit using an unsupported macro is diagnosable at a glance instead of taking
-down the page.
+A render failure does not crash the viewer, as was also the case for the Tk
+viewer: the raw `$...$` source appears in a distinct colour, so a future edit
+that uses an unsupported macro is easy to diagnose and the rest of the page
+still renders.
 
-Not supported, because the two real pages do not use them and
-guessing is worse than a visible gap: nested lists, ordered lists inside
-blockquotes, inline HTML, reference-style links, and setext (`===`) headings.
-A standalone `---` is always a horizontal rule here, never a setext underline.
+Some constructs are not supported, because the two real pages do not use them
+and guessing their rendering would be worse than a visible gap: nested lists,
+ordered lists inside blockquotes, inline HTML, reference-style links, and
+setext (`===`) headings. A standalone `---` is always treated as a horizontal
+rule, never as a setext underline.
 """
 
 from __future__ import annotations
@@ -97,9 +101,9 @@ _PLACEHOLDER_RE = re.compile(r"\x00(\d+)\x00")
 class MathImage:
     """One rasterised equation, ready to register with a `QTextDocument`.
 
-    ``width`` and ``height`` are *logical* pixels -- the PNG's own dimensions
-    divided by the device pixel ratio it was rendered at -- so that a 2x image
-    is downsampled into a correctly sized box on a Retina panel rather than
+    ``width`` and ``height`` are logical pixels, i.e. the PNG's own dimensions
+    divided by the device pixel ratio it was rendered at, so that a 2x image
+    is downsampled into a correctly sized box on a Retina panel instead of
     rendering at double size.
     """
 
@@ -170,8 +174,8 @@ def render_markdown(
     ``render`` is injectable so the whole pipeline can be tested without
     rasterising anything, including the degradation path where it returns
     ``None``. It defaults to a cached
-    :func:`~gratinglab.gui.mathtext.render_math_png`; a page carries roughly
-    forty equations and the cache is what keeps reopening the viewer instant.
+    :func:`~gratinglab.gui.mathtext.render_math_png`. A page carries roughly
+    forty equations, and the cache allows the viewer to reopen immediately.
     """
     collector = _Collector(
         inline_dpi=inline_dpi,
@@ -191,8 +195,8 @@ def to_html(
     """Render a theory page, banner included.
 
     A solver whose `Capabilities.rigorous` is False is announced at the top,
-    matching the project's practice of surfacing an approximation rather than
-    letting a reader discover it in section 7.
+    following the project's practice of stating an approximation up front
+    instead of leaving a reader to discover it in section 7.
     """
     rendered = render_markdown(page.text, **kwargs)
     if page.rigorous:
@@ -219,8 +223,8 @@ class _Block:
 def _blocks(markdown: str) -> tuple[_Block, ...]:
     """Split a page into block-level structures.
 
-    One pass, no lookbehind: every block kind is identified by its first line,
-    which is true of the markdown these docs use.
+    The split takes one pass with no lookbehind, because every block kind in
+    the markdown these docs use is identified by its first line.
     """
     lines = markdown.split("\n")
     blocks: list[_Block] = []
@@ -368,8 +372,9 @@ def _block_html(block: _Block, collector: _Collector) -> str:
 def _inline(raw: str, collector: _Collector) -> str:
     """Render one run of markdown text, math spans included.
 
-    Math is separated **before** escaping: several math spans in the real docs
-    contain `<` or `>`, and handing mathtext `&lt;` would render it literally.
+    Math is separated before escaping, because several math spans in the real
+    docs contain `<` or `>`, and passing mathtext `&lt;` would render it
+    literally.
     """
     out: list[str] = []
     for segment in mathtext.split_segments(raw):
@@ -383,9 +388,10 @@ def _inline(raw: str, collector: _Collector) -> str:
 def _markup(escaped: str) -> str:
     """Bold, italic, code and links, applied to already-escaped text.
 
-    Order matters: code spans are extracted first so that markup characters
-    inside them stay literal, and links before emphasis so a link's text can be
-    emphasised without the URL being scanned for asterisks.
+    The order of the steps is significant. Code spans are extracted first, so
+    that markup characters inside them stay literal, and links are handled
+    before emphasis, so that a link's text can be emphasised without the URL
+    being scanned for asterisks.
     """
     placeholders: list[str] = []
 
@@ -420,10 +426,10 @@ def _emphasis(text: str) -> str:
 def png_size(data: bytes) -> tuple[int, int] | None:
     """Pixel dimensions from a PNG's IHDR chunk, without a decoder.
 
-    Layout is fixed by the format: an 8-byte signature, a 4-byte chunk length,
-    the literal ``IHDR``, then width and height as big-endian uint32. Reading
-    them directly keeps the size calculation pure, so the HiDPI arithmetic is
-    testable without Qt or a display.
+    The layout is fixed by the format: an 8-byte signature, a 4-byte chunk
+    length, the literal ``IHDR``, then width and height as big-endian uint32.
+    Reading these fields directly keeps the size calculation pure, so the
+    HiDPI arithmetic can be tested without Qt or a display.
     """
     if len(data) < 24 or data[12:16] != b"IHDR":
         return None
@@ -438,9 +444,9 @@ def math_dpi(font_pixel_size: float, *, display: bool = False) -> int:
 
     matplotlib renders mathtext at ``rcParams["font.size"]`` (10 pt by
     default), so 72 dpi would give ten-pixel-tall glyphs. Scaling by the
-    viewer's actual font size keeps equations the same visual weight as the
-    prose around them at any zoom or platform default, which the fixed 130/170
-    constants only manage on the machine they were chosen on.
+    viewer's actual font size gives equations the same visual weight as the
+    surrounding prose at any zoom level or platform default, whereas the fixed
+    130/170 constants achieve this only on the machine they were chosen on.
     """
     base = 72.0 * font_pixel_size / 10.0
     return max(1, round(base * (1.3 if display else 1.0)))
@@ -451,13 +457,16 @@ def menu_label(title: str, suffix: str = "") -> str:
 
     Qt reads ``&`` in an action's text as "underline the next character", so
     the page titled "Grating Geometry & Conventions" would appear as "Grating
-    Geometry Conventions" with a stray underline. Doubling escapes it.
+    Geometry Conventions" with a stray underline. Doubling the character
+    escapes it.
     """
     return (title + suffix).replace("&", "&&")
 
 
 @lru_cache(maxsize=512)
 def _cached_render(latex: str, *, dpi: int, color: str) -> bytes | None:
-    """Rasterise, remembering. Reopening the viewer re-renders every equation
-    on the page otherwise -- roughly forty of them, and more at 2x."""
+    """Rasterise with caching.
+
+    Without the cache, reopening the viewer would re-render every equation on
+    the page, roughly forty of them, and more at 2x."""
     return mathtext.render_math_png(latex, dpi=dpi, color=color)

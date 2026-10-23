@@ -1,13 +1,13 @@
 """
 The slope/curvature summary that accompanies a boundary profile.
 
-This used to sit beside a second copy of the ``.ggp`` writer. That copy is
-gone -- :mod:`gratinglab.io.ggp` is now the only implementation -- but the
-metrics file has no counterpart there and is metrology's own output, so it
+This used to sit beside a second copy of the ``.ggp`` writer. That copy has
+been removed, and :mod:`gratinglab.io.ggp` is now the only implementation, but
+the metrics file has no counterpart there and is metrology's own output, so it
 stays here.
 
-It is a human-readable sidecar, not an interchange format: nothing parses it
-back. The numbers that a solver needs travel through
+The file is a human-readable sidecar and is not an interchange format; nothing
+parses it back. The numbers that a solver needs travel through
 :meth:`~gratinglab.metrology.boundary.BoundaryProfile.to_problem`.
 """
 

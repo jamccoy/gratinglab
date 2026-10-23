@@ -1,6 +1,7 @@
 """
-AFM profile plotting functions
-Complex multi-panel layouts organized by temperature
+AFM profile plotting functions.
+
+The plots are multi-panel layouts organized by temperature.
 """
 import matplotlib.pyplot as plt
 import os
@@ -164,10 +165,10 @@ def _plot_single_scan(result, label):
 # Legacy function for backwards compatibility
 def plot_sample_profiles_comparison(results, labels):
     """
-    DEPRECATED: Use plot_sample_profiles_by_temperature instead
-    
-    Plot AFM profiles for all samples in a single multi-panel figure
-    This is kept for backwards compatibility but not recommended for many samples
+    Deprecated: use plot_sample_profiles_by_temperature instead.
+
+    Plot AFM profiles for all samples in a single multi-panel figure. This is
+    kept for backwards compatibility but is not recommended for many samples.
     """
     import warnings
     warnings.warn("plot_sample_profiles_comparison is deprecated. "

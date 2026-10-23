@@ -25,9 +25,9 @@ What becomes of each entry:
     2,001 log-spaced points left a 0.27 error in Xe's index next to its UV
     pole while the median dataset was good to 5e-8.
 ``tabulated n2``
-    **Refused.** That is the nonlinear (Kerr) index :math:`n_2`, from the
+    Refused. This is the nonlinear (Kerr) index :math:`n_2`, from the
     database's separate n2 catalogue, in the same file shape. Read as ``n`` it
-    would be a plausible-looking material with nothing right about it.
+    would give a plausible-looking material with no correct property.
 
 ``n`` with no ``k`` means the dataset is transparent where it is defined, and
 ``k`` is taken as zero; the ``source`` says so, because "lossless" and "loss
@@ -45,8 +45,8 @@ overlap; 2 single-point tables; 1 giving ``n`` twice.
 Optical constants here are :math:`n = n' + ik` with :math:`k \ge 0`, the
 ``exp(-i\omega t)`` convention of ``conventions.md``, which is refractiveindex.info's
 own. They are stored as ``decrement = 1 - n'`` and ``absorption = k``, so a
-glass in the visible has a *negative* decrement. That is the same quantity the
-X-ray tables carry, merely far from zero.
+glass in the visible has a negative decrement. This is the same quantity the
+X-ray tables carry, but far from zero.
 
 PyYAML is needed to read these, and only these: ``pip install
 "gratinglab[refractiveindex]"``. It is imported when a file is read, never at

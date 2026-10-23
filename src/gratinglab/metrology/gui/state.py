@@ -1,8 +1,9 @@
 """
 Form state, and the rules for turning it into settings.
 
-Pure: no Qt import, no file access, no plotting. Everything a widget needs to
-decide *what to compute* is decided here, so it can be tested without a display.
+The module is pure, with no Qt import, no file access and no plotting.
+Everything a widget needs to decide what to compute is decided here, so it can
+be tested without a display.
 
 The window reads values off its controls into a `FormState`, calls `build`, and
 either gets an `AnalysisSettings` or a list of field errors it can attach to the
@@ -32,9 +33,9 @@ class FormState:
     """
     Raw values as the controls hold them.
 
-    Numbers are already typed here rather than being strings, because Qt spin
-    boxes hand back floats and ints. What this layer adds is the *semantic*
-    checking the widgets cannot express - a spin box can cap a range, but it
+    Numbers are already typed here instead of being strings, because Qt spin
+    boxes hand back floats and ints. What this layer adds is the semantic
+    checking the widgets cannot express: a spin box can cap a range, but it
     cannot know that facet trim above 0.28 leaves no facet to fit.
     """
     period_est: float = 315.0
@@ -155,9 +156,9 @@ def summarize_result(result) -> str:
     """
     The results panel text.
 
-    Pure so its wording is testable, and because formatting numbers is exactly
-    the kind of thing that quietly goes wrong (a missing key, a nan) in a place
-    where the only symptom is a blank widget.
+    The function is pure so that its wording is testable, and because number
+    formatting can fail quietly (a missing key, a nan) in a place where the
+    only symptom is a blank widget.
     """
     if result is None:
         return "No measurements."

@@ -5,35 +5,34 @@
     .venv/bin/python tools/publish_wiki.py --wiki ../gratinglab.wiki
 
 The copying and the page-link rewriting live in :mod:`endstation.tools`, shared
-with the other projects here. What stays is the part that is genuinely ours, and
-it is all one problem: **a wiki is flat and this project's docs are not.**
+with the other projects here. What remains here is specific to this project, and
+it addresses one problem: a wiki is flat, and this project's docs are not.
 
 ``docs/`` has subdirectories (``theory/``) and its pages link out of the docs
 tree entirely (``../src/gratinglab/convergence.py``). The shared tool publishes
 top-level pages and deliberately leaves every other link alone, because it
 cannot know whether the target exists in the wiki. In a wiki those links resolve
-against ``/wiki/`` and 404. So after the copy, this rewrites every
-repository-relative target to an absolute blob URL on the default branch --
-which is where that file actually lives, and where a reader following the link
-wants to end up.
+against ``/wiki/`` and 404. After the copy, this script therefore rewrites
+every repository-relative target to an absolute blob URL on the default branch,
+which is where that file lives and where a reader following the link expects
+to arrive.
 
 The metrology window carries a wiki of its own, in
 ``src/gratinglab/metrology/wiki/``, shipped as package data so an installed copy
-has it. Those pages are the ones a person analysing a scan actually reads (tip
+has it. Those pages are the ones a person analysing a scan reads (tip
 correction, swath statistics, reading the outputs), so they are published too,
-as ``AFM-<slug>`` pages in the window's reading order. The prefix is not
-decoration: a wiki names a page after its file, and a bare ``overview`` or
+as ``AFM-<slug>`` pages in the window's reading order. The prefix is needed
+because a wiki names a page after its file, and a bare ``overview`` or
 ``flattening`` next to the project pages would say nothing about what it
 covers. Their source stays inside the package, so an edit there is still one
 edit.
 
-``Home.md`` and ``_Sidebar.md`` are generated rather than copied. They are
-navigation, not prose: their whole content is a list of the pages that exist,
-which is knowledge this script has and no document in ``docs/`` should have to
-duplicate.
+``Home.md`` and ``_Sidebar.md`` are generated instead of copied. They are
+navigation pages whose whole content is a list of the pages that exist, which
+this script knows and which no document in ``docs/`` should have to duplicate.
 
-Nothing here commits or pushes -- same rule as the shared tool. It writes a
-checkout and stops, so the diff can be read before anything is public.
+Nothing here commits or pushes, following the same rule as the shared tool. It
+writes a checkout and stops, so the diff can be read before anything is public.
 """
 
 from __future__ import annotations
@@ -111,10 +110,10 @@ Installation, the GUI, and where measurement data lives are in the
 
 
 def _to_blob_urls(text: str, pages: set[str]) -> str:
-    """Point repository-relative links at the repository, not at ``/wiki/``.
+    """Point repository-relative links at the repository instead of ``/wiki/``.
 
-    A target naming a published page is left alone -- the shared tool has
-    already made it a wiki link. Everything else is a path relative to
+    A target naming a published page is left alone, because the shared tool
+    has already made it a wiki link. Everything else is a path relative to
     ``docs/``, resolved against it and emitted as an absolute blob URL.
     """
 

@@ -1,8 +1,9 @@
 """Reader and writer for PCGrate ``.ggp`` polygonal boundary profiles.
 
 A ``.ggp`` holds a groove profile normalised to the period: ``x`` runs 0 to 1
-across exactly one period and ``y`` is height as a fraction of that period --
-the same convention :mod:`gratinglab.profiles` uses, so no rescaling is needed.
+across exactly one period and ``y`` is height as a fraction of that period.
+This is the same convention :mod:`gratinglab.profiles` uses, so no rescaling is
+needed.
 
 Canonical form::
 
@@ -12,8 +13,8 @@ Canonical form::
     0.012346 0.000808
     ...
 
-This matters because it lets a scalar calculation and a PCGrate run be driven
-from the **identical** geometry, isolating the method difference from any
+The shared convention allows a scalar calculation and a PCGrate run to be
+driven from identical geometry, which isolates the method difference from any
 difference in assumed groove shape.
 
 Three header variants exist on disk, and only the first is accepted by PCGrate:
@@ -26,19 +27,19 @@ Header                               PCGrate accepts   Seen in
 ``# X(normalized...)`` only           **no**           ``*_fix{,2,3,4}.ggp``
 ===================================  ================  ==============
 
-We **read all three** -- they are real files someone needs to load -- and
-**write only the canonical form**. ``np.savetxt(header=...)`` is what produces
-the hashed variants; it must not be used here.
+This module reads all three, since they are real files that need to be loaded,
+and writes only the canonical form. ``np.savetxt(header=...)`` is what produces
+the hashed variants, so it must not be used here.
 
-This is the only ``.ggp`` writer in the project. It was not always: the
-metrology package shipped a second copy, and the two were kept in agreement by
-a comment and a byte-compatibility test. :mod:`gratinglab.metrology` now calls
+This is now the only ``.ggp`` writer in the project. The metrology package
+previously shipped a second copy, and the two were kept in agreement by a
+comment and a byte-compatibility test. :mod:`gratinglab.metrology` now calls
 this one.
 
-Worth stating plainly, because the format is the reason the sidecar exists: a
-``.ggp`` **cannot carry the period in nm**. It holds a shape, not a grating.
-Anything downstream needs the period from somewhere else --
-``benchmarks/corpus.toml`` is exactly that "somewhere else", recovered by hand.
+The format is the reason the sidecar exists: a ``.ggp`` cannot carry the period
+in nm. It holds the shape of a grating without its scale, so anything
+downstream must obtain the period from another source.
+``benchmarks/corpus.toml`` is that other source, recovered by hand.
 Code holding a measured profile should reach for
 :meth:`gratinglab.metrology.boundary.BoundaryProfile.to_problem` instead, which
 carries the period it measured. See ``docs/roadmap.md`` on the native boundary
@@ -75,8 +76,8 @@ class GgpFile:
     """A parsed ``.ggp``, with the header provenance kept.
 
     ``format_valid`` records whether the file as written would
-    load in PCGrate -- worth surfacing, because a hashed header fails there
-    while parsing perfectly well here.
+    load in PCGrate. This is surfaced because a hashed header fails there
+    while parsing without error here.
     """
 
     t: np.ndarray
@@ -97,9 +98,9 @@ def read_ggp(path: str | Path) -> GgpFile:
     Raises
     ------
     ValueError
-        On a malformed data line. Refusing loudly is deliberate: a truncated
-        point silently dropped would shift the profile and quietly change every
-        efficiency computed from it.
+        On a malformed data line. The error is deliberate, because a truncated
+        point that was silently dropped would shift the profile and change
+        every efficiency computed from it.
     """
     path = Path(path)
     lines = _read_text(path).splitlines()
@@ -155,8 +156,8 @@ def _read_text(path: Path) -> str:
 
     `write_ggp` writes UTF-8 and PCGrate runs on Windows and writes cp1252, so
     both are real. UTF-8 goes first because valid UTF-8 is almost never valid
-    by accident, while cp1252 accepts nearly anything and would quietly misread
-    a UTF-8 header. The same chain as `efficiency_table`, which reads the other
+    by accident, while cp1252 accepts nearly anything and would silently misread
+    a UTF-8 header. This is the same chain as `efficiency_table`, which reads the other
     file PCGrate writes. Before this the platform's locale decided, so a header
     that loaded on Linux could raise on Windows.
     """
@@ -217,7 +218,8 @@ def write_ggp(
 
     Pass either a ``profile`` or explicit ``t``/``y`` arrays.
 
-    Six decimals, single-space separated, newline terminated. The format is
+    Values are written to six decimals, single-space separated and newline
+    terminated. The format is
     pinned by ``tests/test_ggp.py``; PCGrate rejects variations on it.
     """
     if (profile is None) == (t is None):

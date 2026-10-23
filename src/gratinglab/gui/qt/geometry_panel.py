@@ -1,12 +1,12 @@
 """The grating geometry: period, profile, mount, wavelengths.
 
-Extracted from `main_window.py`'s original `_build_inputs`, minus scalar's own
-"Scalar solver" groupbox and its Solve/Cancel/Export controls -- those are
-solver-specific and stay wherever a solver's own tab lives (`ScalarTab`,
-eventually alongside whatever RCWA's tab turns out to need). This panel is
-shared: it is built once, not once per solver, because a `Problem` and an
-`Illumination` mean the same thing regardless of which solver is about to
-consume them.
+This panel was extracted from the original `_build_inputs` of
+`main_window.py`, without scalar's own "Scalar solver" groupbox and its
+Solve/Cancel/Export controls. Those are specific to a solver and remain in
+that solver's own tab (`ScalarTab`, and eventually whatever tab RCWA
+requires). This panel is shared and built once, not once per solver, because
+a `Problem` and an `Illumination` mean the same thing whichever solver is
+about to consume them.
 """
 
 from __future__ import annotations
@@ -33,11 +33,11 @@ __all__ = ["GeometryPanel"]
 
 
 class GeometryPanel(QWidget):
-    """Grating, mount and wavelength inputs -- the persistent left sidebar.
+    """Grating, mount and wavelength inputs, shown in the persistent left sidebar.
 
-    Not wrapped in its own scroll area: how this panel is embedded (today,
-    stacked above a solver's own controls under one shared scroller) is the
-    caller's decision, not this widget's.
+    The panel is not wrapped in its own scroll area, because the way it is
+    embedded (at present, stacked above a solver's own controls under one
+    shared scroller) is for the caller to decide.
     """
 
     #: Pressing Enter in a field, or finishing a "Load profile…" pick. This
@@ -171,9 +171,9 @@ class GeometryPanel(QWidget):
         """Refuse to open rather than fail later on one code path.
 
         `read_form` builds a `FormState` by keyword from this dict, so a
-        renamed or forgotten field is a TypeError at solve time -- visible
-        only to whoever presses Solve. Checking here makes it immediate and
-        says which field.
+        renamed or forgotten field would otherwise cause a TypeError at solve
+        time, visible only to whoever presses Solve. Checking here reports the
+        problem immediately and names the field.
         """
         declared = {f.name for f in dataclasses.fields(FormState)}
         if self._fields.keys() != declared:
@@ -230,7 +230,8 @@ class GeometryPanel(QWidget):
         A gratinglab ``.json`` carries the period it was measured at, so the
         period field is set from it; a ``.ggp`` cannot, so the field is left as
         it is, which is the one case where the user still has to supply it.
-        Also what the metrology window's "Send to efficiency window" calls.
+        The metrology window's "Send to efficiency window" also calls this
+        method.
         """
         path = Path(path)
         note = ""
@@ -253,12 +254,12 @@ class GeometryPanel(QWidget):
 
 
 def _value(widget: QWidget) -> str:
-    """The *value* of an input, whichever kind it is.
+    """The value of an input, whichever kind it is.
 
     A combo's value is its `userData` when it has one, not its label. The
-    coating combo shows "(none)" for the empty choice,
-    and `FormState` wants "" -- putting the label in would make the empty
-    coating an unknown material name.
+    coating combo shows "(none)" for the empty choice, while `FormState`
+    expects "", and passing the label would turn the empty coating into an
+    unknown material name.
     """
     if isinstance(widget, QComboBox):
         data = widget.currentData()

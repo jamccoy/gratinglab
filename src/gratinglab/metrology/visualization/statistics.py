@@ -1,8 +1,8 @@
 """
-Statistical plotting functions
-Histograms, distributions, and multi-file comparisons
+Statistical plotting functions.
 
-UPDATED: Proper error bar representation with clear labels
+This module plots histograms, distributions, and multi-file comparisons. It
+was updated to represent error bars properly, with clear labels.
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -18,10 +18,10 @@ def plot_summary_statistics(blaze_angles, positions, all_local_angles,
         blaze_angles: list of blaze angles (degrees)
         positions: x position (µm) of each measurement in blaze_angles, same
             length. Under row-group analysis many measurements share a position,
-            because each row group re-measures the same grooves - this used to
-            take raw_x and groove_centers and slice them to match, which cannot
-            work when there are n_groups x n_grooves angles but only n_grooves
-            centers.
+            because each row group re-measures the same grooves. This function
+            used to take raw_x and groove_centers and slice them to match,
+            which cannot work when there are n_groups x n_grooves angles but
+            only n_grooves centers.
         all_local_angles: list of all local angle measurements
         mean_angle: mean blaze angle (degrees)
         std_angle: standard deviation of blaze angles (degrees)
@@ -93,9 +93,9 @@ def plot_summary_statistics(blaze_angles, positions, all_local_angles,
 
 def plot_multi_file_comparison(results, labels=None, temperatures=None):
     """
-    Comparison plots for multiple files - bar chart and histograms
-    
-    NOW WITH IMPROVED ERROR BAR HANDLING:
+    Comparison plots for multiple files: a bar chart and histograms.
+
+    The error bars are handled as follows:
     - Bar charts show ±1 SEM (uncertainty in the mean)
     - Histograms show per-groove distributions (consistent with bar chart)
     - Clear labels distinguish between σ (spread) and SEM (uncertainty)
@@ -281,13 +281,13 @@ def plot_multi_file_comparison(results, labels=None, temperatures=None):
 
 def plot_multi_file_comparison_with_local_angles(results, labels=None, temperatures=None):
     """
-    Alternative comparison plot that shows BOTH per-groove AND local angle distributions
-    
-    This gives you the full picture:
-    - Per-groove angles: Shows groove-to-groove variation
-    - Local angles: Shows within-facet variation (curvature/camber)
-    
-    Use this if you want to see both types of variation!
+    Alternative comparison plot showing both per-groove and local angle distributions.
+
+    The two distributions show different kinds of variation:
+    - Per-groove angles show groove-to-groove variation.
+    - Local angles show within-facet variation (curvature/camber).
+
+    This plot is intended for cases where both types of variation are of interest.
     """
     
     if labels is None:

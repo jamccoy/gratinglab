@@ -2,19 +2,20 @@
 
 The boundary profile averages every row of a scan into one trace and every
 groove along it into one shape. That answers "what does the groove look like"
-and hides "how much does it vary". This module answers the second by building
-the same averaged groove separately for each swath (the horizontal row bands
-the blaze-angle analysis calls row groups, with exactly its banding) and
-comparing them.
+but not "how much does it vary". This module answers the second question by
+building the same averaged groove separately for each swath (the horizontal
+row bands the blaze-angle analysis calls row groups, with exactly its banding)
+and comparing them.
 
-Two spreads come out, and the comparison between them is the point:
+Two spreads are produced, and the result of interest is the comparison
+between them:
 
 ``between_rms_nm``
-    How much the averaged groove differs from swath to swath: variation *down*
+    How much the averaged groove differs from swath to swath: variation down
     the image, along the length of the grooves.
 ``within_rms_nm``
     How much individual grooves differ from their swath's average: variation
-    *along* the scan line, groove to groove.
+    along the scan line, groove to groove.
 
 A between-swath spread well above the within-swath one says the shape changes
 along the grooves (a ruling or etch gradient, or a drifting scan); the reverse
@@ -22,9 +23,9 @@ says the grooves differ from each other more than any one groove changes along
 its length.
 
 Each swath's groove is aligned to the others by a circular shift before it is
-compared, so a groove that is the same shape but displaced counts
-as the same shape. Normalisation already rolls every groove so its minimum
-sits at the boundary, so that alignment only removes what is left over. The
+compared, so a groove that is the same shape but displaced counts as the same
+shape. Normalisation already rolls every groove so its minimum sits at the
+boundary, so the alignment only removes the remaining offset. The
 lateral position is measured separately, from where each swath finds its
 grooves, and reported as ``shift_nm``: a steady drift down the image is a fact
 about the scan (the grooves rotated relative to the fast axis, or thermal
@@ -236,8 +237,8 @@ def _align(y: np.ndarray, reference: np.ndarray) -> tuple[np.ndarray, int]:
     """Circularly shift ``y`` onto ``reference``; return it and the signed shift.
 
     The shift minimising the squared difference is the one maximising the
-    circular cross-correlation, found by FFT. Signed, so a drift down the
-    image reads as a trend rather than wrapping.
+    circular cross-correlation, found by FFT. The shift is signed, so a drift
+    down the image reads as a trend instead of wrapping.
     """
     a = y - y.mean()
     b = reference - reference.mean()

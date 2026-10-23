@@ -1,4 +1,4 @@
-"""gratinglab -- an open comparison platform for grating efficiency analysis.
+"""gratinglab: an open comparison platform for grating efficiency analysis.
 
 The organising idea is that the physical problem and the numerical method are
 separate objects, and the problem spec is serializable. One ``Problem`` goes to

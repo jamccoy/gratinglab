@@ -1,57 +1,61 @@
-r"""What a grating geometry looks like, decided without a toolkit.
+r"""Describe what a grating geometry looks like, without a GUI toolkit.
 
-Returns drawable primitives -- polylines, arrows, markers, tagged captions --
-in physical coordinates (nm, in the :math:`(\hat{d}, \hat{n})` frame of
-``docs/conventions.md`` §3). The widget positions them and colours them by tag;
-it computes no angle, no direction and no cutoff, so a bug there misplaces a
-line rather than drawing wrong physics. Same split, and the same reason, as
-:mod:`gratinglab.gui.provenance`: which line is red is a correctness question.
+This module returns drawable primitives (polylines, arrows, markers and tagged
+captions) in physical coordinates, in nm and in the
+:math:`(\hat{d}, \hat{n})` frame of ``docs/conventions.md`` §3. The widget
+positions them and colours them by tag. It computes no angle, no direction and
+no cutoff, so a bug in the widget can misplace a line but cannot draw wrong
+physics. :mod:`gratinglab.gui.provenance` is divided the same way for the same
+reason, since which line is drawn in red is a question of correctness.
 
-This module **arranges**; it never re-derives. Every angle comes from
-:mod:`gratinglab.geometry`, every height from :meth:`Problem.height_nm`.
+This module arranges results and does not re-derive them. Every angle comes
+from :mod:`gratinglab.geometry`, and every height from
+:meth:`Problem.height_nm`.
 
-Three panels, because the physics needs three
-=============================================
+The panels
+==========
 
-**main** -- the view *down the groove axis* :math:`\hat{g}`, i.e. the
+**main**: the view down the groove axis :math:`\hat{g}`, i.e. the
 projection onto the :math:`\hat{n}`-:math:`\hat{d}` plane. In that projection
 :math:`\mathbf{k}_i` and every :math:`\mathbf{k}_m` have the same projected
 length :math:`k\sin\gamma`, and their azimuths are exactly :math:`\alpha` and
-:math:`\beta_m`. Two things follow, and they are why this is a good view rather
-than a compromise:
+:math:`\beta_m`. This has two consequences, which make the projection a
+suitable view:
 
 1. Every propagating order lands on one circle centred at the strike point.
-   That circle *is* the diffraction cone, seen end-on -- so "the mount is
-   conical" becomes a picture rather than a caption.
+   That circle is the diffraction cone seen end-on, so the conical nature of
+   the mount is shown in the picture and need not be stated in a caption.
 2. :math:`\alpha`, :math:`\beta_m`, :math:`\delta` and :math:`\beta_b` are all
    azimuths in this same plane, drawn true at any :math:`\gamma`.
 
-**ladder** -- every order on a :math:`\sin\beta` axis. The main panel can only
-draw an order that has a direction; an evanescent one has none, and
+**ladder**: every order on a :math:`\sin\beta` axis. The main panel can only
+draw an order that has a direction. An evanescent order has none, and
 ``conventions.md`` §4 forbids dropping it ("retained in the record, never
-silently dropped, never NaN"). So an evanescent order sits here, outside the
-:math:`[-1, 1]` propagating window, with no ray attached. Omitting it from the
-picture would be exactly the silent drop that section exists to prevent.
+silently dropped, never NaN"). An evanescent order is therefore placed here,
+outside the :math:`[-1, 1]` propagating window, with no ray attached. Leaving
+it out of the picture would be the silent drop that section is written to
+prevent.
 
-There used to be a third panel here, drawing :math:`\gamma` as a true-to-scale
-sliver. It existed because the main panel is a projection: :math:`k_z =
+There used to be a third panel, which drew :math:`\gamma` as a true-to-scale
+sliver. It was needed because the main panel is a projection: :math:`k_z =
 k\cos\gamma` is perpendicular to it and invisible, and at :math:`\gamma = 1.5°`
 that is 99.97% of :math:`|k|`, so a reader who sees rays at 25° from the normal
-could conclude the mount is not grazing. :mod:`gratinglab.gui.diagram3d` now
-draws the actual cone, with :math:`\gamma` as a real angle in a real scene
-rather than a stand-in beside one -- so the sliver was retired (M13-I). Two
-drawings of one angle are two answers to one question. The captions still say
-what this projection cannot show, and now point at the view that can.
+could conclude that the mount is not grazing. :mod:`gratinglab.gui.diagram3d`
+now draws the actual cone, with :math:`\gamma` as a real angle in a real scene,
+and the sliver was therefore retired (M13-I) so that the angle is drawn in one
+place only. The captions still state what this projection cannot show, and
+refer the reader to the view that can.
 
-What is *not* drawn
-===================
+What is not drawn
+=================
 
-:math:`\zeta`, the facet graze angle, is **text only**.
+:math:`\zeta`, the facet graze angle, is given as text only.
 :func:`~gratinglab.geometry.facet_graze` is the three-dimensional angle between
-:math:`\hat{k}_i` and the facet *plane*, :math:`\sin\zeta = \sin\gamma
-\cos(\delta-\alpha)`. It is **not** the angle between the projected ray and the
-facet line in this drawing -- 1.495° against 85.5° at the reference geometry.
-An arc labelled :math:`\zeta` would be the worst lie available here.
+:math:`\hat{k}_i` and the facet plane, :math:`\sin\zeta = \sin\gamma
+\cos(\delta-\alpha)`. It is not the angle between the projected ray and the
+facet line in this drawing; at the reference geometry the two are 1.495° and
+85.5° respectively. An arc labelled :math:`\zeta` would therefore be seriously
+misleading.
 """
 
 from __future__ import annotations
@@ -148,9 +152,9 @@ class Polyline:
     """An open path, already sampled.
 
     Arcs and angle wedges are polylines too: a ``matplotlib.patches.Arc`` takes
-    degrees counter-clockwise from ``+x``, which is a *different* angle
-    convention from this project's azimuth-from-:math:`\\hat{n}`, and that
-    conversion does not belong in a widget.
+    degrees counter-clockwise from ``+x``, which is a different angle
+    convention from this project's azimuth-from-:math:`\\hat{n}`, and the
+    conversion between the two does not belong in a widget.
     """
 
     x: NDArray[np.float64]
@@ -166,8 +170,9 @@ class Polyline:
 class Arrow:
     """A directed segment, tail to head, in absolute coordinates.
 
-    Endpoints rather than angle-and-length, so that the widget converts
-    nothing, and a sign error has nowhere to hide in the untested layer.
+    It is stored as two endpoints instead of an angle and a length, so that
+    the widget converts nothing and no sign error can arise in the untested
+    layer.
     """
 
     x0: float
@@ -189,10 +194,10 @@ class Arrow:
 
 @dataclass(frozen=True, slots=True)
 class Marker:
-    """A point with a *named* glyph.
+    """A point with a named glyph.
 
-    ``glyph`` is one of ``"out-of-page"``, ``"strike"``. Named, not styled: the
-    widget owns the mapping from name to marker.
+    ``glyph`` is one of ``"out-of-page"``, ``"strike"``. The glyph is given by
+    name only, and the widget owns the mapping from name to marker style.
     """
 
     x: float
@@ -207,14 +212,14 @@ class Marker:
 class OrderMark:
     """One diffraction order, on the :math:`\\sin\\beta` ladder.
 
-    Present whether or not it propagates. ``sin_beta`` is unclipped, straight
-    from :func:`~gratinglab.geometry.sin_beta`, so an evanescent order reads
-    :math:`|\\sin\\beta| > 1` and lands visibly outside the window rather than
-    vanishing.
+    An order is present whether or not it propagates. ``sin_beta`` is
+    unclipped, taken directly from :func:`~gratinglab.geometry.sin_beta`, so an
+    evanescent order reads :math:`|\\sin\\beta| > 1` and is drawn visibly
+    outside the window.
 
-    ``beta`` is ``None`` **exactly** when the order is evanescent -- not
-    ``nan``, not ``0.0``. An evanescent order has no direction, and a number
-    here would invite one.
+    ``beta`` is ``None`` exactly when the order is evanescent; it is never
+    ``nan`` or ``0.0`` in that case. An evanescent order has no direction, and
+    a numerical value here would suggest that it had one.
     """
 
     order: int
@@ -238,9 +243,10 @@ class Diagram:
     blaze_order: int | None
 
     def mark(self, order: int) -> OrderMark:
-        """The :class:`OrderMark` for one order. Raises if it is not present --
-        an order that should be in the record and isn't is a bug, not a
-        default."""
+        """The :class:`OrderMark` for one order.
+
+        Raises if the order is not present, because an order missing from the
+        record indicates a bug and has no sensible default."""
         for entry in self.orders:
             if entry.order == order:
                 return entry
@@ -267,7 +273,7 @@ def x_nm(t: ArrayLike, period: float) -> NDArray[np.float64]:
 
 def direction(azimuth: float) -> NDArray[np.float64]:
     """Unit vector at an azimuth measured from :math:`\\hat{n}` toward
-    :math:`\\hat{d}` -- the convention every angle in §3 uses."""
+    :math:`\\hat{d}`, which is the convention used by every angle in §3."""
     return np.array([np.sin(azimuth), np.cos(azimuth)])
 
 
@@ -285,9 +291,9 @@ def order_span(
     """Every propagating order, plus ``pad`` evanescent ones on each side.
 
     :func:`~gratinglab.geometry.order_range` returns exactly the propagating
-    set, which is the right answer for a solver and the wrong one for a
-    picture: an order that has just passed off leaves no trace, and the passing
-    off is the thing worth watching.
+    set. That is appropriate for a solver but not for a picture, because an
+    order that has just passed off would leave no trace, and the passing off
+    is what a reader of the picture wants to follow.
     """
     live = order_range(wavelength, period, sin_alpha, sin_gamma)
     return np.arange(int(live.min()) - pad, int(live.max()) + pad + 1, dtype=np.int64)
@@ -357,9 +363,9 @@ def _active_facet_t(problem: "Problem") -> tuple[float, float]:
     period that occupies the middle of the window.
 
     For a sawtooth that is the active (blaze) facet, ``[0, apex]``. For every
-    other profile there is no distinguished facet, so the anchor is the crest
-    -- the ray *directions* are the physics, and the origin is a visual anchor
-    that a caption already declares arbitrary.
+    other profile there is no distinguished facet, so the crest is used as the
+    anchor. Only the ray directions carry physical meaning; the origin is a
+    visual anchor, and a caption already states that it is arbitrary.
     """
     profile = problem.profile
     apex = getattr(profile, "apex", None)
@@ -380,8 +386,9 @@ def facet_normal(problem: "Problem") -> tuple[float, float]:
     """Outward unit normal of the struck facet, in the physical frame.
 
     Taken from :meth:`Profile.boundary`, which already returns outward normals
-    (``ny > 0``), with the ``x`` component flipped by :data:`T_AXIS_SIGN` --
-    the normal is a direction in ``t``-space and this frame runs the other way.
+    (``ny > 0``), with the ``x`` component flipped by :data:`T_AXIS_SIGN`,
+    because the normal is a direction in ``t``-space and this frame runs the
+    opposite way.
     """
     start, end = _active_facet_t(problem)
     t_mid = np.mod(0.5 * (start + end), 1.0)
@@ -446,11 +453,11 @@ def blaze_jump(
     """``(index to jump to, reason)`` for a "go to the blaze wavelength"
     control.
 
-    The reason is non-empty **exactly** when the index is ``None``, so a caller
-    puts *this* text in a disabled button's tooltip instead of inventing one --
-    or leaving a dead control that says nothing. A disabled control that
-    explains itself is honest; an enabled one that silently does nothing is
-    not.
+    The reason is non-empty exactly when the index is ``None``, so a caller
+    can put this text in a disabled button's tooltip instead of composing its
+    own or leaving a disabled control with no explanation. A disabled control
+    that states why it is disabled is preferable to an enabled one that does
+    nothing.
     """
     targets = blaze_targets(problem, illumination)
     if not targets:
@@ -481,9 +488,9 @@ def captions(
 ) -> tuple[Line, ...]:
     """What the drawing cannot show, said in words.
 
-    Every one of these exists because the picture is true but partial, and a
-    partial truth left unlabelled is how a reader talks themselves into the
-    wrong geometry.
+    Each caption exists because the picture is correct but incomplete, and an
+    incomplete picture without labels can lead a reader to infer the wrong
+    geometry.
     """
     live = sum(1 for m in marks if m.propagating)
     dark = len(marks) - live
@@ -570,7 +577,7 @@ def build(
     periods: int = 2,
     pad_orders: int = 2,
 ) -> Diagram:
-    """Everything one drawing consists of. The only entry point a widget needs."""
+    """Build one whole drawing; this is the only entry point a widget needs."""
     period = problem.period
     marks = order_marks(problem, illumination, wavelength, pad=pad_orders)
     labelled = label_orders(marks)

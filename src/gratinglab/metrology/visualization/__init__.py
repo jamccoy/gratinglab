@@ -1,6 +1,7 @@
 """
-Visualization and plotting functions
-Diagnostic plots, statistics, and AFM profiles
+Visualization and plotting functions.
+
+This package provides diagnostic plots, statistics plots, and AFM profiles.
 """
 
 from .diagnostics import plot_analyzed_regions_overlay, plot_flattening_diagnostic

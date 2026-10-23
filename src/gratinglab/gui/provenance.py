@@ -1,18 +1,19 @@
-"""What the provenance panel says, decided without a toolkit.
+"""Decide what the provenance panel says, without a GUI toolkit.
 
-The panel is the reason the GUI is worth having rather than a toy: it is where
-a result declares how far it can be trusted. That makes *which line gets which
-colour* a correctness question, not a styling one, and correctness questions do
-not belong in a widget.
+The provenance panel is what makes the GUI more than a demonstration, because
+it is where a result states how far it can be trusted. The choice of colour
+for each line is therefore a question of correctness, and questions of
+correctness do not belong in a widget.
 
-So this module owns the decision and returns :class:`Line` tuples; the widget
-layer only paints them. The rule the tests exist to protect is that **things
-which are not wrong must not look wrong**: ``converged is None`` means "not yet
-checked", true for every solver until the convergence harness lands, and a
-coating-free run giving relative efficiency is the correct default. Both once
-rendered identically to a real problem, which is how a fully successful run
-could read as broken. The convergence harness exists now, so ``None`` means
-"this solve did not sweep" rather than "nothing can" -- still not a failure.
+This module makes that decision and returns :class:`Line` tuples, and the
+widget layer only paints them. The rule the tests protect is that output which
+is not wrong must not be styled as wrong. ``converged is None`` means "not yet
+checked", which was true for every solver until the convergence harness was
+added, and a coating-free run giving relative efficiency is the correct
+default. Both were once rendered identically to a real problem, which made a
+fully successful run appear broken. The convergence harness now exists, so
+``None`` means "this solve did not sweep" instead of "nothing can", and it is
+still not a failure.
 """
 
 from __future__ import annotations
@@ -42,8 +43,8 @@ class Line:
 
     A ``tag`` of ``None`` is ordinary body text. Lines are emitted in reading
     order and a single visual line may be several ``Line`` objects, so that a
-    neutral label can introduce a coloured value -- ``"energy balance: "``
-    dimmed, then the range in green or red.
+    neutral label can introduce a coloured value, for example
+    ``"energy balance: "`` dimmed, followed by the range in green or red.
     """
 
     text: str
@@ -74,13 +75,13 @@ def provenance_lines(
 ) -> tuple[Line, ...]:
     """Everything the panel says about one completed solve.
 
-    ``lambda_over_period`` is passed in rather than a parsed form, so this
-    function needs nothing from the GUI and is trivial to call from a test.
+    ``lambda_over_period`` is passed in instead of a parsed form, so this
+    function needs nothing from the GUI and is easy to call from a test.
 
     ``cancelled`` marks the case where the user asked to stop and the result on
-    screen is the *previous* one. The solve really does stop now -- the solver
-    checks at every wavelength -- so this no longer has to hedge about work
-    continuing in the background.
+    screen is the previous one. The solve now does stop, because the solver
+    checks for cancellation at every wavelength, so the text no longer needs
+    to allow for work continuing in the background.
     """
     provenance = scan.provenance
     lines: list[Line] = []
@@ -179,14 +180,14 @@ def provenance_lines(
 
 
 def _knob_label(method: str) -> str:
-    """What this method's truncation count is a count *of*.
+    """What this method's truncation count counts.
 
-    Read off the registry rather than a table kept here, so a solver added
-    later names its own knob without editing this module -- the header said
-    "quadrature pts" for every method, which was wrong for the integral
-    solver's boundary points from the day that tab existed. Falls back for
-    imported reference data, whose `method` need not be a registered solver
-    at all.
+    The label is read from the registry instead of from a table kept here, so
+    a solver added later names its own knob without any edit to this module.
+    The header previously said "quadrature pts" for every method, which was
+    wrong for the integral solver's boundary points from the time that tab
+    was added. A fallback is returned for imported reference data, whose
+    `method` need not be a registered solver at all.
     """
     from ..solvers.base import get_solver
 
@@ -200,11 +201,11 @@ def _knob_label(method: str) -> str:
 def _evidence(study: Any) -> str:
     """What a convergence verdict rests on, in one dim trailing clause.
 
-    A bare "yes" is a claim; the knob value and the swept range are what let a
-    reader check it -- and `converged_at` is the actionable half, since it is
-    usually cheaper than the value it took to prove it. Degrades to a bare
-    newline for a verdict that arrived without its study, rather than
-    inventing detail for it.
+    A bare "yes" is only a claim; the knob value and the swept range allow a
+    reader to check it. `converged_at` is the more useful of the two for
+    acting on the result, since it is usually cheaper than the value needed
+    to establish it. For a verdict that arrived without its study, the
+    function returns a bare newline and does not invent detail.
     """
     if not isinstance(study, dict):
         return "\n"
@@ -217,7 +218,7 @@ def _evidence(study: Any) -> str:
 
 
 def error_lines(errors: Sequence["FieldError"]) -> tuple[Line, ...]:
-    """The panel's other job: say which fields stopped the solve."""
+    """Report which fields stopped the solve, the panel's other function."""
     lines = [Line(f"{len(errors)} field(s) need attention\n", "bad")]
     lines.extend(Line(f"  • {e.field}: {e.message}\n", "bad") for e in errors)
     return tuple(lines)
@@ -233,8 +234,8 @@ def solving_lines(method: str, wavelength_count: int) -> tuple[Line, ...]:
 def to_html(lines: Sequence[Line]) -> str:
     """Render lines as the small HTML subset Qt's rich text engine accepts.
 
-    Escaped, so a solver warning containing ``<`` or ``&`` -- and the docs do
-    carry ampersands -- cannot silently become markup or vanish.
+    The text is escaped, so a solver warning containing ``<`` or ``&`` (the
+    docs do contain ampersands) cannot silently become markup or disappear.
     """
     parts: list[str] = []
     for line in lines:
@@ -247,9 +248,9 @@ def to_html(lines: Sequence[Line]) -> str:
 def alarming_text(lines: Sequence[Line]) -> str:
     """Every character styled as a problem, concatenated.
 
-    Exists for the tests that assert something is *not* flagged, which is
-    otherwise awkward to phrase and was previously done by walking Tk tag
-    index pairs.
+    It exists for the tests that assert that something is not flagged. Such
+    an assertion is otherwise awkward to express, and it was previously made
+    by walking Tk tag index pairs.
     """
     return "".join(line.text for line in lines if line.tag in ALARM_TAGS)
 

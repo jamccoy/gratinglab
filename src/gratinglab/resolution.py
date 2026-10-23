@@ -8,27 +8,27 @@ the interference profile of ISSI eq. (8),
     \left[\frac{\sin(Ns)}{N\sin(s)}\right]^2, \qquad
     s = \left[\sin\alpha + \sin\beta\right]\sin\gamma\,\frac{p\pi}{\lambda},
 
-whose first zeros sit at :math:`s = m\pi \pm \pi/N`. The Rayleigh criterion --
-one wavelength's peak on the other's first zero -- then gives
+whose first zeros sit at :math:`s = m\pi \pm \pi/N`. The Rayleigh criterion,
+which places one wavelength's peak on the other's first zero, then gives
 
 .. math::
     R \equiv \frac{\lambda}{\Delta\lambda} = |m|\,N,
 
-so the closed form and the numeric profile are one implementation checking the
-other, exactly the pattern the scalar solver uses for its sawtooth closed forms.
+so the closed form and the numeric profile serve as checks on each other, in
+the same way the scalar solver uses its sawtooth closed forms.
 
-Scope. This module answers the ideal-grating question:
-:math:`N` identical grooves at exact spacing. The successor -- resolving power
-degraded by groove placement and period errors, computed from a measured groove
-ensemble -- is roadmap work and is *not* approximated here. An
-:class:`~gratinglab.problem.Problem` whose ``n_grooves`` is ``None`` is refused
-rather than silently treated as infinite, because "R is undefined" and
-"R is very large" are different answers.
+This module answers the ideal-grating question of :math:`N` identical grooves
+at exact spacing. The successor, resolving power degraded by groove placement
+and period errors and computed from a measured groove ensemble, is roadmap
+work and is not approximated here. A :class:`~gratinglab.problem.Problem`
+whose ``n_grooves`` is ``None`` is refused instead of being treated as
+infinite, because "R is undefined" and "R is very large" are different
+answers.
 
-``n_grooves`` is the **illuminated** groove count, not the total count on the
-part -- :meth:`BoundaryProfile.to_problem` fills it with the number of grooves
-the scan measured, which is what makes a measured surface flow through
-to a spectrograph number in-process.
+``n_grooves`` is the illuminated groove count, as distinct from the total count
+on the part. :meth:`BoundaryProfile.to_problem` fills it with
+the number of grooves the scan measured, which allows a measured surface to
+flow through to a spectrograph number in-process.
 """
 
 from __future__ import annotations
@@ -60,8 +60,8 @@ class ResolvingPower:
         The just-resolved wavelength difference, nm.
     criterion
         How "resolved" is judged. Only ``"rayleigh"`` exists; the field is
-        carried so a future criterion (e.g. FWHM-based) is a value, not an
-        incompatible reinterpretation of ``r``.
+        carried so that a future criterion (e.g. FWHM-based) can be expressed
+        as a value instead of an incompatible reinterpretation of ``r``.
     """
 
     order: int
@@ -104,16 +104,18 @@ def resolving_power(
 ) -> ResolvingPower:
     r"""Rayleigh resolving power :math:`R = |m|N` of one propagating order.
 
-    Derivation, so the closed form is checkable against :func:`line_profile`:
-    the line of wavelength :math:`\lambda` peaks where
+    The derivation is given so that the closed form can be checked against
+    :func:`line_profile`. The line of wavelength :math:`\lambda` peaks where
     :math:`\sin\alpha + \sin\beta = m\lambda/(p\sin\gamma)` and first vanishes
     where the right-hand side becomes :math:`(m \pm 1/N)\lambda/(p\sin\gamma)`.
     Placing the peak of :math:`\lambda + \Delta\lambda` on that zero gives
-    :math:`m\,\Delta\lambda = \lambda/N`, i.e. :math:`R = |m|N` -- independent
-    of the mount, because :math:`\sin\gamma` scales both spacings alike.
+    :math:`m\,\Delta\lambda = \lambda/N`, i.e. :math:`R = |m|N`, which is
+    independent of the mount because :math:`\sin\gamma` scales both spacings
+    alike.
 
-    Refuses (``ValueError``) rather than approximates: ``n_grooves`` unset,
-    ``order == 0``, or an order that is evanescent at this wavelength.
+    The function raises ``ValueError`` instead of approximating when
+    ``n_grooves`` is unset, when ``order == 0``, or when the order is
+    evanescent at this wavelength.
     """
     _check(problem, illumination, wavelength, order)
     assert problem.n_grooves is not None  # narrowed by _check
@@ -144,9 +146,10 @@ def line_profile(
     so the default window always contains the line and its first
     ``half_widths`` zeros regardless of :math:`N`.
 
-    The window is clipped where it would leave :math:`|\sin\beta| \le 1`: a
-    line sitting near grazing exit is returned truncated rather than padded
-    with angles that do not exist. Same refusals as :func:`resolving_power`.
+    The window is clipped where it would leave :math:`|\sin\beta| \le 1`, so a
+    line sitting near grazing exit is returned truncated and is not padded
+    with angles that do not exist. The refusals are the same as those of
+    :func:`resolving_power`.
     """
     _check(problem, illumination, wavelength, order)
     assert problem.n_grooves is not None  # narrowed by _check
@@ -176,12 +179,12 @@ def describe(
 ) -> str:
     """One human-readable line per order with a defined resolving power.
 
-    Presentation helper for a GUI readout: orders without a defined R (the
-    zeroth, and any evanescent at this wavelength) are skipped rather than
-    refused, because a readout enumerating orders is a different contract from
-    a computation asked about one. Returns ``""`` when nothing qualifies --
-    including when ``n_grooves`` is unset, which is the common case for an
-    idealised problem.
+    This is a presentation helper for a GUI readout. Orders without a defined
+    R (the zeroth, and any evanescent at this wavelength) are skipped instead
+    of refused, because a readout enumerating orders has a different contract
+    from a computation asked about one. Returns ``""`` when nothing
+    qualifies, including when ``n_grooves`` is unset, which is the common case
+    for an idealised problem.
     """
     if problem.n_grooves is None:
         return ""

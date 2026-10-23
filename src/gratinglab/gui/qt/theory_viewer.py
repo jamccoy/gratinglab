@@ -1,16 +1,16 @@
 """The read-only viewer for one theory or reference page.
 
-Thin by design: :mod:`gratinglab.gui.richtext` turns the page into HTML and a
-list of rasterised equations, and this class does nothing but hand both to a
-`QTextBrowser`. Everything that could be wrong in an interesting way -- table
-structure, escaping, math placement, the approximate-method banner -- is
-decided and tested there, without a window.
+The viewer is thin by design. :mod:`gratinglab.gui.richtext` turns the page
+into HTML and a list of rasterised equations, and this class only passes both
+to a `QTextBrowser`. Everything that could be wrong in a non-trivial way
+(table structure, escaping, math placement, the approximate-method banner) is
+decided and tested in that module, without a window.
 
-Images are registered with `QTextDocument.addResource` rather than embedded as
-`data:` URIs, because `loadResource` does not handle `data:` by default. That
-also disposes of the Tk viewer's ugliest detail: a list monkey-patched onto the
-window purely to keep `PhotoImage` objects alive against garbage collection
-while Tk was still displaying them.
+Images are registered with `QTextDocument.addResource` instead of being
+embedded as `data:` URIs, because `loadResource` does not handle `data:` by
+default. This also removes the least elegant detail of the Tk viewer: a list
+monkey-patched onto the window solely to keep `PhotoImage` objects alive
+against garbage collection while Tk was still displaying them.
 """
 
 from __future__ import annotations
@@ -29,10 +29,10 @@ def render_into(
 ) -> None:
     """Render a page into an existing `QTextBrowser`, images and all.
 
-    Shared by :class:`TheoryViewer` and :class:`~.setup_tab.SetupTab` --
-    both are "one markdown-ish page, typeset, in a browser," and the second
-    use is exactly the signal that this was worth factoring out rather than
-    copied.
+    It is shared by :class:`TheoryViewer` and :class:`~.setup_tab.SetupTab`,
+    both of which show "one markdown-ish page, typeset, in a browser," and the
+    second use is what justified factoring this function out instead of
+    copying it.
     """
     rendered = richtext.to_html(
         page, device_pixel_ratio=device_pixel_ratio, color=text_color
@@ -84,6 +84,6 @@ class TheoryViewer(QWidget):
 
         Equations are images, so they do not follow a stylesheet the way the
         surrounding prose does. Black math on a dark theme would be unreadable
-        for no reason other than that it was baked in.
+        only because its colour had been fixed at render time.
         """
         return self.palette().windowText().color().name()

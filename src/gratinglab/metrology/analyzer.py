@@ -1,7 +1,8 @@
 """
-Core AFM file analyzer
-Handles single file analysis with all the detailed logic
-Now supports row-group analysis for many more measurements per image!
+Core AFM file analyzer.
+
+This module handles the analysis of a single file in full detail. It also
+supports row-group analysis, which yields many more measurements per image.
 """
 import numpy as np
 import matplotlib.pyplot as plt
@@ -24,9 +25,11 @@ def analyze_single_file(filename, show_plots=True, settings=None):
     """
     Analyze a single AFM file and extract blaze angles
     
-    Supports two modes:
-    1. Traditional: Average all rows → single profile → few measurements
-    2. Row-group: Multiple row-group profiles → many measurements
+    Two modes are supported:
+    1. Traditional: all rows are averaged into a single profile, which gives
+       few measurements.
+    2. Row-group: several row-group profiles are extracted, which gives many
+       measurements.
 
     Set USE_ROW_GROUPS = True in config.py to enable row-group analysis, or pass
     settings with use_row_groups set.
@@ -54,8 +57,9 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
     """
     Analyze a single AFM file using row-group analysis
     
-    This extracts multiple profiles from different regions of the image,
-    giving you many more measurements and allowing assessment of within-image variation.
+    This extracts multiple profiles from different regions of the image, which
+    gives many more measurements and allows within-image variation to be
+    assessed.
     
     Parameters:
         filename: path to AFM data file
@@ -272,9 +276,9 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
 
 def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
     """
-    Traditional analysis: average all rows into single profile
-    
-    This is the original analysis method. Kept for compatibility and comparison.
+    Traditional analysis: average all rows into a single profile.
+
+    This is the original analysis method, kept for compatibility and comparison.
     """
     
     if settings is None:
@@ -361,8 +365,8 @@ def _load_and_validate(filename, settings):
     Load AFM data, flatten the image, and validate it.
 
     Image flattening happens here because this is the only point where the 2-D
-    array exists and every workflow passes through it - the next step averages
-    rows away.
+    array exists and every workflow passes through it; the next step averages
+    the rows away.
     """
     try:
         data, scan_x_size = load_afm_data(filename,
@@ -541,11 +545,11 @@ def _extract_all_angles(raw_x, flat_y, groove_centers, period_nm, local_periods,
 
 def _calculate_statistics(blaze_angles, quality, all_local_angles, angle_uncertainties):
     """
-    Calculate summary statistics with proper uncertainty decomposition
-    
-    Separates two sources of uncertainty:
-    1. Measurement uncertainty: How well can we measure each groove?
-    2. Physical variation: How much do grooves differ?
+    Calculate summary statistics with an uncertainty decomposition.
+
+    Two sources of uncertainty are separated:
+    1. Measurement uncertainty: how well each groove can be measured.
+    2. Physical variation: how much the grooves differ from one another.
     """
     mean_angle = np.mean(blaze_angles)
     
@@ -593,10 +597,10 @@ def _calculate_statistics(blaze_angles, quality, all_local_angles, angle_uncerta
 def _calculate_statistics_row_groups(blaze_angles, quality, all_local_angles,
                                      angle_uncertainties, groove_row_groups):
     """
-    Calculate statistics for row-group analysis
+    Calculate statistics for row-group analysis.
 
-    Decomposes variance into three components:
-    1. Measurement uncertainty (how well we fit each groove)
+    The variance is decomposed into three components:
+    1. Measurement uncertainty (how well each groove is fitted)
     2. Within-image variation (variation between row groups)
     3. Groove-to-groove variation (real physical differences)
 
@@ -604,9 +608,9 @@ def _calculate_statistics_row_groups(blaze_angles, quality, all_local_angles,
         groove_row_groups: row group index of each measurement, same length as
             blaze_angles. This used to be reconstructed by walking the angle list
             in slices the size of each group's detected-centre count, but angles
-            are only recorded for grooves whose fit succeeded - so one failed fit
-            shifted every later group, and a guard then silently dropped the
-            tail. Selecting by label cannot drift.
+            are only recorded for grooves whose fit succeeded, so one failed fit
+            shifted every later group and a guard then silently dropped the
+            tail. Selection by label is not subject to that misalignment.
     """
     stats = _calculate_statistics(blaze_angles, quality, all_local_angles,
                                   angle_uncertainties)

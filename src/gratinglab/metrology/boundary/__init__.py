@@ -1,11 +1,11 @@
 """
 Boundary profile generation for PCGrate
 
-Averages the detected grooves of an AFM scan into a single representative
-groove, normalises it to one period, and exports it as a PCGrate .ggp
-boundary profile.
+This package averages the detected grooves of an AFM scan into a single
+representative groove, normalises it to one period, and exports it as a
+PCGrate .ggp boundary profile.
 
-Shares the profile front-end (loading, groove detection, groove windowing)
+It shares the profile front-end (loading, groove detection, groove windowing)
 with the blaze-angle analysis in gratinglab.metrology.core.
 """
 

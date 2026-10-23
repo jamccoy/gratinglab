@@ -9,12 +9,13 @@ def load_afm_data(filename, default_scan_size=2.0, settings=None):
     """
     Load AFM data, whatever format it arrived in.
 
-    Dispatches on content rather than on the caller knowing: raw Nanoscope files
-    (.spm, and the extensionless companions Nanoscope also writes) are read
-    directly; everything else takes the text path used for Gwyddion exports.
+    The format is detected from the content, so the caller need not know it.
+    Raw Nanoscope files (.spm, and the extensionless companions Nanoscope also
+    writes) are read directly; everything else takes the text path used for
+    Gwyddion exports.
 
-    Dispatching here rather than at each call site is deliberate - there are six
-    callers, and none of them should have to care.
+    The dispatch happens here instead of at each call site by design: there
+    are six callers, and none of them should need to handle the format.
 
     Parameters:
         settings: optional AnalysisSettings, consulted for which .spm channel and
@@ -42,11 +43,11 @@ def load_afm_data(filename, default_scan_size=2.0, settings=None):
 
 def _load_text(filename, default_scan_size=2.0):
     """
-    Load a text export (Gwyddion and similar), reading the scan size from the
-    header comments when they carry it.
+    Load a text export, such as one from Gwyddion.
 
-    Unchanged behaviour - this is the original load_afm_data body, moved so the
-    dispatcher above stays readable. The stored baselines depend on it.
+    The scan size is read from the header comments when they carry it. The
+    behaviour is unchanged: this is the original load_afm_data body, moved so
+    the dispatcher above stays readable. The stored baselines depend on it.
     """
     import re
     
@@ -285,7 +286,7 @@ def find_groove_positions(x, y, period_nm, prominence_factor=0.3, distance_facto
     Parameters:
         edge_exclusion: reject centers lying within this many periods of either
             end of the profile. A groove that close to the edge has no complete
-            facet in the data - the scan starts or stops part-way through it -
+            facet in the data (the scan starts or stops part-way through it),
             so any angle fitted to it is meaningless. 0.0 disables the check.
         return_n_edge_rejected: also return how many centers were rejected
 

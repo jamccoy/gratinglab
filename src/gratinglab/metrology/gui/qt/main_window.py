@@ -1,9 +1,10 @@
 """
-The window.
+The main window.
 
-Thin by intention: it reads controls into a `FormState`, asks `gui.state` to turn
-that into settings, hands the work to a thread, and draws what comes back. Any
-question that can be answered without a window belongs in `gui/state.py`.
+The window is deliberately thin: it reads controls into a `FormState`, asks
+`gui.state` to turn that into settings, hands the work to a thread, and draws
+what comes back. Any question that can be answered without a window belongs in
+`gui/state.py`.
 """
 from __future__ import annotations
 

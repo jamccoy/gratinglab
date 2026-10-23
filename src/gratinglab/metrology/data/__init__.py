@@ -1,6 +1,7 @@
 """
-Data management and aggregation
-Combining scans and grouping by temperature
+Data management and aggregation.
+
+This package combines scans and groups them by temperature.
 """
 
 from .aggregation import (

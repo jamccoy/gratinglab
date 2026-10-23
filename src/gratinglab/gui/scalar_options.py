@@ -1,17 +1,18 @@
 """The scalar solver's own form: quadrature points, and their Nyquist guard.
 
-Split out of :mod:`gratinglab.gui.state` when the window grew a tab per
-solver. Geometry (period, profile, mount, wavelengths) is shared across every
-solver a tab might run and lives in :class:`gratinglab.gui.state.FormState`;
-this module holds the one thing that was never geometry to begin with --
-``quadrature_points`` is scalar's own accuracy knob, and validating it needs
-the *result* of parsing geometry (the propagating-order range) without being
-part of parsing geometry itself. Keeping it here, rather than back inside
-``state.build()``, means a second solver's own knob and guard get their own
-module the same way, instead of `build()` growing a branch per solver.
+This module was split out of :mod:`gratinglab.gui.state` when the window
+gained a tab per solver. The geometry (period, profile, mount, wavelengths)
+is shared by every solver a tab might run and lives in
+:class:`gratinglab.gui.state.FormState`. This module holds the one setting
+that was never part of the geometry: ``quadrature_points`` is scalar's own
+accuracy knob, and validating it requires the result of parsing the geometry
+(the propagating-order range) without being part of that parsing. Keeping it
+here, and not inside ``state.build()``, means that a second solver's knob and
+guard are given their own module in the same way, instead of `build()` gaining
+a branch per solver.
 
-Nothing here imports a toolkit; it is tested the same way `state.py` is,
-without a window.
+Nothing here imports a toolkit, and the module is tested in the same way as
+`state.py`, without a window.
 """
 
 from __future__ import annotations
@@ -70,13 +71,13 @@ def build_options(
     ------
     FormErrors
         Same contract as :func:`gratinglab.gui.state.build`: every problem
-        found, not just the first.
+        found is reported, not only the first.
 
-    The Nyquist check needs a solved geometry (the propagating-order range,
-    from the *shortest* wavelength in the scan, where the most orders
-    propagate) to say anything, which is exactly why it cannot live inside
-    geometry parsing -- geometry alone does not know which solver, or which
-    solver option, is about to consume it.
+    The Nyquist check requires a solved geometry, namely the propagating-order
+    range at the shortest wavelength in the scan, where the most orders
+    propagate. For this reason it cannot live inside geometry parsing, since
+    the geometry alone does not know which solver, or which solver option,
+    will consume it.
     """
     errors: list[FieldError] = []
     quadrature = _number(

@@ -1,23 +1,23 @@
-r"""Demonstrating convergence, or refusing to claim it.
+r"""Demonstrate convergence, or decline to claim it.
 
 Every :class:`~gratinglab.result.Provenance` this project has ever produced
-carries ``converged=None`` -- "not checked". That is honest but useless: it
-means no number here has been shown correct, only computed. This module is
-what turns that field into evidence.
+carries ``converged=None``, meaning "not checked". That value is accurate but
+uninformative: it means that no number has been shown to be correct, only
+computed. This module turns that field into evidence.
 
-The idea is the ordinary one. A solver declares its accuracy knob
-(:attr:`~gratinglab.solvers.base.Capabilities.accuracy_knob` -- ``truncation``
+The method is the ordinary one. A solver declares its accuracy knob
+(:attr:`~gratinglab.solvers.base.Capabilities.accuracy_knob`: ``truncation``
 for RCWA, ``boundary_points`` for the integral method, ``quadrature_points``
-for scalar quadrature). Sweep it upward, watch the answer stop moving, and
-report where it stopped.
+for scalar quadrature). The knob is swept upward until the answer stops
+moving, and the value at which it stopped is reported.
 
-Why a *plateau*, not the first pair that agrees
-===============================================
+Why agreement is required over a plateau
+========================================
 
-The tempting rule -- "converged once two consecutive refinements agree within
-tolerance" -- is not safe, and this project has the measurement to prove it
-rather than the principle. Scalar quadrature on the reference blazed grating,
-maximum change in efficiency per doubling:
+The tempting rule, "converged once two consecutive refinements agree within
+tolerance", is not safe, and this project has a measurement that shows it.
+The table gives the maximum change in efficiency per doubling for scalar
+quadrature on the reference blazed grating:
 
 ======  ==========  ===================
 ``n``   change      vs. previous change
@@ -30,37 +30,39 @@ maximum change in efficiency per doubling:
 ======  ==========  ===================
 
 At a tolerance of 1e-5 the naive rule stops at ``n=512`` on the strength of
-that 9.6e-6 -- and the very next refinement then moves the answer by 2.4e-5,
-more than the tolerance just certified. The cause is geometric, not numerical
-noise: the blazed profile has a slope kink at :math:`t = 0.833`, and doubling
-``n`` changes how near a quadrature node falls to it, so the error is not
-monotone in ``n``. Any method with a corner, a resonance, or an anomaly can do
-this.
+that 9.6e-6, and the next refinement then moves the answer by 2.4e-5, which is
+more than the tolerance just certified. The cause is geometric and is not
+numerical noise: the blazed profile has a slope kink at :math:`t = 0.833`, and
+doubling ``n`` changes how near a quadrature node falls to it, so the error is
+not monotone in ``n``. Any method with a corner, a resonance, or an anomaly can
+behave in the same way.
 
-So agreement must persist. :data:`DEFAULT_PLATEAU` consecutive differences
-must all fall below tolerance -- three knob values in a row that agree -- and
-the accidental single agreement above is rejected by exactly one more solve.
-Raise ``plateau`` for a method known to be worse behaved; there is no way to
-lower it below 1, because a single agreement is the thing this exists to
-distrust.
+Agreement is therefore required to persist. :data:`DEFAULT_PLATEAU`
+consecutive differences must all fall below tolerance (three knob values in a
+row that agree), and the accidental single agreement above is rejected by
+exactly one more solve. ``plateau`` may be raised for a method known to be
+worse behaved. It cannot be lowered below 1, because a single agreement is
+precisely what this module is designed to distrust.
 
 What is compared
 ================
 
-Absolute difference in efficiency, maximised over every wavelength and order.
-Absolute rather than relative because efficiencies live in :math:`[0, 1]` and
-a relative error on an order carrying 1e-12 of the power is noise being
-promoted to a headline. The order grid and the propagating mask must match
-between rungs; if they do not, this raises rather than comparing misaligned
-arrays, which is the failure mode the whole project is arranged against.
+The quantity compared is the absolute difference in efficiency, maximised over
+every wavelength and order. An absolute difference is used because
+efficiencies lie in :math:`[0, 1]`, and a relative error on an order carrying
+1e-12 of the power would promote noise to a headline figure. The order grid
+and the propagating mask must match between rungs; if they do not, this module
+raises an error instead of comparing misaligned arrays, since that is the
+failure mode the whole project is arranged to prevent.
 
-What it does *not* do
-=====================
+What it does not do
+===================
 
-Prove correctness. A converged wrong model is still wrong -- scalar theory
-converges beautifully to an answer that neglects polarization entirely. This
-measures numerical self-consistency, and :mod:`gratinglab.checks` measures the
-physics. They are different questions and both are needed.
+This module does not prove correctness. A converged wrong model is still
+wrong; scalar theory converges well to an answer that neglects polarization
+entirely. The module measures numerical self-consistency, and
+:mod:`gratinglab.checks` measures the physics. These are different questions,
+and both are needed.
 """
 
 from __future__ import annotations
@@ -122,17 +124,17 @@ class ConvergenceReport:
         The criterion applied.
     converged_at
         Coarsest knob value demonstrated adequate, or ``None`` if the sweep
-        ended without a plateau. **This is the actionable number**: it is what
-        a production run should use, not the finest value tried.
+        ended without a plateau. This is the value a production run should
+        use, in preference to the finest value tried.
     scan
-        The finest scan computed, with its provenance stamped -- ``converged``
-        set to a real boolean at last, and ``notes["convergence"]`` carrying
-        this evidence so a result can defend itself away from this object.
+        The finest scan computed, with its provenance stamped: ``converged``
+        is set to a real boolean, and ``notes["convergence"]`` carries this
+        evidence so that a result remains supported away from this object.
     skipped
         ``(value, reason)`` for rungs the solver refused, e.g. a quadrature
-        too coarse to resolve the highest order. Recorded, not silently
-        dropped: a ladder that mostly did not run is a different situation
-        from one that ran and disagreed.
+        too coarse to resolve the highest order. These are recorded because a
+        ladder that mostly did not run is a different situation from one that
+        ran and disagreed.
     """
 
     knob: str
@@ -151,7 +153,7 @@ class ConvergenceReport:
 
     @property
     def final_difference(self) -> float | None:
-        """The last change measured -- the tightest bound the sweep supports."""
+        """The last change measured, which is the tightest bound the sweep supports."""
         return self.differences[-1] if self.differences else None
 
     def as_notes(self) -> dict[str, object]:
@@ -182,11 +184,11 @@ class ConvergenceReport:
 
 
 def doubling_ladder(start: int, rungs: int) -> tuple[int, ...]:
-    """``start``, ``2*start``, ``4*start``, ... -- ``rungs`` values.
+    """``rungs`` values: ``start``, ``2*start``, ``4*start``, and so on.
 
-    Doubling because discretisation error typically falls geometrically, so a
-    linear ladder spends most of its solves learning nothing while a geometric
-    one brackets the plateau in a handful.
+    The ladder doubles because discretisation error typically falls
+    geometrically. A linear ladder would spend most of its solves learning
+    little, while a geometric one brackets the plateau in a handful.
     """
     if start < 1:
         raise ValueError(f"start must be positive, got {start}")
@@ -198,8 +200,8 @@ def doubling_ladder(start: int, rungs: int) -> tuple[int, ...]:
 def default_ladder(solver) -> tuple[int, ...]:
     """A ladder straddling the solver's own default for its accuracy knob.
 
-    Read from the signature rather than hardcoded, so a backend that changes
-    its default does not silently leave this sweeping the wrong range.
+    The default is read from the signature and is not hardcoded, so a backend
+    that changes its default does not leave this sweeping the wrong range.
     """
     knob = _knob_of(solver)
     default = inspect.signature(solver.solve).parameters[knob].default
@@ -227,7 +229,7 @@ def check_convergence(
     """Sweep a solver's accuracy knob until the answer stops moving.
 
     Stops at the first plateau, so a well-behaved case costs only the rungs it
-    needed. A case that never plateaus runs the whole ladder and says so --
+    needed. A case that never plateaus runs the whole ladder and reports it:
     :attr:`ConvergenceReport.passed` is False and
     ``scan.provenance.converged`` is ``False``, which is a stronger and more
     useful statement than the ``None`` it started as.
@@ -244,26 +246,26 @@ def check_convergence(
     progress
         Called ``(rungs_done, len(ladder))``.
 
-        Two different granularities. The callback is **invoked
-        once per wavelength**, so a
-        :class:`~gratinglab.solvers.base.SolveCancelled` raised from it lands
-        within milliseconds rather than at the end of a rung -- and a rung is
-        the expensive unit here, up to a quarter of the whole sweep. But the
-        numbers it *reports* are per rung, because they are the only ones that
-        are both monotone and meaningful: a per-wavelength counter would
-        restart on every rung and drive a bar backwards, and composing one
-        across rungs would misrepresent progress anyway, since rungs double in
-        cost and the last is half the total work.
+        The callback operates at two different granularities. It is invoked
+        once per wavelength, so a
+        :class:`~gratinglab.solvers.base.SolveCancelled` raised from it takes
+        effect within milliseconds instead of at the end of a rung; a rung is
+        the expensive unit here, up to a quarter of the whole sweep. The
+        numbers it reports, however, are per rung, because they are the only
+        ones that are both monotone and meaningful. A per-wavelength counter
+        would restart on every rung and drive a bar backwards, and composing
+        one across rungs would misrepresent progress in any case, since rungs
+        double in cost and the last is half the total work.
 
-        So a bar sits still within a rung and steps once per rung. That is the
-        honest shape of this computation.
+        A bar therefore sits still within a rung and steps once per rung,
+        which reflects the actual shape of this computation.
 
         Unlike the :class:`~gratinglab.solvers.base.Solver` contract, this
-        does **not** end at ``(total, total)``: the sweep stops at the first
-        plateau, so a well-behaved case genuinely never runs the tail of the
-        ladder. Finishing early is the good outcome, and running the counter
-        up to the end to make a bar look tidy would claim work that was never
-        done. A caller learns the sweep is over by it returning.
+        does not end at ``(total, total)``: the sweep stops at the first
+        plateau, so a well-behaved case never runs the tail of the ladder.
+        Finishing early is the desired outcome, and running the counter up to
+        the end to make a bar look tidy would claim work that was never done.
+        A caller learns that the sweep is over when the function returns.
     **options
         Passed to every solve, so a sweep runs at the same settings as the
         production run it is certifying. The knob itself may not appear here.
@@ -271,10 +273,10 @@ def check_convergence(
     Raises
     ------
     SolveCancelled
-        Propagated untouched from ``progress``. **No partial report is
-        returned**: a sweep that was stopped has not demonstrated anything,
-        and handing back a report that implied otherwise would be the mistake
-        this module exists to prevent.
+        Propagated untouched from ``progress``. No partial report is
+        returned, because a sweep that was stopped has not demonstrated
+        anything, and a report implying otherwise would be the mistake this
+        module exists to prevent.
     """
     knob = _knob_of(solver)
     if plateau < 1:
@@ -359,10 +361,10 @@ def check_convergence(
 def _rung_progress(solver, progress: "Progress | None", rung: int, rungs: int) -> dict:
     """``{"progress": ...}`` reporting rungs while being called per wavelength.
 
-    The wavelength counter is discarded -- see
-    :func:`check_convergence`. What it buys is the call *frequency*: every
-    wavelength is a chance for the caller to raise, so cancelling a sweep does
-    not have to wait out the rung it is in.
+    The wavelength counter is discarded (see :func:`check_convergence`). The
+    per-wavelength call frequency is kept because every wavelength gives the
+    caller a chance to raise, so cancelling a sweep does not have to wait out
+    the rung it is in.
     """
     if progress is None or not solver.capabilities.reports_progress:
         return {}
@@ -386,10 +388,10 @@ def _require_same_grid(
 ) -> None:
     """Refuse to compare scans that are not about the same orders.
 
-    The knob controls accuracy, not geometry, so this should never fire -- the
-    order grid comes from the grating equation. It exists because a silent
-    broadcast between differently-shaped arrays would produce a number that
-    looks like a convergence measure and is not.
+    The knob controls accuracy and leaves the geometry alone, and the order
+    grid comes from the grating equation, so this check should never fire. It
+    exists because a silent broadcast between differently-shaped arrays would
+    produce a number that looks like a convergence measure and is not one.
     """
     if not np.array_equal(before.orders, after.orders):
         raise ValueError(
@@ -417,9 +419,9 @@ def _largest_change(before: EfficiencyScan, after: EfficiencyScan) -> float:
 def _stamp(scan: EfficiencyScan, report: ConvergenceReport) -> EfficiencyScan:
     """A copy of ``scan`` whose provenance carries the verdict and its evidence.
 
-    ``converged`` becomes a real boolean either way. False is a result, not a
-    failure to produce one: it says the sweep ran and the answer was still
-    moving, which is exactly what a reader needs in order not to quote the
+    ``converged`` becomes a real boolean in either case. A value of False is
+    itself a finding: it records that the sweep ran and the answer was still
+    moving, which is the information a reader needs in order not to quote the
     number.
     """
     notes = dict(scan.provenance.notes)
@@ -449,7 +451,8 @@ def converged_scan(
 ) -> EfficiencyScan:
     """:func:`check_convergence`, keeping only the stamped scan.
 
-    For callers that want a defensible result rather than the study behind it.
+    This is for callers that want a defensible result without the study
+    behind it.
     The study is still on ``scan.provenance.notes["convergence"]``.
     """
     return check_convergence(solver, problem, illumination, wavelengths, **kwargs).scan

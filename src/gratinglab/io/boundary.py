@@ -1,6 +1,6 @@
 """Saving a measured groove profile with its scale and where it came from.
 
-A ``.ggp`` holds a groove's *shape* and nothing else: it is normalised to one
+A ``.ggp`` holds a groove's shape and nothing else: it is normalised to one
 period and has no room for the period itself, so a profile written to one and
 read back has lost the number the solver's phase term scales by. That is the
 gap ``docs/roadmap.md`` item 5 names. Two formats close it here:
@@ -17,8 +17,8 @@ gap ``docs/roadmap.md`` item 5 names. Two formats close it here:
 ``.csv``, for everything else
     One row per point, ``t`` and ``y`` as fractions of the period plus the same
     points in nm, under ``#`` comment lines carrying the period, groove counts
-    and source. For a spreadsheet, MATLAB, or another code. Write-only: the
-    JSON is the one to read back.
+    and source. It is intended for a spreadsheet, MATLAB, or another code. It
+    is write-only; the JSON is the format to read back.
 
 Both writers take any object with the fields of
 ``gratinglab.metrology.boundary.BoundaryProfile`` (``x_norm``, ``y_norm``,
@@ -82,8 +82,9 @@ class BoundaryFile:
     def to_problem(self, *, coating=None, substrate=None, roughness=0.0):
         """This groove as an efficiency problem, with the period it was measured at.
 
-        The same problem ``BoundaryProfile.to_problem`` builds in process,
-        which is the point of the format: see ``tests/test_io_boundary.py``.
+        This is the same problem ``BoundaryProfile.to_problem`` builds in
+        process, which is the purpose of the format; see
+        ``tests/test_io_boundary.py``.
         Roughness is not in the file for the reason that method's docstring
         gives: nothing here measures surface microroughness.
         """
@@ -112,8 +113,8 @@ def write_boundary_json(
     ``source`` names the scan it came from and ``settings`` is the
     ``AnalysisSettings`` it was built with; both land in the provenance and
     neither is required. Floats are written at full precision, so reading the
-    file back reproduces the profile exactly rather than to six decimals as a
-    ``.ggp`` does.
+    file back reproduces the profile exactly, where a ``.ggp`` keeps six
+    decimals.
     """
     path = Path(path)
     t, y = _points(profile)
@@ -217,9 +218,10 @@ def write_boundary_csv(
 def read_profile_file(path: "str | Path"):
     """A profile from either a gratinglab ``.json`` or a PCGrate ``.ggp``.
 
-    By suffix, because the two are unrelated formats and sniffing would only
-    turn a clear refusal into a confusing one. Only the JSON carries a period;
-    read it with :func:`read_boundary_json` to get that too.
+    The format is chosen by suffix, because the two are unrelated formats and
+    sniffing the content would only turn a clear refusal into a confusing one.
+    Only the JSON carries a period; read it with :func:`read_boundary_json`
+    to get that too.
     """
     path = Path(path)
     if path.suffix.lower() == ".json":

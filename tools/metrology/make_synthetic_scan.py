@@ -3,27 +3,28 @@ Generate the synthetic AFM scan the metrology tests run on.
 
 Real scans are the research group's data and are not committed (see
 `config.DEFAULT_AFM_DIR`). Without a substitute, most of the metrology suite
-would skip on any machine that lacks them -- including CI, which would then be
-green while testing almost none of the pipeline.
+would skip on any machine that lacks them, including CI, which would then pass
+while testing almost none of the pipeline.
 
-So this writes a *known* grating: an ideal sawtooth of stated period and blaze
-angle, in the Gwyddion text export format `core.processing._load_text` already
-parses. Two properties matter more than realism:
+This script therefore writes a known grating: an ideal sawtooth of stated
+period and blaze angle, in the Gwyddion text export format that
+`core.processing._load_text` already parses. Two properties matter more than
+realism:
 
-1. **It is sharp.** Depth and blaze angle are locked together by the geometry,
-   which is exactly what a real tip-rounded scan is not -- see `findings.md`,
-   "The measured groove is rounded, not faceted". A test can therefore assert
-   that the pipeline *recovers* the angle it was given, which no real scan
-   allows, because on a real scan the true answer is unknown.
-2. **It is deterministic.** Seeded noise, so a failure is a change in the code
-   and never a change in the fixture.
+1. Sharpness. Depth and blaze angle are locked together by the geometry, which
+   is not the case for a real tip-rounded scan (see `findings.md`, "The
+   measured groove is rounded, not faceted"). A test can therefore assert that
+   the pipeline recovers the angle it was given, which no real scan allows,
+   because on a real scan the true answer is unknown.
+2. Determinism. The noise is seeded, so a failure reflects a change in the
+   code and never a change in the fixture.
 
 Regenerate with:
 
     python tools/metrology/make_synthetic_scan.py
 
-and commit the result. It is checked in rather than built at test time so that
-a fixture change is a reviewable diff.
+and commit the result. It is checked in instead of being built at test time so
+that a fixture change is a reviewable diff.
 """
 from __future__ import annotations
 
@@ -86,13 +87,13 @@ def sawtooth(t: np.ndarray, blaze_deg: float, antiblaze_deg: float) -> np.ndarra
 
 
 def build(dilated: bool = False) -> np.ndarray:
-    """The scan, as heights in metres -- the unit the loader promises.
+    """The scan, as heights in metres, which is the unit the loader promises.
 
-    ``dilated=True`` images the same sawtooth through the tip above --
-    dilation first, instrument noise after, which is the order the physics
-    has them in. The RNG is re-seeded per call and drawn in the same order,
-    so the two fixtures carry *identical* noise and tilt: any difference
-    between them is the tip, nothing else.
+    ``dilated=True`` images the same sawtooth through the tip above, applying
+    dilation first and instrument noise after, which is the order in which the
+    physics applies them. The RNG is re-seeded per call and drawn in the same
+    order, so the two fixtures carry identical noise and tilt, and any
+    difference between them is due to the tip alone.
     """
     rng = np.random.default_rng(SEED)
 

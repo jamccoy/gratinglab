@@ -1,18 +1,19 @@
 """
 Running the analysis off the UI thread.
 
-A single scan takes about 0.3 s, so today this buys little a user would notice.
-It matters as soon as the window grows a compare mode: eight scans is seconds,
-and retrofitting an event flow around a window that has already frozen is worse
-than building for it once.
+A single scan takes about 0.3 s, so at present this gives little benefit a
+user would notice. It becomes relevant once the window gains a compare mode,
+where eight scans take seconds, and retrofitting an event flow around a window
+that already freezes is harder than building for it once.
 
-Cancel abandons a result; it does not interrupt one. `analyze_single_file`
-reaches NumPy-bound loops with no check point, and a Python thread cannot be
-killed, so there is nothing to interrupt from out here. Cancelling bumps a
-token: the in-flight result still arrives, is recognised as stale, and is
-dropped. The window stops waiting; the CPU does not stop working.
+Cancel abandons a result without interrupting the computation.
+`analyze_single_file` reaches NumPy-bound loops with no check point, and a
+Python thread cannot be killed, so there is nothing to interrupt from out
+here. Cancelling increments a token: the in-flight result still arrives, is
+recognised as stale, and is dropped. The window stops waiting, while the CPU
+continues the computation to completion.
 
-The worker returns plain data. It never touches a figure - see the rule in
+The worker returns plain data and never touches a figure; see the rule in
 `gratinglab.metrology.gui`.
 """
 from __future__ import annotations
