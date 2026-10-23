@@ -1,19 +1,20 @@
 # Tip correction
 
-An AFM image is not the surface. It is the surface **dilated** by the tip: at
-every pixel the tip descends until something touches, and the height recorded is
-where the *apex* stopped, which is above the true surface everywhere the contact
-happened on the tip's flank instead of its point.
+An AFM image is not the surface itself but the surface *dilated* by the tip. At
+every pixel the tip descends until it makes contact, and the recorded height is
+the position at which the apex stopped. Wherever the contact occurred on the
+tip's flank and not at its point, this height lies above the true surface.
 
-The correction (Villarrubia 1997) inverts that where the inversion exists, and
-says so where it does not. It is **off by default**, because it changes measured
-numbers (groove depth especially), and a corrected depth and an uncorrected
-depth are different measurements that must not be filed under one name.
+The correction (Villarrubia 1997) inverts this dilation where the inversion
+exists, and reports where it does not. It is off by default, because it changes
+measured numbers (groove depth in particular), and a corrected depth and an
+uncorrected depth are different measurements that must not be recorded under the
+same name.
 
 ## The tip model
 
-A spherical apex cap on two straight flanks, one either side of the apex along
-the scan line, each with its own angle:
+The tip is modelled as a spherical apex cap on two straight flanks, one on
+either side of the apex along the scan line, each with its own angle:
 
 | Setting | Means |
 |---|---|
@@ -22,18 +23,19 @@ the scan line, each with its own angle:
 | `TIP_HALF_ANGLE_RIGHT_DEG` | The **+x** flank. `None` (the default) means the same as -x: a symmetric cone. |
 | `TIP_CORRECTION` | `'none'` (default) or `'erosion'`. |
 
-Datasheet angles are **half angles**, measured from the tip axis to one face,
-not the full opening angle. A flank of half angle *a* rises at **90 - a**
-degrees from the surface, so an 18° tip has 72° flanks. That clears a 70.5°
-anti-blaze facet by 1.5° and would not clear a 75° one at all. That
-near-parallelism, not the nanometre apex, is what limits blazed-grating
-metrology.
+Datasheet angles are half angles, measured from the tip axis to one face, and
+are not the full opening angle. A flank of half angle *a* rises at 90 - a
+degrees from the surface, so an 18° tip has 72° flanks. Such a tip clears a
+70.5° anti-blaze facet by 1.5° and would not clear a 75° facet at all. This
+near-parallelism of flank and facet, more than the nanometre-scale apex, is what
+limits the metrology of blazed gratings.
 
 ## Pyramids, and which face the scan sees
 
 Real tips are pyramids, and in a profile across the grooves the tip meets the
-surface with whichever faces point along the fast-scan axis. Bruker's
-ScanAsyst-Air, the probe used for the group's scans:
+surface with whichever of its faces point along the fast-scan axis. The
+specifications of Bruker's ScanAsyst-Air, the probe used for the group's scans,
+are as follows:
 
 | | Bruker spec | Flank from the surface |
 |---|---|---|
@@ -42,8 +44,8 @@ ScanAsyst-Air, the probe used for the group's scans:
 | Back angle | 25 ± 2.5° | **65°** |
 | Side angle | 17.5 ± 2.5° | 72.5° |
 
-So the cross-section the correction needs depends on how the cantilever lay
-against the scan:
+The cross-section required by the correction therefore depends on the
+orientation of the cantilever relative to the scan:
 
 | Scanning | -x flank | +x flank |
 |---|---|---|
@@ -51,93 +53,97 @@ against the scan:
 | along it, front face to -x | 15° (front) | 25° (back) |
 | along it, front face to +x | 25° (back) | 15° (front) |
 
-**The orientation matters more than the radius.** A wall rising towards +x is
-followed by the tip's +x flank. Scanned along the cantilever with the back face
-there, that flank rises at only 65°, and a 70° anti-blaze facet is touched at
-its top corner and nowhere below it: the facet is unrecoverable by any
-algorithm. Turn the sample or the scan 180° and the 75° front face follows it
-instead, and erosion recovers nearly all of it. In the test suite the same
-tip, the same 70° wall and the same sampling give at most one certain pixel per
-wall one way round and eight or nine of ten the other.
+The orientation matters more than the radius. A wall rising towards +x is
+followed by the tip's +x flank. When the scan runs along the cantilever with the
+back face on that side, the flank rises at only 65°, and a 70° anti-blaze facet
+is touched at its top corner and nowhere below it, so the facet cannot be
+recovered by any algorithm. If the sample or the scan is rotated by 180°, the
+75° front face follows the wall instead, and erosion recovers nearly all of the
+facet. In the test suite, the same tip, the same 70° wall and the same sampling
+give at most one certain pixel per wall in one orientation and eight or nine of
+ten in the other.
 
-Across the cantilever both flanks are 72.5°, which clears 70° by only 2.5°, the
-same as the ±2.5° tolerance on the angle itself. Treat a recovered anti-blaze
-facet on such a scan as marginal.
+Across the cantilever both flanks are at 72.5°, which clears 70° by only 2.5°,
+equal to the ±2.5° tolerance on the angle itself. A recovered anti-blaze facet
+on such a scan should be regarded as marginal.
 
-Which way round a scan was taken is a fact about the instrument and the scan
-angle, not something the image records reliably, so the choice is yours. If you
-do not know it, run both along-cantilever presets: where they disagree is
-exactly the part of the groove the orientation decides.
+The orientation in which a scan was taken is determined by the instrument and
+the scan angle, and the image does not record it reliably, so the choice is left
+to the user. If the orientation is not known, both along-cantilever presets
+should be run: the regions where they disagree are exactly the parts of the
+groove that the orientation determines.
 
 ## Setting it
 
-In the metrology window, under **Analysis parameters**: choose `erosion` under
-Tip correction, then a **Tip shape**. *Symmetric cone* ties the two flanks
+In the metrology window, under "Analysis parameters", choose `erosion` under Tip
+correction and then select a tip shape. "Symmetric cone" ties the two flanks
 together. The three ScanAsyst-Air presets fill in the radius and both angles,
-and editing any number afterwards switches the shape to *Custom*, so the picker
-never names a tip the numbers do not describe. The Boundary profile is
-corrected straight away, with the fraction of pixels recovered exactly shown
-under its metrics; the blaze angles are corrected at the next Run, and the
-results say which tip was assumed, both flanks included when they differ.
-Outside the window, set the fields in `config.py` or pass an `AnalysisSettings`
-with them set. `gratinglab.metrology.core.tip.TIP_PRESETS` holds the presets by
-name.
+and editing any number afterwards switches the shape to "Custom", so the picker
+never names a tip that the numbers do not describe. The Boundary profile is
+corrected immediately, and the fraction of pixels recovered exactly is shown
+under its metrics. The blaze angles are corrected at the next Run, and the
+results state which tip was assumed, including both flanks when they differ.
+Outside the window, the fields can be set in `config.py` or passed in an
+`AnalysisSettings`. `gratinglab.metrology.core.tip.TIP_PRESETS` holds the
+presets by name.
 
-A new tip is near its nominal radius and a worn one is not, so a correction made
-with the nominal 2 nm is the optimistic one. If a tip has had a hard life, try
-the 12 nm maximum as well.
+A new tip is close to its nominal radius and a worn one is not, so a correction
+made with the nominal 2 nm radius is the optimistic case. For a tip that has seen
+heavy use, the 12 nm maximum should be tried as well.
 
-Expect the exported groove shape to change less than the image does. The
-export sets its lowest point to zero, and after erosion that point is the
-trough floor the tip never reached, which stays an upper bound. On the
-dilated test fixture the image error falls from 9.06 nm to 0.87 nm while the
-averaged groove's shape error, with that offset removed, stays about 2 nm,
-because the tip's 72 degree flank already followed the 70 degree facet.
+The exported groove shape is expected to change less than the image does. The
+export sets its lowest point to zero, and after erosion that point is the trough
+floor that the tip never reached, which remains an upper bound. On the dilated
+test fixture the image error falls from 9.06 nm to 0.87 nm, while the averaged
+groove's shape error, with that offset removed, remains about 2 nm, because the
+tip's 72 degree flank already followed the 70 degree facet.
 
 ## What you get back, and what you do not
 
-Erosion returns the **least upper bound** on the true surface consistent with the
-image and the tip. That is two statements:
+Erosion returns the *least upper bound* on the true surface that is consistent
+with the image and the tip. This result has two parts:
 
-- Wherever the **apex** made contact, the bound *is* the surface. Recovery there
-  is exact, to machine precision on clean data.
-- Wherever it did not, the tip physically could not reach, and **no algorithm
-  recovers what is there**. The trough wedge between two facets is the standard
-  case: a sphere of radius *R* stands off a corner by a distance that grows with
-  *R*, and that depth is simply not in the data.
+- Wherever the apex made contact, the bound is the surface. Recovery there is
+  exact, to machine precision on clean data.
+- Wherever the apex did not make contact, the tip could not physically reach the
+  surface, and no algorithm can recover what is there. The trough wedge between
+  two facets is the standard case: a sphere of radius *R* stands off a corner by
+  a distance that grows with *R*, and that depth is not contained in the data.
 
-So the number to read is not the corrected profile alone but the **certain
-fraction** that comes with it, reported in the metrics, in the `.txt` sidecar,
-and in the log line. The uncertain remainder means "at most this high", never
-"this high". A corrected profile without that fraction would manufacture exactly
-the false confidence the correction exists to remove.
+The quantity to read is therefore the corrected profile together with the
+*certain fraction* that accompanies it, which is reported in the metrics, in the
+`.txt` sidecar, and in the log line. The uncertain remainder means "at most this
+high" and never "this high". A corrected profile reported without that fraction
+would create the false confidence that the correction is intended to remove.
 
 On the test fixture (a known sawtooth imaged through a known 20 nm tip), the
-uncorrected surface is wrong by 9.06 nm on average; after erosion, over the
-certain pixels, by 0.18 nm. The residual is the noise floor, not the tip.
+uncorrected surface is in error by 9.06 nm on average, and after erosion, over
+the certain pixels, by 0.18 nm. This residual is the noise floor and is not due
+to the tip.
 
 ## What it found on a real scan
 
-The reason this exists. A TASTE grating scan measures a blaze angle of 27.9°
-from its facet fit and 20.3° from its depth, a 7.6° disagreement that on a
-sharp groove is impossible, since depth and facet angle are locked together.
-Tip rounding was the obvious suspect.
+This scan is the reason the correction was implemented. A TASTE grating scan
+gives a blaze angle of 27.9° from its facet fit and 20.3° from its depth. On a
+sharp groove a 7.6° disagreement of this kind is impossible, since depth and
+facet angle are geometrically linked, and tip rounding was the obvious suspect.
 
-Running the correction **acquits the nominal tip**, in both directions:
+Running the correction shows that the nominal tip is not responsible, in both
+directions of the analysis:
 
 | Apex radius | Depth/period after erosion | Implied blaze | Pixels certain |
 |---|---|---|---|
-| uncorrected | 0.3275 | 20.33° | — |
+| uncorrected | 0.3275 | 20.33° | n/a |
 | 1 nm | 0.3275 | 20.33° | 97.7% |
 | 2 nm (ScanAsyst-Air nominal) | 0.3275 | 20.33° | 95.9% |
 | 5 nm | 0.3275 | 20.33° | 81.8% |
 | 10 nm | 0.3274 | 20.32° | 74.8% |
 
-Nothing moves. The measured surface is already reachable by a sharp tip, so
-there is no tip-hidden depth to give back.
+The results do not change. The measured surface is already reachable by a sharp
+tip, so there is no depth hidden by the tip to recover.
 
-Forward, dilating an ideal 27.91°/70.5° groove and asking what a tip would
-report:
+In the forward direction, an ideal 27.91°/70.5° groove was dilated to determine
+what a given tip would report:
 
 | Apex radius | Image depth/period | Implied blaze |
 |---|---|---|
@@ -147,27 +153,28 @@ report:
 | 40 nm | 0.3909 | 24.40° |
 | **80 nm** | **0.3362** | **20.89°** |
 
-A sharp tip costs 0.14° of the 7.6° gap. Reproducing the measurement takes an
-apex worn to ~80 nm: forty times the ScanAsyst-Air's 2 nm nominal radius, and
-nearly seven times Bruker's 12 nm maximum.
+A sharp tip accounts for 0.14° of the 7.6° discrepancy. Reproducing the
+measurement requires an apex worn to ~80 nm, which is forty times the
+ScanAsyst-Air's 2 nm nominal radius and nearly seven times Bruker's 12 nm
+maximum.
 
-Both tables were made with a symmetric 18° cone, close to the ScanAsyst-Air's
-17.5° sides. They predate the asymmetric model, so they say nothing yet about a
-scan taken along the cantilever, where the 65° back face would hide more of the
-anti-blaze facet than any radius in them.
+Both tables were produced with a symmetric 18° cone, close to the
+ScanAsyst-Air's 17.5° sides. They predate the asymmetric model, and so they do
+not yet address a scan taken along the cantilever, where the 65° back face would
+hide more of the anti-blaze facet than any radius in the tables.
 
-So the groove is probably rounded, or the tip was badly worn. Which one is
-not answerable from the scan: it needs the probe's condition at scan time, a
-re-scan with a fresh tip, or a cross-section.
+The results suggest that the groove is rounded, or that the tip was badly worn.
+The scan alone cannot distinguish the two: this requires the condition of the
+probe at the time of the scan, a re-scan with a fresh tip, or a cross-section.
 
 ## When to turn it on
 
 - **A tip you have reason to distrust**: late in its life, or after imaging
-  something hard. Compare the corrected and uncorrected depth; if they differ,
-  the tip was hiding surface.
-- **Sharp features near the tip's own scale.** Trenches, undercuts, anything
-  where the flank angle is close to the sidewall angle.
+  something hard. If the corrected and uncorrected depths differ, the tip was
+  hiding part of the surface.
+- **Sharp features near the tip's own scale.** Trenches, undercuts, and any
+  feature where the flank angle is close to the sidewall angle.
 
-And when not to: as a matter of routine on well-behaved scans. If the erosion
-returns the image unchanged, it has told you the tip was adequate, which is
-worth knowing once, not on every run.
+The correction is not needed as a matter of routine on well-behaved scans. If
+erosion returns the image unchanged, this shows that the tip was adequate, which
+is useful to establish once but not on every run.
