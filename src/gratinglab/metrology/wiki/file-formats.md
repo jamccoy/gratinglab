@@ -1,12 +1,13 @@
 # File formats
 
-Two ways in: the instrument's own **Nanoscope `.spm`** file, or a **text export**
-from Gwyddion. Both are supported, and on the same scan they agree to within
+Two input formats are supported: the instrument's own Nanoscope `.spm` file,
+and a text export from Gwyddion. On the same scan the two agree to within
 0.002°.
 
 ## Text exports
 
-A tab-separated grid of heights in metres, with a short comment header:
+A text export is a tab-separated grid of heights in metres, preceded by a short
+comment header:
 
 ```
 # Channel: ZSensor
@@ -15,21 +16,21 @@ A tab-separated grid of heights in metres, with a short comment header:
 # Value units: m
 ```
 
-The scan width is read from that header when present, otherwise the fallback in
-`SCAN_X_SIZE` is used.
+The scan width is read from that header when it is present; otherwise the
+fallback value in `SCAN_X_SIZE` is used.
 
-This was the only supported input until recently, and every file in `data/` is
-one. The drawback is that the export is an untracked manual step: nothing in the
-file records which channel was exported, which scan direction, or what processing
-was applied first. The `_flatten` in those filenames is the only clue that
-anything was.
+Until recently this was the only supported input, and every file in `data/` is
+a text export. Its drawback is that the export is an untracked manual step:
+nothing in the file records which channel was exported, which scan direction was
+used, or what processing was applied beforehand. The `_flatten` in those
+filenames is the only indication that any processing was applied.
 
 ## Nanoscope `.spm`
 
-The file the microscope writes. A latin-1 ASCII header of `\Key: value` lines,
-then the binary image planes.
+This is the file the microscope writes. It consists of a latin-1 ASCII header of
+`\Key: value` lines followed by the binary image planes.
 
-One file holds **several planes**. A typical PeakForce scan contains four:
+One file holds several planes. A typical PeakForce scan contains four:
 
 | Channel | Direction |
 |---|---|
@@ -38,79 +39,84 @@ One file holds **several planes**. A typical PeakForce scan contains four:
 | Peak Force Error | Retrace |
 | Peak Force Error | Trace |
 
-Each plane's header section says where its bytes start (`Data offset`), how wide
-each sample is (`Bytes/pixel`, 2 or 4), and its dimensions (`Samps/line` for
-columns, `Number of lines` for rows).
+The header section for each plane gives the offset at which its bytes start
+(`Data offset`), the width of each sample (`Bytes/pixel`, 2 or 4), and its
+dimensions (`Samps/line` for columns, `Number of lines` for rows).
 
-Rows and columns are read separately. They are frequently unequal: the
-bundled fixture is 512 wide by 401 lines, because that scan stopped early.
-Assuming a square image would read past the plane and reshape the next channel's
-bytes into the height map.
+Rows and columns are read separately, because they are frequently unequal: the
+bundled fixture is 512 wide by 401 lines, since that scan stopped early. Assuming
+a square image would read past the end of the plane and reshape the next
+channel's bytes into the height map.
 
 ### Which plane gets analysed
 
-`SPM_CHANNEL` and `SPM_DIRECTION`, defaulting to **Height Sensor / Retrace**.
+The plane is selected by `SPM_CHANNEL` and `SPM_DIRECTION`, which default to
+Height Sensor / Retrace.
 
 Only Height Sensor is offered in the GUI. Peak Force Error is a feedback error
-signal, not topography; running it through a blaze-angle pipeline produces a
-confident-looking number that means nothing.
+signal and does not represent topography; passing it through a blaze-angle
+pipeline produces a plausible-looking number with no physical meaning.
 
-Retrace is the default because it is the plane this project's existing Gwyddion
-exports were taken from: it correlates 0.98 with the export, where Trace
-correlates 0.90. That makes the two input routes agree by construction rather
-than by luck. Both directions image the same grooves and either is a legitimate
-choice; the GUI offers a selector when a `.spm` is loaded.
+Retrace is the default because it is the plane from which this project's
+existing Gwyddion exports were taken: it correlates 0.98 with the export, while
+Trace correlates 0.90. With this default the two input routes agree by
+construction. Both directions image the same grooves and either is a legitimate
+choice, and the GUI offers a selector when a `.spm` is loaded.
 
 ### The height scale, and how to misread it
 
-Raw samples are integers. Converting them to nanometres uses a line like:
+Raw samples are integers. They are converted to nanometres using a line such
+as:
 
 ```
 \@2:Z scale: V [Sens. ZsensSens] (0.0000000001872337 V/LSB) 0.804163 V
 ```
 
-giving `height = raw × (V/LSB) × Sens`.
+which gives `height = raw × (V/LSB) × Sens`.
 
-The name in brackets must be used verbatim. A file typically defines both:
+The name in brackets must be used exactly as written. A file typically defines
+both of the following:
 
 ```
 \@Sens. Zsens:     V  32.46000 nm/V
 \@Sens. ZsensSens: V 166.6319  nm/V
 ```
 
-`Zsens` looks like `ZsensSens` with a redundant suffix stripped, and reaching for
-it produces heights **5.13× too small**. Nothing looks wrong: the image is the
-right shape, the grooves sit in the right places, the flattening succeeds, and
-every reported blaze angle is quietly incorrect.
+`Zsens` resembles `ZsensSens` with a redundant suffix removed, and using it
+produces heights 5.13× too small. Nothing in the result appears wrong: the image
+has the right shape, the grooves are in the right places, and the flattening
+succeeds, but every reported blaze angle is incorrect.
 
-This is guarded by a test that compares peak-to-peak against the known export and
-names the mistake in its failure message.
+This case is guarded by a test that compares the peak-to-peak height against the
+known export and names the mistake in its failure message.
 
 ## The two routes compared
 
-Same scan, both ways:
+The same scan was processed by both routes:
 
 | Route | N | Mean blaze angle | σ | Period |
 |---|---|---|---|---|
 | Gwyddion `.txt` | 100 | 27.913° | 2.127° | 314.33 nm |
 | Raw `.spm` | 100 | 27.911° | 2.126° | 314.33 nm |
 
-A difference of **0.002°**, against a standard deviation of 2.13°.
+The means differ by 0.002°, against a standard deviation of 2.13°.
 
-They are not bit-identical, and should not be: the export was flattened by
-Gwyddion, the `.spm` is raw, and the two differ by 7 nm RMS. But this software
-flattens every row-group profile itself before fitting, which removes the same
-background. The Gwyddion step turns out to be redundant for this pipeline.
+The results are not bit-identical, and they are not expected to be: the export
+was flattened by Gwyddion while the `.spm` is raw, and the two differ by 7 nm
+RMS. This software, however, flattens every row-group profile itself before
+fitting, which removes the same background. The Gwyddion flattening step is
+therefore redundant for this pipeline.
 
-One incidental finding while verifying that: the `_flatten.0_00003` companion
-file sitting beside the raw scan is **byte-identical** to it. Gwyddion never
-wrote modified data; the flattening existed only in the text export.
+A further finding was made during this verification: the `_flatten.0_00003`
+companion file beside the raw scan is byte-identical to it. Gwyddion never wrote
+modified data, and the flattening existed only in the text export.
 
 ## Practical notes
 
-- Format is detected by **content**, not extension. Nanoscope writes companion
-  files with no extension at all, and those load fine.
-- Heights are returned in metres from both routes, so nothing downstream needs to
-  know which format it came from.
-- A raw `.spm` is a few megabytes against roughly half that for the text export,
-  and carries every channel rather than one.
+- The format is detected from the file's content and not from its extension.
+  Nanoscope writes companion files with no extension at all, and these load
+  correctly.
+- Both routes return heights in metres, so no downstream step needs to know
+  which format the data came from.
+- A raw `.spm` occupies a few megabytes, roughly twice the size of the text
+  export, and it carries every channel instead of one.
