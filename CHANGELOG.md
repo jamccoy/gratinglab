@@ -10,7 +10,7 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
-## Unreleased
+## 0.1.9 (2026-10-23)
 
 ### Changed
 
@@ -30,6 +30,11 @@ entries under "Unreleased" into a section named for the new version;
   trove classifier for optics, and no Qt environment classifier is claimed,
   because a classifier cannot be conditional on an extra and a default install
   pulls no toolkit.
+- The README names [endstation](https://pypi.org/project/endstation/) as what
+  gratinglab is built on and links its PyPI page rather than only its
+  repository, in the dependency paragraph and in the licence table. A reader on
+  gratinglab's project page who wants the shared scaffolding wants the package,
+  not the source tree.
 - The README's licence section, which is the PyPI project page, was the single
   line "BSD-3-Clause." It now states the copyright, what the licence permits
   (commercial and closed-source use, no copyleft reach), what it requires
