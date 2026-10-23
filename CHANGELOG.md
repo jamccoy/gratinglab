@@ -17,6 +17,14 @@ entries under "Unreleased" into a section named for the new version;
 - The wiki's generated Home page matches the README's opening and no longer
   says its pages come from `docs/` alone.
 
+### Fixed
+
+- On Python 3.11 the `gui` extra no longer installs PySide6 6.12.0, which
+  aborts the interpreter at exit (`Fatal Python error: bool_dealloc`) after
+  heavy use of the windows. Versions 6.9 to 6.11 are unaffected, and on Python
+  3.12 and later the bug is harmless, so the exclusion applies to that one
+  release on 3.11 only.
+
 ## 0.1.7 (2026-10-22)
 
 ### Changed

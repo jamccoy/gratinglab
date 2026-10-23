@@ -48,7 +48,20 @@ dev = ["pytest>=7", "pytest-qt>=4.5", "matplotlib>=3.8", "pandas>=2.1", "ruff>=0
 #
 # PySide6 (LGPLv3) rather than PyQt6 (GPL): this package is BSD-3, and an
 # optional dynamically-linked dependency keeps it that way.
-gui = ["matplotlib>=3.8", "PySide6-Essentials>=6.7", "endstation[qt]>=0.2.2"]
+#
+# PySide6 6.12.0 on Python 3.11 aborts the interpreter at exit (Fatal Python
+# error: bool_dealloc) after heavy GUI use: it releases a reference to True or
+# False that it does not own, which on 3.11 eventually frees the object during
+# finalization. On 3.12 and later True and False are immortal and the bug is
+# harmless. Measured in CI on 2026-10-22: 6.9.3, 6.10.3 and 6.11.2 passed twice
+# each and 6.12.0 crashed twice. Only that release is excluded, and only on 3.11,
+# so a fixed 6.12.x is taken as soon as it exists.
+gui = [
+    "matplotlib>=3.8",
+    "PySide6-Essentials>=6.7,!=6.12.0; python_version < '3.12'",
+    "PySide6-Essentials>=6.7; python_version >= '3.12'",
+    "endstation[qt]>=0.2.2",
+]
 # Groove metrology: reading AFM scans and averaging them into a boundary
 # profile. An extra for the same reason the GUI is one -- `pip install
 # gratinglab` must stay numpy/scipy/pydantic, so a solver-only user never
