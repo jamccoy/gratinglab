@@ -12,7 +12,30 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+### Changed
+
+- The metrology window's Flattening page explains the levelling it documents
+  rather than only tabulating it: why a background has to be removed at all
+  (the substrate plane is the reference a blaze angle is quoted against, and
+  an error in it is an error in every angle), why fitting through the lands is
+  not the same as fitting through the whole trace, and where the proof that
+  image flattening is free stops holding. It also documents the third
+  levelling, the endpoint flattening applied on PCGrate export, which was
+  described only in `docs/theory/metrology.md`; the page previously said there
+  were two stages.
+- The same page now states the `level_grooves` feature-detection criteria
+  (half a period of separation, 20% of the height range in prominence), the
+  shipped defaults including `FLATTEN_FEATURE = 'peaks'`, the fallbacks taken
+  when too few features are found, and the fact that `level_grooves` needs a
+  period estimate, so the period used to level a profile is not independent of
+  the period the run reports. `tests/metrology/test_wiki.py` pins each of
+  these against the code.
+
 ### Fixed
+
+- The Flattening page's method table marked `level_grooves` as the default in
+  a row that also listed its three feature choices, which read as though
+  `both` were the default feature. It is `peaks`.
 
 - The README and the docstrings name `tools/apps.py`, the script that builds
   the icons and the macOS bundles. They still named `tools/make_app.py` and
