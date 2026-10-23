@@ -9,7 +9,7 @@ is what this software computes. It uses a few thick elements so that it
 remains legible at 16 px, the size at which icons most often become
 unreadable.
 
-``tools/make_icon.py`` turns this into a macOS ``.icns``.
+``tools/apps.py icon`` turns this into a macOS ``.icns``.
 """
 
 from __future__ import annotations

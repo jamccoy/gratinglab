@@ -10,6 +10,19 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Fixed
+
+- The README and the docstrings name `tools/apps.py`, the script that builds
+  the icons and the macOS bundles. They still named `tools/make_app.py` and
+  `tools/make_icon.py`, which were merged into it, so every command the
+  documentation gave for building a bundle or regenerating an icon failed. The
+  README also now says that a bundle execs the console script in the
+  checkout's virtualenv rather than freezing one, so it does not survive being
+  copied to another machine, and names `tools/apps.py check`, which reports
+  that breakage.
+
 ## 0.1.8 (2026-10-22)
 
 ### Added

@@ -19,7 +19,7 @@ importing ``gratinglab.metrology.gui`` must stay cheap, since that is what
 raises the friendly "PySide6 is an optional extra" message.
 ``tests/test_gui_boundary.py`` checks it.
 
-``tools/make_icon.py`` turns this into a macOS ``.icns``.
+``tools/apps.py icon`` turns this into a macOS ``.icns``.
 """
 
 from __future__ import annotations

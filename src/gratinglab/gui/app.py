@@ -58,7 +58,7 @@ def _bring_to_front(window) -> None:
     The fallback was therefore a `subprocess.run` on every launch, wrapped in
     a bare `except`, which did nothing in the one case it was written for, and
     it has been removed. The supported way to bring the window forward when
-    starting from a shell is to launch the bundle, which `tools/make_app.py`
+    starting from a shell is to launch the bundle, which `tools/apps.py bundle`
     builds and the README describes.
     """
     window.raise_()
