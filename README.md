@@ -215,9 +215,18 @@ pipeline recovers the period and blaze angle used to generate it.
 
 ```bash
 .venv/bin/python -m pip install -e ".[gui,metrology]"
-gratinglab-gui                 # geometry, solvers, comparison
-gratinglab-metrology-gui       # AFM import, blaze angles, boundary profiles
+gratinglab-app                 # the chooser: one place to start, both windows
+gratinglab-gui                 # straight to geometry, solvers, comparison
+gratinglab-metrology-gui       # straight to AFM import, blaze angles, boundary profiles
 ```
+
+There are two windows, and `gratinglab-app` is the front door that asks which one
+you want. Both halves are this one package — the metrology measures a groove and the
+solvers compute an efficiency from the result — but the desktop layer used to ship
+them as two commands and two application bundles, the AFM one still named after the
+repository it was merged from, which made the half in regular use the half that was
+hardest to find. The two direct commands above are unchanged, for a shortcut or a
+habit.
 
 The windows are built with Qt (PySide6), so `pip install "gratinglab[gui]"` needs no
 system toolkit to be installed first. PySide6 is licensed under the LGPLv3 and is an
@@ -256,9 +265,11 @@ contributed backend appears in the window once it is registered.
 
 The Help menu contains the theory pages, rendered with typeset equations and tables.
 
-A macOS `.app` can be built for either window with `python tools/apps.py bundle --app
-gratinglab` (or `--app metrology`), on macOS 13 or later, the minimum supported by the
-PySide6 wheels. `--dest ~/Applications` puts it where Finder will list it. The bundle
+A macOS `.app` is built with `python tools/apps.py bundle --app gratinglab`, on macOS
+13 or later, the minimum supported by the PySide6 wheels. That is one `GratingLab.app`
+opening the chooser, which is what you want installed; `--app metrology` and `--app
+efficiency` build bundles that skip the chooser and open one window directly, for
+anyone who would rather have that in the Dock. `--dest ~/Applications` puts it where Finder will list it. The bundle
 is a stub that execs the console script in this checkout's virtualenv rather than a
 frozen application, so it is not portable to another machine; `python tools/apps.py
 check --app gratinglab` reports when that virtualenv has moved, which is the one

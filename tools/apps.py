@@ -1,9 +1,13 @@
 #!/usr/bin/env python
-"""The two windows this project ships, and how to build a bundle for either.
+"""The bundles this project can build, and how to build one.
 
     .venv/bin/python tools/apps.py icon --app metrology
-    .venv/bin/python tools/apps.py bundle --app gratinglab [--dest ~/Applications]
+    .venv/bin/python tools/apps.py bundle --app gratinglab [--dest /Applications]
     .venv/bin/python tools/apps.py check --app gratinglab
+
+The default, `--app gratinglab`, is the one meant to be installed: a single
+GratingLab that opens the chooser in `gratinglab.gui.launcher`. The other two
+open one window directly and exist for anyone who wants that in the Dock.
 
 The bundling itself lives in :mod:`endstation.tools`, which is shared with the
 other projects here. What remains here is specific to this project: which
@@ -66,12 +70,26 @@ class Window:
 WINDOWS = {
     window.key: window
     for window in (
+        # What ships, and the default: one icon, opening the chooser, which
+        # then opens whichever window was asked for in the same process.
         Window("gratinglab", "GratingLab", "GratingLab",
                "gratinglab.gui.icon", "GratingLab.icns",
-               "gratinglab-gui", "org.gratinglab.gui"),
-        Window("metrology", "AFM Blaze Meas", "AFMBlazeMeas",
+               "gratinglab-app", "org.gratinglab.app"),
+        # Bundles that skip the chooser. Neither is built unless asked for by
+        # name, so the Dock gets one GratingLab by default.
+        #
+        # The metrology one was "AFM Blaze Meas", stem AFMBlazeMeas, bundle id
+        # org.jamccoy.afmblazemeas -- all three inherited from the repository
+        # the metrology was merged from. Spotlight indexed it as AFMBlazeMeas,
+        # which sorts nowhere near GratingLab and names a project that no
+        # longer exists, so the half of the package in regular use was the
+        # half nobody could find. The identity is now this project's.
+        Window("efficiency", "GratingLab Efficiency", "GratingLabEfficiency",
+               "gratinglab.gui.icon", "GratingLab.icns",
+               "gratinglab-gui", "org.gratinglab.efficiency"),
+        Window("metrology", "GratingLab AFM", "GratingLabAFM",
                "gratinglab.metrology.gui.icon", "afm_blaze_meas.icns",
-               "gratinglab-metrology-gui", "org.jamccoy.afmblazemeas"),
+               "gratinglab-metrology-gui", "org.gratinglab.metrology"),
     )
 }
 

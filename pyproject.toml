@@ -98,6 +98,13 @@ refractiveindex = ["pyyaml>=6"]
 mut = ["mutmut>=3.2,<3.3"]
 
 [project.scripts]
+# The front door, and what the application bundle launches: a chooser that
+# asks which window you want. Both halves are this one package, but the
+# desktop layer used to ship them as two scripts and two icons, one of them
+# still named after the repository the metrology was merged from, which made
+# the AFM half look like a different project. The two direct scripts below are
+# unchanged, for a shortcut or a habit.
+gratinglab-app = "gratinglab.gui.launcher:main"
 gratinglab-gui = "gratinglab.gui.app:main"
 gratinglab-metrology-gui = "gratinglab.metrology.gui:main"
 # The metrology CLI, carried over unchanged. It still takes no arguments and
