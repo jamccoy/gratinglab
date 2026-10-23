@@ -333,6 +333,75 @@ The test suite relies on three practices in particular:
   .venv/bin/mutmut run
   ```
 
-## License
+## License, copyright and reuse
 
-BSD-3-Clause.
+gratinglab is released under the
+[BSD 3-Clause License](https://github.com/jamccoy/gratinglab/blob/master/LICENSE),
+copyright (c) 2026 Jake McCoy. What follows is a plain summary for convenience; the
+`LICENSE` file is what governs, and nothing here is legal advice.
+
+**What you may do.** Use, modify and redistribute the code, in source or binary form,
+for any purpose, including commercial use and inside closed-source work. There is no
+copyleft obligation: software that imports gratinglab does not become BSD-licensed,
+and you are not required to publish your modifications.
+
+**What you must do.** Retain the copyright notice, the list of conditions and the
+disclaimer when you redistribute — in the source for a source distribution, and in the
+documentation or other accompanying materials for a binary one. The third clause
+separately forbids using the author's or contributors' names to endorse or promote a
+derived product without prior written permission.
+
+**What you do not get.** The software is provided as is, without warranty of any kind,
+and the author is not liable for any use of it. That disclaimer carries more weight
+here than it does for most packages, because the efficiency solvers are experimental
+(see Status): a number this software produces is evidence to be checked against
+another method, not a result to be relied on because a computer printed it.
+
+Contributions are accepted under the same licence. A pull request is taken as agreement
+that the contribution may be distributed under BSD-3-Clause.
+
+### Citing it
+
+[`CITATION.cff`](https://github.com/jamccoy/gratinglab/blob/master/CITATION.cff) is
+the citation of record, and GitHub's "Cite this repository" renders it as BibTeX or
+APA. It names the version, which is checked against `gratinglab.__version__` on every
+release, so a citation generated from it points at the code that produced the number
+rather than at whatever is current. If a result depends on a solver backend or on an
+optical constant table, cite those too: the method's own reference is in
+[`docs/references.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/references.md),
+and `Provenance` records what a run actually used.
+
+### The licences you inherit by installing it
+
+| Installed with | Package | Licence |
+|---|---|---|
+| core | numpy, scipy | BSD-3-Clause |
+| core | pydantic | MIT |
+| core | [endstation](https://github.com/jamccoy/endstation) | BSD-3-Clause |
+| `[gui]`, `[metrology]` | matplotlib | PSF-based, BSD-compatible |
+| `[gui]` | PySide6-Essentials | LGPL-3.0 |
+| `[refractiveindex]` | PyYAML | MIT |
+
+A solver-only install is permissive throughout. The `gui` extra is the one worth
+knowing about: Qt for Python is LGPL-3.0, which is the reason this project depends on
+PySide6 and not on PyQt6, whose licence is GPL and would reach your own code.
+Importing an LGPL library dynamically does not change the licence of what you write,
+but redistributing a bundled application that ships Qt inside it brings LGPL
+obligations for that component — chiefly your users' right to substitute their own
+build of it. Running the window yourself, or installing either extra from PyPI, raises
+no such question.
+
+### What this licence does not cover
+
+**Optical constant tables.** None are distributed with the package, and a table you
+add is governed by the terms of whoever published it, not by this licence. CXRO and
+refractiveindex.info each state their own, and a table exported from another program
+carries whatever that program's terms attach to it.
+[`SOURCES.md`](https://github.com/jamccoy/gratinglab/blob/master/src/gratinglab/materials/data/SOURCES.md)
+records where each kind comes from and why none ships here.
+
+**Measurement data.** AFM scans and the reference efficiency corpus are the research
+group's data and are deliberately absent from the repository, as described above under
+Install. The code is open; the measurements it was validated against are not ours to
+publish, and the documentation says which results are therefore not reproducible from
+a bare clone.

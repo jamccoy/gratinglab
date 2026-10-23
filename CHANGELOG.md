@@ -33,6 +33,33 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Changed
 
+- The PyPI keywords no longer lead with x-ray work or name PCGrate. Nothing in
+  the solvers or the metrology assumes a wavelength band — the grating equation
+  carries none, and the materials layer reads CXRO x-ray tables and
+  refractiveindex.info ultraviolet-to-infrared tables alike — so the old list
+  told a reader the in-plane half of the package was not meant for them.
+  `x-ray` is still there, among the bands rather than ahead of them, and
+  `optics`, `diffraction grating`, `diffraction efficiency`, `integral method`,
+  `groove profile`, `ultraviolet` and `infrared` are new. `pcgrate` is gone:
+  it is a program this project validates against, not a feature of this one.
+  `CITATION.cff` gains the same balance.
+- Three classifiers added: `Operating System :: OS Independent`, which CI
+  demonstrates on three platforms, and `Topic :: Scientific/Engineering ::
+  Information Analysis` and `:: Visualization` beside Physics. There is no
+  trove classifier for optics, and no Qt environment classifier is claimed,
+  because a classifier cannot be conditional on an extra and a default install
+  pulls no toolkit.
+- The README's licence section, which is the PyPI project page, was the single
+  line "BSD-3-Clause." It now states the copyright, what the licence permits
+  (commercial and closed-source use, no copyleft reach), what it requires
+  (notice retention, and the no-endorsement clause), and that there is no
+  warranty — which matters more than usual while the solvers are experimental.
+  It adds how to cite a version, a table of the licences each extra brings in,
+  the LGPL position of the `gui` extra and why PySide6 rather than PyQt6, and
+  the two things the licence does not cover: optical constant tables, whose
+  terms belong to whoever published them, and the measurement data, which is
+  not ours to publish.
+
 - The metrology window's Flattening page explains the levelling it documents
   rather than only tabulating it: why a background has to be removed at all
   (the substrate plane is the reference a blaze angle is quoted against, and
