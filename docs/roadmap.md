@@ -347,6 +347,37 @@ ports its formulas and leaves the raytracer where it is.
 
 ---
 
+## Versioning
+
+The project follows the usual convention for software before 1.0. A patch
+release (0.1.x) carries fixes and small additions; a minor release (0.x) marks a
+milestone and is also where an interface may change, provided the change is
+stated in [`CHANGELOG.md`](../CHANGELOG.md); 1.0 is a commitment that the public
+interface is stable until 2.0. The releases so far, 0.1.1 to 0.1.7, have all
+been patch releases, although two of them (swath statistics and asymmetric tips)
+added features that would justify a minor version under a stricter reading.
+
+The intended milestones are as follows.
+
+- **0.2**: the AFM metrology is complete for the group's own analysis. Its
+  components are in place: groove averaging that excludes partial grooves, tip
+  correction with real probe shapes, swath statistics, and the boundary JSON
+  format that carries the period. The release is due once the graduate students
+  using it confirm that it covers their analysis.
+- **0.3 and later minor versions**: the efficiency solvers lose their
+  experimental status. The criterion is the one stated in the README: use on a
+  real problem, with the integral solver compared against measured
+  efficiencies, such as the ALS data reduced by `als_eff_meas`, and not only
+  against published benchmarks and its own physics checks. Integrating the
+  contributed RCWA backend is a further minor release.
+- **1.0**: the public interface is declared stable. That covers `Problem`,
+  `BoundaryProfile`, `AnalysisSettings`, the boundary JSON format and the solver
+  plugin protocol. The preconditions are that the solvers have been validated
+  against measurements, that these interfaces have stopped changing between
+  releases, and that the Zenodo DOI and the JOSS submission (§6) are complete.
+  JOSS does not require 1.0, but a reviewed paper is a natural point at which to
+  fix the interface it describes.
+
 ## Open questions
 
 Answers to the following questions would unblock real work.
