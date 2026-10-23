@@ -48,3 +48,36 @@ def ref_dir() -> Path:
 @pytest.fixture(scope="session")
 def synthetic_wavescan() -> Path:
     return DATA / "synthetic_wavescan.txt"
+
+
+def pytest_sessionfinish(session, exitstatus):
+    """Free the Qt objects the suite leaves behind while Qt still exists.
+
+    Python's final garbage collection runs after Qt has started to shut down,
+    and if it finds Qt objects then it can abort the interpreter after every
+    test has passed: ``Fatal Python error: bool_dealloc`` with
+    "Garbage-collecting" on the stack, which the ubuntu / py3.11 CI job hit
+    intermittently. ``gui.qt.gc_guard`` collects at exit for the same reason,
+    but it cannot reach windows that were closed and never deleted. Closing and
+    deleting every top-level widget here, then collecting, leaves the final
+    collection nothing of Qt's to free.
+
+    Nothing is imported for a run that never loaded Qt.
+    """
+    import gc
+    import sys
+
+    if "PySide6.QtWidgets" not in sys.modules:
+        return
+    from PySide6.QtCore import QCoreApplication, QEvent
+    from PySide6.QtWidgets import QApplication
+
+    app = QApplication.instance()
+    if app is None:
+        return
+    app.closeAllWindows()
+    for widget in app.topLevelWidgets():
+        widget.deleteLater()
+    QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
+    app.processEvents()
+    gc.collect()
