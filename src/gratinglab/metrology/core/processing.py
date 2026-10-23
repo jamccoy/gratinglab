@@ -1,6 +1,8 @@
 """
 Core data processing functions for AFM analysis
 """
+import warnings
+
 import numpy as np
 from scipy.signal import find_peaks
 
@@ -216,7 +218,10 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
         peaks, _ = find_peaks(y, distance=len(y)//20)
         
         if len(peaks) < 3:
-            print("Warning: Not enough peaks found for groove_peaks method, using polynomial")
+            warnings.warn(
+                f"groove_peaks found {len(peaks)} peak(s), too few to fit; "
+                f"using a degree-{poly_order} polynomial through the whole profile",
+                UserWarning, stacklevel=2)
             poly_coeffs = np.polyfit(x, y, poly_order)
             background = np.polyval(poly_coeffs, x)
         else:
@@ -253,7 +258,10 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
                 feature_y.extend(y[troughs])
         
         if len(feature_x) < 2:
-            print("    Warning: Not enough features found for level_grooves, using linear")
+            warnings.warn(
+                f"level_grooves found {len(feature_x)} feature(s), too few to fit; "
+                "using linear",
+                UserWarning, stacklevel=2)
             poly_coeffs = np.polyfit(x, y, 1)
             background = np.polyval(poly_coeffs, x)
         else:
@@ -274,17 +282,20 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
                     feature_x = feature_x[mask]
                     feature_y = feature_y[mask]
                 else:
-                    print(f"    Warning: edge exclusion leaves {kept} feature(s), "
-                          f"too few for a degree-{poly_order} background; "
-                          "using all of them")
+                    warnings.warn(
+                        f"edge exclusion leaves {kept} feature(s), too few for a "
+                        f"degree-{poly_order} background; using all of them",
+                        UserWarning, stacklevel=2)
 
             # A degree-k polynomial needs k+1 points to be determined. Reaching
             # here guarantees two, so the order is reduced rather than letting
             # polyfit return a rank-deficient answer behind a RankWarning.
             order = min(poly_order, len(feature_x) - 1)
             if order < poly_order:
-                print(f"    Warning: {len(feature_x)} feature(s) support only a "
-                      f"degree-{order} background, not degree-{poly_order}")
+                warnings.warn(
+                    f"{len(feature_x)} feature(s) support only a degree-{order} "
+                    f"background, not degree-{poly_order}",
+                    UserWarning, stacklevel=2)
 
             poly_coeffs = np.polyfit(feature_x, feature_y, order)
             background = np.polyval(poly_coeffs, x)

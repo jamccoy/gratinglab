@@ -16,12 +16,15 @@ flattening sets the plane every blaze angle on the scan is quoted against, a
 bad background is a bias on every groove rather than noise on one. These tests
 pin the handling.
 
+Each fallback raises a `UserWarning`. The suite runs with
+`filterwarnings = error`, so a test that provokes one has to say so, and any
+other test that starts flattening by fallback fails rather than passing
+quietly.
+
 The profiles here are built rather than measured: a few smooth bumps at known
 positions, so the feature set is exactly what the test intends and the
 expected background can be written down.
 """
-import warnings
-
 import numpy as np
 import pytest
 
@@ -62,9 +65,10 @@ class TestEdgeExclusionDoesNotStarveTheFit:
     def test_all_features_are_used_when_exclusion_would_leave_too_few(self):
         x, y = _profile(self.CENTRES)
 
-        flat, background = flatten_profile(
-            x, y, method='level_grooves', poly_order=2,
-            exclude_edges=0.2, feature='peaks', period_nm=PERIOD_NM)
+        with pytest.warns(UserWarning, match='using all of them'):
+            flat, background = flatten_profile(
+                x, y, method='level_grooves', poly_order=2,
+                exclude_edges=0.2, feature='peaks', period_nm=PERIOD_NM)
 
         # exclude_edges=0.2 keeps only 0.2 <= x <= 0.8, i.e. the middle bump.
         # A degree-2 background needs three points, so all three are used.
@@ -75,14 +79,15 @@ class TestEdgeExclusionDoesNotStarveTheFit:
             "the background was not fitted through every detected feature")
         assert np.allclose(flat, y - expected, atol=1e-9)
 
-    def test_the_warning_says_what_actually_happened(self, capsys):
+    def test_the_warning_says_what_actually_happened(self):
         x, y = _profile(self.CENTRES)
 
-        flatten_profile(x, y, method='level_grooves', poly_order=2,
-                        exclude_edges=0.2, feature='peaks',
-                        period_nm=PERIOD_NM)
+        with pytest.warns(UserWarning) as caught:
+            flatten_profile(x, y, method='level_grooves', poly_order=2,
+                            exclude_edges=0.2, feature='peaks',
+                            period_nm=PERIOD_NM)
 
-        message = capsys.readouterr().out
+        message = str(caught[0].message)
         assert 'edge exclusion leaves 1 feature(s)' in message, message
         assert 'using all of them' in message, message
 
@@ -97,6 +102,8 @@ class TestEdgeExclusionDoesNotStarveTheFit:
         heights = [2.0] + [1.0] * 9 + [2.0]
         x, y = _profile(centres, heights)
 
+        # Neither call may warn: eleven features survive either way, so a
+        # warning here would mean the fit was starved after all.
         _, excluded = flatten_profile(
             x, y, method='level_grooves', poly_order=2,
             exclude_edges=0.2, feature='peaks', period_nm=PERIOD_NM)
@@ -120,8 +127,7 @@ class TestOrderIsReducedRatherThanRankDeficient:
     def test_two_features_give_the_line_through_them(self):
         x, y = _profile((0.25, 0.75))
 
-        with warnings.catch_warnings():
-            warnings.simplefilter('error', np.exceptions.RankWarning)
+        with pytest.warns(UserWarning, match='degree-1 background'):
             _, background = flatten_profile(
                 x, y, method='level_grooves', poly_order=2,
                 exclude_edges=0.0, feature='peaks', period_nm=PERIOD_NM)
@@ -132,14 +138,15 @@ class TestOrderIsReducedRatherThanRankDeficient:
         # A straight line, not a curve that happened to pass through two points.
         assert np.allclose(np.diff(background, 2), 0.0, atol=1e-12)
 
-    def test_the_reduction_is_reported(self, capsys):
+    def test_the_reduction_is_reported(self):
         x, y = _profile((0.25, 0.75))
 
-        flatten_profile(x, y, method='level_grooves', poly_order=2,
-                        exclude_edges=0.0, feature='peaks',
-                        period_nm=PERIOD_NM)
+        with pytest.warns(UserWarning) as caught:
+            flatten_profile(x, y, method='level_grooves', poly_order=2,
+                            exclude_edges=0.0, feature='peaks',
+                            period_nm=PERIOD_NM)
 
-        message = capsys.readouterr().out
+        message = str(caught[0].message)
         assert 'support only a degree-1 background' in message, message
 
 
@@ -160,18 +167,17 @@ class TestTheUnaffectedPathsStayPut:
             x, np.array(centres), np.ones(len(centres)), 2)
         assert np.allclose(background, expected, atol=1e-9)
 
-    def test_too_few_features_still_falls_back_to_linear(self, capsys):
+    def test_too_few_features_still_falls_back_to_linear(self):
         """
         One bump cannot be levelled on its features, and the outer guard
         catches that before the branch this change touches.
         """
         x, y = _profile((0.5,))
 
-        _, background = flatten_profile(
-            x, y, method='level_grooves', poly_order=2,
-            exclude_edges=0.0, feature='peaks', period_nm=PERIOD_NM)
-
-        assert 'using linear' in capsys.readouterr().out
+        with pytest.warns(UserWarning, match='using linear'):
+            _, background = flatten_profile(
+                x, y, method='level_grooves', poly_order=2,
+                exclude_edges=0.0, feature='peaks', period_nm=PERIOD_NM)
         assert np.allclose(background, np.polyval(np.polyfit(x, y, 1), x))
 
     def test_level_grooves_still_demands_a_period(self):
