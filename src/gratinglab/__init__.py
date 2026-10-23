@@ -21,7 +21,7 @@ from .illumination import Illumination, Polarization
 from .resolution import ResolvingPower, resolving_power
 from .result import EfficiencyScan, OrderEfficiency, Provenance
 
-__version__ = "0.1.6"
+__version__ = "0.1.7"
 
 __all__ = [
     "Illumination",
