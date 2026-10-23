@@ -254,9 +254,14 @@ contributed backend appears in the window once it is registered.
 
 The Help menu contains the theory pages, rendered with typeset equations and tables.
 
-A macOS `.app` can be built with `python tools/make_app.py` (macOS 13 or later, the
-minimum supported by the PySide6 wheels), and the icon is regenerated with
-`python tools/make_icon.py`.
+A macOS `.app` can be built for either window with `python tools/apps.py bundle --app
+gratinglab` (or `--app metrology`), on macOS 13 or later, the minimum supported by the
+PySide6 wheels. `--dest ~/Applications` puts it where Finder will list it. The bundle
+is a stub that execs the console script in this checkout's virtualenv rather than a
+frozen application, so it is not portable to another machine; `python tools/apps.py
+check --app gratinglab` reports when that virtualenv has moved, which is the one
+failure a bundle cannot show from the outside. `python tools/apps.py icon --app
+gratinglab` regenerates the icon from the artwork in `gratinglab.gui.icon`.
 
 ## Documentation
 
