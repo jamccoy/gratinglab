@@ -487,3 +487,68 @@ def test_hc_matches_the_prototype():
     table reproduces it rather than shifting every wavelength in the fifth
     decimal place."""
     assert HC_EV_NM == 1239.84193
+
+
+class TestInstall:
+    """`materials.install`, which the Setup tab's Add material button calls."""
+
+    @pytest.fixture
+    def library(self, tmp_path, monkeypatch):
+        directory = tmp_path / "library"  # not created: install must make it
+        monkeypatch.setenv(materials.LIBRARY_ENV, str(directory))
+        return directory
+
+    @pytest.fixture
+    def gold(self):
+        return materials.data_dir() / "Au.txt"
+
+    def test_a_table_becomes_a_coating(self, library, gold, tmp_path):
+        source = tmp_path / "downloads" / "Pt.txt"
+        source.parent.mkdir()
+        source.write_bytes(gold.read_bytes())
+        written = materials.install(source)
+        assert written == library / "Pt.txt"
+        assert "Pt" in materials.available()
+        assert str(library) in materials.lookup("Pt").source
+
+    def test_the_name_can_differ_from_the_file(self, library, gold):
+        materials.install(gold, "Gold")
+        assert (library / "Gold.txt").is_file()
+
+    @pytest.mark.parametrize("name", ["", ".hidden", "a/b", "../Pt", "Pt nm"])
+    def test_a_name_that_cannot_be_a_coating_is_refused(self, library, gold, name):
+        with pytest.raises(ValueError, match="material name"):
+            materials.install(gold, name)
+        assert not library.exists()
+
+    def test_an_unknown_suffix_is_refused(self, library, tmp_path):
+        stray = tmp_path / "Pt.csv"
+        stray.write_text("1,2\n", encoding="utf-8")
+        with pytest.raises(ValueError, match="not a table"):
+            materials.install(stray)
+
+    def test_an_unreadable_table_never_reaches_the_library(self, library, tmp_path):
+        broken = tmp_path / "Pt.txt"
+        broken.write_text("not a CXRO export\n", encoding="utf-8")
+        with pytest.raises(ValueError):
+            materials.install(broken)
+        assert not (library / "Pt.txt").exists()
+
+    def test_an_existing_table_is_replaced_only_when_asked(self, library, gold, tmp_path):
+        materials.install(gold, "Pt")
+        with pytest.raises(FileExistsError):
+            materials.install(gold, "Pt")
+        assert materials.install(gold, "Pt", overwrite=True) == library / "Pt.txt"
+
+    def test_a_second_suffix_for_one_name_is_refused_even_with_overwrite(
+        self, library, gold, tmp_path
+    ):
+        """`lookup` refuses a directory holding Pt.txt and Pt.ari, so
+        installing the pair would break the coating; replacing it would mean
+        deleting a file of the user's."""
+        materials.install(gold, "Pt")
+        ari = tmp_path / "Pt.ari"
+        materials.write_ari(materials.lookup("Pt"), ari)
+        with pytest.raises(ValueError, match="remove it"):
+            materials.install(ari, overwrite=True)
+        assert sorted(p.name for p in library.iterdir()) == ["Pt.txt"]

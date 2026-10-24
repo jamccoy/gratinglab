@@ -28,6 +28,18 @@ entries under "Unreleased" into a section named for the new version;
 - `Profile.boundary(n, grading=p)`, which every built-in profile accepts, and
   `BoundaryCurve.graded`. A profile written against the older `boundary(n)`
   signature still works with the default mesh.
+- The Setup tab acts on the material library instead of only describing it.
+  **Add material…** picks a CXRO, refractiveindex.info or PCGrate table, asks
+  its coating name, reads it to prove it is usable and copies it into your
+  library; **Rescan library** re-reads the directories after a change made
+  outside the window; **Open library folder** opens your library, creating it
+  first. Both changes reach the geometry dock's Coating dropdown at once, which
+  before needed a restart, and a selected coating that disappears falls back to
+  "(none)" and says so. The page's links now open in the system browser, and
+  its provenance section cites the kinds of table actually installed rather
+  than Henke for every one.
+- `materials.install(path, name=None, overwrite=False)`, the same install from
+  Python. An unreadable table is refused before it reaches the library.
 
 ## 0.1.10 (2026-10-23)
 

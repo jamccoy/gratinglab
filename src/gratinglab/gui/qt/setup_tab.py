@@ -16,14 +16,54 @@ This tab instead owns the library: which materials are available, what they
 were derived from, and how to add one. That content suits a tab, since it is
 reference material and not an input, it duplicates no state, and it is what a
 user needs when the coating dropdown offers one entry and they wanted nickel.
+
+Its three buttons act on the library and never on the `Problem`: adding a
+table, re-reading the directories, and opening the one you own. Each change
+emits `library_changed`, which the window routes to the geometry dock's
+Coating dropdown, so a table added here is a coating there without a restart.
 """
 
 from __future__ import annotations
 
-from PySide6.QtWidgets import QTextBrowser, QVBoxLayout, QWidget
+from pathlib import Path
+
+from PySide6.QtCore import QUrl, Signal
+from PySide6.QtGui import QDesktopServices
+from PySide6.QtWidgets import (
+    QFileDialog,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QMessageBox,
+    QPushButton,
+    QTextBrowser,
+    QVBoxLayout,
+    QWidget,
+)
 
 from ..docs import TheoryPage
 from .theory_viewer import render_into
+
+#: What each reader's ``source`` string starts with, and what to cite for it.
+_CITATIONS = {
+    "CXRO/Henke": (
+        "**CXRO/Henke tables** are the Henke–Gullikson–Davis compilation. Work "
+        "using them should cite *X-ray interactions: photoabsorption, "
+        "scattering, transmission, and reflection at E = 50–30000 eV, "
+        "Z = 1–92*, Atomic Data and Nuclear Data Tables **54** (2), 181–342 "
+        "(1993)."
+    ),
+    "refractiveindex.info": (
+        "**refractiveindex.info tables** each come from a measurement of their "
+        "own, named in the Source column above and carried into every "
+        "result's provenance. Cite that measurement, not the database."
+    ),
+    "PCGrate": (
+        "**PCGrate `.ari` tables** carry no citation of their own: the "
+        "provenance names the file and nothing more, so record where it came "
+        "from beside it."
+    ),
+}
 
 __all__ = ["SetupTab", "library_page"]
 
@@ -42,6 +82,7 @@ def library_page() -> str:
         unlisted = ""
     except ValueError as refused:  # two tables for one name in one directory
         names, unlisted = (), f"**A library could not be read:** {refused}\n\n"
+    kinds: set[str] = set()
     if not names:
         listing = unlisted + (
             "**No tables are installed.** That is what an install starts with, "
@@ -61,6 +102,7 @@ def library_page() -> str:
             except (OSError, ValueError, ImportError) as unreadable:
                 rows.append(f"| `{name}` | unreadable | | {unreadable} |")
                 continue
+            kinds.update(k for k in _CITATIONS if table.source.startswith(k))
             low, high = table.range_nm
             rows.append(
                 f"| `{name}` | {low:.3g} – {high:.3g} nm | "
@@ -69,6 +111,11 @@ def library_page() -> str:
         listing = unlisted + "\n".join(rows) + "\n"
 
     searched = "\n".join(f"    {d}" for d in library_dirs())
+    # Cite what is installed; with nothing installed, every kind a library
+    # could hold, since that is what the next table will be.
+    citations = "\n\n".join(
+        text for kind, text in _CITATIONS.items() if kind in kinds or not kinds
+    )
 
     return f"""\
 # Materials
@@ -113,6 +160,12 @@ naming the number it needs.
 
 ## Adding a material
 
+**Add material…** above picks a table, asks the name it should have as a
+coating, reads it to prove it is usable, and copies it into your library; the
+Coating dropdown has it at once. **Rescan library** re-reads the directories
+after you add or remove a file yourself, and **Open library folder** opens the
+first of them, creating it if it does not exist yet.
+
 A library is a directory of tables, one material per file and named for it.
 Any of these, saved as `Pt` plus its suffix, is the coating `Pt`:
 
@@ -138,10 +191,7 @@ code changes. Or load a table from anywhere without adding it:
 
 ## Provenance
 
-These are the Henke–Gullikson–Davis compilation. Work using them should cite
-*X-ray interactions: photoabsorption, scattering, transmission, and reflection
-at E = 50–30000 eV, Z = 1–92*, Atomic Data and Nuclear Data Tables **54** (2),
-181–342 (1993).
+{citations}
 
 The package ships no tables: CXRO's terms for redistributing them inside a
 BSD-3 package have not been confirmed, and `SOURCES.md` beside the bundled
@@ -180,23 +230,148 @@ mistaken for an order passing off.
 
 
 class SetupTab(QWidget):
-    """Reference material, presented as a page instead of a form.
+    """Reference material, presented as a page, with three library actions.
 
     It has no ``solve_requested`` or ``build_options``, because it is not
     part of the solve/cancel contract that every solver tab implements, and
-    ``MainWindow`` never routes to it.
+    ``MainWindow`` never routes a solve to it. ``library_changed`` fires
+    after any action that may have changed what is installed.
     """
+
+    library_changed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self._browser = QTextBrowser()
         self._browser.setOpenExternalLinks(False)
         self._browser.setOpenLinks(False)
+        # Links leave for the system browser; the page itself never navigates.
+        self._browser.anchorClicked.connect(self._follow)
+
+        self._add_button = QPushButton("Add material…")
+        self._add_button.setToolTip(
+            "Pick a CXRO .txt, refractiveindex.info .yml or PCGrate .ari "
+            "table, name it, and copy it into your library"
+        )
+        self._add_button.clicked.connect(self.add_material)
+        self._rescan_button = QPushButton("Rescan library")
+        self._rescan_button.setToolTip(
+            "Re-read the library directories, after adding or removing a file "
+            "outside this window"
+        )
+        self._rescan_button.clicked.connect(self.rescan)
+        self._folder_button = QPushButton("Open library folder")
+        self._folder_button.clicked.connect(self.open_library_folder)
+
+        buttons = QHBoxLayout()
+        for button in (self._add_button, self._rescan_button, self._folder_button):
+            buttons.addWidget(button)
+        buttons.addStretch(1)
+        self._status = QLabel("")
+        self._status.setWordWrap(True)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
+        layout.addLayout(buttons)
+        layout.addWidget(self._status)
         layout.addWidget(self._browser)
+        self._render()
 
+    # -- library actions --------------------------------------------------
+
+    def rescan(self) -> None:
+        """Re-read every library directory into the page and the dropdown."""
+        from ...materials import available
+
+        self._render()
+        try:
+            count = len(available())
+        except ValueError:
+            self._status.setText("A library could not be read; see below.")
+        else:
+            self._status.setText(
+                f"Library read: {count} material{'s' if count != 1 else ''}."
+            )
+        self.library_changed.emit()
+
+    def add_material(self) -> None:
+        """Pick a table, name it, validate it, and install it."""
+        from ...materials import install
+
+        chosen = self._choose_file()
+        if not chosen:
+            return
+        name = self._choose_name(Path(chosen).stem)
+        if not name:
+            return
+        try:
+            try:
+                written = install(chosen, name)
+            except FileExistsError:
+                if not self._confirm_replace(name):
+                    raise
+                written = install(chosen, name, overwrite=True)
+        except (OSError, ValueError, ImportError) as refused:
+            # A table that does not read is reported and never installed:
+            # the library is checked here rather than inside a later solve.
+            self._status.setText(f"{Path(chosen).name} was not added: {refused}")
+            return
+        self._render()
+        self._status.setText(
+            f"Added {name} from {Path(chosen).name} as {written}. It is in the "
+            "Coating dropdown now."
+        )
+        self.library_changed.emit()
+
+    def open_library_folder(self) -> None:
+        """Open your library directory, creating it first if need be."""
+        from ...materials import library_dirs
+
+        directory = library_dirs()[0]
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+        except OSError as refused:
+            self._status.setText(f"Could not create {directory}: {refused}")
+            return
+        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(directory))):
+            self._status.setText(f"Your library is {directory}")
+
+    # -- dialogs, one method each so a test can answer them ----------------
+
+    def _choose_file(self) -> str:
+        path, _filter = QFileDialog.getOpenFileName(
+            self,
+            "Add material",
+            str(Path.home()),
+            "Optical constants (*.txt *.yml *.yaml *.ari);;All files (*)",
+        )
+        return path
+
+    def _choose_name(self, default: str) -> str:
+        name, accepted = QInputDialog.getText(
+            self,
+            "Material name",
+            "Name as a coating (refractiveindex.info files are named for "
+            "their author, so rename those):",
+            text=default,
+        )
+        return name.strip() if accepted else ""
+
+    def _confirm_replace(self, name: str) -> bool:
+        answer = QMessageBox.question(
+            self,
+            "Replace material",
+            f"Your library already has {name}. Replace it?",
+        )
+        return answer == QMessageBox.StandardButton.Yes
+
+    # -- page -------------------------------------------------------------
+
+    def _follow(self, url: QUrl) -> None:
+        if url.scheme() in ("http", "https"):
+            QDesktopServices.openUrl(url)
+
+    def _render(self) -> None:
         page = TheoryPage(
             name="setup",
             title="Setup",
