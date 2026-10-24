@@ -424,7 +424,84 @@ The other siblings are settled: `afm_blaze_meas` is already absorbed (M17),
 `endstation` remains the shared scaffolding dependency, `ebl_fracture` remains a
 separate fabrication-layout tool (it contains no optics, and its own roadmap
 excludes blazed and VLS geometry), and PyXFocus is covered by §3 above, which
-ports its formulas and leaves the raytracer where it is.
+ports its formulas and leaves the raytracer where it is. The subsection below
+proposes the one interface `ebl_fracture` would need, and records why the
+separation should stay a separation.
+
+#### A design description, and where the fabrication boundary falls
+
+**Proposed, not started (2026-10-24).** Nothing is written and nothing is
+committed to; this records the shape and the reasoning so that the question is
+settled deliberately rather than by whoever next feels the gap.
+
+The package describes a grating that *exists*. `BoundaryProfile` carries a
+measured groove, and `Problem` carries the period, the profile and the
+materials of a grating in hand. There is no object for the grating one intends
+to *make*: period, duty cycle or blaze angle, patterned area, groove
+orientation, and the substrate it goes on. That is the gap a design section
+would fill, and the point worth noticing is that it is *physics and not
+fabrication* — vendor-neutral, with no fields, no subfields, no dose and no
+file format in it.
+
+What it buys is the loop. Design → predicted efficiency from the solvers →
+fabricate → measure with the metrology → measured efficiency → compare against
+the prediction. Every stage of that already exists in this package or its
+siblings, including the last one now that `MeasuredEfficiency` and
+`Comparison.residuals` are in. What is missing is a single shared description
+of the intended grating, so that the prediction and the thing actually written
+to the resist are known to be the same grating rather than two sets of numbers
+typed twice.
+
+**The interface, if it is built.** `ebl_fracture`'s `txl2gpf` already accepts a
+grating as loose arguments (`--grating 1.0 --duty 0.5 --area 1000x1000`). It
+would accept the design object instead, with `gratinglab` an *optional*
+dependency of `ebl_fracture` and never the reverse. This package would learn
+nothing about GPF, fields, dose or any instrument.
+
+**Why not absorb the fracture tool**, recorded so the question is not reopened
+by accident:
+
+- **No shared physics.** Nothing in fracture needs the grating equation;
+  nothing in efficiency needs a field grid or a dose ladder. The overlap is the
+  word "grating".
+- **Different validation regimes.** `ebl_fracture` is validated by byte-exact
+  round-trips of a vendor binary and by area conservation over ~135,000
+  randomised shapes. This package is validated against closed-form results,
+  published benchmark tables, energy balance and reciprocity. Both are sound
+  and neither transfers.
+- **It is pre-instrument.** By its own README nothing it has written has been
+  near the tool. Absorbing unexposed, instrument-specific code would make this
+  package's releases wait on beam time.
+- **The blazed case is its deferral, not ours to take on.** Its roadmap names
+  multi-dose and grayscale — that is, blazed profiles — as the *first* widening
+  of scope, with the reference material already identified, and gates it on a
+  plain uniform grating coming off the machine correctly. That sequencing is
+  right for a reverse-engineered writer and would be inherited wholesale by a
+  merge. A `txl`-to-`gpf` flow for *blazed* gratings is therefore a later step
+  in that project, not an early one here.
+
+**What this is not.** General pattern design beyond a grating — arrays,
+alignment marks, dicing lanes, whole-wafer layout — belongs with the layout
+tool and not here. The line to hold is that this package describes gratings as
+optics; the layout tool describes patterns as exposures.
+
+Open questions, in the order they would have to be answered:
+
+- Whether the design is a new type or a constructor on `Problem`. A `Problem`
+  without a measured profile is already most of a design, and two types that
+  overlap by 80% is the kind of thing `conventions.md` exists to prevent.
+- Whether one type can carry both a duty cycle and a blaze angle, given that a
+  blazed groove has no duty cycle in the lamellar sense. A tagged union of
+  profile intents is probably honest; a single struct with ignored fields is
+  not.
+- Whether it stops at geometry or carries the resist and substrate stack. The
+  stack matters to fabrication and to absolute efficiency, which argues for it,
+  but it is also the part most likely to pull instrument-specific detail across
+  the boundary drawn above.
+- Whether a design should be able to state a *tolerance*, so that a measured
+  grating can be compared against the intent and not merely described. That is
+  the question that would make this section earn its place rather than being a
+  tidier way to type four numbers.
 
 ---
 
