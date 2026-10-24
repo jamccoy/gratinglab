@@ -101,7 +101,7 @@ def _require_qt():
 def main(argv=None) -> int:
     """Console-script entry point for ``gratinglab-app``."""
     QApplication = _require_qt()
-    from .qt.launcher import LauncherWindow
+    from .qt.launcher import show_chooser
 
     app = QApplication.instance() or QApplication(list(argv or sys.argv))
     # Fusion for the same reason the metrology window asks for it: the native
@@ -111,10 +111,9 @@ def main(argv=None) -> int:
 
     install(app)
 
-    window = LauncherWindow()
-    window.show()
-    window.raise_()
-    window.activateWindow()
+    # show_chooser, not LauncherWindow(), so that "Main Menu" in either
+    # window brings this same chooser back instead of a second copy.
+    show_chooser()
     return app.exec()
 
 

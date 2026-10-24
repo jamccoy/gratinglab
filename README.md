@@ -227,7 +227,9 @@ gratinglab-metrology-gui       # straight to AFM import, blaze angles, boundary 
 ```
 
 There are two windows, and `gratinglab-app` is the front door that asks which one
-you want. Both halves are this one package — the metrology measures a groove and the
+you want. Neither is a dead end: each carries a **Go** menu that switches to the other
+and returns to the chooser (`Ctrl+Shift+M`), and switching reuses a window that is
+already open rather than starting a second empty copy of it. Both halves are this one package — the metrology measures a groove and the
 solvers compute an efficiency from the result — but the desktop layer used to ship
 them as two commands and two application bundles, the AFM one still named after the
 repository it was merged from, which made the half in regular use the half that was

@@ -95,6 +95,25 @@ from PySide6.QtWidgets import QLabel  # noqa: E402
 from gratinglab.gui.qt import launcher as qt_launcher  # noqa: E402
 
 
+@pytest.fixture(autouse=True)
+def _no_leaked_windows():
+    """
+    Clear the module-level registries around every test.
+
+    `_OPEN_WINDOWS` and `_CHOOSER` exist to outlive the chooser, which is
+    exactly what makes them a hazard here: a widget left in either one
+    survives qtbot's teardown as a Python object whose C++ half is gone, and
+    the next test to touch it fails somewhere unrelated.
+    """
+    qt_launcher._OPEN_WINDOWS.clear()
+    qt_launcher._CHOOSER.clear()
+    yield
+    for window in list(qt_launcher._OPEN_WINDOWS) + list(qt_launcher._CHOOSER):
+        window.close()
+    qt_launcher._OPEN_WINDOWS.clear()
+    qt_launcher._CHOOSER.clear()
+
+
 class TestTheWindowsItNames:
     """The paths in the table have to resolve, without building a window."""
 
@@ -179,7 +198,7 @@ class TestTheChooser:
         """
         before = len(qt_launcher._OPEN_WINDOWS)
         stub = Mode(key='stub', title='Stub', blurb='x' * 50,
-                    window='PySide6.QtWidgets:QWidget',
+                    window='PySide6.QtWidgets:QMainWindow',
                     script='gratinglab-app')
 
         opened = qt_launcher.open_window(stub)
@@ -248,3 +267,127 @@ class TestItReallyOpensTheRealWindows:
         finally:
             opened = qt_launcher._OPEN_WINDOWS.pop()
             opened.close()
+
+
+class TestGettingBackAndSwitching:
+    """
+    The chooser was a one-way door: pick a mode and there was no route to the
+    other one or back. Each window now carries a Go menu.
+    """
+
+    def _stub_mode(self, key='stub'):
+        return Mode(key=key, title=f'Stub {key}', blurb='x' * 50,
+                    window='PySide6.QtWidgets:QMainWindow',
+                    script='gratinglab-app')
+
+    def test_every_opened_window_gets_the_menu(self, qtbot):
+        window = qt_launcher.open_window(self._stub_mode())
+        qtbot.addWidget(window)
+
+        menu = window._gratinglab_switch_menu
+        assert menu.title() == qt_launcher.SWITCH_MENU_TITLE
+        labels = [a.text() for a in window._gratinglab_switch_actions]
+        assert labels[-1] == 'Main Menu'
+
+    def test_the_menu_offers_the_other_modes_not_the_current_one(self, qtbot):
+        """
+        A window must not offer a route to itself.
+
+        Checked with the real metrology mode, since that is the pairing that
+        matters: from the AFM window the menu should name the efficiency one.
+        """
+        window = qt_launcher.open_window(mode('metrology'))
+        qtbot.addWidget(window)
+
+        labels = [a.text() for a in window._gratinglab_switch_actions]
+        assert 'Compute efficiency' in labels
+        assert 'Measure a scan' not in labels, "it offered a route to itself"
+
+    def test_switching_reuses_the_window_rather_than_opening_a_second(self, qtbot):
+        """
+        The failure this prevents looks like losing work.
+
+        The metrology window holds a loaded scan and its settings. A switch
+        that produced an empty second copy would read as the scan being gone.
+        """
+        chosen = self._stub_mode()
+        first = qt_launcher.open_window(chosen)
+        qtbot.addWidget(first)
+
+        again = qt_launcher.open_window(chosen)
+        assert again is first
+        assert len(qt_launcher._OPEN_WINDOWS) == 1
+
+    def test_a_closed_window_comes_back_with_its_state(self, qtbot):
+        """Closing is not destroying while a reference is held."""
+        chosen = self._stub_mode()
+        window = qt_launcher.open_window(chosen)
+        qtbot.addWidget(window)
+        window.close()
+        assert not window.isVisible()
+
+        again = qt_launcher.open_window(chosen)
+        assert again is window
+        assert again.isVisible()
+
+    def test_main_menu_brings_back_the_same_chooser(self, qtbot):
+        first = qt_launcher.show_chooser()
+        qtbot.addWidget(first)
+        first.close()
+
+        again = qt_launcher.show_chooser()
+        assert again is first, "a second chooser would be a second main menu"
+        assert again.isVisible()
+        assert len(qt_launcher._CHOOSER) == 1
+
+    def test_the_round_trip(self, qtbot):
+        """
+        Chooser, into a mode, back to the chooser, into the other mode.
+
+        The journey the Go menu exists for, with nothing stubbed but the
+        windows themselves.
+        """
+        chooser = qt_launcher.show_chooser()
+        qtbot.addWidget(chooser)
+
+        first = qt_launcher.open_window(self._stub_mode('one'))
+        qtbot.addWidget(first)
+        chooser.close()
+
+        back = qt_launcher.show_chooser()
+        assert back is chooser and back.isVisible()
+
+        second = qt_launcher.open_window(self._stub_mode('two'))
+        qtbot.addWidget(second)
+
+        assert first is not second
+        assert len(qt_launcher._OPEN_WINDOWS) == 2
+
+    def test_the_main_menu_action_actually_shows_it(self, qtbot):
+        """Triggering the menu action, not calling the function behind it."""
+        window = qt_launcher.open_window(self._stub_mode())
+        qtbot.addWidget(window)
+
+        assert not qt_launcher._CHOOSER
+        back = window._gratinglab_switch_actions[-1]
+        back.trigger()
+
+        assert len(qt_launcher._CHOOSER) == 1
+        qtbot.addWidget(qt_launcher._CHOOSER[0])
+        assert qt_launcher._CHOOSER[0].isVisible()
+
+    def test_the_other_mode_action_opens_that_mode(self, qtbot):
+        from gratinglab.metrology.gui.qt.main_window import (
+            MainWindow as MetrologyWindow,
+        )
+
+        window = qt_launcher.open_window(mode('efficiency'))
+        qtbot.addWidget(window)
+
+        switch = window._gratinglab_switch_actions[0]
+        assert switch.text() == 'Measure a scan'
+        switch.trigger()
+
+        opened = qt_launcher._OPEN_WINDOWS[-1]
+        qtbot.addWidget(opened)
+        assert isinstance(opened, MetrologyWindow)
