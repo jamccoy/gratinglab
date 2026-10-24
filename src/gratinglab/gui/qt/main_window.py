@@ -195,6 +195,8 @@ class MainWindow(QMainWindow):
         # `_solve_active_tab`'s `getattr(..., "name", None)` skips both.
         self._setup_tab = SetupTab()
         self._tab_widget.addTab(self._setup_tab, "Setup")
+        # The dock is built first, so its dropdown can follow the library.
+        self._setup_tab.library_changed.connect(self.geometry.refresh_coatings)
 
         self.geometry_tab = GeometryTab()
         self._tab_widget.addTab(self.geometry_tab, "Grating Geometry")

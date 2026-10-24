@@ -137,10 +137,7 @@ class GeometryPanel(QWidget):
         # four milestones. Empty entry first, because no coating is the
         # ordinary default and gives relative efficiency -- a correct answer to
         # a different question, not a missing input.
-        from ...materials import available
-
         coating = QComboBox()
-        coating.addItem("(none)", userData="")
         coating.setToolTip(
             "No coating gives relative efficiency -- a correct answer to a "
             "different question, not a missing input. Naming a material "
@@ -149,10 +146,9 @@ class GeometryPanel(QWidget):
             'Conductivity is "tabulated" (and ignores it when "perfect"). '
             "The provenance panel says which you got."
         )
-        for name in available():
-            coating.addItem(name, userData=name)
         coating.activated.connect(lambda _i: self.changed.emit())
         self._fields["coating"] = coating
+        self.refresh_coatings()
         surface_form.addRow("Coating", coating)
 
         entry(surface_form, "Roughness σ (nm)", "roughness")
@@ -166,6 +162,35 @@ class GeometryPanel(QWidget):
         for group in (grating, mount, surface, scan):
             column.addWidget(group)
         column.addStretch(1)
+
+    def refresh_coatings(self) -> None:
+        """Re-read the material library into the Coating dropdown.
+
+        The choice is kept when its material is still installed. When it is
+        not, the dropdown falls back to "(none)" and emits ``changed``, since
+        the problem the form describes has changed under the user. A library
+        that cannot be read lists no materials here; the Setup tab says why.
+        """
+        from ...materials import available
+
+        combo = self._fields["coating"]
+        current = combo.currentData() or ""
+        try:
+            names = available()
+        except ValueError:  # two tables for one name; Setup reports it
+            names = ()
+        combo.blockSignals(True)
+        try:
+            combo.clear()
+            combo.addItem("(none)", userData="")
+            for name in names:
+                combo.addItem(name, userData=name)
+            index = combo.findData(current)
+            combo.setCurrentIndex(max(index, 0))
+        finally:
+            combo.blockSignals(False)
+        if current and index < 0:
+            self.changed.emit()
 
     def _check_fields_match_formstate(self) -> None:
         """Refuse to open rather than fail later on one code path.

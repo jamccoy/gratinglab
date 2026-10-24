@@ -1338,6 +1338,139 @@ class TestSetupTab:
     def test_and_the_dock_is_where_the_control_actually_is(self, win):
         """Non-vacuity for the guard: the control exists, just not here."""
         assert "coating" in win.geometry._fields
+
+    @pytest.fixture
+    def library(self, tmp_path, monkeypatch):
+        from gratinglab import materials
+
+        directory = tmp_path / "library"
+        monkeypatch.setenv(materials.LIBRARY_ENV, str(directory))
+        return directory
+
+    @staticmethod
+    def _answer(monkeypatch, tab, path, name, replace=False):
+        monkeypatch.setattr(tab, "_choose_file", lambda: str(path))
+        monkeypatch.setattr(tab, "_choose_name", lambda default: name)
+        monkeypatch.setattr(tab, "_confirm_replace", lambda _name: replace)
+
+    @staticmethod
+    def _coatings(win):
+        combo = win.geometry._fields["coating"]
+        return [combo.itemData(i) for i in range(combo.count())]
+
+    def test_an_added_material_is_a_coating_without_a_restart(
+        self, win, library, monkeypatch
+    ):
+        from gratinglab import materials
+
+        tab = win._setup_tab
+        self._answer(monkeypatch, tab, materials.data_dir() / "Au.txt", "Pt")
+        assert "Pt" not in self._coatings(win)
+        mentions = tab._browser.toPlainText().count("Pt")
+        tab.add_material()
+        assert (library / "Pt.txt").is_file()
+        assert "Pt" in self._coatings(win)
+        # The page re-rendered with a row for it; "Pt" was already the
+        # example name in the prose, so count rather than test presence.
+        assert tab._browser.toPlainText().count("Pt") > mentions
+        assert "Added Pt" in tab._status.text()
+
+    def test_an_unreadable_table_is_reported_and_not_added(
+        self, win, library, tmp_path, monkeypatch
+    ):
+        broken = tmp_path / "Pt.txt"
+        broken.write_text("not a CXRO export\n", encoding="utf-8")
+        self._answer(monkeypatch, win._setup_tab, broken, "Pt")
+        win._setup_tab.add_material()
+        assert "was not added" in win._setup_tab._status.text()
+        assert "Pt" not in self._coatings(win)
+
+    def test_a_declined_replace_leaves_the_table_alone(
+        self, win, library, monkeypatch
+    ):
+        from gratinglab import materials
+
+        tab = win._setup_tab
+        self._answer(monkeypatch, tab, materials.data_dir() / "Au.txt", "Pt")
+        tab.add_material()
+        before = (library / "Pt.txt").stat().st_mtime_ns
+        tab.add_material()
+        assert "was not added" in tab._status.text()
+        assert (library / "Pt.txt").stat().st_mtime_ns == before
+
+    def test_cancelling_either_dialog_does_nothing(self, win, library, monkeypatch):
+        tab = win._setup_tab
+        self._answer(monkeypatch, tab, "", "Pt")
+        tab.add_material()
+        monkeypatch.setattr(tab, "_choose_file", lambda: "Pt.txt")
+        monkeypatch.setattr(tab, "_choose_name", lambda default: "")
+        tab.add_material()
+        assert not library.exists()
+        assert tab._status.text() == ""
+
+    def test_rescan_finds_a_file_added_by_hand(self, win, library):
+        from gratinglab import materials
+
+        library.mkdir()
+        (library / "Ni.txt").write_bytes((materials.data_dir() / "Au.txt").read_bytes())
+        assert "Ni" not in self._coatings(win)
+        win._setup_tab.rescan()
+        assert "Ni" in self._coatings(win)
+        assert "Library read" in win._setup_tab._status.text()
+
+    def test_a_removed_coating_falls_back_to_none_and_says_so(
+        self, win, library, qtbot
+    ):
+        from gratinglab import materials
+
+        library.mkdir()
+        table = library / "Ni.txt"
+        table.write_bytes((materials.data_dir() / "Au.txt").read_bytes())
+        win._setup_tab.rescan()
+        combo = win.geometry._fields["coating"]
+        combo.setCurrentIndex(combo.findData("Ni"))
+        table.unlink()
+        with qtbot.waitSignal(win.geometry.changed, timeout=1000):
+            win._setup_tab.rescan()
+        assert combo.currentData() == ""
+
+    def test_a_kept_coating_stays_selected(self, win, library):
+        combo = win.geometry._fields["coating"]
+        combo.setCurrentIndex(combo.findData("Au"))
+        win._setup_tab.rescan()
+        assert combo.currentData() == "Au"
+
+    def test_open_library_folder_creates_it(self, win, library, monkeypatch):
+        from gratinglab.gui.qt import setup_tab
+
+        opened = []
+        monkeypatch.setattr(
+            setup_tab.QDesktopServices, "openUrl", lambda url: opened.append(url) or True
+        )
+        win._setup_tab.open_library_folder()
+        assert library.is_dir()
+        assert opened and opened[0].toLocalFile().endswith("library")
+
+    def test_web_links_open_outside_and_nothing_else_does(self, win, monkeypatch):
+        from PySide6.QtCore import QUrl
+
+        from gratinglab.gui.qt import setup_tab
+
+        opened = []
+        monkeypatch.setattr(
+            setup_tab.QDesktopServices, "openUrl", lambda url: opened.append(url) or True
+        )
+        win._setup_tab._follow(QUrl("https://henke.lbl.gov/optical_constants/"))
+        win._setup_tab._follow(QUrl("file:///etc/passwd"))
+        assert [u.toString() for u in opened] == ["https://henke.lbl.gov/optical_constants/"]
+
+    def test_provenance_cites_what_is_installed(self, win):
+        """Only the bundled CXRO gold is installed in the suite, so the page
+        cites Henke and not the refractiveindex.info or PCGrate notes."""
+        text = win._setup_tab._browser.toPlainText()
+        assert "Atomic Data and Nuclear Data Tables" in text
+        assert "Cite that measurement" not in text
+        assert "carry no citation" not in text
         assert "roughness" in win.geometry._fields
 
     def test_it_is_not_in_the_solver_tab_registry(self, win):

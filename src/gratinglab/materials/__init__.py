@@ -31,6 +31,8 @@ a claim that the code has to honour.
 from __future__ import annotations
 
 import os
+import re
+import shutil
 from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
@@ -54,6 +56,7 @@ __all__ = [
     "from_ari_file",
     "from_cxro_file",
     "from_refractiveindex_file",
+    "install",
     "library_dirs",
     "lookup",
     "read_ari",
@@ -194,6 +197,66 @@ def _read(path: Path, mtime_ns: int, name: str) -> OpticalConstants:
     # The reader records the file name; the directory is what tells two
     # libraries' Au.txt apart, and `source` is what provenance carries.
     return replace(table, source=f"{table.source}, in {path.parent}")
+
+
+#: A material name is a file stem in a library and a ``coating`` string on a
+#: ``Problem``, so it has to be safe as both: no separators, no leading dot.
+_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._+-]*")
+
+
+def install(
+    path: "str | Path", name: str | None = None, *, overwrite: bool = False
+) -> Path:
+    """Copy a table into your library, after proving that it reads.
+
+    The table goes into the first directory :func:`library_dirs` searches,
+    which is :func:`user_dir` unless ``GRATINGLAB_MATERIALS`` names others,
+    as ``<name><suffix>``; ``name`` defaults to the file's stem. A
+    refractiveindex.info file is named for its author (``Johnson.yml``), so
+    that is the case for passing one.
+
+    The file is read with the reader for its suffix first, and whatever that
+    raises is raised here, so an unreadable table never reaches the library
+    to fail later inside a solve. A table already there under that name is
+    refused unless ``overwrite`` is set (``FileExistsError``), and one under
+    the same name with a different suffix is refused regardless
+    (``ValueError``), because :func:`lookup` would
+    then refuse the pair and replacing it means deleting a file of yours.
+    Returns the path written.
+    """
+    source = Path(path)
+    suffix = source.suffix.lower()
+    if suffix not in _READERS:
+        raise ValueError(
+            f"{source.name} is not a table this library reads; use one of "
+            f"{', '.join(sorted(_READERS))}"
+        )
+    name = source.stem if name is None else name
+    if not _NAME.fullmatch(name):
+        raise ValueError(
+            f"{name!r} cannot be a material name: use letters, digits and "
+            "._+- only, starting with a letter or digit (e.g. Pt, SiO2, B4C)"
+        )
+    _READERS[suffix](source, name=name)
+
+    directory = library_dirs()[0]
+    directory.mkdir(parents=True, exist_ok=True)
+    destination = directory / f"{name}{suffix}"
+    existing = _tables(directory).get(name)
+    if existing is not None:
+        if existing.suffix.lower() != suffix:
+            raise ValueError(
+                f"{directory} already holds {existing.name} for {name!r}; "
+                f"remove it to install {source.name} in its place, since a "
+                "library cannot hold two tables for one name"
+            )
+        if existing.resolve() == source.resolve():
+            return existing
+        if not overwrite:
+            raise FileExistsError(f"{existing} already exists")
+        destination = existing
+    shutil.copyfile(source, destination)
+    return destination
 
 
 def from_cxro_file(path: "str | Path", name: str | None = None) -> OpticalConstants:
