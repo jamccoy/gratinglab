@@ -1438,6 +1438,17 @@ made the X-ray lamellar converge smoothly even with the old operator, and cost
 accuracy on the 1000 nm blaze (8.2e-4 at p = 6, P = 512). It was a diagnosis,
 not a change, and the mesh is as it was.
 
+**Re-measured with both fixes in, the allocation should stay proportional to
+length.** Shares proportional to `L^(1/p)` and to `L^(1/2)` were tried against
+`L` on all four finite-conductivity cases and the three perfectly conducting
+profiles of §5, at p = 4 and 6. At P = 512 and p = 4 the alternatives lose on
+the X-ray blaze (2.9e-6 against 2.2e-5 and 1.5e-5), the X-ray lamellar (2.0e-6
+against 5.8e-6 and 3.9e-6), the visible blaze (2.4e-5 against 3.7e-5 and
+3.1e-5), the perfectly conducting lamellar (1.8e-6 against 8.1e-6 and 1.9e-5)
+and the ideal sawtooth (6.6e-6 against 1.5e-4 and 1.4e-4). They gain only on
+the visible lamellar, by 15%. The short-wall trouble was the old `D_t V⁻`, and
+with it gone the scale mismatch at a corner costs nothing measurable.
+
 **Two things the energy balance could not see.** The single operator balances
 the X-ray lamellar to 1.1e-6 at P = 1024 and the composition to 8e-7 at P = 768,
 and at P = 1280 their efficiencies differ by 2.9e-5. Only the ladder of efficiencies settles it: the old
