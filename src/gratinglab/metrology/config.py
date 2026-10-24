@@ -93,6 +93,24 @@ N_ROW_GROUPS = 20      # Number of row groups to extract from each image
 # the place to add a method that is not affine.
 IMAGE_FLATTEN_METHOD = 'align_rows'
 
+# ============ SCAR REPAIR (2-D, after image flattening) ============
+# Scan lines that stand off both neighbours: tip skips, feedback ringing. The
+# Gwyddion "Remove scars" step, done here so it is recorded. 'none',
+# 'interpolate' (fill down each column from the lines either side) or 'drop'
+# (leave those lines out of row grouping). See core/scars.py.
+SCAR_REPAIR = 'none'
+SCAR_THRESHOLD = 4.0       # x robust row-to-row noise, both neighbours
+SCAR_MIN_LENGTH = 16       # pixels along the line
+SCAR_MAX_WIDTH = 4         # lines
+
+# ============ REGION MASK (pixels left out of the analysis) ============
+# Pixel indices of the image as loaded, half-open like a slice. Masked lines
+# join no row group; masked columns yield no grooves. Drawn in the GUI's Import
+# tab, which shows the values to copy here. See core/region_mask.py.
+MASK_RECT = None           # (row0, row1, col0, col1), e.g. a particle
+MASK_ROWS = ()             # ((row0, row1), ...) whole scan lines
+MASK_COLS = ()             # ((col0, col1), ...) whole columns
+
 # ============ TIP CORRECTION (2-D, after image flattening) ============
 # Undo the tip's dilation of the surface where that is possible (Villarrubia
 # 1997 erosion; see core/tip.py). Off by default: the correction changes

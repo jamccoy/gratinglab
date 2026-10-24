@@ -116,9 +116,16 @@ def _load_text(filename, default_scan_size=2.0):
 
 
 def raw_data(data, scan_x_size):
-    """Extract displacement and height profile from 2D AFM data (averages all rows)"""
+    """
+    Extract displacement and height profile from 2D AFM data (averages all rows)
+
+    NaN pixels (masked, or on a dropped scar line) are left out of each
+    column's mean; a column NaN on every line stays NaN. See core/region_mask.py.
+    """
+    from .region_mask import nan_mean_rows
     disp_um = scan_x_size * np.arange(0, len(data[0])) / (len(data[0]) - 1)
-    groov_nm = (10**9) * (np.mean(data, axis=0) - np.min(np.mean(data, axis=0)))
+    mean = nan_mean_rows(data)
+    groov_nm = (10**9) * (mean - np.nanmin(mean))
     return disp_um, groov_nm
 
 
@@ -140,8 +147,22 @@ def raw_data_multi_group(data, scan_x_size, n_groups=10):
         profiles_nm: list of n_groups 1D arrays, each containing a height profile in nm
         group_info: dict with metadata about the grouping
     """
+    from .region_mask import nan_mean_rows
+
+    # Lines that are NaN from end to end (masked rows, dropped scar lines) are
+    # left out before the bands are cut, so they contribute to no group and the
+    # groups stay equal in size over what remains. Their indices still refer to
+    # the image as loaded.
+    all_rows = data.shape[0]
+    kept_rows = np.flatnonzero(~np.all(np.isnan(data), axis=1))
+    rows_excluded = all_rows - len(kept_rows)
+    if rows_excluded:
+        data = data[kept_rows]
+
     n_rows = data.shape[0]
     n_cols = data.shape[1]
+    if n_rows == 0:
+        raise ValueError("every scan line is masked or dropped; nothing left to analyse")
     
     # Calculate x-displacement (same for all profiles)
     disp_um = scan_x_size * np.arange(0, n_cols) / (n_cols - 1)
@@ -170,25 +191,29 @@ def raw_data_multi_group(data, scan_x_size, n_groups=10):
         
         # Extract and average rows in this group
         group_data = data[start_row:end_row, :]
-        profile_avg = np.mean(group_data, axis=0)
+        profile_avg = nan_mean_rows(group_data)
         
         # Convert to nm and subtract minimum
-        profile_nm = (10**9) * (profile_avg - np.min(profile_avg))
+        profile_nm = (10**9) * (profile_avg - np.nanmin(profile_avg))
         
         profiles_nm.append(profile_nm)
-        group_ranges.append((start_row, end_row))
+        # In the image's own line numbers, so a masked gap shows as a wider band
+        group_ranges.append((int(kept_rows[start_row]), int(kept_rows[end_row - 1]) + 1))
     
     # Package metadata
     group_info = {
         'n_groups': n_groups,
         'n_rows': n_rows,
         'rows_per_group': rows_per_group,
-        'group_ranges': group_ranges
+        'group_ranges': group_ranges,
+        'rows_excluded': rows_excluded,
     }
     
     print(f"  Extracted {n_groups} row-group profiles")
     print(f"    Rows per group: {rows_per_group}")
     print(f"    Total rows used: {n_groups * rows_per_group} of {n_rows}")
+    if rows_excluded:
+        print(f"    Lines excluded (masked or dropped): {rows_excluded} of {all_rows}")
     
     return disp_um, profiles_nm, group_info
 

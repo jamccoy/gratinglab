@@ -10,6 +10,37 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- AFM scan-line scar repair, the step Gwyddion calls "Remove scars": a run of
+  one to four lines standing off the lines either side of it is found after
+  image flattening and either interpolated down its columns or dropped from row
+  grouping (`scar_repair = 'none' | 'interpolate' | 'drop'`, default `none`,
+  with `scar_threshold`, `scar_min_length`, `scar_max_width`). It is its own
+  stage in `metrology.core.scars`, not an image-flattening method, because it
+  is used together with one. The number of lines repaired is shown in the
+  Import tab and written to the results panel, the summary file and the
+  boundary metrics file. On the synthetic scan with seven scarred lines the
+  averaged groove is off by 1.22 nm unrepaired and 0.014 nm interpolated.
+- A region mask: drag on the image in the AFM window's Import tab to exclude a
+  rectangle, whole scan lines or whole columns. It is stored as settings
+  (`mask_rect`, `mask_rows`, `mask_cols`, in pixels; `MASK_*` in `config.py`) so
+  a batch or CLI run reproduces it, and it is recorded wherever scar repair is.
+  Masked lines join no row group and masked columns yield no grooves. Masked,
+  a 150 nm particle that moved the mean blaze angle by 0.49 degrees has no
+  influence left: the result equals the clean scan's under the same mask.
+- Wiki page "Scars and masking".
+
+### Changed
+
+- The mask is applied before image flattening, so `align_rows` and `plane`
+  now skip NaN pixels; a scan with nothing masked levels exactly as before.
+- The Import tab's y axis counts scan lines from the top, where line 0 was
+  always drawn, so it reads the same line numbers the mask stores. It used to
+  count from the bottom.
+
 ## 0.1.12 (2026-10-24)
 
 ### Added

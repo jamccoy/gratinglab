@@ -29,6 +29,7 @@ PAGE_ORDER = (
     "overview",
     "file-formats",
     "flattening",
+    "scars-and-masking",
     "tip-correction",
     "row-groups",
     "icc-correction",
