@@ -13,9 +13,10 @@ integral-method code. Comparison legends therefore describe physics ("scalar vs
 integral") instead of products, while :attr:`Provenance.version` still records
 exactly which program and version generated the reference data.
 
-Dialects are distinguished by their banner line. Only one is implemented today;
-a GSolver or RETICOLO dialect would be added in :func:`read_table` and not as a
-separate vendor module.
+Dialects are distinguished by their banner line. One text dialect is
+implemented; a GSolver or RETICOLO dialect would be added in :func:`read_table`
+and not as a separate vendor module. PCGrate's XML results file is the second
+dialect, read by :func:`read_xml_table` further down, and is described there.
 
 Format, confirmed by inspection of PCGrate-SX 6.7.1 output::
 
@@ -40,6 +41,7 @@ different for every file and silently wrong if the order range changes.
 from __future__ import annotations
 
 import re
+import xml.etree.ElementTree as ET
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -47,7 +49,15 @@ import numpy as np
 
 from ..result import EfficiencyScan, Provenance
 
-__all__ = ["EfficiencyTable", "read_table", "MISSING"]
+__all__ = [
+    "EfficiencyTable",
+    "read_table",
+    "MISSING",
+    "XmlEfficiencyTable",
+    "read_xml_table",
+    "xml_to_scan",
+    "read_xml_scan",
+]
 
 #: PCGrate writes this for an order that does not propagate at a given scan point.
 MISSING = "--"
@@ -380,3 +390,204 @@ def read_scan(
     See :func:`to_scan` for why ``method`` is the caller's to declare.
     """
     return to_scan(read_table(path, **kwargs), method=method)
+
+
+# -- the XML dialect ------------------------------------------------------
+#
+# Ported from ``als_eff_meas.models.read_pcgrate_xml``, which is how that
+# package read the modelled curves it overlaid on beamline data. Its layout,
+# kept exactly because it is the one evidence there is of what the files
+# look like:
+#
+#     root[1]              the scan points, one child per point, in order
+#     point[0]             that point's orders, one child per order
+#     <order>              attributes Order_number, Efficiency_TE,
+#                          Efficiency_TM and Efficiency (unpolarized)
+#
+# Elements are found by POSITION and not by tag name, as in the original. No
+# real export is in this tree to confirm the tag names, and the fixture in
+# als_eff_meas's tests invented its own, so matching on names would be a guess
+# about files nobody here has opened. The attribute names are what the
+# original read from real files, so those are relied on.
+#
+# The scan coordinate is not read either, for the same reason: the original
+# keyed every point by its index and paired it with the energy list from its
+# own campaign configuration. So :func:`xml_to_scan` takes the wavelengths
+# from the caller, and refuses a count that does not match.
+
+#: PCGrate's attribute for each polarization, in gratinglab's vocabulary.
+_XML_ATTRIBUTE = {
+    "TE": "Efficiency_TE",
+    "TM": "Efficiency_TM",
+    "unpolarized": "Efficiency",
+}
+
+
+@dataclass(frozen=True, slots=True)
+class XmlEfficiencyTable:
+    """A parsed PCGrate XML results file, one entry per scan point.
+
+    ``orders[i]`` and ``efficiency[i]`` are parallel arrays for scan point
+    ``i``, in the file's own order. The set of orders differs between points,
+    since orders pass off as the scan moves, which is why this is kept
+    ragged until :func:`xml_to_scan` puts it on a common order set.
+    """
+
+    orders: tuple[np.ndarray, ...]
+    efficiency: tuple[np.ndarray, ...]
+    polarization: str
+    source: Path
+
+    def __len__(self) -> int:
+        return len(self.orders)
+
+
+def read_xml_table(path: str | Path, *, polarization: str = "unpolarized") -> XmlEfficiencyTable:
+    """Parse a PCGrate XML results file for one polarization.
+
+    Parameters
+    ----------
+    polarization
+        ``"TE"``, ``"TM"`` or ``"unpolarized"``, which selects the
+        ``Efficiency_TE``, ``Efficiency_TM`` or ``Efficiency`` attribute.
+        The als_eff_meas reader called the last one ``"NP"`` and fell back to
+        it for any name it did not know; here an unknown name raises.
+
+    Raises
+    ------
+    ValueError
+        If the file does not have the layout described above, if an order is
+        missing the attribute asked for or repeats within a point, or if a
+        value is not a number. A results file that does not parse cleanly is
+        refused, not partly read.
+    """
+    path = Path(path)
+    if polarization not in _XML_ATTRIBUTE:
+        raise ValueError(
+            f"polarization must be one of {tuple(_XML_ATTRIBUTE)}, got {polarization!r}"
+        )
+    attribute = _XML_ATTRIBUTE[polarization]
+
+    try:
+        root = ET.parse(path).getroot()
+    except ET.ParseError as exc:
+        raise ValueError(f"{path}: not well-formed XML ({exc})") from exc
+    if len(root) < 2 or len(root[1]) == 0:
+        raise ValueError(
+            f"{path}: expected the scan points as the second child of <{root.tag}>, "
+            "and found none. This does not look like a PCGrate XML results file."
+        )
+
+    orders: list[np.ndarray] = []
+    efficiency: list[np.ndarray] = []
+    for index, point in enumerate(root[1]):
+        where = f"{path}: scan point {index}"
+        if len(point) == 0 or len(point[0]) == 0:
+            raise ValueError(f"{where} holds no orders")
+        point_orders: list[int] = []
+        point_values: list[float] = []
+        for element in point[0]:
+            number = element.get("Order_number")
+            if number is None:
+                raise ValueError(f"{where}: <{element.tag}> has no Order_number")
+            raw = element.get(attribute)
+            if raw is None:
+                present = sorted(k for k in element.attrib if k.startswith("Efficiency"))
+                raise ValueError(
+                    f"{where}, order {number}: no {attribute} attribute for "
+                    f"{polarization}; the file carries {present}"
+                )
+            try:
+                point_orders.append(int(number))
+                point_values.append(float(raw))
+            except ValueError as exc:
+                raise ValueError(
+                    f"{where}: order {number!r} = {raw!r} is not a number"
+                ) from exc
+        if len(set(point_orders)) != len(point_orders):
+            raise ValueError(f"{where} repeats an order")
+        orders.append(np.asarray(point_orders, dtype=np.int64))
+        efficiency.append(np.asarray(point_values, dtype=np.float64))
+
+    return XmlEfficiencyTable(
+        orders=tuple(orders),
+        efficiency=tuple(efficiency),
+        polarization=polarization,
+        source=path,
+    )
+
+
+def xml_to_scan(
+    table: XmlEfficiencyTable,
+    wavelengths,
+    *,
+    method: str = "imported",
+    version: str = "PCGrate (XML)",
+) -> EfficiencyScan:
+    """Put a parsed XML table on a wavelength axis the caller supplies.
+
+    The file does not carry its scan coordinate in any form this reader
+    trusts (see the notes above :class:`XmlEfficiencyTable`), so
+    ``wavelengths``, in nm and one per scan point in the file's order, come
+    from whoever set up the run. An order that a point does not list is
+    recorded as 0.0 and non-propagating there, matching the text dialect's
+    ``--``.
+
+    ``method`` is the caller's to declare, for the reason :func:`to_scan`
+    gives. ``version`` lands on ``Provenance.version``; the XML records no
+    program version this reader can rely on, so pass the real one if known.
+    """
+    wavelengths = np.asarray(wavelengths, dtype=np.float64)
+    if wavelengths.ndim != 1 or len(wavelengths) != len(table):
+        raise ValueError(
+            f"{table.source}: {len(table)} scan points but "
+            f"{wavelengths.size} wavelength(s) given; they pair one to one"
+        )
+    orders = np.unique(np.concatenate(table.orders))
+    efficiency = np.zeros((len(table), len(orders)))
+    propagating = np.zeros((len(table), len(orders)), dtype=np.bool_)
+    for row, (point_orders, values) in enumerate(zip(table.orders, table.efficiency)):
+        column = np.searchsorted(orders, point_orders)
+        efficiency[row, column] = values
+        propagating[row, column] = True
+
+    provenance = Provenance(
+        method=method,
+        version=version,
+        source=str(table.source),
+        truncation=None,
+        converged=None,
+        notes={
+            "vendor": "PCGrate",
+            "dialect": "xml",
+            "polarization": table.polarization,
+            "wavelengths": "supplied by the caller; the file's scan axis is not read",
+        },
+    )
+    return EfficiencyScan(
+        wavelengths=wavelengths,
+        orders=orders,
+        efficiency=efficiency,
+        propagating=propagating,
+        provenance=provenance,
+    )
+
+
+def read_xml_scan(
+    path: str | Path,
+    wavelengths,
+    *,
+    polarization: str = "unpolarized",
+    method: str = "imported",
+    version: str = "PCGrate (XML)",
+) -> EfficiencyScan:
+    """Read a PCGrate XML results file straight into an :class:`EfficiencyScan`.
+
+    >>> read_xml_scan("run.xml", wavelengths, method="integral")   # doctest: +SKIP
+    """
+    return xml_to_scan(
+        read_xml_table(path, polarization=polarization),
+        wavelengths,
+        method=method,
+        version=version,
+    )

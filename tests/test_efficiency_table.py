@@ -9,7 +9,14 @@ checkable without running any solver.
 import numpy as np
 import pytest
 
-from gratinglab.io.efficiency_table import read_table, read_scan, to_scan
+from gratinglab.io.efficiency_table import (
+    read_scan,
+    read_table,
+    read_xml_scan,
+    read_xml_table,
+    to_scan,
+    xml_to_scan,
+)
 from gratinglab.result import EfficiencyScan
 
 from corpus import reference_dir
@@ -273,3 +280,95 @@ class TestRealCorpus:
             "energy-conservation violations are no longer concentrated near "
             "order passing-off; the failure mode changed"
         )
+
+
+# -- the XML dialect ----------------------------------------------------------
+
+
+#: The layout als_eff_meas read, with point 1 having lost order -1 to passing
+#: off, which is the case the ragged representation exists for. Tag names are
+#: deliberately unlike the fixture als_eff_meas's tests used: the reader goes by
+#: position, and this proves it does not depend on names nobody has confirmed.
+PCGRATE_XML = """<?xml version="1.0"?>
+<Results>
+  <Header name="test"/>
+  <Points>
+    <P>
+      <O>
+        <R Order_number="-1" Efficiency="0.10" Efficiency_TE="0.11" Efficiency_TM="0.12"/>
+        <R Order_number="0" Efficiency="0.50" Efficiency_TE="0.51" Efficiency_TM="0.52"/>
+      </O>
+    </P>
+    <P>
+      <O>
+        <R Order_number="0" Efficiency="0.60" Efficiency_TE="0.61" Efficiency_TM="0.62"/>
+        <R Order_number="1" Efficiency="0.20" Efficiency_TE="0.21" Efficiency_TM="0.22"/>
+      </O>
+    </P>
+  </Points>
+</Results>
+"""
+
+
+@pytest.fixture
+def pcgrate_xml(tmp_path):
+    path = tmp_path / "results.xml"
+    path.write_text(PCGRATE_XML)
+    return path
+
+
+class TestXmlDialect:
+    def test_reads_orders_per_scan_point(self, pcgrate_xml):
+        table = read_xml_table(pcgrate_xml)
+        assert len(table) == 2
+        assert [o.tolist() for o in table.orders] == [[-1, 0], [0, 1]]
+        assert [e.tolist() for e in table.efficiency] == [[0.10, 0.50], [0.60, 0.20]]
+
+    @pytest.mark.parametrize(
+        "polarization, expected", [("TE", 0.11), ("TM", 0.12), ("unpolarized", 0.10)]
+    )
+    def test_selects_the_polarization(self, pcgrate_xml, polarization, expected):
+        """TM was unreachable in the reader this was ported from."""
+        table = read_xml_table(pcgrate_xml, polarization=polarization)
+        assert table.efficiency[0][0] == pytest.approx(expected)
+        assert table.polarization == polarization
+
+    def test_an_unknown_polarization_raises_instead_of_falling_back(self, pcgrate_xml):
+        with pytest.raises(ValueError, match="polarization"):
+            read_xml_table(pcgrate_xml, polarization="NP")
+
+    def test_converts_to_a_scan_on_the_caller_s_wavelengths(self, pcgrate_xml):
+        scan = read_xml_scan(pcgrate_xml, [2.0, 3.0], polarization="TE", method="integral")
+        assert isinstance(scan, EfficiencyScan)
+        assert scan.wavelengths.tolist() == [2.0, 3.0]
+        assert scan.orders.tolist() == [-1, 0, 1]
+        assert scan.efficiency.tolist() == [[0.11, 0.51, 0.0], [0.0, 0.61, 0.21]]
+        # an order a point does not list is evanescent there, as with "--"
+        assert scan.propagating.tolist() == [[True, True, False], [False, True, True]]
+        assert scan.provenance.method == "integral"
+        assert scan.provenance.notes["dialect"] == "xml"
+
+    def test_refuses_a_wavelength_count_that_does_not_pair(self, pcgrate_xml):
+        with pytest.raises(ValueError, match="pair one to one"):
+            xml_to_scan(read_xml_table(pcgrate_xml), [2.0, 3.0, 4.0])
+
+    @pytest.mark.parametrize(
+        "text, message",
+        [
+            ("<Results><A/></Results>", "second child"),
+            ("<Results><A/><B><P/></B></Results>", "holds no orders"),
+            ("<Results><A/><B><P><O><R Efficiency='0.1'/></O></P></B></Results>", "Order_number"),
+            ("<Results><A/><B><P><O><R Order_number='0' Efficiency_TE='0.1'/></O></P></B></Results>",
+             "no Efficiency attribute"),
+            ("<Results><A/><B><P><O><R Order_number='0' Efficiency='x'/></O></P></B></Results>",
+             "not a number"),
+            ("<Results><A/><B><P><O><R Order_number='0' Efficiency='0.1'/>"
+             "<R Order_number='0' Efficiency='0.2'/></O></P></B></Results>", "repeats"),
+            ("<Results><unclosed></Results>", "well-formed"),
+        ],
+    )
+    def test_refuses_a_file_that_does_not_parse_cleanly(self, tmp_path, text, message):
+        path = tmp_path / "bad.xml"
+        path.write_text(text)
+        with pytest.raises(ValueError, match=message):
+            read_xml_table(path)
