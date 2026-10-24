@@ -14,7 +14,8 @@ from __future__ import annotations
 import dataclasses
 from pathlib import Path
 
-from PySide6.QtCore import Signal
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
@@ -111,7 +112,9 @@ class GeometryPanel(QWidget):
 
         self._path_label = QLabel("")
         self._path_label.setWordWrap(True)
-        self._path_label.setStyleSheet("color: #555")
+        # The palette's muted role rather than a fixed grey, so it follows
+        # the theme (a stylesheet colour would also freeze the label's palette).
+        self._path_label.setForegroundRole(QPalette.ColorRole.Mid)
         self._load_button = QPushButton("Load profile…")
         self._load_button.clicked.connect(self.load_profile)
         grating_form.addRow(self._load_button)
@@ -162,6 +165,43 @@ class GeometryPanel(QWidget):
         for group in (grating, mount, surface, scan):
             column.addWidget(group)
         column.addStretch(1)
+        self._forms = (grating_form, mount_form, surface_form, scan_form)
+        self._align_forms()
+
+    def _align_forms(self) -> None:
+        """Give the four groups one label column, so the inputs line up.
+
+        Each group lays out its own form, so each sized its label column to
+        its own longest label and the input boxes started at four different
+        offsets down the dock (64 px apart at the widest). The shared width
+        is measured over every text a label can take, the mount labels'
+        alternatives included, so switching mount never moves the inputs.
+        """
+        metrics = self.fontMetrics()
+        texts = [
+            text
+            for pair in ANGLE_LABELS.values()
+            for text in pair
+            if text is not None
+        ]
+        labels: list[QLabel] = []
+        for form in self._forms:
+            form.setFieldGrowthPolicy(
+                QFormLayout.FieldGrowthPolicy.AllNonFixedFieldsGrow
+            )
+            form.setLabelAlignment(
+                Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter
+            )
+            for row in range(form.rowCount()):
+                item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+                label = item.widget() if item is not None else None
+                if isinstance(label, QLabel):
+                    labels.append(label)
+                    texts.append(label.text())
+        # A little slack over the text, as a QLabel's own size hint carries.
+        width = max(metrics.horizontalAdvance(t) for t in texts) + 6
+        for label in labels:
+            label.setFixedWidth(width)
 
     def refresh_coatings(self) -> None:
         """Re-read the material library into the Coating dropdown.

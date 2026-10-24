@@ -915,6 +915,61 @@ class TestGeometryDock:
         assert not win.centralWidget().isAncestorOf(win.geometry)
 
 
+class TestDockAlignment:
+    """The four groups share one label column, so the inputs line up."""
+
+    def test_every_label_has_one_width(self, win):
+        from PySide6.QtWidgets import QFormLayout, QLabel
+
+        widths = set()
+        for form in win.geometry._forms:
+            for row in range(form.rowCount()):
+                item = form.itemAt(row, QFormLayout.ItemRole.LabelRole)
+                if item is not None and isinstance(item.widget(), QLabel):
+                    widths.add(item.widget().width() if item.widget().isVisible()
+                               else item.widget().maximumWidth())
+        assert len(widths) == 1
+
+    def test_switching_mount_keeps_the_column(self, win):
+        """Measured over every text a mount label can take, so relabelling
+        the angle fields never widens the column."""
+        label = win.geometry._angle_labels["alpha"]
+        before = label.maximumWidth()
+        for mount in ("Classical", "Conical", "Off-plane"):
+            win.geometry._fields["mount"].setCurrentText(mount)
+            assert label.maximumWidth() == before
+            assert label.fontMetrics().horizontalAdvance(label.text()) <= before
+
+
+class TestArrowLabels:
+    def test_no_two_labels_in_the_cross_section_overlap(self, qtbot, win):
+        """The order tips crowd one arc; `_declutter` pushes labels apart."""
+        tab = win.geometry_tab
+        # Shown and at a real window size: an unshown canvas keeps the
+        # figure's default size, which leaves the labels room, and then this
+        # test passes with or without the declutter (measured).
+        win.resize(1400, 860)
+        win.show()
+        win._tab_widget.setCurrentWidget(tab)
+        qtbot.waitExposed(win)
+        qtbot.waitUntil(lambda: tab._diagram is not None, timeout=5000)
+        qtbot.wait(200)
+        tab._paint(tab._diagram)
+        renderer = tab._canvas.get_renderer()
+        axes = tab._axes["main"]
+        boxes = [
+            text.get_window_extent(renderer)
+            for text in axes.texts
+            if text.get_text().startswith(("m=", "β"))
+        ]
+        assert len(boxes) >= 3
+        for i, a in enumerate(boxes):
+            for b in boxes[i + 1:]:
+                assert not a.overlaps(b)
+        title = axes.title.get_window_extent(renderer)
+        assert not any(box.overlaps(title) for box in boxes)
+
+
 class TestGeometryTab:
     """The tab and its wiring. What the *drawing* contains is decided and
     tested in `tests/test_gui_diagram.py`, without a window."""
