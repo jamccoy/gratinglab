@@ -256,8 +256,9 @@ class ImportView(QWidget):
             start = ""
         path, _ = QFileDialog.getOpenFileName(
             self, "Open AFM File", start,
-            "AFM data (*.txt *.dat *.asc *.spm);;"
-            "Nanoscope (*.spm);;Text export (*.txt);;All files (*)")
+            "AFM data (*.txt *.dat *.asc *.spm *.ibw);;"
+            "Nanoscope (*.spm);;Asylum (*.ibw);;Text export (*.txt);;"
+            "All files (*)")
         if path:
             self.load(path)
 
@@ -268,11 +269,13 @@ class ImportView(QWidget):
     def load(self, path):
         """Read a file, flatten it, and tell the window."""
         try:
+            from ...io.ibw import is_igor_wave_file
             from ...io.spm import is_nanoscope_file
             nanoscope = is_nanoscope_file(path)
+            asylum = not nanoscope and is_igor_wave_file(path)
 
             self.direction_combo.blockSignals(True)
-            self.direction_combo.setEnabled(nanoscope)
+            self.direction_combo.setEnabled(nanoscope or asylum)
             self.direction_combo.blockSignals(False)
 
             settings = self._defaults.with_(**self.settings_overrides())
@@ -290,8 +293,16 @@ class ImportView(QWidget):
             self.file_label.setStyleSheet("font-size: 11px;")
 
             rows, cols = data.shape
-            source = (f"Nanoscope: {settings.spm_channel} / "
-                      f"{settings.spm_direction}" if nanoscope else "Text export")
+            if nanoscope:
+                source = (f"Nanoscope: {settings.spm_channel} / "
+                          f"{settings.spm_direction}")
+            elif asylum:
+                from ...io.ibw import _choose, list_channels
+                chosen = _choose(list(list_channels(path)), None,
+                                 settings.spm_direction)
+                source = f"Asylum: {chosen.channel} / {chosen.direction}"
+            else:
+                source = "Text export"
             self.info_label.setText(
                 f"{source}\nShape: {rows} × {cols} px\n"
                 f"Scan width: {scan_size:.3f} µm")

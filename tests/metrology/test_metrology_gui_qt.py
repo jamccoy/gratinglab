@@ -128,6 +128,21 @@ class TestImportTab:
         assert window._data is not None
         assert window.importer.filename == SAMPLE
 
+    def test_an_asylum_ibw_loads_and_names_its_channel(self, qtbot, window, tmp_path):
+        """Asylum files open in the window, with the direction selector live
+        and the channel the reader chose shown, as a .spm's is."""
+        from test_ibw_reader import _sawtooth, _write_ibw
+
+        image = _sawtooth(period_nm=400.0, blaze_deg=25.0, antiblaze_deg=70.0,
+                          scan_um=4.0, cols=512, rows=32)
+        path = _write_ibw(tmp_path / "scan.ibw",
+                          {"ZSensorRetrace": image, "ZSensorTrace": image},
+                          dx_m=4e-6 / 512)
+        window.load(str(path))
+        assert window.run_btn.isEnabled()
+        assert "Asylum: ZSensor / Retrace" in window.importer.info_label.text()
+        assert window.importer.direction_combo.isEnabled()
+
     def test_image_flattening_choice_reaches_the_form(self, qtbot, window):
         window.load(SAMPLE)
         window.importer.image_method_combo.setCurrentText('none')

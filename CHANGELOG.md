@@ -14,6 +14,15 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- Asylum Research `.ibw` files open directly, in the AFM window and through
+  `load_afm_data`, with no Gwyddion export step: `metrology.io.ibw` reads Igor
+  binary waves (version 5, either byte order) without a new dependency, takes
+  the ZSensor channel (Height when there is none) in the chosen scan direction,
+  and refuses a channel that is not in metres. **Not yet checked against a file
+  from an instrument**: the tests build files to the specification, and a
+  synthetic 25° blaze at 400 nm comes back as 24.81° and 400.29 nm through the
+  full analysis.
+
 - `gratinglab.measured.MeasuredEfficiency`, measured efficiency with an
   uncertainty on every point: sparse per order, as parallel `order`,
   `wavelength`, `value` and `sigma` float arrays, with a
