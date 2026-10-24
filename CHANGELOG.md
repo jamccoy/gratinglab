@@ -76,6 +76,20 @@ entries under "Unreleased" into a section named for the new version;
   is drawn and stored in pixels of the scan as loaded, which is why the
   Import tab draws the image before that correction and the profile after.
 
+## Unreleased
+
+### Added
+
+- Each window carries a **Go** menu: it switches to the other mode and returns
+  to the chooser, with `Ctrl+Shift+M` for the latter. The chooser was a
+  one-way door — picking a mode closed it with no route onward — which is half
+  a fix for the problem it was added to solve.
+- Switching reuses a window that is already open instead of constructing a
+  second one. The metrology window holds a loaded scan and its settings, so a
+  switch that produced an empty copy would read as the work having been lost.
+  A window that was closed comes back with its state, since closing does not
+  destroy it while the launcher holds a reference.
+
 ## 0.1.12 (2026-10-24)
 
 ### Added
