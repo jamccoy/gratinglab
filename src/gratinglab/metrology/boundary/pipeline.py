@@ -21,7 +21,10 @@ from dataclasses import dataclass, field
 import numpy as np
 
 from ..core.processing import find_groove_positions, raw_data
-from ..core.tip import apply_tip_correction
+from ..core.region_mask import (GROOVE_REACH_PERIODS, bridge_nan,
+                                describe_mask, groove_spacings_px, has_mask,
+                                reject_grooves_near_nan,
+                                tip_correct_around_nan)
 from .average import (average_grooves, flatten_endpoints, normalize_profile,
                       profile_metrics)
 
@@ -48,6 +51,7 @@ class BoundaryProfile:
     n_grooves: int          # detected, after edge exclusion
     n_used: int             # averaged; the rest were too near an edge
     n_edge_rejected: int
+    n_mask_rejected: int = 0  # dropped for reaching into a masked column
 
     #: The full flattened trace and its detected groove centres, so a caller can
     #: show where the averaged groove came from.
@@ -157,14 +161,25 @@ def build_boundary_profile(data, scan_x_size, settings, orientation=None) -> Bou
     # and the certain fraction land in the metrics: a corrected depth and an
     # uncorrected one are different measurements and the sidecar must say
     # which one it is describing.
-    data, tip = apply_tip_correction(data, scan_x_size, settings)
+    #
+    # The region mask, scar repair and orientation are the callers', all before
+    # this point: the mask before levelling, which reads whole lines. It is not
+    # re-applied here, because the orientation correction shifts and crops the
+    # columns its pixel indices refer to. Excluded pixels arrive as NaN.
+    n_masked = int(np.isnan(data).sum())
+    data, tip = tip_correct_around_nan(data, scan_x_size, settings)
 
-    raw_x, raw_y = raw_data(data, scan_x_size)
+    raw_x, measured_y = raw_data(data, scan_x_size)
+    raw_y = bridge_nan(measured_y)
 
     # Endpoints to zero, then remove the residual tilt. See the module docstring
     # for why this is not the profile flattening used elsewhere.
     flat_y = flatten_endpoints(raw_x, raw_y)
-    flat_y = flat_y - np.polyval(np.polyfit(raw_x, flat_y, 1), raw_x)
+    # The tilt is fitted to measured columns only: a bridged gap is a straight
+    # line, and fitting it would tilt every groove by however much it weighs.
+    measured = np.isfinite(measured_y)
+    flat_y = flat_y - np.polyval(
+        np.polyfit(raw_x[measured], flat_y[measured], 1), raw_x)
 
     scan_width_nm = scan_x_size * 1000
     period_nm = scan_width_nm / max(2, int(scan_width_nm / settings.period_est))
@@ -175,16 +190,21 @@ def build_boundary_profile(data, scan_x_size, settings, orientation=None) -> Bou
         distance_factor=settings.distance_factor,
         edge_exclusion=settings.edge_exclusion_periods,
         return_n_edge_rejected=True)
+    groove_centers, n_mask_rejected = reject_grooves_near_nan(
+        groove_centers, measured_y,
+        GROOVE_REACH_PERIODS * period_nm / ((raw_x[1] - raw_x[0]) * 1000))
 
     if len(groove_centers) == 0:
         raise ValueError(
             "no grooves detected - check that the estimated period matches "
-            "this grating, or lower the detection prominence")
+            "this grating, or lower the detection prominence"
+            + (", or shrink the region mask" if n_mask_rejected else ""))
 
     # Measured period, once there is more than one groove to measure between.
-    if len(groove_centers) > 1:
-        period_nm = float(np.mean(
-            np.diff(groove_centers) * (raw_x[1] - raw_x[0]) * 1000))
+    # A spacing across a masked gap is not a period (groove_spacings_px).
+    spacings = groove_spacings_px(groove_centers, measured_y)
+    if np.isfinite(spacings).any():
+        period_nm = float(np.nanmean(spacings) * (raw_x[1] - raw_x[0]) * 1000)
 
     x_avg, y_avg, y_std, n_used = average_grooves(
         raw_x, flat_y, groove_centers, period_nm,
@@ -206,6 +226,10 @@ def build_boundary_profile(data, scan_x_size, settings, orientation=None) -> Bou
         if not tip.symmetric:
             metrics['tip_half_angle_right_deg'] = tip.half_angle_right_deg
         metrics['tip_certain_fraction'] = tip.certain_fraction
+    if n_masked and has_mask(settings):
+        metrics['region_mask'] = describe_mask(settings)
+        metrics['masked_pixels'] = n_masked
+        metrics['mask_rejected_grooves'] = n_mask_rejected
 
     return BoundaryProfile(
         x_norm=x_norm,
@@ -218,6 +242,7 @@ def build_boundary_profile(data, scan_x_size, settings, orientation=None) -> Bou
         n_grooves=len(groove_centers),
         n_used=n_used,
         n_edge_rejected=n_edge_rejected,
+        n_mask_rejected=n_mask_rejected,
         profile_x_um=raw_x,
         profile_y_nm=flat_y,
         groove_centers=groove_centers,

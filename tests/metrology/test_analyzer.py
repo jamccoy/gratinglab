@@ -485,7 +485,7 @@ def test_a_missing_file_is_reported_not_raised():
     _load_and_validate soft-fails so a batch run does not stop on one bad file.
     """
     assert _quiet(_load_and_validate, '/nonexistent/scan.txt', _settings()) == \
-        (None, None)
+        (None, None, None)
 
 
 def test_analysis_of_a_missing_file_returns_none_in_both_modes():

@@ -51,4 +51,14 @@ def write_profile_metrics(path, metrics):
                     f"(the rest are upper bounds on the surface)\n")
         else:
             f.write("Tip correction: none\n")
+        # Only when used, so an unrepaired, unmasked export is byte-identical
+        # to what this file always held.
+        if metrics.get('scar_repair', 'none') != 'none':
+            f.write(f"Scar repair: {metrics['scar_repair']} "
+                    f"({metrics.get('scar_lines', 0)} line(s))\n")
+        if metrics.get('region_mask'):
+            f.write(f"Region mask: {metrics['region_mask']} "
+                    f"({metrics.get('masked_pixels', 0)} pixels, "
+                    f"{metrics.get('mask_rejected_grooves', 0)} groove(s) "
+                    f"rejected)\n")
     return path

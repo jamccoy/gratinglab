@@ -456,6 +456,85 @@ class TestSwathDialog:
         assert len(rows) == 1 + 5
 
 
+class TestScarsAndMask:
+    """Scar repair and the region mask, set in the Import tab."""
+
+    def _drag(self, window, start, end):
+        """A real drag through the selector: press, move and release events."""
+        from matplotlib.testing.widgets import click_and_drag
+        click_and_drag(window.importer._selector, start, end)
+
+    def test_a_drawn_rectangle_reaches_the_settings(self, qtbot, window):
+        from gratinglab.metrology.gui.state import build
+        window.load(SAMPLE)
+        # The synthetic scan: 64 lines, 384 columns across 2 um.
+        self._drag(window, (0.55, 20.5), (0.85, 43.5))
+        settings, errors = build(window.form_state())
+        assert errors == ()
+        assert settings.mask_rect == (20, 44, 105, 164)
+        assert "rect rows 20-44 cols 105-164" in window.importer.mask_label.text()
+
+    def test_the_mask_reaches_the_analysis_and_its_result(self, qtbot, window):
+        window.load(SAMPLE)
+        self._drag(window, (0.55, 20.5), (0.85, 43.5))
+        _run_and_wait(qtbot, window)
+        assert window._result['region_mask'] == "rect rows 20-44 cols 105-164"
+        assert "Region mask" in window.results_label.text()
+
+    def test_row_and_column_drags_accumulate_and_clear(self, qtbot, window):
+        window.load(SAMPLE)
+        window.importer.drag_mode_combo.setCurrentText('rows')
+        self._drag(window, (0.1, 2.2), (1.9, 4.7))
+        self._drag(window, (0.1, 60.2), (1.9, 62.0))
+        window.importer.drag_mode_combo.setCurrentText('columns')
+        self._drag(window, (1.0, 10), (1.1, 30))
+        form = window.form_state()
+        assert form.mask_rows == ((2, 5), (60, 63))
+        assert form.mask_cols == ((192, 212),)
+        window.importer.clear_mask()
+        form = window.form_state()
+        assert (form.mask_rect, form.mask_rows, form.mask_cols) == (None, (), ())
+
+    def test_masked_lines_are_excluded_from_what_the_tab_hands_on(self, qtbot, window):
+        import numpy as np
+        window.load(SAMPLE)
+        window.importer.drag_mode_combo.setCurrentText('rows')
+        self._drag(window, (0.1, 2.2), (1.9, 4.7))
+        assert np.isnan(window.importer.data[2:5]).all()
+        assert np.isfinite(window.importer.data[5:]).all()
+
+    def test_loading_another_file_clears_the_mask(self, qtbot, window):
+        from scans import SYNTHETIC_DILATED
+        window.load(SAMPLE)
+        self._drag(window, (0.55, 20.5), (0.85, 43.5))
+        window.load(str(SYNTHETIC_DILATED))
+        assert window.form_state().mask_rect is None
+
+    def test_scar_repair_is_reported_in_the_tab_and_the_settings(self, qtbot, window, tmp_path):
+        import contextlib
+        import io as _io
+        from gratinglab.metrology.core.processing import load_afm_data
+        from gratinglab.metrology.gui.state import build
+        with contextlib.redirect_stdout(_io.StringIO()):
+            data, _ = load_afm_data(SAMPLE, default_scan_size=2.0)
+        data[30, 40:240] += 60e-9
+        path = tmp_path / "scarred.txt"
+        lines = ["# Channel: ZSensor", "# Width: 2.000 µm", "# Height: 0.333 µm",
+                 "# Value units: m"]
+        lines += ["\t".join(f"{v:.5e}" for v in row) for row in data]
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+        window.load(str(path))
+        window.importer.scar_combo.setCurrentText('interpolate')
+        assert window.importer.scar_report.lines == (30,)
+        assert "1 line(s) interpolated" in window.importer.scar_note.text()
+        settings, _ = build(window.form_state())
+        assert settings.scar_repair == 'interpolate'
+        _run_and_wait(qtbot, window)
+        assert window._result['scar_lines'] == 1
+        assert "Scar repair      : interpolate, 1 line(s)" in window.results_label.text()
+
+
 class TestTipCorrectionControls:
     """Tip deconvolution, from the window rather than config.py."""
 

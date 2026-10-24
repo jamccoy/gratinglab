@@ -27,6 +27,8 @@ from PySide6.QtWidgets import (
 )
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+from matplotlib.patches import Rectangle
+from matplotlib.widgets import RectangleSelector
 
 from ...config import PROJECT_ROOT
 from ...core.image_flatten import (VALID_IMAGE_FLATTEN_METHODS, flatten_image,
@@ -34,10 +36,18 @@ from ...core.image_flatten import (VALID_IMAGE_FLATTEN_METHODS, flatten_image,
 from ...core.orientation import VALID_GROOVE_ORIENTATIONS, apply_groove_orientation
 from ...core.processing import (flatten_profile, load_afm_data,
                                 load_scan_y_size, raw_data)
+from ...core.region_mask import (apply_region_mask, bridge_nan, describe_mask,
+                                 pixels_from_drag)
+from ...core.scars import VALID_SCAR_REPAIRS, repair_scars_for
 from ...settings import (AnalysisSettings, VALID_FLATTEN_FEATURES,
                          VALID_FLATTEN_METHODS, VALID_SPM_DIRECTIONS)
 
 __all__ = ["ImportView"]
+
+
+#: What a drag on the image does. A rectangle replaces any earlier one; line
+#: and column ranges accumulate until the mask is cleared.
+DRAG_MODES = ('rectangle', 'rows', 'columns')
 
 
 class ImportView(QWidget):
@@ -58,8 +68,20 @@ class ImportView(QWidget):
         self._loaded_scan_size = None
         self._scan_y_size = None  # slow axis, from the file; None if unrecorded
         self.orientation = None   # OrientationReport for _flat
+        # Masked, levelled and scar-repaired, but not yet rotated: the image
+        # the panel draws, because the mask is stored in pixels of the scan
+        # as loaded and the orientation correction shifts and crops them.
+        self._drawn = None
         self._filename = None
         self._period_est = self._defaults.period_est
+        self._scars = None        # the ScarReport behind _flat
+
+        # The region mask, in pixels of the image as loaded. Settings rather
+        # than drawing state, so a batch run reproduces what was drawn here.
+        self._mask_rect = self._defaults.mask_rect
+        self._mask_rows = list(self._defaults.mask_rows)
+        self._mask_cols = list(self._defaults.mask_cols)
+        self._selector = None     # kept alive: matplotlib holds it weakly
 
         self._build_ui()
 
@@ -77,6 +99,7 @@ class ImportView(QWidget):
         column.setSpacing(8)
         column.addWidget(self._build_file_group())
         column.addWidget(self._build_image_group())
+        column.addWidget(self._build_cleanup_group())
         column.addWidget(self._build_profile_group())
         column.addStretch()
 
@@ -182,6 +205,62 @@ class ImportView(QWidget):
         layout.addWidget(self.orientation_note)
         return group
 
+    def _build_cleanup_group(self):
+        group = QGroupBox("Scars and mask (2-D)")
+        layout = QVBoxLayout(group)
+
+        layout.addWidget(QLabel("Scar repair:"))
+        self.scar_combo = QComboBox()
+        self.scar_combo.addItems(list(VALID_SCAR_REPAIRS))
+        self.scar_combo.setCurrentText(self._defaults.scar_repair)
+        self.scar_combo.setToolTip(
+            "Scan lines that stand off the lines either side of them: tip\n"
+            "skips and feedback ringing, Gwyddion's 'scars'. Found after\n"
+            "image flattening.\n\n"
+            "interpolate: refill them down each column from the lines\n"
+            "either side, which is where the grooves run.\n"
+            "drop: leave those lines out of every row group instead.")
+        self.scar_combo.currentTextChanged.connect(self._reflatten)
+        layout.addWidget(self.scar_combo)
+
+        row = QHBoxLayout()
+        row.addWidget(QLabel("Threshold (sigma):"))
+        self.scar_threshold_spin = QDoubleSpinBox()
+        self.scar_threshold_spin.setRange(1.0, 50.0)
+        self.scar_threshold_spin.setSingleStep(0.5)
+        self.scar_threshold_spin.setDecimals(1)
+        self.scar_threshold_spin.setValue(self._defaults.scar_threshold)
+        self.scar_threshold_spin.setToolTip(
+            "How far a scar must stand off both neighbouring lines, in units\n"
+            "of the scan's own line-to-line noise. Lower finds more.")
+        self.scar_threshold_spin.valueChanged.connect(self._reflatten)
+        row.addWidget(self.scar_threshold_spin)
+        layout.addLayout(row)
+
+        self.scar_note = QLabel("Scar repair off")
+        self.scar_note.setWordWrap(True)
+        self.scar_note.setStyleSheet("font-size: 11px; color: gray;")
+        layout.addWidget(self.scar_note)
+
+        layout.addWidget(QLabel("Drag on the image to exclude:"))
+        self.drag_mode_combo = QComboBox()
+        self.drag_mode_combo.addItems(list(DRAG_MODES))
+        self.drag_mode_combo.setToolTip(
+            "rectangle: a patch such as a particle (one at a time).\n"
+            "rows: whole scan lines; they join no row group.\n"
+            "columns: whole columns; no groove is measured across them.")
+        layout.addWidget(self.drag_mode_combo)
+
+        self.mask_label = QLabel("No mask")
+        self.mask_label.setWordWrap(True)
+        self.mask_label.setStyleSheet("font-size: 11px;")
+        layout.addWidget(self.mask_label)
+
+        clear = QPushButton("Clear mask")
+        clear.clicked.connect(self.clear_mask)
+        layout.addWidget(clear)
+        return group
+
     def _build_profile_group(self):
         group = QGroupBox("Profile flattening (1-D)")
         layout = QVBoxLayout(group)
@@ -263,7 +342,64 @@ class ImportView(QWidget):
             flatten_poly_order=self.poly_order_spin.value(),
             flatten_feature=self.feature_combo.currentText(),
             flatten_exclude_edges=self.exclude_spin.value(),
+            scar_repair=self.scar_combo.currentText(),
+            scar_threshold=self.scar_threshold_spin.value(),
+            mask_rect=self._mask_rect,
+            mask_rows=tuple(self._mask_rows),
+            mask_cols=tuple(self._mask_cols),
         )
+
+    @property
+    def scar_report(self):
+        """What scar repair found on the current scan, or None."""
+        return self._scars
+
+    # ── Region mask ──────────────────────────────────────────────────────────
+
+    def set_mask(self, rect=None, rows=(), cols=()):
+        """Replace the whole mask. Pixel indices, half-open, as in settings."""
+        self._mask_rect = tuple(int(v) for v in rect) if rect else None
+        self._mask_rows = [(int(a), int(b)) for a, b in rows]
+        self._mask_cols = [(int(a), int(b)) for a, b in cols]
+        self._mask_changed()
+
+    def clear_mask(self):
+        self.set_mask()
+
+    def add_drag(self, x0, y0, x1, y1):
+        """
+        A drag from (x0, y0) to (x1, y1) in image coordinates (micrometres,
+        scan lines), added to the mask according to the drag mode.
+        """
+        if self._drawn is None:
+            return
+        r0, r1, c0, c1 = pixels_from_drag(x0, y0, x1, y1, self._drawn.shape,
+                                          self._loaded_scan_size)
+        mode = self.drag_mode_combo.currentText()
+        if mode == 'rows':
+            self._mask_rows.append((r0, r1))
+        elif mode == 'columns':
+            self._mask_cols.append((c0, c1))
+        else:
+            self._mask_rect = (r0, r1, c0, c1)
+        self._mask_changed()
+
+    def _on_select(self, press, release):
+        if None in (press.xdata, press.ydata, release.xdata, release.ydata):
+            return
+        self.add_drag(press.xdata, press.ydata, release.xdata, release.ydata)
+
+    def _mask_changed(self):
+        text = describe_mask(self._mask_settings())
+        self.mask_label.setText(
+            f"Excluded: {text}\n(pixels, half-open; MASK_* in config.py)"
+            if text else "No mask")
+        self._reflatten()
+
+    def _mask_settings(self):
+        return self._defaults.with_(mask_rect=self._mask_rect,
+                                    mask_rows=tuple(self._mask_rows),
+                                    mask_cols=tuple(self._mask_cols))
 
     def set_period_est(self, period_nm: float) -> None:
         """
@@ -305,6 +441,11 @@ class ImportView(QWidget):
             self.direction_combo.setEnabled(nanoscope or asylum)
             self.direction_combo.blockSignals(False)
 
+            if path != self._filename:
+                # A mask belongs to the scan it was drawn on.
+                self._mask_rect, self._mask_rows, self._mask_cols = None, [], []
+                self.mask_label.setText("No mask")
+
             settings = self._defaults.with_(**self.settings_overrides())
             with contextlib.redirect_stdout(io.StringIO()):
                 data, scan_size = load_afm_data(
@@ -339,7 +480,7 @@ class ImportView(QWidget):
 
         except Exception as exc:
             self.info_label.setText(f"Error:\n{exc}")
-            self._raw = self._flat = None
+            self._raw = self._flat = self._drawn = None
             self.orientation = None
             self.dataChanged.emit()
 
@@ -348,11 +489,24 @@ class ImportView(QWidget):
         if self._raw is None:
             return
         method = self.image_method_combo.currentText()
-        before = row_offset_spread(self._raw)
-        flat = flatten_image(self._raw, method)
+        # The same order as the analysis: mask, level, repair scars. The mask
+        # comes first because levelling reads every pixel of a line, so what
+        # this tab hands on, NaN where excluded, is what the analysis sees.
+        masked, _ = apply_region_mask(self._raw, self._mask_settings())
+        before = row_offset_spread(masked)
+        flat = flatten_image(masked, method)
         after = row_offset_spread(flat)
         self.image_note.setText(
             f"Row-offset spread\n  {before*1e9:.2f} → {after*1e9:.2f} nm")
+
+        # Scars before the orientation correction, which shifts rows and
+        # would carry each scar along with them.
+        scar_settings = self._defaults.with_(
+            scar_repair=self.scar_combo.currentText(),
+            scar_threshold=self.scar_threshold_spin.value())
+        flat, self._scars = repair_scars_for(flat, scar_settings)
+        self.scar_note.setText(self._scars.summary.capitalize())
+        self._drawn = flat
 
         # The same step, at the same point, as the analysis: whatever this tab
         # hands on is what the Analysis and Boundary tabs measure.
@@ -388,26 +542,39 @@ class ImportView(QWidget):
         image_ax = self.figure.add_subplot(2, 1, 1)
         profile_ax = self.figure.add_subplot(2, 1, 2)
 
+        # Line 0 at the top and the y axis counting lines, so what the axis
+        # reads is what the mask stores (core.region_mask.pixels_from_drag).
+        # Drawn before any orientation correction, in the scan's own pixels,
+        # for the same reason; the profile below is the corrected one.
+        drawn = self._drawn if self._drawn is not None else self._flat
+        n_rows, n_cols = drawn.shape
         image = image_ax.imshow(
-            self._flat * 1e9, aspect='auto', cmap='viridis',
-            extent=[0, self._scan_size, 0, self._flat.shape[0]], origin='upper')
+            drawn * 1e9, aspect='auto', cmap='viridis',
+            extent=[0, self._loaded_scan_size, n_rows, 0], origin='upper')
         self.figure.colorbar(image, ax=image_ax, label='Height (nm)')
         image_ax.set_xlabel("X (µm)", fontsize=10)
         image_ax.set_ylabel("Scan line", fontsize=10)
+        self._draw_mask(image_ax, n_rows, n_cols)
+        self._selector = RectangleSelector(
+            image_ax, self._on_select, useblit=False, button=[1],
+            minspanx=0, minspany=0, spancoords='data', interactive=False,
+            props=dict(facecolor='crimson', edgecolor='crimson', alpha=0.25,
+                       fill=True))
         image_ax.set_title(
             f"{os.path.basename(self._filename)}: image flattening: "
             f"{self.image_method_combo.currentText()}", fontsize=10)
 
-        x_um, profile_nm = raw_data(self._flat, self._scan_size)
         try:
+            x_um, profile_nm = raw_data(self._flat, self._scan_size)
             with contextlib.redirect_stdout(io.StringIO()):
                 flat, background = flatten_profile(
-                    x_um, profile_nm,
+                    x_um, bridge_nan(profile_nm),
                     method=self.profile_method_combo.currentText(),
                     poly_order=self.poly_order_spin.value(),
                     exclude_edges=self.exclude_spin.value(),
                     feature=self.feature_combo.currentText(),
-                    period_nm=self._period_est)
+                    period_nm=self._period_est,
+                    exclude=~np.isfinite(profile_nm))
         except Exception as exc:
             profile_ax.text(0.5, 0.5, f"Profile flattening failed:\n{exc}",
                             ha='center', va='center', color='crimson',
@@ -416,12 +583,14 @@ class ImportView(QWidget):
             self.canvas.draw()
             return
 
+        # Masked columns are gaps, not the straight bridge the fit used.
+        gaps = ~np.isfinite(profile_nm)
         profile_ax.plot(x_um, profile_nm, color='0.6', linewidth=0.9,
                         label='Averaged profile')
         profile_ax.plot(x_um, background, color='crimson', linewidth=1.4,
                         linestyle='--', label='Background to remove')
-        profile_ax.plot(x_um, flat, color='steelblue', linewidth=1.0,
-                        label='After flattening')
+        profile_ax.plot(x_um, np.where(gaps, np.nan, flat), color='steelblue',
+                        linewidth=1.0, label='After flattening')
         profile_ax.set_xlabel("Position (µm)", fontsize=10)
         profile_ax.set_ylabel("Height (nm)", fontsize=10)
         profile_ax.set_title(
@@ -431,3 +600,25 @@ class ImportView(QWidget):
         profile_ax.grid(True, alpha=0.3)
 
         self.canvas.draw()
+
+    def _draw_mask(self, axes, n_rows, n_cols):
+        """Hatch the excluded pixels and tick the scar lines."""
+        width_um = self._loaded_scan_size
+        px = width_um / n_cols
+
+        def patch(r0, r1, c0, c1):
+            axes.add_patch(Rectangle(
+                (c0 * px, r0), (c1 - c0) * px, r1 - r0, fill=False,
+                hatch='///', edgecolor='crimson', linewidth=1.0))
+
+        if self._mask_rect:
+            patch(*self._mask_rect)
+        for r0, r1 in self._mask_rows:
+            patch(r0, r1, 0, n_cols)
+        for c0, c1 in self._mask_cols:
+            patch(0, n_rows, c0, c1)
+
+        if self._scars is not None and self._scars.n_lines:
+            for line in self._scars.lines:
+                axes.plot([width_um * 0.985, width_um], [line + 0.5] * 2,
+                          color='orange', linewidth=2.0)

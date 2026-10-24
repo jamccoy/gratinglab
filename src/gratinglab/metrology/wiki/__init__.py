@@ -30,6 +30,7 @@ PAGE_ORDER = (
     "file-formats",
     "flattening",
     "groove-orientation",
+    "scars-and-masking",
     "tip-correction",
     "row-groups",
     "icc-correction",

@@ -34,6 +34,27 @@ entries under "Unreleased" into a section named for the new version;
   Gwyddion text files, scaled to the lines actually recorded, and returns
   `None` rather than assuming a square scan when the file does not record it.
   A scan without one is reported as not measured.
+- AFM scan-line scar repair, the step Gwyddion calls "Remove scars": a run of
+  one to four lines standing off the lines either side of it is found after
+  image flattening and either interpolated down its columns or dropped from row
+  grouping (`scar_repair = 'none' | 'interpolate' | 'drop'`, default `none`,
+  with `scar_threshold`, `scar_min_length`, `scar_max_width`). It is its own
+  stage in `metrology.core.scars`, not an image-flattening method, because it
+  is used together with one. The number of lines repaired is shown in the
+  Import tab and written to the results panel, the summary file and the
+  boundary metrics file. On the synthetic scan with seven lines scarred over a
+  third of their length the mean blaze angle reads 29.731° against 29.896°
+  clean and the averaged groove is 1.01 nm off; interpolated, 29.895° and
+  0.006 nm. Lines are judged levelled by their median step rather than by
+  `align_rows`, and a scar's shadow on a rotated grating is set aside.
+- A region mask: drag on the image in the AFM window's Import tab to exclude a
+  rectangle, whole scan lines or whole columns. It is stored as settings
+  (`mask_rect`, `mask_rows`, `mask_cols`, in pixels; `MASK_*` in `config.py`) so
+  a batch or CLI run reproduces it, and it is recorded wherever scar repair is.
+  Masked lines join no row group and masked columns yield no grooves. Masked,
+  a 150 nm particle that moved the mean blaze angle by 0.49 degrees has no
+  influence left: the result equals the clean scan's under the same mask.
+- Wiki page "Scars and masking".
 
 ### Changed
 
@@ -44,6 +65,16 @@ entries under "Unreleased" into a section named for the new version;
   on, so the real-scan numbers quoted in the wiki (the 0.49° flattening span,
   the ICC range) predate it. Set `GROOVE_ORIENTATION = 'detect'` to see what it
   would do to a scan without changing anything.
+- The mask is applied before image flattening, so `align_rows` and `plane`
+  now skip NaN pixels; a scan with nothing masked levels exactly as before.
+- The Import tab's y axis counts scan lines from the top, where line 0 was
+  always drawn, so it reads the same line numbers the mask stores. It used to
+  count from the bottom.
+- With both of the above, a scan is prepared in this order: region mask,
+  image flattening, scar repair, groove orientation, tip correction. Scars
+  are repaired before the orientation correction shifts rows, and the mask
+  is drawn and stored in pixels of the scan as loaded, which is why the
+  Import tab draws the image before that correction and the profile after.
 
 ## 0.1.12 (2026-10-24)
 
