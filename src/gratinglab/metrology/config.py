@@ -93,6 +93,22 @@ N_ROW_GROUPS = 20      # Number of row groups to extract from each image
 # the place to add a method that is not affine.
 IMAGE_FLATTEN_METHOD = 'align_rows'
 
+# ============ GROOVE ORIENTATION (2-D, after image flattening) ============
+# A sample rotated on the stage makes every scan line cross the grooves
+# obliquely: the period reads long by 1/cos(theta), facets read shallow, and
+# averaging rows smears the groove. Measured from the groove positions band by
+# band (core/orientation.py), and corrected by aligning the rows and taking
+# the pixel along the groove normal.
+#   'auto'   measure; correct at GROOVE_ORIENTATION_THRESHOLD_DEG or more,
+#            when that is also 3 standard errors from zero
+#   'always' correct whatever was measured; refuse if it cannot be measured
+#   'detect' measure and report only
+#   'off'    neither
+# Needs the slow-axis scan size from the file; a file without one is reported
+# as not measured rather than assumed square.
+GROOVE_ORIENTATION = 'auto'
+GROOVE_ORIENTATION_THRESHOLD_DEG = 0.2
+
 # ============ TIP CORRECTION (2-D, after image flattening) ============
 # Undo the tip's dilation of the surface where that is possible (Villarrubia
 # 1997 erosion; see core/tip.py). Off by default: the correction changes

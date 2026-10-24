@@ -19,6 +19,7 @@ from dataclasses import dataclass, replace
 from typing import Optional
 
 from .core.image_flatten import VALID_IMAGE_FLATTEN_METHODS
+from .core.orientation import DEFAULT_THRESHOLD_DEG, VALID_GROOVE_ORIENTATIONS
 from .core.tip import VALID_TIP_CORRECTIONS
 
 # The blaze facet is trimmed 2.5x harder on the trough side than the land side
@@ -64,6 +65,13 @@ class AnalysisSettings:
     # provably cannot change a blaze angle here (see core/image_flatten.py), so
     # the default costs nothing - measured 0.0000 deg on all eight samples.
     image_flatten_method: str = 'align_rows'
+
+    # Groove orientation: the angle between the grooves and the slow scan
+    # axis, measured after image flattening and corrected, before tip
+    # correction, when it is large enough to matter. See core/orientation.py
+    # for the modes and why 'auto' with 0.2 deg is the default.
+    groove_orientation: str = 'auto'
+    groove_orientation_threshold_deg: float = DEFAULT_THRESHOLD_DEG
 
     # Tip correction: undoing what the tip shape did to the image, where that
     # is possible, on the 2-D array right after image flattening. Off by
@@ -124,6 +132,9 @@ class AnalysisSettings:
             blaze_side=config.BLAZE_SIDE,
             image_flatten_method=getattr(config, 'IMAGE_FLATTEN_METHOD',
                                          'align_rows'),
+            groove_orientation=getattr(config, 'GROOVE_ORIENTATION', 'auto'),
+            groove_orientation_threshold_deg=getattr(
+                config, 'GROOVE_ORIENTATION_THRESHOLD_DEG', DEFAULT_THRESHOLD_DEG),
             tip_correction=getattr(config, 'TIP_CORRECTION', 'none'),
             tip_radius_nm=getattr(config, 'TIP_RADIUS_NM', 1.0),
             tip_half_angle_deg=getattr(config, 'TIP_HALF_ANGLE_DEG', 18.0),
@@ -181,6 +192,13 @@ class AnalysisSettings:
             errors.append(('image_flatten_method',
                            f"must be one of "
                            f"{', '.join(VALID_IMAGE_FLATTEN_METHODS)}"))
+
+        if self.groove_orientation not in VALID_GROOVE_ORIENTATIONS:
+            errors.append(('groove_orientation',
+                           f"must be one of {', '.join(VALID_GROOVE_ORIENTATIONS)}"))
+        if not 0 <= self.groove_orientation_threshold_deg < 45:
+            errors.append(('groove_orientation_threshold_deg',
+                           "must be at least 0 and under 45 degrees"))
 
         if self.tip_correction not in VALID_TIP_CORRECTIONS:
             errors.append(('tip_correction',

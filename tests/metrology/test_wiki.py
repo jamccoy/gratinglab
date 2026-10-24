@@ -177,6 +177,26 @@ class TestContentStaysTrue:
         assert 'Endpoint flattening' in text, "the export levelling is undocumented"
         assert 'three separate points' in text, "the page still claims two stages"
 
+    def test_orientation_page_states_the_shipped_rule(self):
+        """The threshold and the default mode, as settings.py has them."""
+        from gratinglab.metrology.core.orientation import SIGNIFICANCE
+        from gratinglab.metrology.settings import AnalysisSettings
+
+        defaults = AnalysisSettings()
+        text = self._prose('groove-orientation')
+        assert defaults.groove_orientation == 'auto'
+        assert '`auto` (default)' in text
+        assert f'{defaults.groove_orientation_threshold_deg:g}°' in text
+        assert f'{SIGNIFICANCE:g} standard errors' in text
+
+    def test_orientation_page_states_what_is_at_stake_and_what_it_costs(self):
+        """The smearing it removes, and the blunting it adds, both measured."""
+        text = self._prose('groove-orientation')
+        assert '32% shallower' in text, "the 3 deg smearing loss is not stated"
+        assert '3% shallow at 33 pixels per period' in text, (
+            "the interpolation's own cost is not stated")
+        assert 'not measured' in text and 'square scan is not assumed' in text
+
     def test_flattening_page_records_the_period_dependency(self):
         """level_grooves needs a period, so the period is not independent of it."""
         text = self._prose('flattening')

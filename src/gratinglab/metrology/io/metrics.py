@@ -28,6 +28,20 @@ def write_profile_metrics(path, metrics):
         # Present only when the pipeline ran a tip correction. Stated even so:
         # a corrected depth and an uncorrected one are different measurements,
         # and this sidecar is where a reader learns which this file holds.
+        # Present when the caller measured the groove orientation. A period
+        # along the scan line and one along the groove normal differ by
+        # 1/cos(theta), and this line says which the file holds.
+        if 'groove_orientation' in metrics:
+            angle = metrics.get('groove_rotation_deg')
+            if angle is None:
+                f.write(f"Groove rotation: not measured "
+                        f"({metrics.get('groove_rotation_note', '')})\n")
+            else:
+                done = ("corrected" if metrics.get('groove_rotation_corrected')
+                        else f"not corrected, {metrics.get('groove_rotation_note', '')}")
+                f.write(f"Groove rotation: {angle:+.3f} +/- "
+                        f"{metrics['groove_rotation_stderr_deg']:.3f} deg "
+                        f"({done})\n")
         if metrics.get('tip_correction', 'none') != 'none':
             f.write(f"Tip correction: {metrics['tip_correction']} "
                     f"(R = {metrics['tip_radius_nm']:g} nm, "

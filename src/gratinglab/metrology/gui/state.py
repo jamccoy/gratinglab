@@ -52,6 +52,9 @@ class FormState:
     # flattening acts on each averaged row group and is the one that moves the
     # measured angle.
     image_flatten_method: str = 'align_rows'
+    # Groove orientation, also owned by the Import tab: measured on the 2-D
+    # scan after image flattening and corrected when large enough to matter.
+    groove_orientation: str = 'auto'
     flatten_method: str = 'level_grooves'
     flatten_poly_order: int = 2
     flatten_feature: str = 'peaks'
@@ -78,6 +81,7 @@ class FormState:
             scan_x_size=settings.scan_x_size,
             spm_direction=settings.spm_direction,
             image_flatten_method=settings.image_flatten_method,
+            groove_orientation=settings.groove_orientation,
             flatten_method=settings.flatten_method,
             flatten_poly_order=settings.flatten_poly_order,
             flatten_feature=settings.flatten_feature,
@@ -127,6 +131,7 @@ def _to_settings(form: FormState) -> AnalysisSettings:
         scan_x_size=form.scan_x_size,
         spm_direction=form.spm_direction,
         image_flatten_method=form.image_flatten_method,
+        groove_orientation=form.groove_orientation,
         flatten_method=form.flatten_method,
         flatten_poly_order=form.flatten_poly_order,
         flatten_feature=form.flatten_feature,
@@ -183,4 +188,24 @@ def summarize_result(result) -> str:
         f"Measurements     : N = {result['n_grooves']}   ({mode})\n"
         f"Period           : {result['period_nm']:.2f} "
         f"+/- {result.get('period_std', 0):.2f} nm   worst fit R2 = {worst_r2}"
+        + orientation_line(result.get('groove_orientation'))
     )
+
+
+def orientation_line(report) -> str:
+    """
+    The groove-rotation line of the results panel, or nothing.
+
+    Takes the report as the plain dict a result carries. Stated whether or not
+    the correction was applied: a period read along a rotated scan line is
+    long by 1/cos(theta), and the panel is where a reader would notice.
+    """
+    if not report:
+        return ""
+    angle = report.get('angle_deg')
+    if angle is None:
+        return f"\nGroove rotation  : not measured ({report.get('reason', '')})"
+    done = ("corrected" if report.get('applied')
+            else f"not corrected, {report.get('reason', '')}")
+    return (f"\nGroove rotation  : {angle:+.3f} +/- "
+            f"{report.get('stderr_deg', float('nan')):.3f}deg   ({done})")
