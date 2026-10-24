@@ -18,7 +18,10 @@ __all__ = ["main"]
 
 def main(argv=None):
     app = QApplication.instance() or QApplication(argv or sys.argv)
-    app.setStyle("Fusion")
+    # Fusion plus the saved theme, shared with the efficiency window.
+    from gratinglab.gui.qt.theming import install
+
+    install(app)
     window = MainWindow()
     window.show()
     return app.exec()

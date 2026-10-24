@@ -71,6 +71,9 @@ def main() -> int:
     from .qt.main_window import MainWindow
 
     app = QApplication(sys.argv)
+    from .qt.theming import install
+
+    install(app)
     window = MainWindow()
     window.show()
     _bring_to_front(window)

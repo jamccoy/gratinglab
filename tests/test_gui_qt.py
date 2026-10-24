@@ -867,13 +867,15 @@ class TestGeometryDock:
         toggle.trigger()
         assert not win.geometry_dock.isHidden()
 
-    def test_the_view_menu_holds_exactly_the_docks_own_toggle(self, win):
+    def test_the_view_menu_holds_the_docks_own_toggle_and_the_themes(self, win):
         """The dock's own action, so its checked state and its label cannot
         drift from the dock -- which a hand-rolled checkable action would, the
-        moment someone clicked the dock's own close button."""
-        actions = win._view_menu.actions()
-        assert len(actions) == 1
+        moment someone clicked the dock's own close button. The only other
+        entry is the Theme submenu, added with themes."""
+        actions = [a for a in win._view_menu.actions() if not a.isSeparator()]
         assert actions[0] is win.geometry_dock.toggleViewAction()
+        assert [a.menu() is not None for a in actions[1:]] == [True]
+        assert actions[1].text() == "&Theme"
 
     def test_the_toggle_is_reachable_by_keyboard(self, win):
         from PySide6.QtGui import QKeySequence
@@ -1247,13 +1249,16 @@ class TestLiveGeometry:
 
     def test_and_is_not_styled_as_an_error(self, qtbot, win):
         """The absent-assertion: `warn` and `bad` are reserved for something
-        actually wrong. A form mid-edit is not that."""
-        from gratinglab.gui.provenance import TAG_COLORS
+        actually wrong. A form mid-edit is not that. The colours are the
+        theme's, which is what the panel renders with."""
+        from gratinglab.gui.qt import theming
+        from gratinglab.gui.theme import provenance_colors
 
+        colors = provenance_colors(theming.current())
         self._edit(qtbot, win, "period", "-")
         html = win.geometry_tab._captions.toHtml()
-        assert TAG_COLORS["warn"] not in html
-        assert TAG_COLORS["bad"] not in html
+        assert colors["warn"] not in html
+        assert colors["bad"] not in html
         assert "waiting" in win.geometry_tab._captions.toPlainText()
         # Its own line: `to_html` concatenates runs, so a missing newline
         # would run the note straight into the caption beneath it.

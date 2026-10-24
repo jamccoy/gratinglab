@@ -33,6 +33,8 @@ from PySide6.QtWidgets import (
 from .. import diagram as diagram_module
 from .. import diagram3d as diagram3d_module
 from .. import provenance
+from ..theme import provenance_colors, style_axes, style_figure
+from . import theming
 from .profile_plot_panel import ProfilePlotPanel
 from .scene3d_panel import Scene3DPanel
 
@@ -144,6 +146,9 @@ class GeometryTab(QWidget):
             "ladder": self._figure.add_subplot(grid[1, 0]),
         }
         self._canvas = FigureCanvasQTAgg(self._figure)
+        style_figure(self._figure, theming.current())
+        theming.subscribe(self._on_theme)
+        self._caption_lines: tuple = ()
 
         panel = QWidget()
         panel.setMinimumHeight(200)
@@ -235,11 +240,7 @@ class GeometryTab(QWidget):
             "the drawing below is from the last complete geometry\n",
             "dim",
         )
-        self._captions.setHtml(
-            provenance.to_html(
-                (note,) + self._scene.captions + self._diagram.captions
-            )
-        )
+        self._set_captions((note,) + self._scene.captions + self._diagram.captions)
 
     # -- reactions ----------------------------------------------------
 
@@ -298,9 +299,7 @@ class GeometryTab(QWidget):
         # Cheap, and it is the part a reader needs even before the picture
         # arrives, so it is never deferred. The 3D scene's captions carry what
         # the projection cannot show, so both sets appear.
-        self._captions.setHtml(
-            provenance.to_html(self._scene.captions + self._diagram.captions)
-        )
+        self._set_captions(self._scene.captions + self._diagram.captions)
 
         if self.isVisible():
             self._paint(self._diagram)
@@ -308,13 +307,32 @@ class GeometryTab(QWidget):
         else:
             self._needs_paint = True
 
+    def _set_captions(self, lines) -> None:
+        self._caption_lines = tuple(lines)
+        self._captions.setHtml(
+            provenance.to_html(self._caption_lines, provenance_colors(theming.current()))
+        )
+
+    def _on_theme(self, theme) -> None:
+        style_figure(self._figure, theme)
+        if self._caption_lines:
+            self._set_captions(self._caption_lines)
+        if self._diagram is None:
+            self._canvas.draw_idle()
+        elif self.isVisible():
+            self._paint(self._diagram)
+        else:
+            self._needs_paint = True
+
     def _paint(self, drawing) -> None:
         """Position what `diagram` decided, choosing no angle, cutoff or colour."""
-        colors = diagram_module.TAG_COLORS
+        theme = theming.current()
+        colors = {**diagram_module.TAG_COLORS, **theme.diagram}
         self._scene3d.show_scene(self._scene)
 
         for name, axes in self._axes.items():
             axes.clear()
+            style_axes(axes, theme)
             axes.set_title(_PANEL_TITLES[name], fontsize=9)
 
         for path in drawing.paths:

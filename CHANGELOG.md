@@ -45,6 +45,22 @@ entries under "Unreleased" into a section named for the new version;
   than Henke for every one.
 - `materials.install(path, name=None, overwrite=False)`, the same install from
   Python. An unreadable table is refused before it reaches the library.
+- Themes: **View → Theme** offers System (follows the operating system's light
+  or dark setting, live), Light, Dark, Solarized Light, Solarized Dark and High
+  contrast, remembered between runs and shared by both windows. Light is the
+  look the windows had before, colour for colour. Every theme's text meets
+  WCAG AA (4.5:1) and every plotted line 3:1, which `tests/test_gui_theme.py`
+  asserts. The palette, every plot, the provenance panel, the Setup and theory
+  pages and the geometry views all restyle in place.
+
+### Changed
+
+- Diffraction orders are coloured by sign, cool for negative, warm for
+  positive and neutral for m = 0, instead of from matplotlib's ten-colour
+  cycle, which drew a sixteen-order scan with repeats (m = -3 and m = +7 were
+  the same orange). An order keeps its colour when others are hidden, and the
+  order list shows each line's colour beside its entry. The legend moved
+  outside the axes, where it no longer covers the curves it names.
 
 ## 0.1.10 (2026-10-23)
 

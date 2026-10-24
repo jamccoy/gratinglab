@@ -106,7 +106,10 @@ def main(argv=None) -> int:
     app = QApplication.instance() or QApplication(list(argv or sys.argv))
     # Fusion for the same reason the metrology window asks for it: the native
     # macOS style gives a QFormLayout row heights this layout does not expect.
-    app.setStyle("Fusion")
+    # `install` sets it, and applies the saved theme to both windows.
+    from .qt.theming import install
+
+    install(app)
 
     window = LauncherWindow()
     window.show()

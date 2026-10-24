@@ -34,6 +34,13 @@ from corpus import DATA, DEFAULT_REF_DIR, reference_dir  # noqa: F401
 # sets the variable itself with monkeypatch, which restores this afterwards.
 os.environ["GRATINGLAB_MATERIALS"] = tempfile.mkdtemp(prefix="gratinglab-no-library-")
 
+# The same for the GUI's settings (gui/qt/theming.py): an INI file of the
+# suite's own, pinned to the light theme, so no test reads or writes the
+# user's settings and none depends on whether this machine is in dark mode.
+_settings = Path(tempfile.mkdtemp(prefix="gratinglab-settings-")) / "settings.ini"
+_settings.write_text("[appearance]\ntheme=light\n", encoding="utf-8")
+os.environ["GRATINGLAB_SETTINGS"] = str(_settings)
+
 
 @pytest.fixture(scope="session")
 def ref_dir() -> Path:
