@@ -56,6 +56,16 @@ entries under "Unreleased" into a section named for the new version;
   influence left: the result equals the clean scan's under the same mask.
 - Wiki page "Scars and masking".
 
+- Each window carries a **Go** menu: it switches to the other mode and returns
+  to the chooser, with `Ctrl+Shift+M` for the latter. The chooser was a
+  one-way door — picking a mode closed it with no route onward — which is half
+  a fix for the problem it was added to solve.
+- Switching reuses a window that is already open instead of constructing a
+  second one. The metrology window holds a loaded scan and its settings, so a
+  switch that produced an empty copy would read as the work having been lost.
+  A window that was closed comes back with its state, since closing does not
+  destroy it while the launcher holds a reference.
+
 ### Changed
 
 - The default analysis now corrects a groove rotation of 0.2° or more. A
@@ -76,19 +86,34 @@ entries under "Unreleased" into a section named for the new version;
   is drawn and stored in pixels of the scan as loaded, which is why the
   Import tab draws the image before that correction and the profile after.
 
-## Unreleased
+### Fixed
 
-### Added
+- **The slow-axis scan size ignored `\Aspect Ratio`, so the measured groove
+  rotation was too small by that ratio on most scans.** Nanoscope writes the
+  same number twice in `Scan Size` even for a rectangular scan and records the
+  shape in `\Aspect Ratio`; `io/spm.py::_slow_size_um` took the second value
+  at face value. 1013 of the 1245 scans in this project's archive are not
+  1:1 -- 911 at 4:1, 68 at 8:1, 26 at 2:1 -- and since a rotation is an
+  arctangent of a ratio of the two axes, each of those reported a rotation too
+  small by its aspect ratio. Some then declined an orientation correction they
+  needed, because the understated angle fell below the threshold.
 
-- Each window carries a **Go** menu: it switches to the other mode and returns
-  to the chooser, with `Ctrl+Shift+M` for the latter. The chooser was a
-  one-way door — picking a mode closed it with no route onward — which is half
-  a fix for the problem it was added to solve.
-- Switching reuses a window that is already open instead of constructing a
-  second one. The metrology window holds a loaded scan and its settings, so a
-  switch that produced an empty copy would read as the work having been lost.
-  A window that was closed comes back with its state, since closing does not
-  destroy it while the launcher holds a reference.
+  **This changes measured numbers.** Any slow-axis length, and anything
+  derived from one, differs for a non-1:1 scan: a 1.5 um scan at 4:1 now
+  reports 0.375 um of slow axis instead of 1.5. Blaze angles taken from the
+  fast axis are unaffected, as are all 1:1 scans -- which is why nothing
+  caught this, the TASTE fixture and the synthetic scan both being 1:1.
+
+  Checked against Gwyddion, which reads the field and states the result as
+  `# Height:` in its export: of the 70 archive scans with an export beside
+  them, 3 agreed before the fix and 70 agree after. The 3 were the 1:1 ones.
+
+  One trap is pinned by its own test. Two different fields are called
+  `\Aspect Ratio`: the scan list states the shape as a ratio with a colon,
+  while every plane section carries a bare number of the same name that is not
+  a shape at all (0.352542 on the TASTE file). Reading the section's value in
+  preference -- which is how every other field in this reader works -- turns
+  that file's 1.57 um slow axis into 4.44 um.
 
 ## 0.1.12 (2026-10-24)
 

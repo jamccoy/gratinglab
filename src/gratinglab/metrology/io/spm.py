@@ -113,17 +113,71 @@ def _scan_size_um(section: str, header: str) -> float:
     raise ValueError("no Scan Size found in the header")
 
 
+#: The scan shape, ``\\Aspect Ratio: 4:1``. The colon is required: see
+#: :func:`_aspect_ratio` for the other field of the same name.
+_ASPECT_RE = re.compile(r"\\Aspect Ratio:\s*([\d.]+):([\d.]+)")
+
+
+def _aspect_ratio(header: str) -> float:
+    """
+    Fast-axis extent divided by slow-axis extent. 1.0 when not stated.
+
+    Nanoscope writes the *same* number twice in ``Scan Size`` even for a
+    rectangular scan, and records the rectangle here instead: a 1.5 µm scan at
+    ``4:1`` covers 1.5 µm along the fast axis and 0.375 µm along the slow one.
+    Gwyddion reads it that way, and its export of such a file states
+    ``# Width: 1.500 µm`` against ``# Height: 0.375 µm``.
+
+    **Two different fields carry this name, and only one is the scan shape.**
+    The scan list states it as a ratio with a colon, ``1:1`` or ``4:1``. Each
+    plane section also carries an ``\\Aspect Ratio`` that is a bare number --
+    0.352542 on the suite's own TASTE file -- which is not a scan shape and
+    must not be read as one. Taking the section's value in preference, which
+    is the obvious way to write this function given every other field here
+    works that way, turns that file's 1.57 µm slow axis into 4.44 µm. So the
+    colon is part of the pattern, and this reads the header rather than a
+    section.
+
+    The scan shape is independent of the sampling density. ``Samps/line`` and
+    ``Lines`` are in the same ratio on most files, which is what makes their
+    pixels square, but 25 scans in this project's archive disagree, and
+    non-square pixels are an ordinary thing to record. The two are not
+    interchangeable, and it is the aspect ratio that describes the area.
+
+    A missing or unusable field gives 1.0, which is what this reader assumed
+    unconditionally before.
+    """
+    match = _ASPECT_RE.search(header)
+    if match:
+        fast, slow = float(match.group(1)), float(match.group(2))
+        if fast > 0 and slow > 0:
+            return fast / slow
+    return 1.0
+
+
 def _slow_size_um(section: str, header: str, rows: int) -> float | None:
     """
     Physical length of the recorded lines along the slow axis, in microns.
 
-    ``Scan Size`` carries two values, fast then slow (``2.000 2.000 ~m``), and
-    the slow one is the length the scan was *set* to cover in ``\\Lines:``
-    lines. A scan stopped early records fewer: the project's own TASTE file
-    holds 401 lines of 512 samples, with the header still reading 2 µm by
-    2 µm, so taking that 2 µm as the height of what is in the file would make
-    every slow-axis length too long by the missing fraction. The recorded
-    height is therefore ``slow * rows / lines``.
+    Two corrections to the stated ``Scan Size``, and both matter.
+
+    The aspect ratio first. ``Scan Size`` carries two values, fast then slow
+    (``2.000 2.000 ~m``), and on a rectangular scan they are *equal*, with the
+    shape held in ``\\Aspect Ratio`` -- see :func:`_aspect_ratio`. Taking the
+    second value at face value made the slow axis too long by that ratio on
+    1013 of the 1245 scans in this project's archive, 911 of them at 4:1. Since
+    a groove rotation is ``atan`` of a ratio of the two axes, every such scan
+    reported a rotation too small by the same factor, and some declined a
+    correction they needed because the understated angle fell below the
+    threshold. The suite's own TASTE file is 1:1, which is why nothing caught
+    it; `tests/metrology/test_spm_reader.py` now checks the arithmetic
+    directly and, where the archive is reachable, against Gwyddion's own
+    numbers.
+
+    Then the lines actually recorded. The slow extent is what the scan was
+    *set* to cover in ``\\Lines:`` lines, and a scan stopped early records
+    fewer: the TASTE file holds 401 lines of a 512-line scan, so the recorded
+    height is ``extent * rows / lines``.
 
     Returns None, rather than guessing, when the header carries only one
     ``Scan Size`` value or no ``\\Lines:`` count.
@@ -138,7 +192,8 @@ def _slow_size_um(section: str, header: str, rows: int) -> float | None:
     lines = re.search(r"\\Lines:\s*(\d+)", header)
     if size is None or lines is None or int(lines.group(1)) <= 0:
         return None
-    return size * rows / int(lines.group(1))
+    extent = size / _aspect_ratio(header)
+    return extent * rows / int(lines.group(1))
 
 
 def scan_y_size_um(path, channel: str = DEFAULT_CHANNEL,
