@@ -34,6 +34,28 @@ from .. import diagram3d
 from ..theme import style_axes, style_figure
 from . import theming
 
+#: How far the cube is zoomed inside its canvas. matplotlib's default leaves
+#: a wide margin around a 3D box; this fills the panel without clipping the
+#: tick labels at the default window size.
+_BOX_ZOOM = 1.2
+
+#: Where each kind of label sits around its anchor. At grazing incidence the
+#: cone-axis tip, the m=0 tip and the blaze direction's tip are all within a
+#: degree or two of one point, and 3D text cannot move out of its
+#: neighbours' way, so each is put in a different quadrant around the point
+#: instead: the geometry is not moved to make room.
+_LABEL_ANCHORS = {
+    "cone": ("right", "bottom"),
+    "zero": ("left", "top"),
+    "blaze": ("left", "bottom"),
+}
+
+#: How far along its ray a label sits, as a fraction of the ray. The cone
+#: axis is labelled part-way along its shaft rather than at its tip, which
+#: is exactly where the order tips cluster; inside 1.0 also keeps the label
+#: within the frame, which hides anything beyond the tips.
+_LABEL_REACH = {"cone": 0.72}
+
 __all__ = ["Scene3DPanel"]
 
 #: Named glyph -> matplotlib marker. The scene names what a point *is*; this is
@@ -244,7 +266,10 @@ class Scene3DPanel(QWidget):
         self._axes.set_zlim(y0, y1)
         # A cube, so no axis is stretched relative to another -- without this
         # every angle in the picture is a lie.
-        self._axes.set_box_aspect((1.0, 1.0, 1.0))
+        # The zoom scales the whole box uniformly, so it preserves every
+        # angle just as the cube does; it only stops the default margin from
+        # leaving the scene a small cube in a large canvas.
+        self._axes.set_box_aspect((1.0, 1.0, 1.0), zoom=_BOX_ZOOM)
 
         self._magnification.setText(
             f"cone rim, {scene.rim_magnification:.0f}×" if use_rim else ""
@@ -338,8 +363,17 @@ class Scene3DPanel(QWidget):
             )
             record(artist, xs, ys, zs)
             if ray.label:
-                text = axes.text(*head, ray.label, fontsize=7, color=colors[ray.tag])
-                record(text, [head[0]], [head[1]], [head[2]])
+                ha, va = _LABEL_ANCHORS.get(ray.tag, ("left", "bottom"))
+                # A space on the side facing the point, so neighbouring
+                # labels anchored on the same tip do not run together.
+                padded = f"{ray.label} " if ha == "right" else f" {ray.label}"
+                reach = _LABEL_REACH.get(ray.tag, 1.0)
+                at = [t + reach * (h - t) for t, h in zip(tail, head)]
+                text = axes.text(
+                    *at, padded, fontsize=7, color=colors[ray.tag],
+                    ha=ha, va=va,
+                )
+                record(text, [at[0]], [at[1]], [at[2]])
 
         for point in scene.points:
             px, py, pz = _display((point.x, point.y, point.z))
@@ -357,7 +391,14 @@ class Scene3DPanel(QWidget):
         axes.set_xlabel("d̂  (dispersion)", fontsize=8)
         axes.set_ylabel("ĝ  (grooves)", fontsize=8)
         axes.set_zlabel("n̂  (normal)", fontsize=8)
-        axes.tick_params(labelsize=6)
+        axes.tick_params(labelsize=6, pad=0)
+        # Five ticks a side rather than nine: the scale is in arbitrary
+        # units (only directions carry meaning), so the ticks are there to
+        # orient, and nine of them crowded each other.
+        from matplotlib.ticker import MaxNLocator
+
+        for axis in (axes.xaxis, axes.yaxis, axes.zaxis):
+            axis.set_major_locator(MaxNLocator(5))
         axes.view_init(elev=elev, azim=azim)
 
         self._canvas.draw_idle()

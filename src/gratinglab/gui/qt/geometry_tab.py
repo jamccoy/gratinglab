@@ -17,7 +17,9 @@ geometry is known as soon as the form parses.
 
 from __future__ import annotations
 
+import numpy as np
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
     QGroupBox,
     QHBoxLayout,
@@ -164,28 +166,48 @@ class GeometryTab(QWidget):
         strip.setMaximumHeight(240)
         row = QHBoxLayout(strip)
         row.setContentsMargins(0, 0, 0, 0)
-        row.addWidget(self._build_wavelength_group(), 2)
+        row.addWidget(self._build_wavelength_group(), 1)
         row.addWidget(self._build_caption_group(), 3)
         return strip
 
     def _build_wavelength_group(self) -> QWidget:
+        """The wavelength being drawn, chosen from the scan.
+
+        Laid out as two tight rows -- the value and the blaze jump, then the
+        slider between the scan's two ends -- rather than three stacked
+        widgets with the box's spare height between them, which left most of
+        the box empty and narrowed the captions beside it.
+        """
         group = QGroupBox("Wavelength")
         layout = QVBoxLayout(group)
 
         self._wavelength_label = QLabel("—")
-        layout.addWidget(self._wavelength_label)
+        bigger = self._wavelength_label.font()
+        bigger.setPointSizeF(bigger.pointSizeF() * 1.25)
+        bigger.setBold(True)
+        self._wavelength_label.setFont(bigger)
+        self._blaze_button = QPushButton("Jump to blaze λ")
+        self._blaze_button.clicked.connect(self._jump_to_blaze)
+        top = QHBoxLayout()
+        top.addWidget(self._wavelength_label)
+        top.addStretch(1)
+        top.addWidget(self._blaze_button)
+        layout.addLayout(top)
 
         self._slider = QSlider(Qt.Orientation.Horizontal)
         self._slider.setMinimum(0)
         self._slider.setMaximum(0)
         self._slider.valueChanged.connect(self._on_slider_moved)
-        layout.addWidget(self._slider)
-
-        self._blaze_button = QPushButton("Jump to blaze λ")
-        self._blaze_button.clicked.connect(self._jump_to_blaze)
-        row = QHBoxLayout()
-        row.addWidget(self._blaze_button)
-        layout.addLayout(row)
+        self._scan_start = QLabel("")
+        self._scan_stop = QLabel("")
+        for end in (self._scan_start, self._scan_stop):
+            end.setForegroundRole(QPalette.ColorRole.Mid)
+        bottom = QHBoxLayout()
+        bottom.addWidget(self._scan_start)
+        bottom.addWidget(self._slider, 1)
+        bottom.addWidget(self._scan_stop)
+        layout.addLayout(bottom)
+        layout.addStretch(1)
         return group
 
     def _build_caption_group(self) -> QWidget:
@@ -207,6 +229,9 @@ class GeometryTab(QWidget):
         # same size; a wavelength that jumped on every keystroke would make
         # the picture unreadable while typing.
         index = self._slider.value() if self._slider.maximum() == count - 1 else count // 2
+
+        self._scan_start.setText(f"{parsed.wavelengths[0]:.4g}")
+        self._scan_stop.setText(f"{parsed.wavelengths[-1]:.4g} nm")
 
         self._slider.blockSignals(True)
         self._slider.setMaximum(max(0, count - 1))
@@ -348,6 +373,7 @@ class GeometryTab(QWidget):
                 axes.fill_between(path.x, path.fill_to, path.y,
                                   color=colors[path.tag], alpha=0.12)
 
+        labels: list = []
         for arrow in drawing.arrows:
             axes = self._axes[arrow.panel]
             axes.annotate(
@@ -364,14 +390,22 @@ class GeometryTab(QWidget):
                 },
             )
             if arrow.label:
-                axes.annotate(
+                # Placed just beyond the tip along the arrow's own direction,
+                # then pushed further out if it collides (`_declutter`).
+                dx, dy = arrow.x1 - arrow.x0, arrow.y1 - arrow.y0
+                length = float(np.hypot(dx, dy)) or 1.0
+                direction = (dx / length, dy / length)
+                text = axes.annotate(
                     arrow.label,
                     xy=(arrow.x1, arrow.y1),
+                    xytext=(_LABEL_GAP * direction[0], _LABEL_GAP * direction[1]),
+                    textcoords="offset points",
                     fontsize=7,
                     color=colors[arrow.tag],
                     ha="center",
-                    va="bottom",
+                    va="center",
                 )
+                labels.append((axes, text, direction))
 
         for marker in drawing.markers:
             axes = self._axes[marker.panel]
@@ -408,4 +442,41 @@ class GeometryTab(QWidget):
             axes.tick_params(labelsize=7)
         self._axes["main"].grid(alpha=0.15)
 
+        _declutter(self._canvas, labels)
         self._canvas.draw_idle()
+
+
+#: Points between an arrow's tip and its label, and the step a colliding
+#: label is pushed out by, along its own arrow.
+_LABEL_GAP = 7.0
+_LABEL_STEP = 5.0
+_LABEL_MAX = 45.0
+
+
+def _declutter(canvas, labels) -> None:
+    """Push colliding arrow labels outward until each one is clear.
+
+    The order rays fan out from one strike point and their tips sit a few
+    degrees apart on the same arc, so labels placed at the tips stacked on
+    one another. A fixed alternation cannot know which pairs collide, so
+    this measures: labels are taken in fan order (by angle) and each one is
+    pushed further along its own arrow until its box clears every label
+    already placed and the panel title, up to a limit. Moving along the
+    arrow keeps every label pointing at the ray it names.
+    """
+    if not labels:
+        return
+    renderer = canvas.get_renderer()
+    placed: dict[object, list] = {}
+    for axes, text, (ux, uy) in sorted(
+        labels, key=lambda item: np.arctan2(item[2][1], item[2][0])
+    ):
+        blockers = placed.setdefault(axes, [axes.title.get_window_extent(renderer)])
+        reach = _LABEL_GAP
+        while True:
+            box = text.get_window_extent(renderer).expanded(1.08, 1.15)
+            if reach >= _LABEL_MAX or not any(box.overlaps(b) for b in blockers):
+                break
+            reach += _LABEL_STEP
+            text.set_position((reach * ux, reach * uy))
+        blockers.append(text.get_window_extent(renderer))

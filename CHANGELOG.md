@@ -68,6 +68,16 @@ entries under "Unreleased" into a section named for the new version;
   the same orange). An order keeps its colour when others are hidden, and the
   order list shows each line's colour beside its entry. The legend moved
   outside the axes, where it no longer covers the curves it names.
+- The geometry dock's four groups share one label column, so every input
+  starts at the same offset (they sat up to 64 px apart), and switching mount
+  no longer moves them.
+- The Grating Geometry tab: the 3D box fills more of its panel (a uniform
+  zoom, so angles stay exact) with five ticks a side instead of nine; the
+  cross-section's order labels are pushed outward along their own rays until
+  none overlaps another or the title, where they used to stack at the top of
+  the arc; the 3D cone-axis label moved off the tip where the orders
+  cluster; and the Wavelength box is two compact rows with the scan's ends
+  shown, giving the captions beside it the width.
 
 ## 0.1.10 (2026-10-23)
 
