@@ -96,9 +96,15 @@ class BoundaryCurve:
         ``ny < 0``. Never inward.
     ds
         Arc-length weight for each point, for quadrature. Sums to the total
-        profile arc length over one period. Points are spaced at equal arc
-        length, which the integral method's rectangular quadrature rule
-        needs for its spectral accuracy.
+        profile arc length over one period. By default points are spaced at
+        equal arc length, which the integral method's rectangular quadrature
+        rule needs for its spectral accuracy on a smooth curve.
+    graded
+        True when the points come from a corner-graded mesh
+        (``boundary(n, grading=p)`` on a profile with corners). The points
+        are then equally spaced in a mesh parameter, not in arc length, and
+        ``ds`` holds the exact quadrature weight ``s'(tau) / n`` of each
+        point, which the integral method must use node by node.
     """
 
     t: NDArray[np.float64]
@@ -106,6 +112,7 @@ class BoundaryCurve:
     nx: NDArray[np.float64]
     ny: NDArray[np.float64]
     ds: NDArray[np.float64]
+    graded: bool = False
 
     @property
     def arc_length(self) -> float:
@@ -129,8 +136,13 @@ class Profile(Protocol):
     def slice_layers(self, n: int) -> tuple[Layer, ...]:
         """Piecewise-constant slabs, bottom to top."""
 
-    def boundary(self, n: int) -> BoundaryCurve:
-        """Parametrised boundary with outward normals and arc-length weights."""
+    def boundary(self, n: int, *, grading: int = 0) -> BoundaryCurve:
+        """Parametrised boundary with outward normals and arc-length weights.
+
+        ``grading = p >= 2`` clusters the points at the profile's corners
+        with the sigmoidal transformation of order ``p`` (see
+        :func:`_polyline_boundary`); ``0`` keeps equal arc length.
+        """
 
     def is_single_valued(self) -> bool:
         """False for undercut profiles, which RCWA tolerates and C-method cannot."""
@@ -195,26 +207,202 @@ class _BaseProfile(BaseModel):
             )
         return tuple(layers)
 
-    def boundary(self, n: int) -> BoundaryCurve:
+    def boundary(self, n: int, *, grading: int = 0) -> BoundaryCurve:
         """Boundary resampled at equal arc length, with outward normals.
 
         Samples ``height`` finely and resamples the polyline at equal arc
         length, which is the node spacing the integral method's rectangular
         quadrature rule needs. Profiles whose geometry is an exact polygon
         (:class:`Blazed`, :class:`Lamellar`) override with their vertices so
-        facet corners and vertical segments carry no sampling error.
+        facet corners and vertical segments carry no sampling error. A
+        finely sampled smooth height has no corners, so ``grading`` leaves
+        it on the equal-arc mesh.
         """
         if n < 3:
             raise ValueError(f"need at least 3 boundary points, got {n}")
         fine = max(4096, 8 * n)
         t = np.linspace(0.0, 1.0, fine, endpoint=False)
-        return _polyline_boundary(t, self.height(t), n)
+        return _polyline_boundary(t, self.height(t), n, grading=grading)
+
+
+#: A polygon vertex turning the boundary by more than this is a corner, at
+#: which a graded mesh clusters its points. Exact polygons (``Blazed``,
+#: ``Lamellar``) turn by tens of degrees at every vertex; a finely sampled
+#: smooth height turns by a fraction of a degree, so it has none.
+CORNER_TURN_DEGREES = 10.0
+
+#: Fewest points a graded mesh gives one side between two corners. Below
+#: this the sigmoid cannot both cluster at each end and cover the middle.
+_MIN_POINTS_PER_SIDE = 4
+
+
+def _grading_map(
+    u: NDArray[np.float64], order: int
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """Kress's sigmoidal transformation of ``[0, 1]`` onto itself, and its slope.
+
+    ``w(u) = v^p / (v^p + (1 - v)^p)`` with the cubic
+    ``v = (1/2 - 1/p) xi^3 + xi/p + 1/2`` of Kress (1990), ``xi = 2u - 1``,
+    which keeps the middle of a side at twice the equal-arc spacing rather
+    than ``p`` times it.
+    Every derivative of ``w`` below order ``p`` vanishes at both ends, so a
+    corner density that is singular in arc length becomes, multiplied by the
+    slope, smooth in ``u``, and the rectangular rule recovers high order.
+    The map is odd about ``u = 1/2`` (``w(1 - u) = 1 - w(u)``), which the
+    caller uses to place points near the far corner without cancellation.
+    """
+    p = float(order)
+    xi = 2.0 * u - 1.0
+    c = 1.0 / p - 0.5
+    v = -c * xi**3 + xi / p + 0.5
+    dv = 2.0 * (-3.0 * c * xi**2 + 1.0 / p)
+    vp, wp = v**p, (1.0 - v) ** p
+    w = vp / (vp + wp)
+    dw = p * (v * (1.0 - v)) ** (p - 1.0) / (vp + wp) ** 2 * dv
+    return w, dw
+
+
+def _graded_polyline(
+    tx: NDArray[np.float64],
+    ty: NDArray[np.float64],
+    n: int,
+    order: int,
+) -> BoundaryCurve | None:
+    """A corner-graded mesh on the closed polyline ``(tx, ty)``.
+
+    Returns ``None`` when the polyline has no corner, so the caller keeps the
+    equal-arc mesh. Otherwise each side between consecutive corners receives
+    points in proportion to its length, placed at the midpoints of an equal
+    split of the mesh parameter and mapped through :func:`_grading_map`, so
+    no point sits on a corner and every point lies on a straight piece with
+    an exact normal. The weights are the exact ``ds/dtau / n``.
+    """
+    # Drop repeated vertices: a zero-length edge has no direction.
+    keep = np.hypot(np.diff(tx), np.diff(ty)) > 0.0
+    vx = tx[:-1][keep]
+    vy = ty[:-1][keep]
+    m = len(vx)
+    if m < 2:
+        return None
+    ex = np.append(vx[1:], vx[0] + 1.0) - vx
+    ey = np.append(vy[1:], vy[0]) - vy
+    prev_x, prev_y = np.roll(ex, 1), np.roll(ey, 1)
+    turn = np.degrees(
+        np.abs(np.arctan2(prev_x * ey - prev_y * ex, prev_x * ex + prev_y * ey))
+    )
+    corners = np.flatnonzero(turn > CORNER_TURN_DEGREES)
+    if corners.size == 0:
+        return None
+    if n < _MIN_POINTS_PER_SIDE * corners.size:
+        raise ValueError(
+            f"a graded mesh needs at least {_MIN_POINTS_PER_SIDE} points on "
+            f"each of the profile's {corners.size} sides between corners, "
+            f"so n >= {_MIN_POINTS_PER_SIDE * corners.size}; got {n}"
+        )
+
+    # Two periods of vertices, so a side may run through the period wrap.
+    big_x = np.concatenate((vx, vx + 1.0, [vx[0] + 2.0]))
+    big_y = np.concatenate((vy, vy, [vy[0]]))
+    edge = np.hypot(np.diff(big_x), np.diff(big_y))
+    cumulative = np.concatenate(([0.0], np.cumsum(edge)))
+    total = float(cumulative[m])
+
+    starts = corners
+    ends = np.append(corners[1:], corners[0] + m)
+    lengths = cumulative[ends] - cumulative[starts]
+
+    # Largest-remainder allocation, then the per-side floor.
+    share = n * lengths / total
+    counts = np.maximum(np.floor(share).astype(int), _MIN_POINTS_PER_SIDE)
+    while counts.sum() < n:
+        counts[int(np.argmax(share - counts))] += 1
+    while counts.sum() > n:
+        spare = np.where(counts > _MIN_POINTS_PER_SIDE, counts - share, -np.inf)
+        counts[int(np.argmax(spare))] -= 1
+
+    def locate(first: int, last: int, offset, forward: bool):
+        """Points at ``offset`` along the side, measured from its nearer end.
+
+        Measuring from the nearer corner keeps a point a distance 1e-9 from
+        its corner exactly that far, rather than the difference of two
+        nearly equal arc positions.
+        """
+        index = np.arange(first, last + 1)
+        if not forward:
+            index = index[::-1]
+        px, py = big_x[index], big_y[index]
+        steps = np.hypot(np.diff(px), np.diff(py))
+        along = np.concatenate(([0.0], np.cumsum(steps)))
+        piece = np.clip(
+            np.searchsorted(along, offset, side="right") - 1, 0, len(steps) - 1
+        )
+        fraction = (offset - along[piece]) / steps[piece]
+        dx = px[piece + 1] - px[piece]
+        dy = py[piece + 1] - py[piece]
+        sign = 1.0 if forward else -1.0
+        return (
+            px[piece] + fraction * dx,
+            py[piece] + fraction * dy,
+            sign * dx / steps[piece],
+            sign * dy / steps[piece],
+        )
+
+    xs, ys, txs, tys, ds, arc = [], [], [], [], [], []
+    for first, last, length, count in zip(starts, ends, lengths, counts):
+        u = (np.arange(count) + 0.5) / count
+        w, dw = _grading_map(u, order)
+        near = u <= 0.5
+        far_w, _ = _grading_map(1.0 - u[~near], order)
+        px = np.empty(count)
+        py = np.empty(count)
+        qx = np.empty(count)
+        qy = np.empty(count)
+        px[near], py[near], qx[near], qy[near] = locate(
+            first, last, length * w[near], True
+        )
+        px[~near], py[~near], qx[~near], qy[~near] = locate(
+            first, last, length * far_w, False
+        )
+        xs.append(px)
+        ys.append(py)
+        txs.append(qx)
+        tys.append(qy)
+        ds.append(length * dw / count)
+        arc.append(cumulative[first] + length * w)
+
+    x_all = np.concatenate(xs)
+    y_all = np.concatenate(ys)
+    tx_all = np.concatenate(txs)
+    ty_all = np.concatenate(tys)
+    ds_all = np.concatenate(ds)
+    arc_all = np.concatenate(arc)
+
+    # Points past one period belong to the start of this one: shift them
+    # back and rotate them to the front, so the order runs from x[0] like
+    # the equal-arc mesh and only the last point wraps.
+    over = arc_all >= total
+    x_all[over] -= 1.0
+    shift = int(over.sum())
+    order_index = np.roll(np.arange(n), shift)
+    # Tangent (tx, ty) rotated +90 deg is the outward normal (see below).
+    return BoundaryCurve(
+        t=x_all[order_index],
+        y=y_all[order_index],
+        nx=-ty_all[order_index],
+        ny=tx_all[order_index],
+        ds=ds_all[order_index],
+        graded=True,
+    )
 
 
 def _polyline_boundary(
-    x: NDArray[np.float64], y: NDArray[np.float64], n: int
+    x: NDArray[np.float64],
+    y: NDArray[np.float64],
+    n: int,
+    *,
+    grading: int = 0,
 ) -> BoundaryCurve:
-    """Equal-arc-length boundary samples of a polyline spanning one period.
+    """Boundary samples of a polyline spanning one period.
 
     ``x`` and ``y`` are the open polygon vertices, normalised to the period;
     the curve is closed by continuing to ``(x[0] + 1, y[0])``, so a trailing
@@ -222,9 +410,21 @@ def _polyline_boundary(
     facet) is represented as real geometry instead of a steep approximation. Handles
     boundaries that double back in ``x`` (undercut), which is why every
     ``boundary()`` implementation funnels through here.
+
+    With ``grading = 0`` the samples are at equal arc length. With
+    ``grading = p >= 2`` and at least one corner (a vertex turning by more
+    than :data:`CORNER_TURN_DEGREES`) they are graded towards the corners by
+    Kress's sigmoidal transformation of order ``p`` (M&P section 4.6.6;
+    Kress 1990), which restores high-order convergence where the field is
+    singular. With no corner the equal-arc mesh is returned unchanged.
     """
     if n < 3:
         raise ValueError(f"need at least 3 boundary points, got {n}")
+    if grading < 0 or grading == 1:
+        raise ValueError(
+            f"grading must be 0 (equal arc length) or at least 2, got "
+            f"{grading}; order 1 is the identity map and clusters nothing"
+        )
 
     # Close the polygon: the curve continues into the next period.
     tx = np.append(x, x[0] + 1.0)
@@ -235,6 +435,11 @@ def _polyline_boundary(
     total = cumulative[-1]
     if total <= 0:
         raise ValueError("profile has zero arc length")
+
+    if grading:
+        graded = _graded_polyline(tx, ty, n, grading)
+        if graded is not None:
+            return graded
 
     stations = np.linspace(0.0, total, n, endpoint=False)
     xs = np.interp(stations, cumulative, tx)
@@ -355,7 +560,7 @@ class Blazed(_BaseProfile):
         down = -np.tan(np.radians(self.antiblaze_angle))
         return np.where(t <= self.apex, up, down)
 
-    def boundary(self, n: int) -> BoundaryCurve:
+    def boundary(self, n: int, *, grading: int = 0) -> BoundaryCurve:
         """Exact sawtooth polygon.
 
         A vertical anti-blaze facet is the closing segment of the polygon, a
@@ -365,7 +570,7 @@ class Blazed(_BaseProfile):
             x, y = np.array([0.0, 1.0]), np.array([0.0, self.depth])
         else:
             x, y = np.array([0.0, self.apex]), np.array([0.0, self.depth])
-        return _polyline_boundary(x, y, n)
+        return _polyline_boundary(x, y, n, grading=grading)
 
 
 class Lamellar(_BaseProfile):
@@ -390,12 +595,12 @@ class Lamellar(_BaseProfile):
             "cannot represent it; use RCWA or the integral method."
         )
 
-    def boundary(self, n: int) -> BoundaryCurve:
+    def boundary(self, n: int, *, grading: int = 0) -> BoundaryCurve:
         """Exact rectangular polygon; both sidewalls are genuine vertical segments."""
         d, w = self.depth, self.duty_cycle
         x = np.array([0.0, w, w, 1.0])
         y = np.array([d, d, 0.0, 0.0])
-        return _polyline_boundary(x, y, n)
+        return _polyline_boundary(x, y, n, grading=grading)
 
 
 class Sinusoidal(_BaseProfile):
@@ -520,8 +725,8 @@ class FromProfileData(_BaseProfile):
         """Normalised position of the highest measured point."""
         return float(np.asarray(self.t)[int(np.argmax(np.asarray(self.y)))])
 
-    def boundary(self, n: int) -> BoundaryCurve:
-        """Resample the stored polygon at equal arc length.
+    def boundary(self, n: int, *, grading: int = 0) -> BoundaryCurve:
+        """Resample the stored polygon at equal arc length, or graded.
 
         Works from the stored points directly instead of through ``height``,
         which allows it to handle an undercut boundary.
@@ -530,4 +735,5 @@ class FromProfileData(_BaseProfile):
             np.asarray(self.t, dtype=np.float64),
             np.asarray(self.y, dtype=np.float64),
             n,
+            grading=grading,
         )

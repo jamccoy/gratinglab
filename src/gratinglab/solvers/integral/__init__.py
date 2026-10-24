@@ -26,12 +26,19 @@ reflectivity onto the perfect-conductivity result is not equivalent, and
 doing so remains the error catalogued in ``docs/conventions.md`` section 10
 item 5.
 
-One limitation has been measured and is documented here. Profile corners
-make the TM solve (and, with finite conductivity, both polarizations)
-converge at first order, because the Meixner edge condition is sampled by a
-plain equal-arc mesh. Energy balance on cornered profiles therefore carries
-a percent-level deficit at moderate ``boundary_points``. The deviation is
-reported in provenance, and a graded corner mesh is the planned follow-up.
+Profile corners make the TM solve (and, with finite conductivity, both
+polarizations) converge at first order on the default equal-arc mesh,
+because the Meixner edge singularity of the densities is sampled by evenly
+spaced nodes. Energy balance on cornered profiles then carries a
+percent-level deficit at moderate ``boundary_points``. ``corner_grading=p``
+clusters the nodes at the corners with Kress's sigmoidal transformation of
+order ``p`` (M&P section 4.6.6) and restores fast convergence there; see
+``docs/theory/integral.md`` section 5 for the measured ladders. It is opt-in
+until it has been used on real problems, and on a profile with no corner it
+changes nothing. It is refused with ``conductivity="tabulated"`` for now:
+TE improves there, but TM on a visible-light metal and the conical X-ray
+lamellar case were measured unstable, and a mode that is sometimes worse
+than the equal-arc mesh is not offered.
 """
 
 from __future__ import annotations
@@ -70,6 +77,17 @@ _POINTS_PER_WAVELENGTH = 6.0
 #: rescaled: the theorem says 1, and how close the mesh got is the error
 #: estimate.
 _ENERGY_DEVIATION_WARN = 0.005
+
+#: Highest ``corner_grading`` accepted. At order 8 the two nodes nearest a
+#: corner already coincide in double precision at P = 512 on a 1000 nm
+#: sawtooth, and the solve returns NaN (measured); 6 still separates them,
+#: and 4 converges as well as 6 on every profile measured.
+_MAX_GRADING = 6
+
+#: The closest pair of graded nodes must be this many ulps of the largest
+#: coordinate apart, so their separation, which the kernels take as a
+#: difference of coordinates, carries at least two significant digits.
+_MIN_SEPARATION_ULPS = 100.0
 
 #: ``min |cos beta_m|`` below which an order is passing off and the kernel's
 #: ``1/gamma_m`` makes the solve numerically delicate (a Rayleigh anomaly).
@@ -126,6 +144,7 @@ class IntegralSolver:
         boundary_points: int = 400,
         spectral_terms: int | None = None,
         conductivity: Literal["perfect", "tabulated"] = "perfect",
+        corner_grading: int = 0,
         progress: "Progress | None" = None,
     ) -> EfficiencyScan:
         """Efficiency over a wavelength scan at fixed geometry.
@@ -156,6 +175,17 @@ class IntegralSolver:
             ``substrate``) per wavelength; efficiencies are then absolute and
             absorption is recorded on the scan. Any other value raises
             :class:`UnsupportedConfiguration`.
+        corner_grading
+            ``0`` (the default) places the nodes at equal arc length.
+            ``p`` from 2 to 6 grades them towards the profile's corners with
+            Kress's sigmoidal transformation of order ``p``, which is what a
+            cornered profile needs for TM to converge faster than first
+            order. ``4`` is the recommended order. A profile with no corner
+            (a vertex turning by more than
+            :data:`gratinglab.profiles.CORNER_TURN_DEGREES`) keeps the
+            equal-arc mesh whatever is passed. Perfect conductivity only:
+            with ``conductivity="tabulated"`` a non-zero value raises
+            :class:`UnsupportedConfiguration` (see the module docstring).
         progress
             Per-wavelength callback under the contract in
             :class:`~gratinglab.solvers.base.Solver`.
@@ -180,6 +210,27 @@ class IntegralSolver:
             raise ValueError(
                 f"boundary_points must be at least 32, got {boundary_points}"
             )
+        if (
+            isinstance(corner_grading, bool)
+            or not isinstance(corner_grading, (int, np.integer))
+            or not (corner_grading == 0 or 2 <= corner_grading <= _MAX_GRADING)
+        ):
+            raise ValueError(
+                f"corner_grading must be 0 (equal arc length) or an integer "
+                f"from 2 to {_MAX_GRADING}, got {corner_grading!r}"
+            )
+        corner_grading = int(corner_grading)
+        if corner_grading and conductivity == "tabulated":
+            raise UnsupportedConfiguration(
+                'corner_grading is not offered with conductivity="tabulated" '
+                "yet. TE converges faster on a graded mesh, but TM on a "
+                "visible-light metal and the conical X-ray lamellar case were "
+                "measured unstable there (docs/theory/integral.md section 5), "
+                "and a graded solve that is sometimes worse than the "
+                "equal-arc one is not a result to return. Use "
+                "corner_grading=0 and read the reported energy-balance "
+                "deviation."
+            )
 
         started = time.perf_counter()
         sin_alpha = illumination.sin_alpha
@@ -188,13 +239,37 @@ class IntegralSolver:
         # cross blocks vanish identically rather than to rounding.
         cos_gamma = float(np.sqrt(1.0 - sin_gamma**2))
 
-        boundary = physical_boundary(problem, boundary_points)
+        boundary = physical_boundary(
+            problem, boundary_points, grading=corner_grading
+        )
+        if boundary.graded:
+            steps = np.hypot(
+                np.diff(np.append(boundary.x, boundary.x[0] + problem.period)),
+                np.diff(np.append(boundary.y, boundary.y[0])),
+            )
+            scale = float(
+                max(np.abs(boundary.x).max(), np.abs(boundary.y).max())
+                + problem.period
+            )
+            floor = _MIN_SEPARATION_ULPS * np.finfo(np.float64).eps * scale
+            if steps.min() <= floor:
+                raise ValueError(
+                    f"corner_grading={corner_grading} at boundary_points="
+                    f"{boundary_points} puts two nodes {steps.min():.3g} nm "
+                    f"apart, below the {floor:.3g} nm that double precision "
+                    "can resolve on this groove; lower corner_grading (4 is "
+                    "recommended) or boundary_points"
+                )
 
         # The field oscillates along the boundary at the *reduced* wavelength;
         # a mesh that cannot resolve it would not fail loudly on its own.
         reduced_min = float(wavelengths.min()) / sin_gamma
+        # The coarsest spacing must resolve it, which on a graded mesh is
+        # about twice the mean (resolution_length is arc_length otherwise).
         needed = int(
-            np.ceil(_POINTS_PER_WAVELENGTH * boundary.arc_length / reduced_min)
+            np.ceil(
+                _POINTS_PER_WAVELENGTH * boundary.resolution_length / reduced_min
+            )
         )
         if boundary_points < needed:
             raise ValueError(
@@ -224,7 +299,7 @@ class IntegralSolver:
             needed_metal = int(
                 np.ceil(
                     _POINTS_PER_WAVELENGTH
-                    * boundary.arc_length
+                    * boundary.resolution_length
                     / metal_reduced_min
                 )
             )
@@ -365,9 +440,16 @@ class IntegralSolver:
             warnings.append(
                 f"summed efficiency{' plus absorption' if conductivity == 'tabulated' else ''} "
                 f"strays from unity by up to {100 * deviation:.2f}% "
-                "(theorem: exactly 1). Profile corners limit convergence to "
-                "first order on an equal-arc mesh; raise boundary_points, and "
-                "read the deviation as the discretisation error estimate"
+                "(theorem: exactly 1). "
+                + (
+                    "Profile corners limit convergence to first order on an "
+                    "equal-arc mesh; pass corner_grading=4 or raise "
+                    "boundary_points, and read the deviation as the "
+                    "discretisation error estimate"
+                    if not boundary.graded
+                    else "Raise boundary_points, and read the deviation as "
+                    "the discretisation error estimate"
+                )
             )
 
         from ... import __version__
@@ -375,6 +457,11 @@ class IntegralSolver:
         notes: dict = {
             "spectral_terms": terms,
             "energy_balance_deviation": deviation,
+            "mesh": (
+                f"corner-graded, order {corner_grading}"
+                if boundary.graded
+                else "equal arc length"
+            ),
         }
         if conductivity == "perfect":
             notes["boundary_condition"] = "perfectly-conducting"

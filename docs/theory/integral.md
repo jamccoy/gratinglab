@@ -95,6 +95,30 @@ numbers refer to M&P §4.6.
   this reason `Profile.boundary()` resamples every profile at equal arc length,
   and `Blazed`/`Lamellar` supply exact vertex polygons, vertical segments
   included.
+- **Corner-graded mesh (`corner_grading=p`, opt-in).** At a corner the densities
+  are singular (the Meixner edge condition), and on an equal-arc mesh that
+  singularity caps convergence at first order. `Profile.boundary(n, grading=p)`
+  instead splits a mesh parameter τ equally, gives each side between two
+  corners a share of the nodes in proportion to its length, and maps each share
+  through Kress's sigmoidal transformation of order p (M&P §4.6.6; Kress 1990),
+  whose derivatives below order p vanish at both ends. The density times
+  `ds/dτ` is then smooth in τ and the rectangular rule recovers high order. A
+  corner is a polygon vertex turning by more than `CORNER_TURN_DEGREES` (10°),
+  no node sits on one, and every node lies on a straight piece with its exact
+  normal. A profile with no corner keeps the equal-arc mesh.
+
+  Every quadrature is written in τ, with node weights `w_j = s'(τ_j)/P`, and
+  reduces term by term to the equal-arc formulas when `s' = L`. Three places
+  needed more than swapping the weights in, and each was wrong at first in a way
+  only a solve exposed (`docs/findings.md`):
+
+  - the single layer's logarithmic comparison moves into τ, which changes its
+    diagonal to `w_j[R(0,0) + ln(2π s'_j/d)/2π − S̃] − s'_j/π`;
+  - the tangential layer's Cauchy comparison acts on `σ s'`, never on σ, because
+    a corner density is unbounded in τ;
+  - the principal-value diagonals of K, L and D_t V are taken from the neighbour
+    on the node's own side of a corner, since the neighbour across it sits where
+    the kernel is of order 1/distance.
 - **Kummer acceleration.** The raw Green's sum converges like 1/m. The
   large-|m| asymptote sums in closed form to two logarithms (eqs. 4.82–4.85); the
   paired remainder decays like m⁻³ on the diagonal (eq. 4.87) and at worst like
@@ -132,13 +156,50 @@ The measured behaviour is as follows.
 - **TM on smooth profiles** is comparable. On profiles with corners (ideal
   sawtooth, lamellar) the Meixner edge behaviour meets a plain equal-arc mesh and
   TM converges at first order, with a percent-level deficit at P ≈ 100 that is
-  still ~0.5% at P ≈ 1000. The convergence harness reports this accurately, and a
-  graded corner mesh (M&P §4.6.6) is the known follow-up.
+  still ~0.5% at P ≈ 1000. The convergence harness reports this accurately.
+- **TM on profiles with corners, graded mesh** (`corner_grading`), measured on
+  2026-10-23 in-plane at period 1000 nm (lamellar depth 0.3 at α = 10°, 600 nm;
+  ideal 30° sawtooth at α = 20°, 500 nm; 29.5°/70.5° blaze at α = 15°, 450 nm).
+  The deviation of the sum from 1:
+
+  | profile | mesh | P = 64 | 128 | 256 | 512 |
+  |---|---|---|---|---|---|
+  | lamellar | equal arc | 8.5e-3 | 4.3e-3 | 2.3e-3 | 1.3e-3 |
+  | lamellar | graded, p = 4 | 5.9e-4 | 8.7e-5 | 1.3e-5 | 1.8e-6 |
+  | sawtooth | equal arc | 7.5e-2 | 7.5e-2 | 2.2e-2 | 2.9e-2 |
+  | sawtooth | graded, p = 4 | 3.2e-3 | 2.2e-4 | 4.9e-6 | 6.6e-6 |
+  | 29.5°/70.5° | equal arc | 3.9e-2 | 2.8e-2 | 2.0e-2 | 1.4e-2 |
+  | 29.5°/70.5° | graded, p = 4 | 6.8e-5 | 6.6e-5 | 2.0e-5 | 4.2e-6 |
+
+  The efficiencies settle with it: the sawtooth's order −1 moves by 9e-6 from
+  P = 256 to 512 on the graded mesh and by 3.7e-3 on the equal-arc one. Order 6
+  is no better than 4 on these profiles, and orders above 6 put the two nodes
+  nearest a corner within rounding of each other (NaN at order 8, P = 512), so
+  the solver accepts 2 to 6 and refuses a mesh whose closest nodes it cannot
+  separate. TE needed no help with the balance, but see below.
+- **TE on profiles with corners passes the balance and is still wrong.** On the
+  sawtooth the equal-arc TE balance reads 2.6e-10 at P = 512 while its order −1
+  sits 6e-5 from the graded answer and moves by 2e-4 between rungs. The theorem
+  holds for any density that solves the discrete system, so it cannot see an
+  error that is common to every order. Read the convergence harness, not the
+  balance alone, on a cornered TE solve; the graded mesh settles it to 5e-6.
 - **Finite conductivity** holds `R + A = 1` to ~1e-4 on smooth profiles
   (measured: 1.2e-4 for Au at 2 nm, 1.5° graze, P = 256; 1e-5 on a flat
   interface). Corners now limit both polarizations at first order, since the
   edge-singular densities meet the same equal-arc mesh, and this is reported
   through the same deviation.
+- **Finite conductivity on a graded mesh is refused for now.** Measured with
+  fixed indices on the coupled system directly: TE improves everywhere (a
+  visible-light metal, n = 0.2 + 3.5i, on the lamellar and the blaze: 1e-4 to
+  2.7e-6 and 3.9e-4 to 6.9e-6 at P = 512), and the conical X-ray blaze
+  (n = 0.998 + 0.002i, 1.5° graze) goes from 8.3e-2 to 4.1e-4 at order 6. But
+  TM on the visible-light metal stalls near 4e-3 at order 4 and diverges at
+  order 6 (0.2 at P = 512), and the conical X-ray lamellar is erratic on both
+  meshes. Kress's convergence proof for graded Nyström needs a modification at
+  the nodes nearest the corner that is not implemented, and a negative
+  permittivity gives a corner oscillatory edge singularities that no grading
+  resolves. Until that is understood, `corner_grading` with
+  `conductivity="tabulated"` raises `UnsupportedConfiguration`.
 
 ## 6. Validation evidence
 
@@ -150,7 +211,10 @@ The measured behaviour is as follows.
 - **Maréchal–Stroke theorem** (echelette, TM, exact blaze): approached
   monotonically, at first order because of the corner limitation.
 - **Lorentz reciprocity** (`checks.check_reciprocity`): TE to ~1e-8, TM to
-  ~1e-5.
+  ~1e-5 on smooth profiles. On cornered profiles at P = 256 the graded mesh
+  takes TM from 2.3e-2 to 1.3e-4 (sawtooth) and from 6.1e-4 to 9.3e-6
+  (lamellar), an independent check of the table in §5, since reciprocity is not
+  the theorem the deviation measures.
 - **An independent integral-method code, orderwise, on a measured groove**: the
   TASTE perfect-conductivity wavescan in the private reference corpus is
   reproduced across every propagating order of the full 0.6–6.0 nm scan, within
@@ -197,9 +261,13 @@ visible-light metals (|n| of a few), which is why that regime costs nodes here
 
 - Smooth profiles: convergence is fast, and the harness typically certifies P in
   the low hundreds.
-- Cornered profiles + TM: the energy-balance deviation should be expected to
-  shrink only linearly. `check_convergence` (which sweeps this knob) should be
-  left to pick the plateau, in preference to trusting a single run.
+- Cornered profiles + TM: on the default equal-arc mesh the energy-balance
+  deviation shrinks only linearly. Pass `corner_grading=4` with a perfect
+  conductor, which reaches 1e-5 at P ≈ 256 on the profiles in §5. Either way,
+  `check_convergence` (which sweeps this knob) should be left to pick the
+  plateau, in preference to trusting a single run. On a graded mesh the
+  resolution floor applies to the coarsest spacing, about twice the mean, so it
+  asks for roughly twice the nodes.
 - Cost: the kernels are assembled as separable BLAS products
   ([`_kernels.py`](../../src/gratinglab/solvers/integral/_kernels.py)), namely a
   few `(P, 2M+1)·(2M+1, P)` GEMMs per wavelength plus a one-time O(P²·M)

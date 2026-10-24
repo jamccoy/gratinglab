@@ -88,7 +88,7 @@ def solve_transverse(
     alpha_m, gamma_m = wavenumbers(k, alpha0, period, orders)
 
     x, y = boundary.x, boundary.y
-    spacing = boundary.spacing
+    weights = boundary.quadrature
     incident = np.exp(1j * (alpha0 * x - gamma0 * y))
     outgoing = np.exp(-1j * alpha_m[:, None] * x - 1j * gamma_m[:, None] * y)
 
@@ -102,7 +102,7 @@ def solve_transverse(
         )
         density = np.linalg.solve(system, -incident)
         amplitudes = (
-            spacing * (outgoing @ density) / (2j * period * gamma_m)
+            (outgoing @ (weights * density)) / (2j * period * gamma_m)
         )
     elif polarization == "TM":
         system = neumann_matrix(
@@ -114,7 +114,7 @@ def solve_transverse(
             (alpha_m[:, None] / gamma_m[:, None]) * boundary.nx[None, :]
             + boundary.ny[None, :]
         )
-        amplitudes = spacing * ((outgoing * direction) @ field) / (2.0 * period)
+        amplitudes = ((outgoing * direction) @ (weights * field)) / (2.0 * period)
     else:  # pragma: no cover - the solver above never passes anything else
         raise ValueError(f"polarization must be 'TE' or 'TM', got {polarization!r}")
 
