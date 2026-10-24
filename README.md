@@ -83,11 +83,14 @@ and convergence harnesses, the materials layer, and a calculation of the resolvi
 power implied by the number of grooves measured.
 
 The aim is gratings in general: reflection and transmission, metallic and
-dielectric, bare and coated, from X-rays to the infrared. Every mount is
-represented, from in-plane (classical) through conical to extreme off-plane at
-grazing incidence, the soft X-ray spectroscopy regime the project began with, where
-the integral method is the established approach and general-purpose RCWA codes are
-least reliable. Which method serves which regime, and what is not yet covered
+dielectric, bare and coated, from X-rays to the infrared. Every mount between the
+two extremes is supported, not only the extremes: any half-cone angle γ from 90°
+(in-plane, classical) through general conical incidence down to extreme off-plane at
+grazing incidence (γ of a degree or two), the soft X-ray spectroscopy regime the
+project began with, where the integral method is the established approach and
+general-purpose RCWA codes are least reliable. `Illumination.classical`,
+`Illumination.conical(theta, phi)` and `Illumination.offplane(graze, azimuth)` all
+build the same object, and both solvers accept any of them. Which method serves which regime, and what is not yet covered
 (coated and multilayer gratings, for one), is mapped in
 [`docs/roadmap.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/roadmap.md#regimes-and-the-methods-that-serve-them).
 
