@@ -12,7 +12,10 @@ step.
 ```
 AFM scan file (.txt)
       ↓  load, detect the scan width from the header
-      ↓  level the image, and optionally undo the tip's dilation
+      ↓  optionally mask out a region
+      ↓  level the image, and optionally repair scan-line scars
+      ↓  correct the groove orientation when it matters
+      ↓  optionally undo the tip's dilation
       ↓  average rows into a height profile
       ↓  flatten (remove the background tilt or curvature)
       ↓  detect groove centres, reject those clipped by a scan edge
@@ -45,6 +48,8 @@ because every band re-measures the same physical grooves; this is discussed in
 
 - **Flattening**: the two stages, which of them changes the answer, and by how
   much
+- **Scars and masking**: repairing scan lines the tip got wrong, and leaving a
+  particle or a bad patch out of the analysis
 - **Tip correction**: undoing the tip's effect on the measured surface where
   that is possible, and stating where it is not
 - **Row groups and scan edges**: what row-group analysis provides, and why

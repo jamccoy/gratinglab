@@ -164,9 +164,16 @@ def _load_text(filename, default_scan_size=2.0):
 
 
 def raw_data(data, scan_x_size):
-    """Extract displacement and height profile from 2D AFM data (averages all rows)"""
+    """
+    Extract displacement and height profile from 2D AFM data (averages all rows)
+
+    NaN pixels (masked, or on a dropped scar line) are left out of each
+    column's mean; a column NaN on every line stays NaN. See core/region_mask.py.
+    """
+    from .region_mask import nan_mean_rows
     disp_um = scan_x_size * np.arange(0, len(data[0])) / (len(data[0]) - 1)
-    groov_nm = (10**9) * (np.mean(data, axis=0) - np.min(np.mean(data, axis=0)))
+    mean = nan_mean_rows(data)
+    groov_nm = (10**9) * (mean - np.nanmin(mean))
     return disp_um, groov_nm
 
 
@@ -188,8 +195,22 @@ def raw_data_multi_group(data, scan_x_size, n_groups=10):
         profiles_nm: list of n_groups 1D arrays, each containing a height profile in nm
         group_info: dict with metadata about the grouping
     """
+    from .region_mask import nan_mean_rows
+
+    # Lines that are NaN from end to end (masked rows, dropped scar lines) are
+    # left out before the bands are cut, so they contribute to no group and the
+    # groups stay equal in size over what remains. Their indices still refer to
+    # the image as loaded.
+    all_rows = data.shape[0]
+    kept_rows = np.flatnonzero(~np.all(np.isnan(data), axis=1))
+    rows_excluded = all_rows - len(kept_rows)
+    if rows_excluded:
+        data = data[kept_rows]
+
     n_rows = data.shape[0]
     n_cols = data.shape[1]
+    if n_rows == 0:
+        raise ValueError("every scan line is masked or dropped; nothing left to analyse")
     
     # Calculate x-displacement (same for all profiles)
     disp_um = scan_x_size * np.arange(0, n_cols) / (n_cols - 1)
@@ -218,25 +239,29 @@ def raw_data_multi_group(data, scan_x_size, n_groups=10):
         
         # Extract and average rows in this group
         group_data = data[start_row:end_row, :]
-        profile_avg = np.mean(group_data, axis=0)
+        profile_avg = nan_mean_rows(group_data)
         
         # Convert to nm and subtract minimum
-        profile_nm = (10**9) * (profile_avg - np.min(profile_avg))
+        profile_nm = (10**9) * (profile_avg - np.nanmin(profile_avg))
         
         profiles_nm.append(profile_nm)
-        group_ranges.append((start_row, end_row))
+        # In the image's own line numbers, so a masked gap shows as a wider band
+        group_ranges.append((int(kept_rows[start_row]), int(kept_rows[end_row - 1]) + 1))
     
     # Package metadata
     group_info = {
         'n_groups': n_groups,
         'n_rows': n_rows,
         'rows_per_group': rows_per_group,
-        'group_ranges': group_ranges
+        'group_ranges': group_ranges,
+        'rows_excluded': rows_excluded,
     }
     
     print(f"  Extracted {n_groups} row-group profiles")
     print(f"    Rows per group: {rows_per_group}")
     print(f"    Total rows used: {n_groups * rows_per_group} of {n_rows}")
+    if rows_excluded:
+        print(f"    Lines excluded (masked or dropped): {rows_excluded} of {all_rows}")
     
     return disp_um, profiles_nm, group_info
 
@@ -310,8 +335,9 @@ def _feature_residual_rms(feature_x, feature_y, coeffs):
     return float(np.sqrt(np.mean(residual ** 2)))
 
 
-def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0, 
-                   feature='both', period_nm=None, return_report=False):
+def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
+                   feature='both', period_nm=None, return_report=False,
+                   exclude=None):
     """
     Remove background tilt/curvature from AFM profile
     
@@ -327,7 +353,13 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
             was actually done, following the `return_n_edge_rejected` keyword
             on `find_groove_positions`. Off by default so existing two-value
             unpacking keeps working.
-    
+        exclude: boolean array, True where ``y`` is not a measurement: the
+            straight bridge across a masked gap (core/region_mask.py). Those
+            points, and any peak or trough within two pixels of them, take no
+            part in any fit; the background is still evaluated everywhere. A
+            bridge left in pulled every method's background, by 1.3 degrees of
+            blaze angle for `linear` on a scan with 2.5 periods masked.
+        
     Returns:
         y_flat: flattened profile
         background: the removed background
@@ -340,8 +372,20 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
     edge_exclusion_skipped = False
     residual_rms = None
 
+    # Points the fits may use. Everything, unless part of the trace is a bridge.
+    usable = np.ones(len(y), dtype=bool)
+    if exclude is not None and np.any(exclude):
+        gap = np.asarray(exclude, dtype=bool)
+        near_gap = np.convolve(gap.astype(float), np.ones(5), mode='same') > 0
+        usable = ~near_gap
+
+    def _features(indices):
+        """Drop features on or beside a bridge."""
+        indices = np.asarray(indices, dtype=int)
+        return indices[usable[indices]] if len(indices) else indices
+
     if method == 'linear':
-        poly_coeffs = np.polyfit(x, y, 1)
+        poly_coeffs = np.polyfit(x[usable], y[usable], 1)
         background = np.polyval(poly_coeffs, x)
         # `linear` is degree 1 by definition, so poly_order was never a request
         # here and reporting a reduction would make every call look degraded.
@@ -350,23 +394,25 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
     elif method == 'polynomial':
         if exclude_edges > 0:
             n_exclude = int(len(x) * exclude_edges)
-            x_fit = x[n_exclude:-n_exclude]
-            y_fit = y[n_exclude:-n_exclude]
+            keep = usable[n_exclude:-n_exclude]
+            x_fit = x[n_exclude:-n_exclude][keep]
+            y_fit = y[n_exclude:-n_exclude][keep]
             poly_coeffs = np.polyfit(x_fit, y_fit, poly_order)
         else:
-            poly_coeffs = np.polyfit(x, y, poly_order)
+            poly_coeffs = np.polyfit(x[usable], y[usable], poly_order)
         
         background = np.polyval(poly_coeffs, x)
         
     elif method == 'groove_peaks':
         peaks, _ = find_peaks(y, distance=len(y)//20)
-        
+        peaks = _features(peaks)
+                
         if len(peaks) < 3:
             warnings.warn(
                 f"groove_peaks found {len(peaks)} peak(s), too few to fit; "
                 f"using a degree-{poly_order} polynomial through the whole profile",
                 UserWarning, stacklevel=2)
-            poly_coeffs = np.polyfit(x, y, poly_order)
+            poly_coeffs = np.polyfit(x[usable], y[usable], poly_order)
             background = np.polyval(poly_coeffs, x)
             method_used = 'polynomial'
         else:
@@ -389,6 +435,7 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
             height_range = np.max(y) - np.min(y)
             min_prominence = 0.2 * height_range  # Require peaks to be at least 20% of height range
             peaks, _ = find_peaks(y, distance=min_distance, prominence=min_prominence)
+            peaks = _features(peaks)
             if len(peaks) > 0:
                 feature_x.extend(x[peaks])
                 feature_y.extend(y[peaks])
@@ -400,6 +447,7 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
             height_range = np.max(y) - np.min(y)
             min_prominence = 0.2 * height_range
             troughs, _ = find_peaks(y_inv, distance=min_distance, prominence=min_prominence)
+            troughs = _features(troughs)
             if len(troughs) > 0:
                 feature_x.extend(x[troughs])
                 feature_y.extend(y[troughs])
@@ -409,7 +457,7 @@ def flatten_profile(x, y, method='linear', poly_order=2, exclude_edges=0.0,
                 f"level_grooves found {len(feature_x)} feature(s), too few to fit; "
                 "using linear",
                 UserWarning, stacklevel=2)
-            poly_coeffs = np.polyfit(x, y, 1)
+            poly_coeffs = np.polyfit(x[usable], y[usable], 1)
             background = np.polyval(poly_coeffs, x)
             method_used = 'linear'
             order_used = 1

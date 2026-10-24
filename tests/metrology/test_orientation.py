@@ -154,6 +154,43 @@ def test_an_absurd_angle_is_refused():
         align_grooves(_image(0.0), 8.0, 2.0, 70.0)
 
 
+# ── Together with the region mask and scar repair ───────────────────────────
+
+def test_a_masked_rotated_scan_is_still_measured_and_corrected(tmp_path):
+    """
+    A column mask leaves a gap in every band. The bands are searched across it
+    and the grooves beside it dropped, so the angle is still found, and the
+    masked analysis still recovers the true facet.
+    """
+    path = _write_text(tmp_path / "rot3.txt", _image(3.0, cols=3072), 8.0, 2.0)
+    settings = AnalysisSettings(groove_orientation='always', n_row_groups=16,
+                                mask_cols=((1200, 1500),))
+    with contextlib.redirect_stdout(io.StringIO()):
+        result = analyze_single_file(str(path), show_plots=False,
+                                     settings=settings)
+    report = result['groove_orientation']
+    assert report['applied']
+    assert report['angle_deg'] == pytest.approx(3.0, abs=0.02)
+    assert result['mean_angle'] == pytest.approx(BLAZE_DEG, abs=0.02)
+    assert result['mask_rejected_grooves'] > 0
+
+
+def test_scars_are_repaired_before_the_rows_are_shifted(tmp_path):
+    """Repair first: the correction would otherwise carry each scar sideways."""
+    data = _image(3.0, cols=3072)
+    for line in (20, 21, 60):
+        data[line, 400:1400] += 60e-9
+    path = _write_text(tmp_path / "rot3_scars.txt", data, 8.0, 2.0)
+    settings = AnalysisSettings(groove_orientation='always', n_row_groups=16,
+                                scar_repair='interpolate')
+    with contextlib.redirect_stdout(io.StringIO()):
+        result = analyze_single_file(str(path), show_plots=False,
+                                     settings=settings)
+    assert result['scar_lines'] == 3
+    assert result['groove_orientation']['angle_deg'] == pytest.approx(3.0, abs=0.02)
+    assert result['mean_angle'] == pytest.approx(BLAZE_DEG, abs=0.02)
+
+
 # ── The analysis, end to end ─────────────────────────────────────────────────
 
 @pytest.fixture(scope="module")

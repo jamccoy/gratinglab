@@ -60,6 +60,14 @@ class FormState:
     flatten_feature: str = 'peaks'
     flatten_exclude_edges: float = 0.05
 
+    # Also owned by the Import tab: scar repair beside image flattening, and
+    # the region mask drawn on the image, in pixels (see core/region_mask.py).
+    scar_repair: str = 'none'
+    scar_threshold: float = 4.0
+    mask_rect: Optional[tuple] = None
+    mask_rows: tuple = ()
+    mask_cols: tuple = ()
+
     # Tip deconvolution, applied to the 2-D scan before either the blaze-angle
     # analysis or the boundary profile sees it. Off by default: a corrected and
     # an uncorrected depth are different measurements.
@@ -86,6 +94,11 @@ class FormState:
             flatten_poly_order=settings.flatten_poly_order,
             flatten_feature=settings.flatten_feature,
             flatten_exclude_edges=settings.flatten_exclude_edges,
+            scar_repair=settings.scar_repair,
+            scar_threshold=settings.scar_threshold,
+            mask_rect=settings.mask_rect,
+            mask_rows=settings.mask_rows,
+            mask_cols=settings.mask_cols,
             tip_correction=settings.tip_correction,
             tip_radius_nm=settings.tip_radius_nm,
             tip_half_angle_deg=settings.tip_half_angle_deg,
@@ -136,6 +149,11 @@ def _to_settings(form: FormState) -> AnalysisSettings:
         flatten_poly_order=form.flatten_poly_order,
         flatten_feature=form.flatten_feature,
         flatten_exclude_edges=form.flatten_exclude_edges,
+        scar_repair=form.scar_repair,
+        scar_threshold=form.scar_threshold,
+        mask_rect=form.mask_rect,
+        mask_rows=tuple(form.mask_rows),
+        mask_cols=tuple(form.mask_cols),
         tip_correction=form.tip_correction,
         tip_radius_nm=form.tip_radius_nm,
         tip_half_angle_deg=form.tip_half_angle_deg,
@@ -180,6 +198,17 @@ def summarize_result(result) -> str:
     icc_note = (f"   ICC {icc:.2f}, N_eff {result.get('n_effective', float('nan')):.0f}"
                 if icc is not None and icc == icc else "")
 
+    # What was taken out of the scan before it was measured, only when
+    # something was: a repaired or masked scan is a different measurement.
+    cleanup = ""
+    if result.get('scar_repair', 'none') != 'none':
+        cleanup += (f"\nScar repair      : {result['scar_repair']}, "
+                    f"{result.get('scar_lines', 0)} line(s)")
+    if result.get('region_mask'):
+        cleanup += (f"\nRegion mask      : {result['region_mask']}   "
+                    f"{result.get('mask_rejected_grooves', 0)} groove(s) "
+                    f"rejected")
+
     return (
         f"Mean blaze angle : {result['mean_angle']:.3f}deg  "
         f"+/- {sem:.3f}deg (SEM){icc_note}\n"
@@ -189,6 +218,7 @@ def summarize_result(result) -> str:
         f"Period           : {result['period_nm']:.2f} "
         f"+/- {result.get('period_std', 0):.2f} nm   worst fit R2 = {worst_r2}"
         + orientation_line(result.get('groove_orientation'))
+        + cleanup
     )
 
 

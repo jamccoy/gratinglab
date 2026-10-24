@@ -98,6 +98,7 @@ from typing import Optional
 import numpy as np
 
 from .processing import find_groove_positions
+from .region_mask import bridge_nan, nan_mean_rows, reject_grooves_near_nan
 
 __all__ = [
     "VALID_GROOVE_ORIENTATIONS",
@@ -286,14 +287,23 @@ def measure_groove_orientation(data, scan_x_size_um, scan_y_size_um, period_nm,
     x_um = np.arange(n_cols) * pixel_x / 1000.0
     band_positions = []
     for first, end in bands:
-        profile = np.nanmean(data[first:end, :], axis=0) * 1e9
-        if not np.all(np.isfinite(profile)):
-            continue
-        profile = profile - np.polyval(np.polyfit(x_um, profile, 1), x_um)
+        band = data[first:end, :]
+        if not np.isfinite(band).any():
+            continue          # a band the region mask or scar drop removed
+        # Masked pixels (NaN, core/region_mask.py) are left out of the mean; a
+        # column masked across the band is bridged for the search and any
+        # groove reading the bridge is dropped, as the analysis does.
+        measured = nan_mean_rows(band) * 1e9
+        profile = bridge_nan(measured)
+        known = np.isfinite(measured)
+        profile = profile - np.polyval(
+            np.polyfit(x_um[known], profile[known], 1), x_um)
         with contextlib.redirect_stdout(io.StringIO()):
             centers = find_groove_positions(
                 x_um, profile, period_nm, prominence_factor=prominence_factor,
                 distance_factor=distance_factor, edge_exclusion=0.5)
+        centers, _ = reject_grooves_near_nan(
+            centers, measured, 0.5 * period_nm / pixel_x)
         if len(centers):
             xs = [_subpixel(profile, int(c)) * pixel_x for c in centers]
             band_positions.append((0.5 * (first + end - 1) * pixel_y, xs))

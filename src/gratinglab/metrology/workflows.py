@@ -129,6 +129,8 @@ def run_boundary_profile_export(settings=None, filename=None):
     from .core.processing import load_afm_data, load_scan_y_size
     from .core.image_flatten import flatten_image
     from .core.orientation import apply_groove_orientation
+    from .core.region_mask import apply_region_mask
+    from .core.scars import repair_scars_for
     from .boundary import build_boundary_profile
     from gratinglab.io.ggp import write_ggp
 
@@ -146,12 +148,22 @@ def run_boundary_profile_export(settings=None, filename=None):
                                       default_scan_size=settings.scan_x_size,
                                       settings=settings)
 
+    # The region mask before levelling, which reads every pixel of a line.
+    data, _ = apply_region_mask(data, settings)
+
     # Applied here too, so both outputs treat a scan the same way. Provably a
     # no-op for the affine methods - the endpoint flattening downstream removes
     # constant and linear terms again - and verified identical at the written
     # precision, so the stored .ggp fixture still matches.
     if settings.image_flatten_method != 'none':
         data = flatten_image(data, settings.image_flatten_method)
+
+    # Scar repair sits with image flattening, here and in the GUI's Import tab,
+    # and before the orientation correction, which shifts rows and would
+    # carry each scar along with them.
+    data, scars = repair_scars_for(data, settings)
+    if scars.method != 'none':
+        print(f"Scar repair: {scars.summary}")
 
     # The whole-image average is where a rotated sample hurts most: the grooves
     # drift across every row that goes into it. Corrected on the whole image,
@@ -170,6 +182,9 @@ def run_boundary_profile_export(settings=None, filename=None):
     except ValueError as exc:
         print(f"{exc}")
         return None
+    if scars.method != 'none':
+        profile.metrics['scar_repair'] = scars.method
+        profile.metrics['scar_lines'] = scars.n_lines
 
     if profile.metrics.get('tip_correction', 'none') != 'none':
         print(f"Tip correction: erosion "
@@ -183,6 +198,9 @@ def run_boundary_profile_export(settings=None, filename=None):
     print(f"Found {profile.n_grooves} grooves{edge_note}")
     print(f"Measured period: {profile.period_nm:.2f} nm")
     print(f"Averaged {profile.n_used} of {profile.n_grooves} grooves")
+    if profile.metrics.get('region_mask'):
+        print(f"Region mask: {profile.metrics['region_mask']} "
+              f"({profile.n_mask_rejected} groove(s) rejected)")
 
     stem = os.path.splitext(os.path.basename(filename))[0]
     ggp_path = os.path.join(RESULTS_DIR, f'averaged_groove_profile_{stem}.ggp')

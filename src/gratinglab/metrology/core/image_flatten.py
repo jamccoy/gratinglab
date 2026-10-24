@@ -39,6 +39,8 @@ otherwise appear to be broken. Their uses are as follows:
 """
 from __future__ import annotations
 
+import warnings
+
 import numpy as np
 
 __all__ = ["flatten_image", "IMAGE_FLATTEN_METHODS", "VALID_IMAGE_FLATTEN_METHODS",
@@ -68,7 +70,10 @@ def _plane(data: np.ndarray) -> np.ndarray:
     rows, cols = data.shape
     y, x = np.mgrid[0:rows, 0:cols]
     basis = np.column_stack([x.ravel(), y.ravel(), np.ones(data.size)])
-    coefficients, *_ = np.linalg.lstsq(basis, data.ravel(), rcond=None)
+    # Masked pixels (NaN, see core/region_mask.py) take no part in the fit.
+    known = np.isfinite(data.ravel())
+    coefficients, *_ = np.linalg.lstsq(basis[known], data.ravel()[known],
+                                       rcond=None)
     return data - (basis @ coefficients).reshape(rows, cols)
 
 
@@ -85,7 +90,22 @@ def _align_rows(data: np.ndarray) -> np.ndarray:
     symmetric about its own mean. A row that happens to catch more groove
     bottom than land would shift a mean, whereas the median barely moves.
     """
-    return data - np.median(data, axis=1, keepdims=True)
+    return data - _row_medians(data)
+
+
+def _row_medians(data):
+    """
+    Each line's median, over the pixels that are not masked (NaN).
+
+    A masked particle would otherwise move the median of every line it sits
+    on. Plain ``np.median`` when nothing is masked, so the result is unchanged
+    for every scan analysed before masks existed.
+    """
+    if np.isfinite(data).all():
+        return np.median(data, axis=1, keepdims=True)
+    with warnings.catch_warnings():
+        warnings.simplefilter('ignore', RuntimeWarning)  # a fully masked line
+        return np.nanmedian(data, axis=1, keepdims=True)
 
 
 #: Methods by name. Add one here and it appears in the GUI, the settings
@@ -133,4 +153,5 @@ def row_offset_spread(data) -> float:
     is zero after `align_rows` by construction.
     """
     data = np.asarray(data, dtype=float)
-    return float(np.std(np.median(data, axis=1)))
+    medians = _row_medians(data).ravel()
+    return float(np.std(medians[np.isfinite(medians)]))

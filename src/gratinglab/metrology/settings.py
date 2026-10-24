@@ -20,6 +20,7 @@ from typing import Optional
 
 from .core.image_flatten import VALID_IMAGE_FLATTEN_METHODS
 from .core.orientation import DEFAULT_THRESHOLD_DEG, VALID_GROOVE_ORIENTATIONS
+from .core.scars import VALID_SCAR_REPAIRS
 from .core.tip import VALID_TIP_CORRECTIONS
 
 # The blaze facet is trimmed 2.5x harder on the trough side than the land side
@@ -37,6 +38,16 @@ VALID_BLAZE_SIDES = ('negative_slope', 'positive_slope', 'longer')
 VALID_SPM_DIRECTIONS = ('Retrace', 'Trace')
 VALID_FLATTEN_METHODS = ('linear', 'polynomial', 'groove_peaks', 'level_grooves')
 VALID_FLATTEN_FEATURES = ('peaks', 'troughs', 'both')
+
+
+def _as_rect(rect):
+    """A mask rectangle as a tuple of four ints, or None. Lists come from config."""
+    return None if not rect else tuple(int(v) for v in rect)
+
+
+def _as_ranges(ranges):
+    """Mask ranges as a tuple of (start, stop) int pairs, hashable like the rest."""
+    return tuple((int(a), int(b)) for a, b in (ranges or ()))
 
 
 @dataclass(frozen=True)
@@ -72,6 +83,25 @@ class AnalysisSettings:
     # for the modes and why 'auto' with 0.2 deg is the default.
     groove_orientation: str = 'auto'
     groove_orientation_threshold_deg: float = DEFAULT_THRESHOLD_DEG
+    # Scar repair: scan lines that stand off both neighbours (tip skips,
+    # feedback ringing), found after image flattening and either interpolated
+    # down their columns or dropped from row grouping. A stage of its own
+    # rather than a flattening method, because it is used together with one;
+    # core/scars.py says why. Threshold is in units of the robust row-to-row
+    # noise, length in pixels along the line, width in lines.
+    scar_repair: str = 'none'
+    scar_threshold: float = 4.0
+    scar_min_length: int = 16
+    scar_max_width: int = 4
+
+    # Region mask: pixels left out of the analysis, in pixel indices of the
+    # image as loaded, half-open. A rectangle (row0, row1, col0, col1), whole
+    # line ranges ((row0, row1), ...) and whole column ranges ((col0, col1),
+    # ...). Masked lines join no row group and masked columns yield no
+    # grooves; core/region_mask.py says how.
+    mask_rect: Optional[tuple] = None
+    mask_rows: tuple = ()
+    mask_cols: tuple = ()
 
     # Tip correction: undoing what the tip shape did to the image, where that
     # is possible, on the 2-D array right after image flattening. Off by
@@ -135,6 +165,13 @@ class AnalysisSettings:
             groove_orientation=getattr(config, 'GROOVE_ORIENTATION', 'auto'),
             groove_orientation_threshold_deg=getattr(
                 config, 'GROOVE_ORIENTATION_THRESHOLD_DEG', DEFAULT_THRESHOLD_DEG),
+            scar_repair=getattr(config, 'SCAR_REPAIR', 'none'),
+            scar_threshold=getattr(config, 'SCAR_THRESHOLD', 4.0),
+            scar_min_length=getattr(config, 'SCAR_MIN_LENGTH', 16),
+            scar_max_width=getattr(config, 'SCAR_MAX_WIDTH', 4),
+            mask_rect=_as_rect(getattr(config, 'MASK_RECT', None)),
+            mask_rows=_as_ranges(getattr(config, 'MASK_ROWS', ())),
+            mask_cols=_as_ranges(getattr(config, 'MASK_COLS', ())),
             tip_correction=getattr(config, 'TIP_CORRECTION', 'none'),
             tip_radius_nm=getattr(config, 'TIP_RADIUS_NM', 1.0),
             tip_half_angle_deg=getattr(config, 'TIP_HALF_ANGLE_DEG', 18.0),
@@ -199,6 +236,30 @@ class AnalysisSettings:
         if not 0 <= self.groove_orientation_threshold_deg < 45:
             errors.append(('groove_orientation_threshold_deg',
                            "must be at least 0 and under 45 degrees"))
+        if self.scar_repair not in VALID_SCAR_REPAIRS:
+            errors.append(('scar_repair',
+                           f"must be one of {', '.join(VALID_SCAR_REPAIRS)}"))
+        if self.scar_repair != 'none':
+            if self.scar_threshold <= 0:
+                errors.append(('scar_threshold', "must be greater than 0"))
+            if self.scar_min_length < 1:
+                errors.append(('scar_min_length', "must be at least 1 pixel"))
+            if self.scar_max_width < 1:
+                errors.append(('scar_max_width', "must be at least 1 line"))
+
+        if self.mask_rect is not None:
+            rect = tuple(self.mask_rect)
+            if (len(rect) != 4 or rect[0] < 0 or rect[2] < 0
+                    or rect[1] <= rect[0] or rect[3] <= rect[2]):
+                errors.append(('mask_rect',
+                               "must be (row0, row1, col0, col1) with "
+                               "0 <= row0 < row1 and 0 <= col0 < col1"))
+        for name in ('mask_rows', 'mask_cols'):
+            for span in getattr(self, name):
+                if len(span) != 2 or span[0] < 0 or span[1] <= span[0]:
+                    errors.append((name, f"each range must be (start, stop) "
+                                         f"with 0 <= start < stop, got {span!r}"))
+                    break
 
         if self.tip_correction not in VALID_TIP_CORRECTIONS:
             errors.append(('tip_correction',
