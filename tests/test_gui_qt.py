@@ -188,6 +188,32 @@ class TestTheIntegralTab:
         )
         assert options["conductivity"] == "tabulated"
 
+    def test_the_corner_mesh_selector_offers_off_and_the_orders(self, win):
+        from gratinglab.gui.integral_options import GRADING_CHOICES
+
+        combo = win.tabs["integral"]._fields["corner_grading"]
+        assert tuple(combo.itemText(i) for i in range(combo.count())) == GRADING_CHOICES
+        assert combo.currentText() == "off"
+
+    def test_the_corner_mesh_note_follows_the_selector(self, win):
+        tab = win.tabs["integral"]
+        assert "Equal-arc" in tab._grading_note.text()
+        tab._fields["corner_grading"].setCurrentText("4")
+        assert "order 4" in tab._grading_note.text()
+
+    def test_the_corner_mesh_reaches_build_options(self, win):
+        """Regression: the field and the state agreed on the name, so the
+        consistency check passed while `build_options` never read it, and the
+        selector did nothing."""
+        tab = win.tabs["integral"]
+        tab._fields["corner_grading"].setCurrentText("4")
+        tab._fields["boundary_points"].setText("1200")
+        parsed = build(FormState())
+        options = tab.build_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths
+        )
+        assert options["corner_grading"] == 4
+
     def test_a_tabulated_solve_equals_a_direct_one(self, qtbot, win):
         """`TestNotASecondSourceOfTruth`, for the coupled system: the tab must
         not compute, reshape or rescale anything on the way to the plot."""

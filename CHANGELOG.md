@@ -53,6 +53,13 @@ entries under "Unreleased" into a section named for the new version;
   asserts. The palette, every plot, the provenance panel, the Setup and theory
   pages and the geometry views all restyle in place.
 
+- A **Corner mesh** selector on the Integral tab: off (the equal-arc mesh,
+  still the default) or a grading order from 2 to 6, with a note on what it
+  does. The form checks the graded mesh's own resolution floor, whose
+  coarsest spacing is about twice the mean, and refuses an order that would
+  put nodes closer than double precision separates, each on the field that
+  caused it, using the solver's own check.
+
 ### Changed
 
 - Diffraction orders are coloured by sign, cool for negative, warm for

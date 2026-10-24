@@ -5,7 +5,7 @@ This is the options module for the second solver, written as
 own frozen state and its own ``build_options`` raising
 :class:`~gratinglab.gui.state.FormErrors`, and it imports no toolkit.
 
-The form has two settings, because the solver has two. ``conductivity``
+The form has three settings, because the solver has three. ``conductivity``
 chooses the boundary condition, either ``"perfect"`` (relative efficiency, no
 material) or ``"tabulated"`` (the finite-conductivity system of Goray &
 Schmidt 2010, with absolute efficiency and absorption recorded). The mesh
@@ -17,6 +17,12 @@ shorter of the two for any index other than a soft-X-ray one. Both floors
 mirror the solver's own refusals (``solvers/integral``). Validating here as
 well places the error on the field that caused it, alongside every other form
 error, instead of letting it surface as a ValueError from the worker thread.
+
+``corner_grading`` chooses the mesh: equal arc length, or graded towards the
+profile's corners at an order from 2 to 6. A graded mesh changes the floor,
+because its coarsest spacing (mid-side) is about twice the mean, so the
+guard is computed on the mesh the solver will actually build, and the
+solver's own check for nodes too close to separate is applied here too.
 """
 
 from __future__ import annotations
@@ -29,12 +35,19 @@ from numpy.typing import NDArray
 
 from ..illumination import Illumination
 from ..problem import Problem
-from ..solvers.integral import _POINTS_PER_WAVELENGTH
+from ..solvers.integral import (
+    _MAX_GRADING,
+    _POINTS_PER_WAVELENGTH,
+    _coincident_nodes,
+)
+from ..solvers.integral._boundary import physical_boundary
 from .state import FieldError, FormErrors, _number
 
 __all__ = [
     "CONDUCTIVITY_MODES",
     "CONDUCTIVITY_NOTES",
+    "GRADING_CHOICES",
+    "GRADING_NOTES",
     "IntegralOptionsState",
     "build_options",
 ]
@@ -67,12 +80,34 @@ CONDUCTIVITY_NOTES = {
 }
 
 
+#: The corner-mesh choices as the form shows them: ``off`` is the equal-arc
+#: mesh, the solver's default, and a number is the grading order.
+GRADING_CHOICES = ("off",) + tuple(str(p) for p in range(2, _MAX_GRADING + 1))
+
+#: What the choice means, shown beneath the selector, for the reason
+#: ``CONDUCTIVITY_NOTES`` gives.
+GRADING_NOTES = {
+    "off": (
+        "Equal-arc mesh. On a profile with corners TM converges only at "
+        "first order (with finite conductivity, both polarizations do); "
+        "the provenance panel's energy-balance deviation shows how far."
+    ),
+    "graded": (
+        "Nodes clustered at the profile's corners (order {p}), where the "
+        "field is singular: cornered profiles converge far faster, and a "
+        "profile with no corner is unaffected. Needs about twice the "
+        "boundary points for the same resolution floor. 4 is recommended."
+    ),
+}
+
+
 @dataclass(frozen=True, slots=True)
 class IntegralOptionsState:
     """Integral's own form fields, exactly as typed."""
 
     boundary_points: str = "400"
     conductivity: str = CONDUCTIVITY_MODES[0]
+    corner_grading: str = GRADING_CHOICES[0]
 
     def with_field(self, name: str, value: Any) -> "IntegralOptionsState":
         """Return a copy with one field changed."""
@@ -106,20 +141,50 @@ def build_options(
                 f"must be one of {', '.join(CONDUCTIVITY_MODES)}",
             )
         )
+    if form.corner_grading not in GRADING_CHOICES:
+        errors.append(
+            FieldError(
+                "corner_grading",
+                f"must be one of {', '.join(GRADING_CHOICES)}",
+            )
+        )
     if errors:
         raise FormErrors(tuple(errors))
     assert points is not None
+    grading = 0 if form.corner_grading == "off" else int(form.corner_grading)
 
     arc_length = (
         problem.profile.boundary(_ARC_SAMPLES).arc_length * problem.period
     )
+    # The floor is set by the coarsest spacing. On the equal-arc mesh that is
+    # the mean, arc_length / P; a graded mesh is built here exactly as the
+    # solver will build it, since its coarsest spacing depends on P.
+    resolution_length = arc_length
+    if grading:
+        try:
+            mesh = physical_boundary(problem, int(points), grading=grading)
+        except ValueError as refused:  # too few points for the corners
+            raise FormErrors((FieldError("boundary_points", str(refused)),)) from None
+        coincident = _coincident_nodes(mesh, problem.period)
+        if coincident is not None:
+            raise FormErrors((FieldError(
+                "corner_grading",
+                f"order {grading} at {int(points)} points puts two nodes "
+                f"{coincident[0]:.3g} nm apart, closer than double precision "
+                "can separate on this groove; choose a lower order (4 is "
+                "recommended) or fewer points.",
+            ),))
+        if mesh.graded:
+            resolution_length = mesh.resolution_length
     reduced = float(wavelengths.min()) / illumination.sin_gamma
-    needed = int(np.ceil(_POINTS_PER_WAVELENGTH * arc_length / reduced))
+    needed = int(np.ceil(_POINTS_PER_WAVELENGTH * resolution_length / reduced))
     message = (
         f"needs at least {needed} to give "
         f"{_POINTS_PER_WAVELENGTH:g} nodes per transverse "
         f"wavelength ({reduced:.4g} nm) along the "
         f"{arc_length:.4g} nm boundary"
+        + (", where the graded mesh's coarsest spacing sets the floor"
+           if resolution_length != arc_length else "")
     )
 
     if form.conductivity == "tabulated":
@@ -131,7 +196,7 @@ def build_options(
             raise FormErrors((error,))
         assert name is not None and indices is not None
         metal_needed, metal_message = _metal_floor(
-            name, indices, illumination, wavelengths, arc_length
+            name, indices, illumination, wavelengths, resolution_length
         )
         # One error on one field: whichever side of the boundary binds harder.
         # Reporting both would put two messages on `boundary_points` that a
@@ -142,7 +207,11 @@ def build_options(
     if points < needed:
         raise FormErrors((FieldError("boundary_points", message),))
 
-    return {"boundary_points": int(points), "conductivity": form.conductivity}
+    return {
+        "boundary_points": int(points),
+        "conductivity": form.conductivity,
+        "corner_grading": grading,
+    }
 
 
 def _tabulated_index(

@@ -251,9 +251,11 @@ hides it), and the window has one tab for each task:
   sweep and reports the coarsest setting that meets the criterion, with a progress bar
   and a Cancel button. Because solvers report progress for each wavelength, Cancel
   stops the computation itself.
-- **Integral method:** the rigorous backend, with the same panel and provenance and its
+- **Integral method:** the rigorous backend, with the same panel and provenance, its
   own boundary-condition control (perfect conductivity or tabulated optical
-  constants). It takes minutes where the scalar solver takes milliseconds, so the
+  constants) and a **Corner mesh** control: off, or a grading order that clusters
+  the boundary nodes at the profile's corners, which a cornered profile needs to
+  converge quickly (4 is recommended). It takes minutes where the scalar solver takes milliseconds, so the
   window opens on the scalar solver and this tab computes only when asked to.
 - **Setup:** the material library, showing which optical constants are installed, the
   range each covers, where each came from, and how to add others. The coating itself is
