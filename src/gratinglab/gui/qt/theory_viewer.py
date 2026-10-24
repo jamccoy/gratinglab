@@ -69,9 +69,19 @@ class TheoryViewer(QWidget):
         layout.addWidget(self._browser)
 
         self.set_page(page)
+        from . import theming
+
+        # Equations are images rasterised in the text colour, so a theme
+        # change re-renders the page rather than only repainting it.
+        theming.subscribe(self._on_theme)
+
+    def _on_theme(self, _theme) -> None:
+        # A bound method so Qt disconnects it with the window (see SetupTab).
+        self.set_page(self._page)
 
     def set_page(self, page) -> None:
         """Render a page into the browser, images and all."""
+        self._page = page
         render_into(
             self._browser,
             page,

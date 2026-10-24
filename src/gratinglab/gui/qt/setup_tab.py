@@ -276,6 +276,14 @@ class SetupTab(QWidget):
         layout.addWidget(self._status)
         layout.addWidget(self._browser)
         self._render()
+        from . import theming
+
+        theming.subscribe(self._on_theme)
+
+    def _on_theme(self, _theme) -> None:
+        # A bound method, not a lambda: Qt drops the connection when this
+        # widget is destroyed, and would keep calling a lambda into a corpse.
+        self._render()
 
     # -- library actions --------------------------------------------------
 

@@ -26,7 +26,7 @@ from __future__ import annotations
 import threading
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QKeySequence
+from PySide6.QtGui import QActionGroup, QKeySequence
 from PySide6.QtWidgets import (
     QDockWidget,
     QMainWindow,
@@ -38,6 +38,8 @@ from PySide6.QtWidgets import (
 
 from .. import provenance
 from ..state import FormErrors, build, validate
+from ..theme import SYSTEM, THEMES
+from . import theming
 from .geometry_panel import GeometryPanel
 from .geometry_tab import GeometryTab
 from .integral_tab import IntegralTab
@@ -103,6 +105,10 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self.setWindowTitle("GratingLab")
         self.resize(1180, 820)
+        # Before any widget exists, so every figure is born in the theme.
+        from PySide6.QtWidgets import QApplication
+
+        self._themes = theming.install(QApplication.instance())
         # Solves run on a worker thread; keep the cycle collector off it.
         from .gc_guard import guard
 
@@ -242,8 +248,9 @@ class MainWindow(QMainWindow):
         that merits a menu is the explanation of the mathematics, which the
         window itself never gives.
 
-        View exists for a single purpose and holds a single action. The
-        geometry panel can now be closed (otherwise it would occupy 300 px of
+        View began with a single purpose and a single action, and now holds
+        a second: the Theme submenu, which is about how the window looks and
+        so belongs nowhere else. The geometry panel can now be closed (otherwise it would occupy 300 px of
         a 1180 px window), and a control that the user can close with no way
         to reopen it would leave the user stuck. Placing the reopening action
         under Help would be worse than adding a View menu, since Help here
@@ -274,6 +281,22 @@ class MainWindow(QMainWindow):
         toggle.setText("&Geometry inputs")
         toggle.setShortcut(QKeySequence("Ctrl+G"))
         self._view_menu.addAction(toggle)
+        self._view_menu.addSeparator()
+
+        # One exclusive group: System follows the OS, the rest are fixed.
+        self._theme_menu = self._view_menu.addMenu("&Theme")
+        self._theme_actions = QActionGroup(self)
+        self._theme_actions.setExclusive(True)
+        choices = [(SYSTEM, "System")] + [(k, t.label) for k, t in THEMES.items()]
+        for key, label in choices:
+            action = self._theme_menu.addAction(label)
+            action.setCheckable(True)
+            action.setData(key)
+            action.setChecked(key == self._themes.choice)
+            action.triggered.connect(lambda _checked=False, k=key: self.set_theme(k))
+            self._theme_actions.addAction(action)
+            if key == SYSTEM:
+                self._theme_menu.addSeparator()
 
         menu = self._help_menu = self._menu_bar.addMenu("&Help")
         menu.addAction("About GratingLab", self.show_about)
@@ -293,6 +316,12 @@ class MainWindow(QMainWindow):
             menu.addAction(
                 menu_label(page.title, suffix), lambda p=page: self.show_theory(p)
             )
+
+    def set_theme(self, choice: str) -> None:
+        """Switch theme by key, or ``"system"``; the menu calls this."""
+        self._themes.set_choice(choice)
+        for action in self._theme_actions.actions():
+            action.setChecked(action.data() == choice)
 
     def _start_worker(self) -> None:
         self._thread = QThread(self)

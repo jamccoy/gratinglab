@@ -31,6 +31,8 @@ from PySide6.QtWidgets import (
 )
 
 from .. import diagram3d
+from ..theme import style_axes, style_figure
+from . import theming
 
 __all__ = ["Scene3DPanel"]
 
@@ -94,6 +96,8 @@ class Scene3DPanel(QWidget):
         self._figure = Figure(figsize=(6, 5), layout="constrained")
         self._axes = self._figure.add_subplot(projection="3d")
         self._canvas = FigureCanvasQTAgg(self._figure)
+        style_figure(self._figure, theming.current())
+        theming.subscribe(self._on_theme)
 
         # Rotation needs no wiring -- Axes3D connects its own handlers -- but
         # the level-of-detail swap does.
@@ -194,6 +198,13 @@ class Scene3DPanel(QWidget):
 
     # -- the contract GeometryTab uses --------------------------------
 
+    def _on_theme(self, theme) -> None:
+        style_figure(self._figure, theme)
+        if self._scene is not None:
+            self._paint(self._scene)
+        else:
+            self._canvas.draw_idle()
+
     def show_scene(self, scene) -> None:
         """Draw a scene.
 
@@ -264,12 +275,14 @@ class Scene3DPanel(QWidget):
     # -- drawing ------------------------------------------------------
 
     def _paint(self, scene) -> None:
-        colors = diagram3d.TAG_COLORS
+        theme = theming.current()
+        colors = {**diagram3d.TAG_COLORS, **theme.diagram}
         axes = self._axes
         # view_init survives cla(); preserve it explicitly anyway so a redraw
         # never yanks the camera out from under a user mid-inspection.
         elev, azim = axes.elev, axes.azim
         axes.clear()
+        style_axes(axes, theme)
 
         # Both levels of detail are built once and swapped by visibility, so a
         # drag never resamples anything -- see `_set_lod`.

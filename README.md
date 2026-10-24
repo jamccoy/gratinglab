@@ -264,6 +264,11 @@ Each registered solver receives a tab generated from the solver registry, so a
 contributed backend appears in the window once it is registered.
 
 The Help menu contains the theory pages, rendered with typeset equations and tables.
+**View → Theme** switches between System (following the operating system), Light,
+Dark, Solarized Light, Solarized Dark and High contrast; the choice is remembered and
+applies to the metrology window too. Diffraction orders are coloured by sign, cool for
+negative and warm for positive, with each order's colour shown beside it in the order
+list.
 
 A macOS `.app` is built with `python tools/apps.py bundle --app gratinglab`, on macOS
 13 or later, the minimum supported by the PySide6 wheels. That is one `GratingLab.app`

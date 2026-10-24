@@ -231,16 +231,19 @@ def solving_lines(method: str, wavelength_count: int) -> tuple[Line, ...]:
     )
 
 
-def to_html(lines: Sequence[Line]) -> str:
+def to_html(lines: Sequence[Line], colors: "dict[str, str] | None" = None) -> str:
     """Render lines as the small HTML subset Qt's rich text engine accepts.
 
     The text is escaped, so a solver warning containing ``<`` or ``&`` (the
     docs do contain ampersands) cannot silently become markup or disappear.
+    ``colors`` replaces :data:`TAG_COLORS`, tag for tag, which is how a theme
+    recolours the panel (``theme.provenance_colors``).
     """
+    palette = TAG_COLORS if colors is None else colors
     parts: list[str] = []
     for line in lines:
         body = html.escape(line.text).replace("\n", "<br>")
-        color = TAG_COLORS.get(line.tag) if line.tag else None
+        color = palette.get(line.tag) if line.tag else None
         parts.append(f'<span style="color:{color}">{body}</span>' if color else body)
     return f'<div style="white-space:pre-wrap">{"".join(parts)}</div>'
 

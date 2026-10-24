@@ -42,6 +42,9 @@ from PySide6.QtWidgets import (
 
 from .. import orders as orders_module
 from .. import provenance
+from ..efficiency_plot import draw_efficiency
+from ..theme import provenance_colors, style_figure
+from . import theming
 from ..scalar_options import (
     REFLECTIVITY_MODELS,
     ROUGHNESS_MODELS,
@@ -56,6 +59,8 @@ __all__ = ["ScalarTab"]
 #: Qt's role for stashing arbitrary data on a QListWidgetItem. Used to carry
 #: the order integer without parsing it back out of the label text.
 _ORDER_ROLE = Qt.ItemDataRole.UserRole
+#: Set on an order that never propagates in the scan, drawn in the muted colour.
+_DIM_ROLE = Qt.ItemDataRole.UserRole + 1
 
 
 class ScalarTab(QWidget):
@@ -83,6 +88,8 @@ class ScalarTab(QWidget):
         super().__init__(parent)
         self._fields: dict[str, QWidget] = {}
         self._scan = None
+        self._lines: tuple = ()
+        self._order_colors: dict[int, str] = {}
         self._energy = None
         self._lambda_over_period: float | None = None
         self._visible_orders: frozenset[int] = frozenset()
@@ -261,6 +268,8 @@ class ScalarTab(QWidget):
         self._figure = Figure(figsize=(8, 3), layout="constrained")
         self._axes = self._figure.add_subplot(1, 1, 1)
         self._canvas = FigureCanvasQTAgg(self._figure)
+        style_figure(self._figure, theming.current())
+        theming.subscribe(self._on_theme)
 
         panel = QWidget()
         layout = QVBoxLayout(panel)
@@ -274,7 +283,11 @@ class ScalarTab(QWidget):
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(8, 4, 8, 8)
         heading = QLabel("Provenance")
-        heading.setStyleSheet("font-weight: bold")
+        # Bold by font, not stylesheet: a stylesheet freezes the label's
+        # palette at polish time, and it would keep the old theme's colour.
+        bold = heading.font()
+        bold.setBold(True)
+        heading.setFont(bold)
         self._provenance = QTextEdit()
         self._provenance.setReadOnly(True)
         layout.addWidget(heading)
@@ -396,11 +409,35 @@ class ScalarTab(QWidget):
                 if summary.order in self._visible_orders
                 else Qt.CheckState.Unchecked
             )
-            if not summary.ever_propagating:
-                item.setForeground(self.palette().mid().color())
+            item.setData(_DIM_ROLE, not summary.ever_propagating)
             self._order_list.addItem(item)
         self._order_list.blockSignals(False)
+        self._apply_swatches()
         self._update_order_count_label(len(summaries))
+
+    def _apply_swatches(self) -> None:
+        """Give each listed order its line's colour, and dim the dead ones.
+
+        Both are redone on a theme change: the swatch because the colours
+        move, the dimming because it was the old palette's muted colour.
+        """
+        # From the theme, not self.palette(): on a theme change this runs
+        # before Qt has propagated the new application palette to the widget.
+        from PySide6.QtGui import QColor
+
+        theme = theming.current()
+        muted, text = QColor(theme.muted), QColor(theme.text)
+        # Restyling an item emits itemChanged, whose handler redraws, which
+        # restyles again: blocked, as the checkbox resync already is.
+        self._order_list.blockSignals(True)
+        try:
+            for i in range(self._order_list.count()):
+                item = self._order_list.item(i)
+                color = self._order_colors.get(item.data(_ORDER_ROLE))
+                item.setIcon(theming.swatch(color) if color else theming.QIcon())
+                item.setForeground(muted if item.data(_DIM_ROLE) else text)
+        finally:
+            self._order_list.blockSignals(False)
 
     def _update_order_count_label(self, total: int) -> None:
         self._order_count_label.setText(
@@ -450,27 +487,26 @@ class ScalarTab(QWidget):
     # -- drawing -----------------------------------------------------
 
     def _paint(self, lines) -> None:
-        self._provenance.setHtml(provenance.to_html(lines))
+        self._lines = tuple(lines)
+        self._provenance.setHtml(
+            provenance.to_html(self._lines, provenance_colors(theming.current()))
+        )
+
+    def _on_theme(self, theme) -> None:
+        style_figure(self._figure, theme)
+        if self._scan is not None:
+            self._draw_efficiency(self._scan)
+        else:
+            self._canvas.draw_idle()
+        if self._lines:
+            self._paint(self._lines)
+        self._apply_swatches()
 
     def _draw_efficiency(self, scan) -> None:
-        axes = self._axes
-        axes.clear()
-        for index, order in enumerate(scan.orders):
-            if int(order) not in self._visible_orders:
-                continue
-            axes.plot(
-                scan.wavelengths, scan.efficiency[:, index],
-                lw=1.3, label=f"m={int(order):+d}",
-            )
-        axes.plot(scan.wavelengths, scan.total, "k--", lw=1.0, alpha=0.7, label="Σ")
-        axes.axhline(1.0, color="#b00020", lw=0.8, ls=":", alpha=0.7)
-        axes.set_xlabel("wavelength (nm)")
-        axes.set_ylabel("efficiency")
-        axes.set_ylim(bottom=0)
-        axes.grid(alpha=0.25)
-        handles, _ = axes.get_legend_handles_labels()
-        if handles:
-            axes.legend(fontsize=7, ncol=max(1, len(handles) // 8), loc="upper right")
+        self._order_colors = draw_efficiency(
+            self._axes, scan, self._visible_orders, theming.current()
+        )
+        self._apply_swatches()
         self._canvas.draw_idle()
 
     # -- export ------------------------------------------------------

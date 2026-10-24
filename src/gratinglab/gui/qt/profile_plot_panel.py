@@ -28,11 +28,26 @@ class ProfilePlotPanel(QWidget):
         self._figure = Figure(figsize=(8, 3), layout="constrained")
         self._axes = self._figure.add_subplot(1, 1, 1)
         self._canvas = FigureCanvasQTAgg(self._figure)
+        from ..theme import style_figure
+        from . import theming
+
+        style_figure(self._figure, theming.current())
+        theming.subscribe(self._on_theme)
+        self._parsed = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.addWidget(NavigationToolbar2QT(self._canvas, self))
         layout.addWidget(self._canvas)
+
+    def _on_theme(self, theme) -> None:
+        from ..theme import style_figure
+
+        style_figure(self._figure, theme)
+        if self._parsed is not None:
+            self.draw(self._parsed)
+        else:
+            self._canvas.draw_idle()
 
     def draw(self, parsed) -> None:
         """Redraw from a solved geometry.
@@ -43,9 +58,15 @@ class ProfilePlotPanel(QWidget):
         import numpy as np
 
         from .. import diagram
+        from ..theme import style_axes
+        from . import theming
 
+        self._parsed = parsed
+        theme = theming.current()
+        surface = theme.diagram.get("surface", "#1f3b73")
         axes = self._axes
         axes.clear()
+        style_axes(axes, theme)
         # Physical nm along d-hat, not the raw profile parameter. `t` runs
         # against the dispersion direction (conventions.md §3), so plotting
         # against `t` mirrors the groove -- and this panel sits beside a
@@ -54,8 +75,8 @@ class ProfilePlotPanel(QWidget):
         t = np.linspace(-2.0, 0.0, 1200)
         x = diagram.x_nm(t, parsed.problem.period)
         height = parsed.problem.height_nm(t)
-        axes.plot(x, height, color="#1f3b73", lw=1.8)
-        axes.fill_between(x, 0, height, color="#1f3b73", alpha=0.12)
+        axes.plot(x, height, color=surface, lw=1.8)
+        axes.fill_between(x, 0, height, color=surface, alpha=0.12)
         axes.set_xlabel("position along d̂ (nm), two periods shown")
         axes.set_ylabel("height (nm)")
         axes.set_title(
