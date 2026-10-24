@@ -106,14 +106,20 @@ work:
    serves the gate the versioning policy sets for the solvers to lose their
    experimental status. The als_eff_meas half, its `to_measured()` export,
    remains.
-2. The integral solver compared with the ported ALS campaign, the first
-   comparison against the bench rather than the literature.
-3. RCWA, written in-house (§1), with layer stacks designed in from the start
+2. RCWA, written in-house (§1), with layer stacks designed in from the start
    so that coated and multilayer gratings are not a retrofit.
-4. The C-method.
-5. As they become useful: groove-error-degraded resolving power (§2), the
+3. The C-method.
+4. As they become useful: groove-error-degraded resolving power (§2), the
    analytic profiles in the native format (§5), the PyXFocus formulas (§3) and
    the JOSS submission (§6).
+
+**Deferred (2026-10-24): the comparison with the ported ALS campaign.** The
+machinery for it is in place (`MeasuredEfficiency`, `Comparison.residuals`, and
+a worked test in `tests/test_measured.py` that skips without the data), but the
+comparison itself is set aside for now. The cost of deferring it is stated
+rather than hidden: it is the gate the versioning policy sets for the solvers
+to lose their experimental status, so until a measured comparison runs they
+stay experimental, whatever else lands.
 
 ### 0. Integral method, moved ahead of RCWA
 
