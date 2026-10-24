@@ -10,6 +10,41 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- Groove orientation in the AFM pipeline: a sample mounted a degree or two
+  off square is measured and, when it matters, corrected, with no rotating by
+  eye in Gwyddion. `metrology.core.orientation` finds the grooves band by band,
+  links them into tracks and fits one slope to all of them, giving the angle
+  and its standard error; the correction shifts each row so the grooves line
+  up and takes the pixel along the groove normal, which is exact for a
+  grating. On a synthetic 30° grating rotated 3° the blaze angle comes back
+  as 29.998° against 29.966° uncorrected, the period 315.00 nm against 315.43,
+  and the whole-image groove depth to within 0.2% where uncorrected it reads
+  32% shallow. The `groove_orientation` setting is `auto` by default: correct
+  at 0.2° or more when that is three standard errors from zero; `always`,
+  `detect` and `off` are the others. The angle is reported whether or not it
+  was applied, in the analysis result, the results panel, the Import and
+  Boundary tabs, a boundary profile's metrics (so the `.json` export) and the
+  metrics sidecar. A new wiki page, *Groove orientation*, explains it.
+
+- `load_scan_y_size` reads the slow-axis scan size from `.spm`, `.ibw` and
+  Gwyddion text files, scaled to the lines actually recorded, and returns
+  `None` rather than assuming a square scan when the file does not record it.
+  A scan without one is reported as not measured.
+
+### Changed
+
+- The default analysis now corrects a groove rotation of 0.2° or more. A
+  synthetic scan with none, including the committed fixture, is unaffected
+  (it measures -0.002 ± 0.002° and is left alone). **The real scans have not
+  been re-measured with it**, since none are on the machine this was written
+  on, so the real-scan numbers quoted in the wiki (the 0.49° flattening span,
+  the ICC range) predate it. Set `GROOVE_ORIENTATION = 'detect'` to see what it
+  would do to a scan without changing anything.
+
 ## 0.1.12 (2026-10-24)
 
 ### Added

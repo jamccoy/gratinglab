@@ -46,7 +46,7 @@ from pathlib import Path
 import numpy as np
 
 __all__ = ["IbwChannel", "read_ibw", "list_channels", "is_igor_wave_file",
-           "TOPOGRAPHY_PREFERENCE", "DEFAULT_DIRECTION"]
+           "scan_y_size_um", "TOPOGRAPHY_PREFERENCE", "DEFAULT_DIRECTION"]
 
 #: Topography channels in order of preference. ZSensor is the closed-loop
 #: sensor reading, the counterpart of Nanoscope's "Height Sensor"; Height is
@@ -204,6 +204,39 @@ def _scan_x_size_um(wave: _Wave, note: str) -> float:
     if scan is not None:
         return float(scan) * 1e6
     raise ValueError("no physical X scaling and no ScanSize in the note")
+
+
+def _slow_size_um(wave: _Wave, note: str) -> float | None:
+    """Length of the recorded lines along the slow axis, or None if unknown.
+
+    The Y scaling is metres per line, so ``delta * lines`` is the height of
+    what was recorded even when the scan stopped early. Without a physical Y
+    scaling the note can still answer, as ``ScanSize * SlowRatio`` over
+    ``ScanLines`` lines, but only when all three are present: the note's size
+    is the size the scan was set to, and the recorded lines may be fewer.
+    """
+    rows = wave.dims[1]
+    delta = wave.sf_a[1]
+    if 0.0 < delta < 1e-3:
+        return delta * rows * 1e6
+    size, ratio, lines = (_note_value(note, key)
+                          for key in ("ScanSize", "SlowRatio", "ScanLines"))
+    if size is None or ratio is None or lines is None:
+        return None
+    try:
+        if float(lines) > 0:
+            return float(size) * float(ratio) * rows / float(lines) * 1e6
+    except ValueError:
+        return None
+    return None
+
+
+def scan_y_size_um(path) -> float | None:
+    """The slow-axis length of the image's recorded lines, in microns."""
+    raw = Path(path).read_bytes()
+    wave = _parse(raw)
+    note, _labels = _sections(raw, wave)
+    return _slow_size_um(wave, note)
 
 
 def _split_label(label: str) -> tuple[str, str]:

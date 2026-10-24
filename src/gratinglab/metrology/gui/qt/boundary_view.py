@@ -189,9 +189,14 @@ class BoundaryView(QWidget):
 
     # ── Data in ──────────────────────────────────────────────────────────────
 
-    def set_scan(self, data, scan_size, filename, settings):
-        """Take the current scan from the window. Called on every Import change."""
+    def set_scan(self, data, scan_size, filename, settings, orientation=None):
+        """Take the current scan from the window. Called on every Import change.
+
+        `orientation` is the Import tab's OrientationReport. The scan arrives
+        already corrected; the report only travels into the metrics.
+        """
         self._data = data
+        self._orientation = orientation
         self._scan_size = scan_size
         self._filename = filename
         self._settings = settings
@@ -229,7 +234,8 @@ class BoundaryView(QWidget):
         settings = self._settings.with_(**self.settings_overrides())
         try:
             self._profile = build_boundary_profile(
-                self._data, self._scan_size, settings)
+                self._data, self._scan_size, settings,
+                orientation=getattr(self, '_orientation', None))
         except Exception as exc:
             self._profile = None
             self._set_actions_enabled(False)
@@ -255,6 +261,15 @@ class BoundaryView(QWidget):
                    f"{format_angles(m.get('tip_half_angle_deg', float('nan')), m.get('tip_half_angle_right_deg'))}"
                    f"\n{'':<18}{100 * m.get('tip_certain_fraction', float('nan')):.1f}% "
                    f"of pixels recovered exactly")
+        rotation = ""
+        if 'groove_orientation' in m:
+            if m.get('groove_rotation_deg') is None:
+                rotation = "\nGroove rotation : not measured"
+            else:
+                rotation = (f"\nGroove rotation : {m['groove_rotation_deg']:+.3f} "
+                            f"+/- {m['groove_rotation_stderr_deg']:.3f} deg"
+                            + (", corrected" if m.get('groove_rotation_corrected')
+                               else ", not corrected"))
         self.metrics_label.setText(
             f"Period          : {p.period_nm:.2f} nm\n"
             f"Grooves averaged: {p.n_used} of {p.n_grooves}{edge}\n"
@@ -262,7 +277,7 @@ class BoundaryView(QWidget):
             f"Peak-to-valley  : {m['peak_to_valley']:.4f} of period\n"
             f"RMS slope       : {m['rms_slope']:.4f}\n"
             f"Max sidewall    : {m['max_angle_deg']:.2f} deg\n"
-            f"Max curvature   : {m['max_curvature']:.4f}{tip}")
+            f"Max curvature   : {m['max_curvature']:.4f}{rotation}{tip}")
 
     def _show_placeholder(self, message="Load an AFM file in the Import tab"):
         self.figure.clear()

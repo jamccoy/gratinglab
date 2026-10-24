@@ -31,7 +31,9 @@ from matplotlib.figure import Figure
 from ...config import PROJECT_ROOT
 from ...core.image_flatten import (VALID_IMAGE_FLATTEN_METHODS, flatten_image,
                                    row_offset_spread)
-from ...core.processing import flatten_profile, load_afm_data, raw_data
+from ...core.orientation import VALID_GROOVE_ORIENTATIONS, apply_groove_orientation
+from ...core.processing import (flatten_profile, load_afm_data,
+                                load_scan_y_size, raw_data)
 from ...settings import (AnalysisSettings, VALID_FLATTEN_FEATURES,
                          VALID_FLATTEN_METHODS, VALID_SPM_DIRECTIONS)
 
@@ -52,7 +54,10 @@ class ImportView(QWidget):
         self._defaults = AnalysisSettings.from_config()
         self._raw = None          # as loaded, before any flattening
         self._flat = None         # after image flattening; what analysis sees
-        self._scan_size = None
+        self._scan_size = None    # of _flat: along the groove normal if corrected
+        self._loaded_scan_size = None
+        self._scan_y_size = None  # slow axis, from the file; None if unrecorded
+        self.orientation = None   # OrientationReport for _flat
         self._filename = None
         self._period_est = self._defaults.period_est
 
@@ -154,6 +159,27 @@ class ImportView(QWidget):
         self.image_note.setWordWrap(True)
         self.image_note.setStyleSheet("font-size: 11px; color: gray;")
         layout.addWidget(self.image_note)
+
+        layout.addWidget(QLabel("Groove orientation:"))
+        self.orientation_combo = QComboBox()
+        self.orientation_combo.addItems(list(VALID_GROOVE_ORIENTATIONS))
+        self.orientation_combo.setCurrentText(self._defaults.groove_orientation)
+        self.orientation_combo.setToolTip(
+            "The angle between the grooves and the slow scan axis, measured\n"
+            "from where the grooves sit in each band of rows.\n\n"
+            "A rotated sample reads its period long by 1/cos(angle) and\n"
+            "smears the groove when rows are averaged.\n\n"
+            "auto: correct at 0.2 deg or more, when that is significant\n"
+            "always: correct whatever is measured\n"
+            "detect: measure and report only\n"
+            "off: neither")
+        self.orientation_combo.currentTextChanged.connect(self._reflatten)
+        layout.addWidget(self.orientation_combo)
+
+        self.orientation_note = QLabel("—")
+        self.orientation_note.setWordWrap(True)
+        self.orientation_note.setStyleSheet("font-size: 11px; color: gray;")
+        layout.addWidget(self.orientation_note)
         return group
 
     def _build_profile_group(self):
@@ -232,6 +258,7 @@ class ImportView(QWidget):
             scan_x_size=self.scan_size_spin.value(),
             spm_direction=self.direction_combo.currentText(),
             image_flatten_method=self.image_method_combo.currentText(),
+            groove_orientation=self.orientation_combo.currentText(),
             flatten_method=self.profile_method_combo.currentText(),
             flatten_poly_order=self.poly_order_spin.value(),
             flatten_feature=self.feature_combo.currentText(),
@@ -285,7 +312,8 @@ class ImportView(QWidget):
                     settings=settings)
 
             self._raw = data
-            self._scan_size = scan_size
+            self._scan_size = self._loaded_scan_size = scan_size
+            self._scan_y_size = load_scan_y_size(path, settings)
             self._filename = path
             self.scan_size_spin.setValue(scan_size)
 
@@ -312,6 +340,7 @@ class ImportView(QWidget):
         except Exception as exc:
             self.info_label.setText(f"Error:\n{exc}")
             self._raw = self._flat = None
+            self.orientation = None
             self.dataChanged.emit()
 
     def _reflatten(self):
@@ -320,10 +349,22 @@ class ImportView(QWidget):
             return
         method = self.image_method_combo.currentText()
         before = row_offset_spread(self._raw)
-        self._flat = flatten_image(self._raw, method)
-        after = row_offset_spread(self._flat)
+        flat = flatten_image(self._raw, method)
+        after = row_offset_spread(flat)
         self.image_note.setText(
             f"Row-offset spread\n  {before*1e9:.2f} → {after*1e9:.2f} nm")
+
+        # The same step, at the same point, as the analysis: whatever this tab
+        # hands on is what the Analysis and Boundary tabs measure.
+        settings = self._defaults.with_(**self.settings_overrides())
+        try:
+            self._flat, self._scan_size, self.orientation = apply_groove_orientation(
+                flat, self._loaded_scan_size, self._scan_y_size, settings)
+            self.orientation_note.setText(self.orientation.summary())
+        except ValueError as exc:
+            self._flat, self._scan_size, self.orientation = (
+                flat, self._loaded_scan_size, None)
+            self.orientation_note.setText(f"Not applied: {exc}")
         self._redraw()
         self.dataChanged.emit()
 

@@ -435,7 +435,8 @@ class MainWindow(QMainWindow):
             return
         settings, errors = build(self.form_state())
         if settings is not None:
-            self.boundary.set_scan(self._data, self._scan_size, self._filename, settings)
+            self.boundary.set_scan(self._data, self._scan_size, self._filename, settings,
+                                   orientation=self.importer.orientation)
 
     # ── Form ─────────────────────────────────────────────────────────────────
 
@@ -452,6 +453,7 @@ class MainWindow(QMainWindow):
             scan_x_size=overrides['scan_x_size'],
             spm_direction=overrides['spm_direction'],
             image_flatten_method=overrides['image_flatten_method'],
+            groove_orientation=overrides['groove_orientation'],
             flatten_method=overrides['flatten_method'],
             flatten_poly_order=overrides['flatten_poly_order'],
             flatten_feature=overrides['flatten_feature'],
@@ -500,7 +502,8 @@ class MainWindow(QMainWindow):
         settings, errors = build(self.form_state())
         if settings is not None:
             self.boundary.set_scan(self._data, self._scan_size,
-                                   self._filename, settings)
+                                   self._filename, settings,
+                                   orientation=self.importer.orientation)
 
         self.n_groups_spin.setMaximum(max(2, self._data.shape[0] // 3))
         self.show_raw_profile()

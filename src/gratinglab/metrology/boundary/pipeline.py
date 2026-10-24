@@ -126,7 +126,7 @@ class BoundaryProfile:
         )
 
 
-def build_boundary_profile(data, scan_x_size, settings) -> BoundaryProfile:
+def build_boundary_profile(data, scan_x_size, settings, orientation=None) -> BoundaryProfile:
     """
     Average the grooves of one scan into a normalised boundary profile.
 
@@ -136,6 +136,13 @@ def build_boundary_profile(data, scan_x_size, settings) -> BoundaryProfile:
         settings: AnalysisSettings; uses the period estimate, groove detection
             and edge exclusion shared with the blaze-angle path, plus the ggp_*
             fields for the export itself.
+        orientation: the OrientationReport for this scan, when the caller
+            measured one (core.orientation.apply_groove_orientation). The
+            correction itself is the caller's, made on the whole image before
+            this is called, because a swath passed in here is too short to
+            measure an angle from. This only records it in the metrics, so the
+            sidecar says whether the period and shape are along the scan line
+            or along the groove normal.
 
     Returns:
         BoundaryProfile
@@ -190,6 +197,8 @@ def build_boundary_profile(data, scan_x_size, settings) -> BoundaryProfile:
         smoothing_window=settings.ggp_smoothing_window)
 
     metrics = profile_metrics(x_norm, y_norm, period_nm, n_used)
+    if orientation is not None:
+        metrics.update(orientation.as_metrics())
     metrics['tip_correction'] = settings.tip_correction
     if tip is not None:
         metrics['tip_radius_nm'] = tip.radius_nm

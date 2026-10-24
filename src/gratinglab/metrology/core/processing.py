@@ -56,6 +56,54 @@ def load_afm_data(filename, default_scan_size=2.0, settings=None):
     return _load_text(filename, default_scan_size)
 
 
+def load_scan_y_size(filename, settings=None):
+    """
+    The slow-axis length of the recorded lines, in microns, or None.
+
+    Separate from `load_afm_data` so that function's two-value return, which
+    six callers unpack, stays as it is. Only groove-orientation measurement
+    needs this number, because it is the one step that compares a length
+    along x with a length along y.
+
+    None means the file does not say, and the caller must not substitute the
+    fast-axis width: a scan of 2 µm by 1 µm read as square would report half
+    its real groove rotation, with no sign of the assumption.
+
+    Sources:
+        .spm: the second ``Scan Size`` value, scaled to the lines recorded
+        .ibw: the Y scaling, or the note's ScanSize, SlowRatio and ScanLines
+        text: a ``Height:`` line in the header, as Gwyddion writes it
+    """
+    from ..io import ibw as _ibw
+    from ..io import spm as _spm
+
+    if _spm.is_nanoscope_file(filename):
+        channel = getattr(settings, 'spm_channel', None) or _spm.DEFAULT_CHANNEL
+        direction = getattr(settings, 'spm_direction', None) or _spm.DEFAULT_DIRECTION
+        return _spm.scan_y_size_um(filename, channel=channel, direction=direction)
+    if _ibw.is_igor_wave_file(filename):
+        return _ibw.scan_y_size_um(filename)
+    return _text_scan_y_size(filename)
+
+
+def _text_scan_y_size(filename):
+    """The ``# Height: 0.333 µm`` line of a Gwyddion text export, or None."""
+    import re
+
+    try:
+        with open(filename, encoding="utf-8", errors="replace") as handle:
+            header = [handle.readline() for _ in range(10)]
+    except OSError:
+        return None
+    for line in header:
+        match = re.match(r"\s*#?\s*Height:\s*(\d+\.?\d*(?:[eE][+-]?\d+)?)\s*"
+                         r"(µm|um|micron|nm)", line, re.IGNORECASE)
+        if match:
+            value = float(match.group(1))
+            return value / 1000.0 if match.group(2).lower() == 'nm' else value
+    return None
+
+
 def _load_text(filename, default_scan_size=2.0):
     """
     Load a text export, such as one from Gwyddion.

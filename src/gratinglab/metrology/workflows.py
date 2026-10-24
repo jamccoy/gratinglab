@@ -126,8 +126,9 @@ def run_boundary_profile_export(settings=None, filename=None):
     The computation lives in boundary.build_boundary_profile so the GUI can
     preview exactly what this writes.
     """
-    from .core.processing import load_afm_data
+    from .core.processing import load_afm_data, load_scan_y_size
     from .core.image_flatten import flatten_image
+    from .core.orientation import apply_groove_orientation
     from .boundary import build_boundary_profile
     from gratinglab.io.ggp import write_ggp
 
@@ -152,8 +153,20 @@ def run_boundary_profile_export(settings=None, filename=None):
     if settings.image_flatten_method != 'none':
         data = flatten_image(data, settings.image_flatten_method)
 
+    # The whole-image average is where a rotated sample hurts most: the grooves
+    # drift across every row that goes into it. Corrected on the whole image,
+    # as the blaze-angle path does, before tip correction.
     try:
-        profile = build_boundary_profile(data, scan_x_size, settings)
+        data, scan_x_size, orientation = apply_groove_orientation(
+            data, scan_x_size, load_scan_y_size(filename, settings), settings)
+    except ValueError as exc:
+        print(f"{exc}")
+        return None
+    print(f"Groove orientation: {orientation.summary()}")
+
+    try:
+        profile = build_boundary_profile(data, scan_x_size, settings,
+                                         orientation=orientation)
     except ValueError as exc:
         print(f"{exc}")
         return None

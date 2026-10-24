@@ -11,10 +11,11 @@ import os
 from .settings import AnalysisSettings
 from .stats.icc import compute_icc, effective_sample_size
 from .core.image_flatten import flatten_image, row_offset_spread
+from .core.orientation import apply_groove_orientation
 from .core.tip import apply_tip_correction
 from .core.processing import (
     raw_data, raw_data_multi_group,  # NEW: added raw_data_multi_group
-    flatten_profile, find_groove_positions, load_afm_data
+    flatten_profile, find_groove_positions, load_afm_data, load_scan_y_size
 )
 from .core.analysis import extract_blaze_angle
 from .visualization.diagnostics import plot_analyzed_regions_overlay, plot_flattening_diagnostic
@@ -78,7 +79,8 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
     print(f"{'='*60}")
     
     # Load and validate data
-    data, scan_x_size = _load_and_validate(filename, settings)
+    data, scan_x_size, orientation = _load_and_validate(
+        filename, settings, return_orientation=True)
     if data is None:
         return None
     
@@ -276,7 +278,8 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
         all_groove_periods, all_quality, all_local_angles,
         raw_x, group_results, all_groove_groups
     )
-    
+    result['groove_orientation'] = _orientation_dict(orientation)
+
     return result
 
 
@@ -296,7 +299,8 @@ def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
     print(f"{'='*60}")
     
     # Load and validate data
-    data, scan_x_size = _load_and_validate(filename, settings)
+    data, scan_x_size, orientation = _load_and_validate(
+        filename, settings, return_orientation=True)
     if data is None:
         return None
     
@@ -360,21 +364,33 @@ def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
                    settings)
     
     # Combine all results
-    return _package_results(filename, blaze_angles, stats, period_nm, period_std,
-                           groove_periods, quality, all_local_angles,
-                           raw_x, flat_y, groove_centers,
-                           flat_report=flat_report)
+    result = _package_results(filename, blaze_angles, stats, period_nm, period_std,
+                              groove_periods, quality, all_local_angles,
+                              raw_x, flat_y, groove_centers,
+                              flat_report=flat_report)
+    result['groove_orientation'] = _orientation_dict(orientation)
+    return result
 
 
 # ============ HELPER FUNCTIONS ============
 
-def _load_and_validate(filename, settings):
+def _orientation_dict(report):
+    """The groove-orientation report as plain values, or None."""
+    return None if report is None else report.as_dict()
+
+
+def _load_and_validate(filename, settings, return_orientation=False):
     """
     Load AFM data, flatten the image, and validate it.
 
     Image flattening happens here because this is the only point where the 2-D
     array exists and every workflow passes through it; the next step averages
-    the rows away.
+    the rows away. Groove orientation is measured, and corrected when the
+    settings say so, here for the same reason: it needs the rows apart.
+
+    Parameters:
+        return_orientation: also return the OrientationReport, as a third
+            value. Off by default so the two-value form keeps working.
     """
     try:
         data, scan_x_size = load_afm_data(filename,
@@ -389,6 +405,12 @@ def _load_and_validate(filename, settings):
                   f"(row-offset spread {before*1e9:.2f} -> "
                   f"{row_offset_spread(data)*1e9:.2f} nm)")
 
+        # Before tip correction: see core/orientation.py for why the tip is
+        # undone along the groove normal rather than along the scan line.
+        data, scan_x_size, orientation = apply_groove_orientation(
+            data, scan_x_size, load_scan_y_size(filename, settings), settings)
+        print(f"Groove orientation: {orientation.summary()}")
+
         data, correction = apply_tip_correction(data, scan_x_size, settings)
         if correction is not None:
             # The uncertain pixels are upper bounds, not measurements. Facet
@@ -397,10 +419,12 @@ def _load_and_validate(filename, settings):
             # scan was corrected and by what tip.
             print(f"Tip correction: {correction.summary}")
 
+        if return_orientation:
+            return data, scan_x_size, orientation
         return data, scan_x_size
     except Exception as e:
         print(f"Error loading {filename}: {e}")
-        return None, None
+        return (None, None, None) if return_orientation else (None, None)
 
 
 def _plot_2d_image(data, scan_x_size, filename):

@@ -39,9 +39,12 @@ thermally. This affects the export, because the whole-scan profile averages rows
 whose grooves sit in different places and therefore blurs the shape. On the
 synthetic grating, 20 nm of drift across the scan causes the whole-scan groove
 depth to read about 5% low, while every swath reads correctly. The "Whole scan
-vs swath mean" figure detects this case. If it is large and the shift plot shows
-a slope, the image or scan should be rotated before the exported depth and
-angles are relied upon.
+vs swath mean" figure detects this case. A rotation is now measured and, when it
+is large enough to matter, corrected before any of this runs; see the
+`groove-orientation` page. If the figure is still large and the shift plot
+still shows a slope, read the rotation the analysis reported: a scan whose
+angle could not be measured, or thermal drift, which is not a rotation, is not
+corrected, and the exported depth and angles should not be relied upon.
 
 ## Not independent samples
 

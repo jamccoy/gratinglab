@@ -35,7 +35,7 @@ from pathlib import Path
 import numpy as np
 
 __all__ = ["SpmChannel", "read_spm", "list_channels", "is_nanoscope_file",
-           "DEFAULT_CHANNEL", "DEFAULT_DIRECTION"]
+           "scan_y_size_um", "DEFAULT_CHANNEL", "DEFAULT_DIRECTION"]
 
 DEFAULT_CHANNEL = "Height Sensor"
 
@@ -111,6 +111,46 @@ def _scan_size_um(section: str, header: str) -> float:
             value, unit = float(match.group(1)), match.group(2)
             return value / 1000.0 if unit == "nm" else value
     raise ValueError("no Scan Size found in the header")
+
+
+def _slow_size_um(section: str, header: str, rows: int) -> float | None:
+    """
+    Physical length of the recorded lines along the slow axis, in microns.
+
+    ``Scan Size`` carries two values, fast then slow (``2.000 2.000 ~m``), and
+    the slow one is the length the scan was *set* to cover in ``\\Lines:``
+    lines. A scan stopped early records fewer: the project's own TASTE file
+    holds 401 lines of 512 samples, with the header still reading 2 µm by
+    2 µm, so taking that 2 µm as the height of what is in the file would make
+    every slow-axis length too long by the missing fraction. The recorded
+    height is therefore ``slow * rows / lines``.
+
+    Returns None, rather than guessing, when the header carries only one
+    ``Scan Size`` value or no ``\\Lines:`` count.
+    """
+    size = None
+    for text in (section, header):
+        match = re.search(r"\\Scan Size:\s*[\d.]+\s+([\d.]+)\s*(~m|um|µm|nm)", text)
+        if match:
+            value, unit = float(match.group(1)), match.group(2)
+            size = value / 1000.0 if unit == "nm" else value
+            break
+    lines = re.search(r"\\Lines:\s*(\d+)", header)
+    if size is None or lines is None or int(lines.group(1)) <= 0:
+        return None
+    return size * rows / int(lines.group(1))
+
+
+def scan_y_size_um(path, channel: str = DEFAULT_CHANNEL,
+                   direction: str = DEFAULT_DIRECTION) -> float | None:
+    """The slow-axis length of one plane's recorded lines, or None if unknown."""
+    header = _header_text(Path(path).read_bytes())
+    for section in _plane_sections(header):
+        described = _describe_section(section, header)
+        if (described is not None and described.channel == channel
+                and described.direction == direction):
+            return _slow_size_um(section, header, described.rows)
+    return None
 
 
 def _plane_sections(header: str) -> list[str]:
