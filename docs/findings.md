@@ -1326,3 +1326,58 @@ The behaviour is pinned by `tests/metrology/test_tip.py::TestTheRealScan`, which
 skips without the group's data and otherwise fails if nominal-tip erosion ever
 starts to change the measured depth, which would mean either that the scan had
 changed or that the erosion had started to invent surface.
+
+---
+
+## A graded corner mesh, and three errors only a solve could find
+
+Measured 2026-10-23 while adding `corner_grading` to the integral solver. The
+mesh itself works: on three cornered profiles the TM energy-balance deviation at
+P = 512 fell from 1.3e-3, 2.9e-2 and 1.4e-2 to 1.8e-6, 6.6e-6 and 4.2e-6
+(`theory/integral.md` §5). What is worth recording is how it got there, because
+each operator passed a direct accuracy test while being wrong.
+
+**The principal-value diagonal was wrong at the nodes next to a corner.** K, L
+and D_t V take their diagonal as the average of the kernel at the two adjacent
+nodes. A node next to a corner has one neighbour across it, where the kernel is
+of order 1/distance, so the average is not the limit along the node's own facet.
+Measured on a lamellar at P = 256: those diagonal entries read 0.04 to 0.64
+against an identity term of 1/2, where every other node reads zero. Taking the
+limit one-sided, from the neighbour on the same side, brought the graded TM
+results in the table above down by a further factor of 2 to 10. **The
+equal-arc mesh has the same flaw, more weakly (0.02 to 0.1), and it is not fixed
+there**, so that the default results stay exactly what they were. It is a
+candidate contributor to the first-order corner behaviour that this mesh was
+built to remove.
+
+**A comparison function applied to the wrong factor.** The tangential layer
+removes its Cauchy singularity with a Hilbert comparison applied exactly in
+Fourier space. Written in τ and applied to the density σ, it was exact on every
+smooth test density, and `D_t V σ` matched the derivative of `V σ` to 4e-4
+mid-facet. In the finite-conductivity solve it sent the absorption to 5e5, with
+the reflected sum still a sane 0.46. A corner density is singular in arc length
+and, through the grading, unbounded in τ, and the spectral transform of an
+unbounded function is garbage. Applied to σ s′, which the grading makes smooth,
+the same solve gives R + A within 4e-4 of 1. The lesson is the one
+`test_integral_operators.py` already states for `D_t`: an operator verified on
+smooth data says nothing about the densities a solve actually produces.
+
+**The energy balance passes on a TE result that is wrong.** On the ideal
+sawtooth the equal-arc TE balance reads 2.6e-10 at P = 512 while order −1 sits
+6e-5 from the graded answer and moves by 2e-4 between rungs. The theorem holds
+for any density solving the discrete system, so it is blind to an error common
+to every order. The graded mesh settles that order to 5e-6. Reciprocity, which
+is not the same theorem, did see the TM corner error: 2.3e-2 on the equal-arc
+sawtooth at P = 256, 1.3e-4 graded.
+
+**What is not resolved.** With finite conductivity the graded mesh helps TE
+everywhere and the conical X-ray blaze greatly (8.3e-2 to 4.1e-4), but TM on a
+visible-light metal (n = 0.2 + 3.5i) stalls near 4e-3 at order 4 and diverges at
+order 6, and the conical X-ray lamellar is erratic on both meshes. The solver
+therefore refuses `corner_grading` with `conductivity="tabulated"`. Two
+candidate causes, neither tested: Kress's graded Nyström proof needs the
+contributions of the nodes nearest the corner modified, which is not done; and
+a negative permittivity gives a corner oscillatory edge singularities that no
+grading resolves.
+
+Pinned by `tests/test_integral_graded.py`.

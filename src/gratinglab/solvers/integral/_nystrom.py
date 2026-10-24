@@ -76,6 +76,33 @@ trace; ``tangential_layer_matrix`` serves that purpose.
 The perfectly conducting solve keeps its milestone-1 names as thin
 compositions: ``dirichlet_matrix`` (TE) is ``V`` itself and
 ``neumann_matrix`` (TM) is ``I/2 + K``.
+
+Graded meshes. Everything above is stated on the equal-arc mesh. Each
+operator is in fact assembled in the mesh parameter ``tau`` of
+``_boundary``, with node weights ``w_l = s'(tau_l) / P`` in place of the
+constant spacing, and with each singular comparison function moved from arc
+length into ``tau``, where the nodes are always equally spaced:
+
+* ``V``: the comparison is ``H(v) = [ln v + ln(1 - v)] / 2 pi`` with
+  ``v = |tau - tau'|``, whose integral is ``-1/pi`` and whose off-diagonal
+  rectangular sum is the same ``\tilde S``. Since
+  ``G ~ ln(2 pi u / d) / 2 pi + R(0,0)`` and ``u ~ s'_j v``, the diagonal is
+  ``w_j [R(0,0) + ln(2 pi s'_j / d) / 2 pi - \tilde S] - s'_j / pi``. With
+  ``s' = L`` it is the formula above.
+* ``D_t V``: the integrand is the kernel times ``f = sigma s'``, which the
+  grading makes smooth even where ``sigma`` is singular. The comparison is
+  ``e^{i alpha0 (x - x')} cot(pi (tau - tau')) / (2 s'_j)``, the Hilbert
+  part is the same exact Fourier multiplier applied to ``f`` in ``tau``, and
+  it is divided by ``s'_j`` afterwards. Applying the multiplier to
+  ``sigma`` itself instead is exact on smooth data and wrong in a solve: a
+  corner density is unbounded in ``tau``, and it sent the
+  finite-conductivity absorption to 1e5 (measured).
+* ``D_t``: ``d/ds = (1 / s') d/dtau``, differentiated spectrally in ``tau``.
+
+On a profile with corners this is what lets the graded mesh of
+``Profile.boundary(n, grading=p)`` cluster nodes where the Meixner edge
+behaviour makes the densities singular, without losing the singular
+corrections (M&P section 4.6.6; Kress 1990).
 """
 
 from __future__ import annotations
@@ -85,6 +112,7 @@ from math import lgamma
 import numpy as np
 from numpy.typing import NDArray
 
+from ...profiles import CORNER_TURN_DEGREES
 from ._boundary import PhysicalBoundary
 from ._greens import greens_remainder_diagonal, neumann_function
 from ._kernels import (
@@ -118,7 +146,7 @@ def _separations(
     big_x = x[:, None] - x[None, :]
     big_z = y[:, None] - y[None, :]
     diag = np.eye(len(x), dtype=bool)
-    big_x[diag] = 0.25 * (x.max() - x.min()) + boundary.spacing
+    big_x[diag] = 0.25 * (x.max() - x.min()) + float(boundary.quadrature.max())
     big_z[diag] = 0.0
     return big_x, big_z, diag
 
@@ -138,6 +166,36 @@ def _wrapped_neighbours(
     x_prev, y_prev = np.roll(x, 1), np.roll(y, 1)
     x_prev[0] -= period
     return x - x_next, y - y_next, x - x_prev, y - y_prev
+
+
+def _principal_value(
+    boundary: PhysicalBoundary,
+    forward: NDArray[np.complex128],
+    backward: NDArray[np.complex128],
+) -> NDArray[np.complex128]:
+    """The diagonal limit from the kernel at the two adjacent nodes.
+
+    On the equal-arc mesh this is their average, which converges as
+    ``O(spacing^2)`` on a smooth curve. On a graded mesh the node next to a
+    corner has one neighbour just across it, where the kernel is of order
+    ``1 / distance`` rather than the limit along the node's own straight
+    piece, and averaging it in put an ``O(1)`` error on that diagonal entry
+    (measured: up to 0.64 against the identity's 1/2). There the limit is
+    taken one-sided, from the neighbour on the same piece. A neighbour is
+    across a corner when its normal turns by more than
+    :data:`~gratinglab.profiles.CORNER_TURN_DEGREES`, the threshold that
+    placed the corner.
+    """
+    average = 0.5 * (forward + backward)
+    if not boundary.graded:
+        return average
+    nx, ny = boundary.nx, boundary.ny
+    limit = np.cos(np.radians(CORNER_TURN_DEGREES))
+    ahead = nx * np.roll(nx, -1) + ny * np.roll(ny, -1) < limit
+    behind = nx * np.roll(nx, 1) + ny * np.roll(ny, 1) < limit
+    return np.where(
+        ahead & ~behind, backward, np.where(behind & ~ahead, forward, average)
+    )
 
 
 class OperatorAssembler:
@@ -228,26 +286,26 @@ def single_layer_matrix(
     assembler: OperatorAssembler | None = None,
 ) -> NDArray[np.complex128]:
     """The discretised single-layer operator ``V``."""
-    spacing, length = boundary.spacing, boundary.arc_length
+    weights, speed = boundary.quadrature, boundary.speed
     points = len(boundary.x)
     diag = np.eye(points, dtype=bool)
 
     if assembler is None:
         assembler = OperatorAssembler(boundary, period=period, terms=terms)
-    matrix = spacing * assembler.greens(k=k, alpha0=alpha0)
+    matrix = assembler.greens(k=k, alpha0=alpha0) * weights[None, :]
 
     remainder = greens_remainder_diagonal(
         k=k, alpha0=alpha0, period=period, terms=terms
     )
     comparison_sum = (lgamma(points) - (points - 1) * np.log(points)) / np.pi
     matrix[diag] = (
-        spacing
+        weights
         * (
             remainder
-            + np.log(2.0 * np.pi * length / period) / (2.0 * np.pi)
+            + np.log(2.0 * np.pi * speed / period) / (2.0 * np.pi)
             - comparison_sum
         )
-        - length / np.pi
+        - speed / np.pi
     )
     return matrix
 
@@ -262,7 +320,7 @@ def double_layer_matrix(
     assembler: OperatorAssembler | None = None,
 ) -> NDArray[np.complex128]:
     """The discretised double-layer operator ``K`` (no identity part)."""
-    spacing = boundary.spacing
+    weights = boundary.quadrature
     nx, ny = boundary.nx, boundary.ny
     diag = np.eye(len(boundary.x), dtype=bool)
 
@@ -282,9 +340,9 @@ def double_layer_matrix(
         dx_prev, dy_prev, np.roll(nx, 1), np.roll(ny, 1),
         k=k, alpha0=alpha0, period=period, terms=terms,
     )
-    kernel[diag] = 0.5 * (forward + backward)
+    kernel[diag] = _principal_value(boundary, forward, backward)
 
-    return spacing * kernel
+    return kernel * weights[None, :]
 
 
 def adjoint_layer_matrix(
@@ -304,7 +362,7 @@ def adjoint_layer_matrix(
     rows instead of columns and the sign flipped. The diagonal is the same
     adjacent-node principal-value average, with the node's own normal.
     """
-    spacing = boundary.spacing
+    weights = boundary.quadrature
     nx, ny = boundary.nx, boundary.ny
     diag = np.eye(len(boundary.x), dtype=bool)
 
@@ -320,9 +378,9 @@ def adjoint_layer_matrix(
     backward = -neumann_function(
         dx_prev, dy_prev, nx, ny, k=k, alpha0=alpha0, period=period, terms=terms
     )
-    kernel[diag] = 0.5 * (forward + backward)
+    kernel[diag] = _principal_value(boundary, forward, backward)
 
-    return spacing * kernel
+    return kernel * weights[None, :]
 
 
 def tangential_layer_matrix(
@@ -375,7 +433,7 @@ def tangential_layer_matrix(
     continuous, so the plain rectangular rule recovers its usual accuracy,
     with the diagonal taken as the adjacent-node average as elsewhere.
     """
-    spacing, length = boundary.spacing, boundary.arc_length
+    speed = boundary.speed
     points = len(boundary.x)
     diag = np.eye(points, dtype=bool)
     tx, ty = boundary.ny, -boundary.nx
@@ -390,38 +448,45 @@ def tangential_layer_matrix(
     a_matrix, b_matrix = assembler.neumann(k=k, alpha0=alpha0)
     kernel = -(a_matrix * tx[:, None] + assembler.sgn * b_matrix * ty[:, None])
 
-    # The comparison kernel, on the same nodes: arc-length separation between
-    # nodes j and i is (j - i) * spacing on the uniform grid.
+    # Everything below is in the mesh parameter tau, whose nodes are equally
+    # spaced on any mesh. The integrand is the kernel times f = sigma s',
+    # smooth in tau where sigma is not, and the comparison is
+    # cot(pi (tau_j - tau_i)) / (2 s'_j), which matches the kernel as
+    # tau' -> tau_j because u ~ s'_j (tau_j - tau'). On the equal-arc mesh
+    # (s' = L) this is the arc-length cot(pi u / L) / 2L.
     phase = np.exp(1j * alpha0 * boundary.x)
-    offset = (np.arange(points)[:, None] - np.arange(points)[None, :]) * spacing
+    offset = (np.arange(points)[:, None] - np.arange(points)[None, :]) / points
     with np.errstate(divide="ignore", invalid="ignore"):
         comparison = (
-            (phase[:, None] / phase[None, :])
-            / (2.0 * length)
-            / np.tan(np.pi * offset / length)
+            (phase[:, None] / phase[None, :]) / 2.0 / np.tan(np.pi * offset)
         )
     comparison[diag] = 0.0
 
-    remainder = kernel - comparison
+    remainder = (kernel - comparison / speed[:, None]) * speed[None, :]
 
     # The remainder is continuous; its diagonal is the adjacent-node average,
     # taken on the same difference so the comparison's own 1/u cancels there
     # too (its adjacent values are equal and opposite, hence absent).
     dx_next, dy_next, dx_prev, dy_prev = _wrapped_neighbours(boundary, period)
-    forward = kernel_at(dx_next, dy_next, tx, ty)
-    backward = kernel_at(dx_prev, dy_prev, tx, ty)
-    step = 1.0 / (2.0 * length * np.tan(np.pi * spacing / length))
-    comparison_forward = -step * np.exp(1j * alpha0 * dx_next)
-    comparison_backward = step * np.exp(1j * alpha0 * dx_prev)
-    remainder[diag] = 0.5 * (
-        (forward - comparison_forward) + (backward - comparison_backward)
+    step = 1.0 / (2.0 * np.tan(np.pi / points))
+    comparison_forward = -step * np.exp(1j * alpha0 * dx_next) / speed
+    comparison_backward = step * np.exp(1j * alpha0 * dx_prev) / speed
+    forward = (kernel_at(dx_next, dy_next, tx, ty) - comparison_forward) * np.roll(
+        speed, -1
     )
+    backward = (kernel_at(dx_prev, dy_prev, tx, ty) - comparison_backward) * np.roll(
+        speed, 1
+    )
+    remainder[diag] = _principal_value(boundary, forward, backward)
 
-    # The comparison kernel's principal value, applied exactly: strip the
-    # Bloch phase, multiply Fourier mode p by -i sgn(p) / 2, restore it.
+    # The comparison kernel's principal value, applied exactly to f: strip
+    # the Bloch phase, multiply Fourier mode p by -i sgn(p) / 2, restore it,
+    # then divide by s'_j.
     hilbert = assembler.hilbert()
 
-    return spacing * remainder + (phase[:, None] / phase[None, :]) * hilbert
+    return remainder / points + (phase[:, None] / phase[None, :]) * hilbert * (
+        speed[None, :] / speed[:, None]
+    )
 
 
 def tangential_derivative_matrix(
@@ -438,13 +503,14 @@ def tangential_derivative_matrix(
     enters.
     """
     points = len(boundary.x)
-    wavenumber = 2j * np.pi * np.fft.fftfreq(points, d=boundary.spacing)
+    # d/dtau spectrally on the equally spaced tau grid; d/ds = d/dtau / s'.
+    wavenumber = 2j * np.pi * np.fft.fftfreq(points, d=1.0 / points)
     if points % 2 == 0:
         # The unpaired Nyquist mode has no odd (derivative) representation.
         wavenumber[points // 2] = 0.0
     spectral = np.fft.ifft(
         wavenumber[:, None] * np.fft.fft(np.eye(points), axis=0), axis=0
-    ).real
+    ).real / boundary.speed[:, None]
     phase = np.exp(1j * alpha0 * boundary.x)
     matrix = (phase[:, None] / phase[None, :]) * spectral
     matrix[np.diag_indices(points)] += 1j * alpha0 * boundary.ny

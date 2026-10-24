@@ -136,17 +136,16 @@ def _reflected_amplitudes(
     ``single = 0`` (TM).
     """
     x, y = boundary.x, boundary.y
-    spacing = boundary.spacing
+    weights = boundary.quadrature
     alpha_m, gamma_m = wavenumbers(kp, alpha0, period, orders)
     outgoing = np.exp(-1j * alpha_m[:, None] * x - 1j * gamma_m[:, None] * y)
     direction = (
         (alpha_m[:, None] / gamma_m[:, None]) * boundary.nx[None, :]
         + boundary.ny[None, :]
     )
-    return spacing * (
-        (outgoing @ single) / (2j * period * gamma_m)
-        + ((outgoing * direction) @ double) / (2.0 * period)
-    )
+    return (outgoing @ (weights * single)) / (2j * period * gamma_m) + (
+        (outgoing * direction) @ (weights * double)
+    ) / (2.0 * period)
 
 
 def _transmitted_amplitudes(
@@ -161,10 +160,10 @@ def _transmitted_amplitudes(
     """Rayleigh coefficients of the single-layer field ``S^- density`` below
     the boundary (downgoing spectral form of the metal-side kernel)."""
     x, y = boundary.x, boundary.y
-    spacing = boundary.spacing
+    weights = boundary.quadrature
     alpha_m, gamma_m = wavenumbers(km, alpha0, period, orders)
     downgoing = np.exp(-1j * alpha_m[:, None] * x + 1j * gamma_m[:, None] * y)
-    return spacing * (downgoing @ density) / (2j * period * gamma_m)
+    return (downgoing @ (weights * density)) / (2j * period * gamma_m)
 
 
 def solve_transverse_finite(
@@ -321,7 +320,7 @@ def solve_finite_states(
     else:
         transmitted_orders = np.array([], dtype=np.int64)
 
-    spacing = boundary.spacing
+    weights = boundary.quadrature
     solutions = []
     for (p_z, q_z), (w, tau) in zip(states, densities):
         power = abs(p_z) ** 2 + abs(q_z) ** 2
@@ -377,11 +376,11 @@ def solve_finite_states(
         # independent post-processing of the same solve, so R + A = 1
         # measures the discretisation rather than restating the order sum.
         # On a flat interface it reduces exactly to 1 - |r|^2.
-        integral_e = spacing * np.sum(e_normal_minus * np.conj(e_trace))
-        integral_b = spacing * np.sum(b_normal_minus * np.conj(b_trace))
+        integral_e = np.sum(weights * e_normal_minus * np.conj(e_trace))
+        integral_b = np.sum(weights * b_normal_minus * np.conj(b_trace))
         bracket = -(index**2) * integral_e - integral_b
         if conical:
-            integral_t = spacing * np.sum(e_trace * np.conj(dt_b))
+            integral_t = np.sum(weights * e_trace * np.conj(dt_b))
             bracket = bracket + 2.0 * cos_gamma * integral_t.real
         absorption = float(
             (ktp2 / (gamma0 * period * power)) * (bracket / ktm2).imag

@@ -10,6 +10,25 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- `corner_grading=p` on the integral solver: a corner-graded boundary mesh
+  (Kress's sigmoidal transformation, M&P §4.6.6) for perfectly conducting
+  gratings with corners. Cornered TM converged at first order on the
+  equal-arc mesh; with `corner_grading=4` its energy-balance deviation is about
+  1e-5 at 256 points on a lamellar, an ideal sawtooth and a 29.5°/70.5° blaze,
+  against 2e-3 to 3e-2 before, and reciprocity improves by the same factor. It
+  is opt-in, the default results are unchanged bit for bit, and a profile with
+  no corner keeps the equal-arc mesh whatever is passed. With
+  `conductivity="tabulated"` it is refused, because TM on a visible-light metal
+  was measured unstable on it. The measurements are in
+  `docs/theory/integral.md` §5 and `docs/findings.md`.
+- `Profile.boundary(n, grading=p)`, which every built-in profile accepts, and
+  `BoundaryCurve.graded`. A profile written against the older `boundary(n)`
+  signature still works with the default mesh.
+
 ## 0.1.10 (2026-10-23)
 
 ### Added
