@@ -91,6 +91,25 @@ _MAX_GRADING = 6
 #: difference of coordinates, carries at least two significant digits.
 _MIN_SEPARATION_ULPS = 100.0
 
+def _coincident_nodes(boundary, period: float) -> "tuple[float, float] | None":
+    """``(closest, floor)`` in nm when two graded nodes cannot be told apart.
+
+    ``None`` when the closest pair is separable, which an equal-arc mesh
+    always is. Shared with the window's form (``gui.integral_options``) so
+    the two refuse the same meshes.
+    """
+    if not boundary.graded:
+        return None
+    steps = np.hypot(
+        np.diff(np.append(boundary.x, boundary.x[0] + period)),
+        np.diff(np.append(boundary.y, boundary.y[0])),
+    )
+    scale = float(max(np.abs(boundary.x).max(), np.abs(boundary.y).max()) + period)
+    floor = _MIN_SEPARATION_ULPS * np.finfo(np.float64).eps * scale
+    closest = float(steps.min())
+    return (closest, floor) if closest <= floor else None
+
+
 #: ``min |cos beta_m|`` below which an order is passing off and the kernel's
 #: ``1/gamma_m`` makes the solve numerically delicate (a Rayleigh anomaly).
 _ANOMALY_COS = 1e-3
@@ -231,24 +250,16 @@ class IntegralSolver:
         boundary = physical_boundary(
             problem, boundary_points, grading=corner_grading
         )
-        if boundary.graded:
-            steps = np.hypot(
-                np.diff(np.append(boundary.x, boundary.x[0] + problem.period)),
-                np.diff(np.append(boundary.y, boundary.y[0])),
+        coincident = _coincident_nodes(boundary, problem.period)
+        if coincident is not None:
+            closest, floor = coincident
+            raise ValueError(
+                f"corner_grading={corner_grading} at boundary_points="
+                f"{boundary_points} puts two nodes {closest:.3g} nm "
+                f"apart, below the {floor:.3g} nm that double precision "
+                "can resolve on this groove; lower corner_grading (4 is "
+                "recommended) or boundary_points"
             )
-            scale = float(
-                max(np.abs(boundary.x).max(), np.abs(boundary.y).max())
-                + problem.period
-            )
-            floor = _MIN_SEPARATION_ULPS * np.finfo(np.float64).eps * scale
-            if steps.min() <= floor:
-                raise ValueError(
-                    f"corner_grading={corner_grading} at boundary_points="
-                    f"{boundary_points} puts two nodes {steps.min():.3g} nm "
-                    f"apart, below the {floor:.3g} nm that double precision "
-                    "can resolve on this groove; lower corner_grading (4 is "
-                    "recommended) or boundary_points"
-                )
 
         # The field oscillates along the boundary at the *reduced* wavelength;
         # a mesh that cannot resolve it would not fail loudly on its own.

@@ -12,6 +12,8 @@ import pytest
 from gratinglab.gui.integral_options import (
     CONDUCTIVITY_MODES,
     CONDUCTIVITY_NOTES,
+    GRADING_CHOICES,
+    GRADING_NOTES,
     IntegralOptionsState,
     build_options,
 )
@@ -69,7 +71,9 @@ class TestOptions:
             parsed.problem, parsed.illumination, parsed.wavelengths,
             IntegralOptionsState(boundary_points="400"),
         )
-        assert options == {"boundary_points": 400, "conductivity": "perfect"}
+        assert options == {
+            "boundary_points": 400, "conductivity": "perfect", "corner_grading": 0,
+        }
 
     def test_the_default_is_the_solvers_own(self):
         import inspect
@@ -223,6 +227,86 @@ class TestTabulatedConductivity:
         # The mode really ran: only the tabulated condition records absorption.
         assert scan.absorption is not None
         assert scan.provenance.notes["material"] == "Au"
+
+
+class TestCornerGrading:
+    LAMELLAR = FormState(
+        period="1000", profile_kind="Lamellar", depth_fraction="0.3",
+        mount="Classical", alpha="10",
+        wavelength_start="600", wavelength_stop="610", wavelength_count="2",
+    )
+
+    def _options(self, state, **fields):
+        parsed = build(state)
+        return parsed, build_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths,
+            IntegralOptionsState(**fields),
+        )
+
+    def test_off_is_the_solvers_default(self):
+        import inspect
+
+        default = inspect.signature(integral.solve).parameters["corner_grading"].default
+        _, options = self._options(FormState())
+        assert IntegralOptionsState().corner_grading == "off"
+        assert options["corner_grading"] == default == 0
+
+    def test_the_offered_orders_are_exactly_the_solvers(self):
+        from gratinglab.solvers.integral import _MAX_GRADING
+
+        assert GRADING_CHOICES == ("off",) + tuple(
+            str(p) for p in range(2, _MAX_GRADING + 1)
+        )
+        assert set(GRADING_NOTES) == {"off", "graded"}
+
+    def test_an_order_reaches_the_solver_and_runs(self):
+        parsed, options = self._options(
+            self.LAMELLAR, boundary_points="256", corner_grading="4"
+        )
+        assert options["corner_grading"] == 4
+        scan = integral.solve(
+            parsed.problem, parsed.illumination, parsed.wavelengths, **options
+        )
+        assert scan.provenance.notes["mesh"] == "corner-graded, order 4"
+
+    def test_the_graded_floor_binds_where_equal_arc_does_not(self):
+        """The coarsest graded spacing is about twice the mean, so the count
+        the equal-arc floor asks for is refused once grading is on, and the
+        message says why."""
+        parsed = build(FormState())
+        with pytest.raises(FormErrors) as excinfo:
+            build_options(
+                parsed.problem, parsed.illumination, parsed.wavelengths,
+                IntegralOptionsState(boundary_points="32"),
+            )
+        needed = int(re.search(r"at least (\d+)", excinfo.value.errors[0].message)[1])
+        build_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths,
+            IntegralOptionsState(boundary_points=str(needed)),
+        )
+        with pytest.raises(FormErrors) as graded:
+            build_options(
+                parsed.problem, parsed.illumination, parsed.wavelengths,
+                IntegralOptionsState(boundary_points=str(needed), corner_grading="4"),
+            )
+        assert graded.value.errors[0].field == "boundary_points"
+        assert "graded" in graded.value.errors[0].message
+
+    def test_nodes_too_close_to_separate_land_on_the_grading_field(self):
+        state = FormState(
+            period="1000", profile_kind="Blazed", blaze_angle="30",
+            antiblaze_angle="90", mount="Classical", alpha="20",
+            wavelength_start="500", wavelength_stop="510", wavelength_count="2",
+        )
+        with pytest.raises(FormErrors) as excinfo:
+            self._options(state, boundary_points="2048", corner_grading="6")
+        assert excinfo.value.errors[0].field == "corner_grading"
+        assert "double precision" in excinfo.value.errors[0].message
+
+    def test_an_unknown_choice_is_a_field_error(self):
+        with pytest.raises(FormErrors) as excinfo:
+            self._options(FormState(), corner_grading="9")
+        assert excinfo.value.errors[0].field == "corner_grading"
 
 
 class TestPurity:

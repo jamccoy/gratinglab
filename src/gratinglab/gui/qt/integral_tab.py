@@ -51,6 +51,8 @@ from . import theming
 from ..integral_options import (
     CONDUCTIVITY_MODES,
     CONDUCTIVITY_NOTES,
+    GRADING_CHOICES,
+    GRADING_NOTES,
     IntegralOptionsState,
 )
 from ..integral_options import build_options as build_integral_options
@@ -128,8 +130,9 @@ class IntegralTab(QWidget):
         points = QLineEdit(defaults.boundary_points)
         points.returnPressed.connect(self.solve_requested)
         points.setToolTip(
-            "Equal-arc-length nodes on one groove period -- the accuracy\n"
-            "knob the convergence sweep varies. Cost grows roughly cubically."
+            "Nodes on one groove period (equal arc length, or graded towards\n"
+            "the corners: see Corner mesh) -- the accuracy knob the\n"
+            "convergence sweep varies. Cost grows roughly cubically."
         )
         self._fields["boundary_points"] = points
         form.addRow("Boundary pts", points)
@@ -159,7 +162,35 @@ class IntegralTab(QWidget):
         self._conductivity_note.setWordWrap(True)
         form.addRow(self._conductivity_note)
         self._show_conductivity_note(conductivity.currentText())
+
+        grading = QComboBox()
+        grading.addItems(GRADING_CHOICES)
+        grading.setToolTip(
+            "How the boundary nodes are placed.\n"
+            "off: equal arc length, the default.\n"
+            "2-6: graded towards the profile's corners at that order, where\n"
+            "  the field is singular. Cornered profiles converge far faster\n"
+            "  (TM, and both polarizations when tabulated); a smooth profile\n"
+            "  is unaffected. 4 is recommended; 6 can put nodes closer than\n"
+            "  double precision separates at high point counts, and is refused\n"
+            "  there."
+        )
+        grading.currentTextChanged.connect(self._show_grading_note)
+        self._fields["corner_grading"] = grading
+        form.addRow("Corner mesh", grading)
+
+        self._grading_note = QLabel()
+        self._grading_note.setWordWrap(True)
+        form.addRow(self._grading_note)
+        self._show_grading_note(grading.currentText())
         return group
+
+    def _show_grading_note(self, choice: str) -> None:
+        """Say what the selected mesh does."""
+        if choice == "off":
+            self._grading_note.setText(GRADING_NOTES["off"])
+        else:
+            self._grading_note.setText(GRADING_NOTES["graded"].format(p=choice))
 
     def _show_conductivity_note(self, mode: str) -> None:
         """Say what the selected boundary condition means for the numbers."""
@@ -269,6 +300,7 @@ class IntegralTab(QWidget):
         options = IntegralOptionsState(
             boundary_points=_value(self._fields["boundary_points"]),
             conductivity=_value(self._fields["conductivity"]),
+            corner_grading=_value(self._fields["corner_grading"]),
         )
         return build_integral_options(problem, illumination, wavelengths, options)
 
