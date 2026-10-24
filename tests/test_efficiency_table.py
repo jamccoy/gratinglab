@@ -313,7 +313,7 @@ PCGRATE_XML = """<?xml version="1.0"?>
 @pytest.fixture
 def pcgrate_xml(tmp_path):
     path = tmp_path / "results.xml"
-    path.write_text(PCGRATE_XML)
+    path.write_text(PCGRATE_XML, encoding="utf-8")
     return path
 
 
@@ -369,6 +369,6 @@ class TestXmlDialect:
     )
     def test_refuses_a_file_that_does_not_parse_cleanly(self, tmp_path, text, message):
         path = tmp_path / "bad.xml"
-        path.write_text(text)
+        path.write_text(text, encoding="utf-8")
         with pytest.raises(ValueError, match=message):
             read_xml_table(path)
