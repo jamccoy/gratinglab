@@ -70,8 +70,9 @@ is planned, written in-house.
 
 ## Scope
 
-The metrology (`gratinglab.metrology`) reads AFM scans, either Nanoscope `.spm` files
-or Gwyddion text exports. It produces blaze angles for each groove with statistics
+The metrology (`gratinglab.metrology`) reads AFM scans: Bruker/Veeco Nanoscope `.spm`
+files, Asylum Research `.ibw` files (not yet checked against a file from an
+instrument), or Gwyddion text exports. It produces blaze angles for each groove with statistics
 over groups of scan rows and a correction for the correlation between those groups,
 an averaged groove normalised to one period, and statistics describing how that
 groove varies between horizontal swaths of the scan. It can also undo the broadening

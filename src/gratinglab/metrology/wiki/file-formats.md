@@ -1,8 +1,9 @@
 # File formats
 
-Two input formats are supported: the instrument's own Nanoscope `.spm` file,
-and a text export from Gwyddion. On the same scan the two agree to within
-0.002°.
+Three input formats are supported: the Bruker/Veeco Nanoscope `.spm` file,
+the Asylum Research `.ibw` file, and a text export from Gwyddion. On the same
+scan the `.spm` and text routes agree to within 0.002°. The `.ibw` route has
+not yet been checked against a file from an instrument; see its section.
 
 ## Text exports
 
@@ -89,6 +90,41 @@ succeeds, but every reported blaze angle is incorrect.
 
 This case is guarded by a test that compares the peak-to-peak height against the
 known export and names the mistake in its failure message.
+
+## Asylum `.ibw`
+
+Asylum's MFP-3D and Cypher software is written in Igor Pro, and saves a scan as
+an Igor binary wave (version 5): one 3-D wave whose layers are the channels,
+named in the labels of its third dimension (`HeightRetrace`, `ZSensorTrace`,
+`AmplitudeRetrace`, `PhaseRetrace`, ...), with the scan parameters in a text
+note. The reader is `io/ibw.py`, written to WaveMetrics Technical Note PTN003,
+and like the `.spm` reader it needs no library and recognises the file by its
+content, in either byte order.
+
+**Which channel.** The scan direction is the same setting as for `.spm`
+(Retrace by default). The channel is chosen automatically: `ZSensor`, the
+closed-loop sensor reading and the counterpart of Nanoscope's Height Sensor,
+when the scan recorded one, and `Height` (from the piezo drive) otherwise. The
+window shows which it used. Amplitude, phase and deflection are not topography
+and are never chosen; `read_ibw(path, channel=...)` can name another channel
+from Python.
+
+**Scale and units.** Asylum stores heights in metres and sets the wave's X
+scaling to metres per point, so heights are used as stored and the scan width
+is the X scaling times the number of points, falling back to the note's
+`ScanSize` when the wave has no physical scaling. A channel declared in other
+units, or whose values reach a millimetre, is refused rather than read: that is
+the `.ibw` form of the `.spm` scale trap, a constant factor on every height with
+nothing visibly wrong.
+
+**Not yet checked against an instrument file.** None was available when the
+reader was written (2026-10-24). The tests build files to the specification,
+including a synthetic blazed grating whose 25° blaze and 400 nm period come back
+through the full analysis as 24.81° and 400.29 nm, which rules out a transposed
+or rescaled read. They cannot rule out a misreading of the specification shared
+by the reader and the tests. The first real Asylum scan, with an Igor or
+Gwyddion export of the same scan, should be added as a fixture, as the `.spm`
+reader's was.
 
 ## The two routes compared
 

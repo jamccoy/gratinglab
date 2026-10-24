@@ -30,6 +30,7 @@ def load_afm_data(filename, default_scan_size=2.0, settings=None):
         scan_x_size: scan width in microns
     """
     from .. import io as _io  # noqa: F401 - keeps the package import explicit
+    from ..io.ibw import is_igor_wave_file, read_ibw
     from ..io.spm import (DEFAULT_CHANNEL, DEFAULT_DIRECTION, is_nanoscope_file,
                           read_spm)
 
@@ -39,6 +40,16 @@ def load_afm_data(filename, default_scan_size=2.0, settings=None):
         data, scan_x_size = read_spm(filename, channel=channel,
                                      direction=direction)
         print(f"  Nanoscope file: {channel} / {direction}, "
+              f"{data.shape[0]}x{data.shape[1]} px, {scan_x_size:g} µm")
+        return data, scan_x_size
+
+    if is_igor_wave_file(filename):
+        # The scan direction is shared with .spm; the channel is not, since
+        # Asylum names its channels differently ("ZSensor", "Height"), so the
+        # reader picks the topography channel itself (io/ibw.py).
+        direction = getattr(settings, 'spm_direction', None) or DEFAULT_DIRECTION
+        data, scan_x_size = read_ibw(filename, direction=direction)
+        print(f"  Asylum file: {direction}, "
               f"{data.shape[0]}x{data.shape[1]} px, {scan_x_size:g} µm")
         return data, scan_x_size
 
