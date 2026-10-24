@@ -66,7 +66,7 @@ against closed-form results, published benchmark tables, energy balance and
 reciprocity, but remain experimental until they have been used on real problems.
 Efficiencies are absolute when a coating is named, using an optical constant table
 supplied by the user (see Install). A rigorous coupled-wave analysis (RCWA) backend
-has been contributed but is not yet integrated.
+is planned, written in-house.
 
 ## Scope
 
@@ -82,12 +82,14 @@ The efficiency side comprises the problem specification, the solvers, the compar
 and convergence harnesses, the materials layer, and a calculation of the resolving
 power implied by the number of grooves measured.
 
-Two mounting geometries are supported:
-
-- **In-plane (classical):** ultraviolet to near-infrared optical engineering.
-- **Extreme off-plane (conical) at grazing incidence:** soft x-ray spectroscopy, where
-  the integral method is the established approach and general-purpose RCWA codes are
-  least reliable.
+The aim is gratings in general: reflection and transmission, metallic and
+dielectric, bare and coated, from X-rays to the infrared. Every mount is
+represented, from in-plane (classical) through conical to extreme off-plane at
+grazing incidence, the soft X-ray spectroscopy regime the project began with, where
+the integral method is the established approach and general-purpose RCWA codes are
+least reliable. Which method serves which regime, and what is not yet covered
+(coated and multilayer gratings, for one), is mapped in
+[`docs/roadmap.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/roadmap.md#regimes-and-the-methods-that-serve-them).
 
 The method backends, in order of development:
 
@@ -95,7 +97,7 @@ The method backends, in order of development:
 |---|---|
 | Scalar (Kirchhoff, x-ray blaze form) | experimental; checked against closed-form results |
 | Integral method (boundary integral, conical, undercut-capable) | experimental; perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with the absorbed fraction recorded; a corner-graded mesh for profiles with corners (`corner_grading=4`), under either boundary condition; checked against published benchmark tables (Maystre & Popov; Goray & Schmidt), energy balance and reciprocity |
-| RCWA (in-plane, conical, off-plane; Li factorization, S-matrix) | contributed, not yet integrated |
+| RCWA (in-plane, conical, off-plane; Li factorization, S-matrix, layer stacks) | planned, written in-house |
 | C-method (Chandezon) | planned |
 
 The comparison harness also accepts an efficiency table already computed by an
@@ -263,7 +265,7 @@ hides it), and the window has one tab for each task:
   same `Problem` is used by every tab.
 
 Each registered solver receives a tab generated from the solver registry, so a
-contributed backend appears in the window once it is registered.
+new backend appears in the window once it is registered.
 
 The Help menu contains the theory pages, rendered with typeset equations and tables.
 **View → Theme** switches between System (following the operating system), Light,
