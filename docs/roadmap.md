@@ -101,9 +101,11 @@ and the figure here gives only the order of magnitude.
 numbers, because other documents cite them by number; this list is the order of
 work:
 
-1. Measured efficiency in the comparison harness, the als_eff_meas split under
-   "Later", now in progress. It is the gate the versioning policy sets for the
-   solvers to lose their experimental status.
+1. ~~Measured efficiency in the comparison harness~~: the gratinglab half of
+   the als_eff_meas split is done (unreleased, 2026-10-24); see "Later". It
+   serves the gate the versioning policy sets for the solvers to lose their
+   experimental status. The als_eff_meas half, its `to_measured()` export,
+   remains.
 2. The integral solver compared with the ported ALS campaign, the first
    comparison against the bench rather than the literature.
 3. RCWA, written in-house (§1), with layer stacks designed in from the start
@@ -363,6 +365,26 @@ are planned for later. See [`references.md`](references.md) for the literature
 mapped to each.
 
 #### Measured efficiency and the als_eff_meas split
+
+**The gratinglab half is done (unreleased, 2026-10-24).** `MeasuredEfficiency`
+lives in `measured.py`, and `compare.align`/`records` accept it beside
+`EfficiencyScan`, with `Comparison.measured_order` for error-bar plots and
+`Comparison.residuals` for the model at each measured point. The model is swept
+on the measured wavelengths and never interpolated onto them. The PCGrate XML
+dialect is read by `read_xml_table`. The XML reader keeps the original's
+positional layout and takes wavelengths from the caller, because no real export
+was in reach to confirm tag names or a scan attribute; those are the two things
+to check when one is.
+
+Still to do on the als_eff_meas side: its `to_measured()` export, whose
+conversion is written out in the worked-comparison fixture in
+`tests/test_measured.py`, and the deletion of its duplicated optics. That
+comparison skips until the beamline tree is reachable (not found on MC1 or MAC1,
+2026-10-24). When it runs, settle whether als_eff_meas's recovered `alpha`
+matches the sign convention of `Illumination.alpha_deg`, and replace the test's
+placeholder groove depth, which the campaign does not record.
+
+The design it was built to, kept for the reasoning:
 
 The sibling `als_eff_meas` package reduces ALS beamline scans to absolute
 measured efficiency per order, carrying uncertainties end to end. It is the
