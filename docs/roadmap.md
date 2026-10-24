@@ -8,9 +8,14 @@ reasons for its ordering. It is the recommended starting point.
 ## The goal
 
 The project aims to be an open platform for grating groove metrology and
-efficiency analysis. It is not intended as another RCWA implementation, since
-open RCWA is already a crowded field (S4, grcwa, nannos, torcwa, inkstone,
-RETICOLO). The following do not exist openly:
+efficiency analysis, for gratings in general: reflection and transmission,
+metallic and dielectric, bare and coated, from X-rays to the infrared, in any
+mount. It began with one application, soft X-ray spectroscopy in the extreme
+off-plane mount, and that application shaped the first solvers. It is no
+longer the scope (decided 2026-10-24); the regimes it now covers, and which
+method serves each, are mapped below.
+
+The product is not any one solver. The following do not exist openly:
 
 1. A neutral cross-method harness with one problem spec and rigorous conventions.
 2. An open C-method (Chandezon) solver.
@@ -26,19 +31,32 @@ are separate, and that the problem specification is serializable. One `Problem`
 reaches every solver, so disagreement between methods becomes visible instead of
 being hidden behind incompatible conventions.
 
-As a deliberate consequence, RCWA is treated as a *reference backend* and is not
-the product.
+RCWA is a backend here and not the product. Open RCWA is already a crowded
+field (S4, grcwa, nannos, torcwa, inkstone, RETICOLO), and nothing in this
+project competes with those as a standalone code. An RCWA backend is
+nevertheless planned, written in-house (§1): it is the natural method for the
+dielectric, lamellar, coated and transmission cases a general platform has to
+cover, and it is the independent rigorous cross-check on the integral solver
+wherever both apply.
 
-### Two regimes, two roles
+### Regimes and the methods that serve them
 
-- **Soft X-ray, extreme off-plane (γ ≈ 1.5°): the application.** This is the
-  regime in which the commercial integral-method codes dominate and
-  general-purpose open RCWA is weakest.
-- **UV–Vis–NIR, in-plane: the validation regime.** Nearly all published
-  benchmark data (Moharam & Gaylord, Li, Popov/Nevière) lies in this regime. An
-  off-plane X-ray solver is difficult to validate against the literature
-  directly, but the same solver can be validated in the visible and then applied
-  at 2 nm.
+| Regime | Typical use | Methods | State |
+|---|---|---|---|
+| Soft X-ray and EUV, grazing incidence, off-plane | X-ray spectroscopy, the founding application | integral (rigorous), scalar (fast) | integral checked order by order against an independent code; corner-graded mesh |
+| Soft X-ray and EUV, grazing incidence, in-plane | grazing monochromators, beamline optics | integral, scalar | served by the same solvers, less exercised |
+| UV to near-IR, in-plane or conical, metallic | spectrometers, monochromators, pulse compression | integral (finite conductivity); C-method and RCWA planned | integral reproduces the published benchmark tables |
+| Dielectric, lamellar and transmission gratings | beam splitters, telecom, transmission spectroscopy | RCWA (planned); integral for one interface into a lossless substrate | partial |
+| Coated and multilayer gratings | EUV multilayer gratings, protected and overcoated metals | RCWA (planned) | a gap: nothing here models a layer stack yet |
+| Crossed (2D), volume, radial and VLS gratings | photonic structures, imaging spectrographs | later | not started |
+
+The validation logic of the first milestones generalises rather than changes.
+Nearly all published benchmark data (Moharam & Gaylord, Li, Popov/Nevière) is
+in-plane in the UV to near-IR, so a method is validated there first and then
+trusted in regimes the literature does not reach, such as an off-plane mount at
+2 nm. Measured efficiencies (the als_eff_meas split under "Later") are what
+take a regime from validated against the literature to validated against the
+bench.
 
 ---
 
@@ -66,7 +84,7 @@ the product.
 | **Tip deconvolution** ([`core/tip.py`](../src/gratinglab/metrology/core/tip.py), [theory §4b](theory/metrology.md)) | done at M22: Villarrubia erosion with the certainty map, opt-in via `tip_correction='erosion'`, validated pointwise on a committed dilated fixture. Applied to the real TASTE scan, it narrowed the rounded-groove open question by excluding a nominal tip ([`findings.md`](findings.md)) |
 | GUI (Qt/PySide6): tabs, geometry dock, 3D conical view | done |
 | CI (Linux py3.11/3.12, macOS and Windows py3.12) | green. CI runs with `PYTHONWARNDEFAULTENCODING=1`, so a text `open()` that leaves its encoding to the platform fails on every platform, Windows included |
-| RCWA | **contributed, not yet integrated** |
+| RCWA | **planned, written in-house** (§1); no longer expected as a contribution |
 | C-method | not started |
 | **Integral method** ([theory](theory/integral.md)) | perfect-conductivity and finite-conductivity milestones done. Conical from the start, undercut-capable, with a GUI tab; validated against M&P Table 4.1 and, order by order, against an independent integral-method code on the private corpus (a comparison that also identified the TASTE profile). **Experimental**: not yet used for real analysis. M20 added `conductivity="tabulated"`, the coupled conical system of Goray & Schmidt (2010): absolute efficiencies with absorption recorded, a flat limit equal to Fresnel to 6e-5, their Table 3 reproduced per order, and both boundary conditions selectable in the GUI. A graded corner mesh (`corner_grading`) is done for both boundary conditions |
 
@@ -79,6 +97,22 @@ and the figure here gives only the order of magnitude.
 
 ## What is next, in order
 
+**Order from here, as of 2026-10-24.** The numbered sections below keep their
+numbers, because other documents cite them by number; this list is the order of
+work:
+
+1. Measured efficiency in the comparison harness, the als_eff_meas split under
+   "Later", now in progress. It is the gate the versioning policy sets for the
+   solvers to lose their experimental status.
+2. The integral solver compared with the ported ALS campaign, the first
+   comparison against the bench rather than the literature.
+3. RCWA, written in-house (§1), with layer stacks designed in from the start
+   so that coated and multilayer gratings are not a retrofit.
+4. The C-method.
+5. As they become useful: groove-error-degraded resolving power (§2), the
+   analytic profiles in the native format (§5), the PyXFocus formulas (§3) and
+   the JOSS submission (§6).
+
 ### 0. Integral method, moved ahead of RCWA
 
 An earlier revision of this file said "do not attempt the integral method before
@@ -90,15 +124,17 @@ reasons that the earlier revision could not have known:
    a commercial code. The scalar solver could test no more than the diffraction
    pattern against it, and a like-for-like comparison required a solver of the
    same kind.
-2. **The off-plane X-ray application is the purpose of the project, and the
-   integral method is the method of record there.** The conical decoupling
+2. **The off-plane X-ray application was then the purpose of the project, and
+   the integral method is the method of record there.** The conical decoupling
    theorem makes the perfectly conducting milestone cheaper at grazing
    incidence, because the mesh has to resolve only the reduced wavelength
    λ/sin γ.
-3. **RCWA is contributed work and is blocked on a contributor.** The
-   second-implementation stress test of the solver protocol (Capabilities,
-   progress, tabs, convergence knob) was carried out with this backend instead,
-   and the protocol held; see the current-state table.
+3. **RCWA was then expected as contributed work, and was blocked on the
+   contributor.** That expectation was dropped on 2026-10-24: RCWA will be
+   written in-house (§1). The second-implementation stress test of the solver
+   protocol (Capabilities, progress, tabs, convergence knob) was carried out with
+   the integral backend instead, and the protocol held; see the current-state
+   table.
 
 The decision was justified immediately. The first rigorous-vs-rigorous comparison
 matched the reference order by order, within the reference's own energy-balance
@@ -131,13 +167,19 @@ The remaining integral milestones, in order, are:
   permittivity turned out not to matter ([`findings.md`](findings.md)).
 - ~~A solver-contract conformance test~~: done; see the note under RCWA below.
 
-### 1. RCWA: integrating a contributed backend
+### 1. RCWA: an in-house backend
 
-The RCWA backend is not being written within this project; `fgrise` has RCWA
-code. The physics list below is therefore a set of requirements to be stated to a
-contributor and is not a plan of work. The more useful half of this section is
-the set of conditions that any backend has to satisfy in order to register at
-all.
+RCWA will be written within this project. Until 2026-10-24 it was expected as
+contributed code (`fgrise` has an implementation), and this section was a list
+of requirements to state to a contributor; it is now the plan of work. It comes
+after the measured-efficiency validation (see the order above), so that the
+integral solver, the method of record for the founding application, is trusted
+against the bench before a second rigorous method is built beside it.
+
+Generalising the project is what makes this backend necessary rather than a
+cross-check: dielectric, lamellar, transmission and coated gratings are its
+natural territory, and in some of them the integral solver as it stands cannot
+help at all.
 
 The physics requirements are unchanged and non-negotiable:
 
@@ -148,6 +190,10 @@ The physics requirements are unchanged and non-negotiable:
   T-matrix.
 - The formulation must be fully vectorial and conical, since off-plane incidence
   is a primary use case from the outset.
+- Layer stacks above and below the grating region from the start: a coated or
+  multilayer grating is a row of the regime table that nothing else here can
+  serve, and a layer stack is a large retrofit into an RCWA code written
+  without one.
 
 The framework asks for the following:
 
@@ -171,9 +217,9 @@ waiting for.
 
 A conformance test that every registered solver must pass has now been
 [written](../tests/test_solver_conformance.py) and is parametrised over
-`available_solvers()`. A contributed backend is therefore held to the
-declaration, refusal, scan and progress contracts from the moment it registers,
-before any test has been written for it specifically.
+`available_solvers()`. A new backend, the in-house RCWA included, is therefore
+held to the declaration, refusal, scan and progress contracts from the moment it
+registers, before any test has been written for it specifically.
 
 ### 2. Resolving power: the ideal grating done, the measured grooves to follow
 
@@ -291,7 +337,8 @@ boundary in either direction.
 
 ### 6. First release + JOSS
 
-0.1.0 is the first release. It is published to PyPI by Trusted Publishing from
+0.1.0 was the first release and 0.1.11 (2026-10-24) the latest. Every release
+is published to PyPI by Trusted Publishing from
 `.github/workflows/release.yml` on a `v*` tag. That workflow refuses a tag that
 does not match `pyproject.toml`, checks that the wheel and sdist carry no optical
 constant table, and installs the wheel into a clean environment to check that a
@@ -359,7 +406,7 @@ The project follows the usual convention for software before 1.0. A patch
 release (0.1.x) carries fixes and small additions; a minor release (0.x) marks a
 milestone and is also where an interface may change, provided the change is
 stated in [`CHANGELOG.md`](../CHANGELOG.md); 1.0 is a commitment that the public
-interface is stable until 2.0. The releases so far, 0.1.1 to 0.1.7, have all
+interface is stable until 2.0. The releases so far, 0.1.1 to 0.1.11, have all
 been patch releases, although two of them (swath statistics and asymmetric tips)
 added features that would justify a minor version under a stricter reading.
 
@@ -375,7 +422,7 @@ The intended milestones are as follows.
   real problem, with the integral solver compared against measured
   efficiencies, such as the ALS data reduced by `als_eff_meas`, and not only
   against published benchmarks and its own physics checks. Integrating the
-  contributed RCWA backend is a further minor release.
+  in-house RCWA backend is a further minor release.
 - **1.0**: the public interface is declared stable. That covers `Problem`,
   `BoundaryProfile`, `AnalysisSettings`, the boundary JSON format and the solver
   plugin protocol. The preconditions are that the solvers have been validated

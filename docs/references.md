@@ -174,7 +174,7 @@ documents the measurement method used at ALS beamline 6.3.2.
 
 These cases lie in the visible and near-IR, which is why that regime serves as
 the project's *validation* regime even though the application is in the soft
-X-ray. See [`roadmap.md`](roadmap.md#two-regimes-two-roles).
+X-ray. See [`roadmap.md`](roadmap.md#regimes-and-the-methods-that-serve-them).
 
 **Heuberger, G., Klepp, J., Guo, J., Tomita, Y. & Fally, M.** *Light diffraction
 from a phase grating at oblique incidence in the intermediate diffraction
