@@ -10,6 +10,44 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- `gratinglab.measured.MeasuredEfficiency`, measured efficiency with an
+  uncertainty on every point: sparse per order, as parallel `order`,
+  `wavelength`, `value` and `sigma` float arrays, with a
+  `MeasurementProvenance` naming the facility, campaign, polarization and
+  mount. It is a separate type rather than an `EfficiencyScan` with error
+  fields, because measured data has none of a model's dense-grid shape, and
+  the `uncertainties` package does not become a dependency. A polarization
+  that was not recorded stays `None` and is never defaulted, and a slightly
+  negative value from a weak order is kept as measured.
+  `MeasuredEfficiency.from_energies` converts photon energies with the
+  constant the materials code uses.
+- `compare.align` and `compare.records` take measurements beside scans, so
+  measured, scalar and integral results share one `Comparison`.
+  `Comparison.measured_order(m)` gives the points with their error bars for
+  plotting, and `Comparison.residuals(measurement, method)` the model at each
+  measured point with the residual, the pull in units of sigma and a
+  `summary()` that reports chi-squared with its point count. The model must
+  have been swept on the measured wavelengths (`wavelength_grid()`, or its
+  union with a denser grid): nothing interpolates, and an off-grid point is
+  refused by name. `sweep` refuses a measurement and says to pass it to
+  `align`, since resampling sparse data onto a grid would invent points.
+  Existing comparisons are unchanged.
+- The PCGrate XML results dialect, ported from `als_eff_meas`:
+  `io.efficiency_table.read_xml_table`, `xml_to_scan` and `read_xml_scan`.
+  TE, TM and unpolarized all read; TM never could in the reader it came
+  from. The file is read by position, as the original did, and its scan
+  axis is not read, so the wavelengths come from the caller and must pair one
+  to one with the scan points. An order a point does not list is recorded as
+  non-propagating there.
+- `tests/test_measured.py` holds a worked comparison against the ported ALS
+  campaign (OGRE laminar grating I, October 2021). It needs `als_eff_meas`
+  and the private beamline tree, and skips without them; neither MC1 nor
+  MAC1 holds that tree, so it has not yet run.
+
 ## 0.1.11 (2026-10-24)
 
 ### Added
