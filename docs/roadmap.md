@@ -485,23 +485,108 @@ alignment marks, dicing lanes, whole-wafer layout — belongs with the layout
 tool and not here. The line to hold is that this package describes gratings as
 optics; the layout tool describes patterns as exposures.
 
-Open questions, in the order they would have to be answered:
+**The four questions, answered (2026-10-24).** Three of them the existing code
+already decides; the fourth is the one that makes the section worth building.
 
-- Whether the design is a new type or a constructor on `Problem`. A `Problem`
-  without a measured profile is already most of a design, and two types that
-  overlap by 80% is the kind of thing `conventions.md` exists to prevent.
-- Whether one type can carry both a duty cycle and a blaze angle, given that a
-  blazed groove has no duty cycle in the lamellar sense. A tagged union of
-  profile intents is probably honest; a single struct with ignored fields is
-  not.
-- Whether it stops at geometry or carries the resist and substrate stack. The
-  stack matters to fabrication and to absolute efficiency, which argues for it,
-  but it is also the part most likely to pull instrument-specific detail across
-  the boundary drawn above.
-- Whether a design should be able to state a *tolerance*, so that a measured
-  grating can be compared against the intent and not merely described. That is
-  the question that would make this section earn its place rather than being a
-  tidier way to type four numbers.
+**A new type, with a `to_problem()`.** Not a constructor on `Problem`.
+`Problem` is frozen with `extra="forbid"` and is the contract every solver
+reads; its fields beyond period and profile — `roughness`, `n_grooves` —
+describe a grating in hand under illumination, not an intention. A patterned
+area, a groove angle and a tolerance mean nothing to a solver, and putting them
+there would oblige every backend to ignore them. The precedent settles the
+duplication objection: `BoundaryProfile.to_problem()` is already how a
+*measurement* becomes a problem, and it is not accused of duplicating
+`Problem`. A design enters the same way, so there are two producers and one
+contract rather than two overlapping descriptions.
+
+**The profile union already settles the duty-cycle question.** `Blazed`
+(blaze and antiblaze angles), `Lamellar` (`depth_fraction`, `duty_cycle`) and
+`Sinusoidal` (`depth_fraction`) exist as a discriminated union, so no struct
+ever carries both a duty cycle and a blaze angle and the ignored-field problem
+is structurally impossible. Reusing that union, rather than inventing a parallel
+vocabulary of intents, is also what makes the comparison below like-for-like:
+the design and the measurement describe the shape in the same terms. One
+narrowing — `FromProfileData` is excluded, because a measured groove is not an
+intention, so a design's profile is a strictly narrower union than a problem's.
+
+**Geometry, plus the two material identifiers `Problem` already carries, and
+nothing else.** `coating` and `substrate` are in `Problem` because absolute
+efficiency needs them, and a design that cannot name them cannot predict the
+efficiency it is being designed for, which is most of the point. Resist, dose,
+proximity correction, beam step and field size stop at the boundary: they are
+instrument-specific, the fracture tool's settings file already carries them, and
+nothing here reads them. Depth intent is not part of this question at all — it
+lives in the profile. The borderline case is resist thickness, which bounds the
+achievable depth: that is a constraint a *process* places on a design, not a
+property of the design, so it belongs to whatever checks one against the other.
+
+**A tolerance, and it is the reason to build this.** Without it a design is a
+tidier way to type four numbers; with it, the metrology can answer whether the
+grating that came back is the grating that was asked for — and the AFM pipeline
+already measures every input that question needs: the period from groove
+spacing, the blaze angle from the facet fits, the depth from the averaged
+groove, and now the groove angle from the orientation fit. Two conditions on
+`check`, both learned the hard way today:
+
+- It must report the measurement's own uncertainty beside the deviation. Per-scan
+  SEM on the blaze angle is a median 0.77°, and the 0.05° tolerance pinned into
+  `test_both_routes_give_the_same_blaze_angle` is what a threshold set an order
+  of magnitude below the uncertainty looks like: it fails on 62 of 69 archive
+  pairs and means nothing.
+- Where a quantity has no uncertainty attached, it should refuse rather than
+  return a verdict, per "Refuse rather than approximate" below. A conformance
+  claim without an error bar is the most authoritative-looking wrong answer this
+  package could produce.
+
+The per-side facet angle that the avg lineage dropped at rev3 (see the corpus
+survey) would give `check` a second blaze estimate independent of groove
+detection, trimming and the row-group partition, which is what a conformance
+claim actually wants.
+
+**The type, concretely:**
+
+```python
+class Tolerance(BaseModel):            # frozen, extra="forbid"
+    period_nm: float | None = None     # half-widths, not ranges
+    blaze_angle_deg: float | None = None
+    depth_nm: float | None = None
+    duty_cycle: float | None = None
+    groove_angle_deg: float | None = None
+
+class Design(BaseModel):               # frozen, extra="forbid"
+    period: float                      # nm, as everywhere (conventions.md §1)
+    profile: Blazed | Lamellar | Sinusoidal   # the intent, in Problem's vocabulary
+    area_nm: tuple[float, float] | None = None  # patterned extent, fast then slow
+    groove_angle: float = 0.0          # deg from the substrate's reference edge
+    coating: str | None = None
+    substrate: str | None = None
+    tolerance: Tolerance | None = None
+
+    def to_problem(self, *, roughness=0.0, n_grooves=None) -> Problem: ...
+    def check(self, measured: BoundaryProfile) -> Conformance: ...
+```
+
+Every field has a consumer here, which is the test of whether it belongs: the
+profile and period feed `to_problem`, `coating`/`substrate` feed absolute
+efficiency, `groove_angle` is checkable against the orientation fit, and
+`area_nm` divided by the period is the illuminated groove count `Problem`
+already takes as `n_grooves`. It is also what `txl2gpf` needs, which is the
+point of the boundary above, but it is not *only* what the fracture tool needs.
+
+What is still undecided, and would be settled by writing it:
+
+- The shape of `Conformance`. Per-quantity deviation, uncertainty and verdict
+  is the obvious content; whether it is a type of its own or a `Provenance`-like
+  record that a summary file can carry is not obvious.
+- What `check` takes, which is harder than it looks. The uncertainties it needs
+  do not travel together today. `BoundaryProfile` carries `y_std_nm`, the
+  per-point scatter of the averaged groove, but the blaze angle's SEM and its
+  ICC correction come from the row-group statistics on the other branch of the
+  pipeline, and `docs/theory/metrology.md` §5 records that the two branches
+  deliberately do not exchange results. A conformance check wants the shape
+  from one and the error bars from the other, so either it takes both, or
+  something has to carry them together — which is a decision about the
+  metrology's own interfaces and not about this section.
 
 ---
 
