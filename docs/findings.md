@@ -1381,3 +1381,75 @@ a negative permittivity gives a corner oscillatory edge singularities that no
 grading resolves.
 
 Pinned by `tests/test_integral_graded.py`.
+
+## Finite conductivity on the graded mesh: two errors that lived next to the corners
+
+Measured 2026-10-24, finishing the milestone above. Both causes the previous
+entry named were wrong, and the two real ones are the same mistake: an error
+confined to the few nodes nearest a corner is harmless in the perfectly
+conducting TM equation, which is second kind, and is not harmless in the
+finite-conductivity system, which is first kind in its densities.
+
+**The negative permittivity was not the problem.** The TM corner exponent at
+ε = n² ≈ −12.2 + 1.4i (n = 0.2 + 3.5i) is ν = 0.600 − 0.009i at a 90° or 270°
+corner and 0.564 − 0.010i at the blaze's 80° apex, against 2/3 and 0.643 for a
+perfect conductor, and real to two decimals. The singularity is a little stronger than the
+perfect conductor's and resolved the same way.
+
+**K⁺ near a corner.** The trace block is `(I/2 + K⁺)V⁻`. For a node a distance
+a from a corner, the double-layer kernel over the facet across it varies on the
+scale a, and the graded nodes on that facet are spaced on the same scale, so the
+rectangle rule's error is a fixed fraction of the integrand at the first few
+nodes, whatever P is. Subtracting the density's value at the target and
+supplying the Laplace part of `∫ K` exactly, as subtended angles of the polygon's
+segments, removes it. The visible-metal TM lamellar went from a stall near 3e-3
+to 3.4e-6 at P = 512, and the X-ray lamellar on the graded mesh from 1.2 at
+P = 256 (worse than equal arc) to convergence.
+
+**The prototype of that fix had its own corner error, and only the blaze showed
+it.** The target's own segment contributes zero, and the first version found it
+by testing collinearity. On the lamellar every node coordinate is exact, because
+the facets are axis-aligned. On the blaze a node 1e-9 nm from a vertex carries
+rounding of 1e-13 nm, the collinearity test missed, the own segment counted as
+a whole 1/2, and the visible blaze read 5.9. The segment is now the one nearest
+the node. `test_corner_subtraction_completes_the_rule` checks the subtraction
+against an independent adaptive quadrature on all three profiles, and it fails
+when the correction is negated or removed (checked by doing both).
+
+**D_t V⁻ near a corner.** After the first fix every case converged, at third
+order, except the conical X-ray lamellar, which wandered at p = 6 below P = 320
+and stalled near 7e-3 at p = 5 all the way to P = 768. The same lamellar in-plane
+converged to 1e-6 at every order, which pointed at the one operator only the
+conical system uses. On solved densities its weighted disagreement with the
+spectral derivative of the trace was 0.22 against a total of 11 at p = 5, and
+largest at wall nodes 1e-3 to 1e-1 nm from a corner. Replacing it by that
+composition gives under 1e-6 at P = 768 at every order from 4 to 6. **That reverses a rule this
+code states**: `D_t` composed with an assembled `V` was measured useless on the
+equal-arc mesh, which is why the single operator exists. On the graded mesh the
+trace is smooth in τ, so the composition is the accurate one, while the single
+operator's Cauchy remainder is not continuous across a corner. Each mesh now
+uses the operator that is right on it.
+
+**Short sides make it worse, and the reason is the allocation.** Nodes go to
+sides in proportion to length, so by the allocation's arithmetic the first
+node on a 15.8 nm wall sits about 10^(p−1) times farther from its corner than the first node on the 157 nm floor
+beside it. An allocation proportional to `L^(1/p)`, which matches the two scales,
+made the X-ray lamellar converge smoothly even with the old operator, and cost
+accuracy on the 1000 nm blaze (8.2e-4 at p = 6, P = 512). It was a diagnosis,
+not a change, and the mesh is as it was.
+
+**Two things the energy balance could not see.** The single operator balances
+the X-ray lamellar to 1.1e-6 at P = 1024 and the composition to 8e-7 at P = 768,
+and at P = 1280 their efficiencies differ by 2.9e-5. Only the ladder of efficiencies settles it: the old
+path moves by 1.9e-5 between P = 1024 and 1280, and the new one by 1.1e-6. And
+at p = 6 past P = 512 on the 1000 nm blaze the solve degrades to 6.8e-2, which
+looked like a third failure and is the regime the separation floor already
+refuses: the perfectly conducting solve is refused there for the same mesh.
+
+**Not changed.** The equal-arc mesh is untouched in both boundary conditions,
+and the conical cornered case is still poor there (0.08 to 0.16 at P = 512). The
+`K` subtraction was tried on the perfectly conducting TM equation and left off:
+it helps the lamellar and hurts the ideal sawtooth by up to 25 times.
+
+Pinned by `tests/test_integral_graded.py`; the ladders are in
+`theory/integral.md` §5.

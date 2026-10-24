@@ -21,10 +21,15 @@ entries under "Unreleased" into a section named for the new version;
   1e-5 at 256 points on a lamellar, an ideal sawtooth and a 29.5°/70.5° blaze,
   against 2e-3 to 3e-2 before, and reciprocity improves by the same factor. It
   is opt-in, the default results are unchanged bit for bit, and a profile with
-  no corner keeps the equal-arc mesh whatever is passed. With
-  `conductivity="tabulated"` it is refused, because TM on a visible-light metal
-  was measured unstable on it. The measurements are in
+  no corner keeps the equal-arc mesh whatever is passed. It serves
+  `conductivity="tabulated"` too, where `R + A` reaches 2e-6 to 3e-5 at 512
+  points on a visible-light metal and on conical X-ray lamellar and blazed
+  gratings, against 5e-3 to 0.16 on the equal-arc mesh. That needed two
+  corrections the perfectly conducting solve does not use, a singularity
+  subtraction of the double layer at corners and the tangential derivative
+  taken on the assembled trace. The measurements are in
   `docs/theory/integral.md` §5 and `docs/findings.md`.
+- `BoundaryCurve.polygon`: a graded mesh carries the vertices it lies on.
 - `Profile.boundary(n, grading=p)`, which every built-in profile accepts, and
   `BoundaryCurve.graded`. A profile written against the older `boundary(n)`
   signature still works with the default mesh.

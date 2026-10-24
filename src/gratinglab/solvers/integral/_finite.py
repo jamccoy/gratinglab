@@ -47,6 +47,16 @@ construction is as follows.
   refinement does not remove, and this error destroys the conical solve on
   any boundary carrying appreciable high-frequency content.
 
+  On a corner-graded mesh the opposite holds, and the system composes the
+  two after all. There the trace ``V^- w`` is smooth in the mesh parameter
+  even where ``w`` is singular, so the spectral ``d/dtau`` of
+  ``tangential_derivative_matrix`` differentiates it accurately, whereas the
+  single operator's Cauchy remainder is not continuous across a corner and
+  its error near the corners reaches the solve through ``V^+`` undamped
+  (measured: the conical X-ray lamellar stalls near 7e-3 at order 5 with it
+  and reaches 8e-7 by P = 768 with the composition, docs/theory/integral.md
+  section 5).
+
 The result is a 2x2 block system in ``(w, tau)`` whose diagonal blocks are
 ``(I/2 + K^+)V^- - c\,V^+(L^- - I/2)`` and whose cross blocks are
 ``\mp s\,V^+ D_t V^-``. In-plane (``cos gamma = 0``) the cross blocks
@@ -81,6 +91,7 @@ from ._nystrom import (
     adjoint_layer_matrix,
     double_layer_matrix,
     single_layer_matrix,
+    tangential_derivative_matrix,
     tangential_layer_matrix,
 )
 
@@ -256,9 +267,11 @@ def solve_finite_states(
         boundary, k=km, alpha0=alpha0, period=period, terms=terms,
         assembler=assembler,
     )
+    # K+ acts on a trace in an equation first kind in the density, where
+    # its corner quadrature error is amplified (``_nystrom`` module notes).
     k_plus = double_layer_matrix(
         boundary, k=kp, alpha0=alpha0, period=period, terms=terms,
-        assembler=assembler,
+        assembler=assembler, subtract_corners=True,
     )
     l_minus = adjoint_layer_matrix(
         boundary, k=km, alpha0=alpha0, period=period, terms=terms,
@@ -273,10 +286,17 @@ def solve_finite_states(
 
     conical = cos_gamma != 0.0
     if conical:
-        dt_v_minus = tangential_layer_matrix(
-            boundary, k=km, alpha0=alpha0, period=period, terms=terms,
-            assembler=assembler,
-        )
+        # The composition on a graded mesh, the single operator otherwise:
+        # each is the one that is accurate there (module docstring).
+        if boundary.graded:
+            dt_v_minus = (
+                tangential_derivative_matrix(boundary, alpha0=alpha0) @ v_minus
+            )
+        else:
+            dt_v_minus = tangential_layer_matrix(
+                boundary, k=km, alpha0=alpha0, period=period, terms=terms,
+                assembler=assembler,
+            )
         cross = v_plus @ dt_v_minus
         system = np.block(
             [

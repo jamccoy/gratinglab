@@ -35,10 +35,12 @@ clusters the nodes at the corners with Kress's sigmoidal transformation of
 order ``p`` (M&P section 4.6.6) and restores fast convergence there; see
 ``docs/theory/integral.md`` section 5 for the measured ladders. It is opt-in
 until it has been used on real problems, and on a profile with no corner it
-changes nothing. It is refused with ``conductivity="tabulated"`` for now:
-TE improves there, but TM on a visible-light metal and the conical X-ray
-lamellar case were measured unstable, and a mode that is sometimes worse
-than the equal-arc mesh is not offered.
+changes nothing. It serves both boundary conditions. The finite-conductivity
+system needs two corrections on it that the perfectly conducting one does
+not: a singularity subtraction of ``K+`` at the corners
+(``_nystrom.corner_subtraction``), without which TM on a visible-light metal
+stalled, and the tangential derivative taken on the assembled trace
+(``_finite``), without which the conical solve converged erratically.
 """
 
 from __future__ import annotations
@@ -183,9 +185,7 @@ class IntegralSolver:
             order. ``4`` is the recommended order. A profile with no corner
             (a vertex turning by more than
             :data:`gratinglab.profiles.CORNER_TURN_DEGREES`) keeps the
-            equal-arc mesh whatever is passed. Perfect conductivity only:
-            with ``conductivity="tabulated"`` a non-zero value raises
-            :class:`UnsupportedConfiguration` (see the module docstring).
+            equal-arc mesh whatever is passed. Both boundary conditions.
         progress
             Per-wavelength callback under the contract in
             :class:`~gratinglab.solvers.base.Solver`.
@@ -220,17 +220,6 @@ class IntegralSolver:
                 f"from 2 to {_MAX_GRADING}, got {corner_grading!r}"
             )
         corner_grading = int(corner_grading)
-        if corner_grading and conductivity == "tabulated":
-            raise UnsupportedConfiguration(
-                'corner_grading is not offered with conductivity="tabulated" '
-                "yet. TE converges faster on a graded mesh, but TM on a "
-                "visible-light metal and the conical X-ray lamellar case were "
-                "measured unstable there (docs/theory/integral.md section 5), "
-                "and a graded solve that is sometimes worse than the "
-                "equal-arc one is not a result to return. Use "
-                "corner_grading=0 and read the reported energy-balance "
-                "deviation."
-            )
 
         started = time.perf_counter()
         sin_alpha = illumination.sin_alpha

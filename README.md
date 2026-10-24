@@ -94,7 +94,7 @@ The method backends, in order of development:
 | Method | Status |
 |---|---|
 | Scalar (Kirchhoff, x-ray blaze form) | experimental; checked against closed-form results |
-| Integral method (boundary integral, conical, undercut-capable) | experimental; perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with the absorbed fraction recorded; a corner-graded mesh for perfectly conducting profiles with corners (`corner_grading=4`); checked against published benchmark tables (Maystre & Popov; Goray & Schmidt), energy balance and reciprocity |
+| Integral method (boundary integral, conical, undercut-capable) | experimental; perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with the absorbed fraction recorded; a corner-graded mesh for profiles with corners (`corner_grading=4`), under either boundary condition; checked against published benchmark tables (Maystre & Popov; Goray & Schmidt), energy balance and reciprocity |
 | RCWA (in-plane, conical, off-plane; Li factorization, S-matrix) | contributed, not yet integrated |
 | C-method (Chandezon) | planned |
 

@@ -103,6 +103,22 @@ On a profile with corners this is what lets the graded mesh of
 ``Profile.boundary(n, grading=p)`` cluster nodes where the Meixner edge
 behaviour makes the densities singular, without losing the singular
 corrections (M&P section 4.6.6; Kress 1990).
+
+One error the grading does not remove, and :func:`corner_subtraction`
+does. For a node a distance ``a`` from a corner, the double-layer kernel
+over the facet across the corner varies on the scale ``a``, and the graded
+nodes on that facet are spaced on the same scale, so the rectangle rule's
+error at that node is a fixed fraction of the integrand that refinement
+moves to a closer node instead of shrinking. Measured on a lamellar at
+P = 256: up to 0.16 against the identity's 1/2. The perfectly conducting
+``I/2 + K`` tolerates it, because the system is second kind and the error
+stays on a node of weight ``O(h^p)``. The finite-conductivity system
+applies ``K+`` to a trace inside an equation that is first kind in its
+density, where it does not stay put, so ``_finite`` asks for the
+subtraction. ``L-`` carries the same kind of error and needs none, because
+it only ever appears inside ``V+``, whose weights suppress it. ``D_t V-``
+also appears only inside ``V+`` and was not suppressed enough, so on this
+mesh ``_finite`` replaces it by ``D_t`` applied to the assembled trace.
 """
 
 from __future__ import annotations
@@ -124,6 +140,7 @@ from ._kernels import (
 
 __all__ = [
     "OperatorAssembler",
+    "corner_subtraction",
     "single_layer_matrix",
     "double_layer_matrix",
     "adjoint_layer_matrix",
@@ -198,6 +215,67 @@ def _principal_value(
     )
 
 
+def corner_subtraction(
+    boundary: PhysicalBoundary, *, period: float
+) -> NDArray[np.float64]:
+    r"""The diagonal that singularity-subtracts the double layer at corners.
+
+    Writing ``K phi(s_i) = \int K (phi - phi(s_i)) ds' + phi(s_i) \int K ds'``
+    puts the rule's corner error onto an integrand that vanishes at the
+    target, and leaves ``\int K ds'`` to be supplied exactly. Its singular
+    part is the free-space Laplace double layer
+    ``n' . (x' - x) / (2 pi r^2)``, whose integral over a straight segment
+    is minus the angle the segment subtends at ``x``, over ``2 pi``. The
+    returned ``c_i`` is that exact integral minus the rectangle rule's
+    value, over the polygon and the images in the two neighbouring periods,
+    so adding ``diag(c)`` to the discrete ``K`` is the subtraction. Farther
+    images and the remainder ``K - K_Laplace``, which is continuous, are
+    integrated accurately by the rule and need nothing.
+
+    No Bloch phase enters: across the period wrap the kernel's phase and the
+    quasi-periodic density's phase cancel in the product the correction
+    stands in for. The target's own segment contributes zero (its principal
+    value on a straight piece), and it is found as the segment nearest the
+    node rather than by testing collinearity, which rounding in the
+    coordinates of a node 1e-9 nm from a vertex defeats (measured: a
+    misread segment adds a whole 1/2). Zero everywhere on the equal-arc
+    mesh, which is left exactly as it was.
+    """
+    points = len(boundary.x)
+    if boundary.polygon is None:
+        return np.zeros(points)
+    vx, vy = boundary.polygon
+    big_x = np.concatenate((vx - period, vx, vx + period, [vx[0] + 2.0 * period]))
+    big_y = np.concatenate((vy, vy, vy, [vy[0]]))
+    ax, ay, bx, by = big_x[:-1], big_y[:-1], big_x[1:], big_y[1:]
+    x, y = boundary.x[:, None], boundary.y[:, None]
+
+    to_a_x, to_a_y, to_b_x, to_b_y = ax - x, ay - y, bx - x, by - y
+    angle = np.arctan2(
+        to_a_x * to_b_y - to_a_y * to_b_x, to_a_x * to_b_x + to_a_y * to_b_y
+    )
+    ex, ey = bx - ax, by - ay
+    along = np.clip(((x - ax) * ex + (y - ay) * ey) / (ex**2 + ey**2), 0.0, 1.0)
+    own = np.argmin(np.hypot(ax + along * ex - x, ay + along * ey - y), axis=1)
+    angle[np.arange(points), own] = 0.0
+    exact = -angle.sum(axis=1) / (2.0 * np.pi)
+
+    rule = np.zeros(points)
+    weights = boundary.quadrature
+    for image in (-1, 0, 1):
+        dx = boundary.x[None, :] + image * period - boundary.x[:, None]
+        dy = boundary.y[None, :] - boundary.y[:, None]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            kernel = (boundary.nx[None, :] * dx + boundary.ny[None, :] * dy) / (
+                2.0 * np.pi * (dx**2 + dy**2)
+            )
+        if image == 0:
+            # A straight piece's own principal value, as in ``exact``.
+            np.fill_diagonal(kernel, 0.0)
+        rule += kernel @ weights
+    return exact - rule
+
+
 class OperatorAssembler:
     """One boundary's kernel machinery, shared across a whole scan.
 
@@ -221,6 +299,7 @@ class OperatorAssembler:
         self._factors: dict = {}
         self._cores: dict = {}
         self._hilbert: NDArray[np.complex128] | None = None
+        self._subtraction: NDArray[np.float64] | None = None
 
     @property
     def sgn(self) -> NDArray[np.float64]:
@@ -270,6 +349,15 @@ class OperatorAssembler:
             )
         return self._hilbert
 
+    def subtraction(self) -> NDArray[np.float64]:
+        """:func:`corner_subtraction` for this boundary, which depends on
+        geometry only and so is built once per scan."""
+        if self._subtraction is None:
+            self._subtraction = corner_subtraction(
+                self.boundary, period=self.period
+            )
+        return self._subtraction
+
     def clear(self) -> None:
         """Drop the per-wavelength memo; the geometry stays."""
         self._factors.clear()
@@ -318,8 +406,14 @@ def double_layer_matrix(
     period: float,
     terms: int,
     assembler: OperatorAssembler | None = None,
+    subtract_corners: bool = False,
 ) -> NDArray[np.complex128]:
-    """The discretised double-layer operator ``K`` (no identity part)."""
+    """The discretised double-layer operator ``K`` (no identity part).
+
+    ``subtract_corners`` adds :func:`corner_subtraction` to the diagonal,
+    which is exact for a constant density and changes nothing on the
+    equal-arc mesh. The perfectly conducting solve leaves it off.
+    """
     weights = boundary.quadrature
     nx, ny = boundary.nx, boundary.ny
     diag = np.eye(len(boundary.x), dtype=bool)
@@ -342,7 +436,10 @@ def double_layer_matrix(
     )
     kernel[diag] = _principal_value(boundary, forward, backward)
 
-    return kernel * weights[None, :]
+    matrix = kernel * weights[None, :]
+    if subtract_corners and boundary.graded:
+        matrix[diag] += assembler.subtraction()
+    return matrix
 
 
 def adjoint_layer_matrix(
