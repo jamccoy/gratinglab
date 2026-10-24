@@ -87,6 +87,19 @@ def save_results_to_file(results, labels=None, temperatures=None, output_dir=Non
                             f"RMS, worst of {r.get('flatten_residual_groups', 0)} "
                             f"group(s)\n")
 
+            # What was taken out of the scan before it was measured. A repaired
+            # or masked scan is a different measurement of the same file.
+            if r.get('scar_repair', 'none') != 'none':
+                f.write(f"  Scar repair: {r['scar_repair']}, "
+                        f"{r.get('scar_lines', 0)} line(s), "
+                        f"{r.get('scar_pixels', 0)} pixel(s)\n")
+            if r.get('region_mask'):
+                f.write(f"  Region mask: {r['region_mask']} "
+                        f"({r.get('masked_pixels', 0)} pixels; "
+                        f"{r.get('rows_excluded', 0)} line(s) out of row "
+                        f"grouping; {r.get('mask_rejected_grooves', 0)} "
+                        f"groove(s) rejected)\n")
+
             icc = r.get('icc')
             if icc is not None and np.isfinite(icc):
                 n_eff = r.get('n_effective', float('nan'))

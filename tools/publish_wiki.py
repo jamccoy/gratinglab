@@ -80,6 +80,7 @@ there; edits made here are overwritten by the next publish.
 | Find the literature behind a method | **[references](references)** |
 | Run or read a mutation-testing sweep | **[mutation-testing](mutation-testing)** |
 | Analyse an AFM scan: the metrology window's own guide | **[AFM overview](AFM-overview)**, then the AFM pages in the sidebar |
+| Repair scan-line scars, or leave a particle out | **[AFM scars and masking](AFM-scars-and-masking)** |
 | Correct for the tip, or pick a ScanAsyst-Air preset | **[AFM tip correction](AFM-tip-correction)** |
 | See how much the groove shape varies down a scan | **[AFM swath statistics](AFM-swath-statistics)** |
 

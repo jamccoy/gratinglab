@@ -11,7 +11,11 @@ import os
 from .settings import AnalysisSettings
 from .stats.icc import compute_icc, effective_sample_size
 from .core.image_flatten import flatten_image, row_offset_spread
-from .core.tip import apply_tip_correction
+from .core.region_mask import (GROOVE_REACH_PERIODS, apply_region_mask,
+                               bridge_nan, describe_mask,
+                               reject_grooves_near_nan,
+                               tip_correct_around_nan)
+from .core.scars import repair_scars_for
 from .core.processing import (
     raw_data, raw_data_multi_group,  # NEW: added raw_data_multi_group
     flatten_profile, find_groove_positions, load_afm_data
@@ -78,7 +82,7 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
     print(f"{'='*60}")
     
     # Load and validate data
-    data, scan_x_size = _load_and_validate(filename, settings)
+    data, scan_x_size, prep = _load_and_validate(filename, settings)
     if data is None:
         return None
     
@@ -105,12 +109,18 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
     all_groove_periods = []
     group_results = []  # Store results per group for diagnostics
     n_edge_rejected = 0  # Grooves dropped for sitting on a scan edge
+    n_mask_rejected = 0  # Grooves dropped for reaching into a masked column
     all_groove_positions = []  # x position (um) of each accepted measurement
     all_groove_groups = []     # row group index of each accepted measurement
 
     for group_idx, raw_y in enumerate(profiles_list):
         print(f"\n  Processing row group {group_idx + 1}/{settings.n_row_groups}...")
-        
+
+        # Columns masked across this whole group are NaN. Bridged for
+        # flattening and detection only; grooves reading them are dropped below.
+        measured_y = raw_y
+        raw_y = bridge_nan(raw_y)
+
         # Flatten this profile
         flat_y, background, flat_report = flatten_profile(raw_x, raw_y,
                                              method=settings.flatten_method,
@@ -134,8 +144,14 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
                                               edge_exclusion=settings.edge_exclusion_periods,
                                               return_n_edge_rejected=True)
         n_edge_rejected += n_edge
+        groove_centers, n_masked = reject_grooves_near_nan(
+            groove_centers, measured_y,
+            GROOVE_REACH_PERIODS * period_nm_est / ((raw_x[1] - raw_x[0]) * 1000))
+        n_mask_rejected += n_masked
 
         edge_note = f" ({n_edge} rejected: clipped by scan edge)" if n_edge else ""
+        if n_masked:
+            edge_note += f" ({n_masked} rejected: masked region)"
         print(f"    Found {len(groove_centers)} grooves{edge_note}")
 
         if len(groove_centers) == 0:
@@ -276,7 +292,10 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
         all_groove_periods, all_quality, all_local_angles,
         raw_x, group_results, all_groove_groups
     )
-    
+    result.update(prep)
+    result['mask_rejected_grooves'] = n_mask_rejected
+    result['rows_excluded'] = group_info.get('rows_excluded', 0)
+
     return result
 
 
@@ -296,7 +315,7 @@ def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
     print(f"{'='*60}")
     
     # Load and validate data
-    data, scan_x_size = _load_and_validate(filename, settings)
+    data, scan_x_size, prep = _load_and_validate(filename, settings)
     if data is None:
         return None
     
@@ -306,7 +325,8 @@ def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
     
     # Extract and flatten profile
     (raw_x, raw_y, flat_y, background, period_nm_est,
-     flat_report) = _process_profile(data, scan_x_size, show_plots, settings)
+     flat_report, measured_y) = _process_profile(data, scan_x_size, show_plots,
+                                                 settings)
     
     # Find grooves
     groove_centers, n_edge_rejected = find_groove_positions(raw_x, flat_y, period_nm_est,
@@ -314,8 +334,13 @@ def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
                                           distance_factor=settings.distance_factor,
                                           edge_exclusion=settings.edge_exclusion_periods,
                                           return_n_edge_rejected=True)
+    groove_centers, n_mask_rejected = reject_grooves_near_nan(
+        groove_centers, measured_y,
+        GROOVE_REACH_PERIODS * period_nm_est / ((raw_x[1] - raw_x[0]) * 1000))
 
     edge_note = f" ({n_edge_rejected} rejected: clipped by scan edge)" if n_edge_rejected else ""
+    if n_mask_rejected:
+        edge_note += f" ({n_mask_rejected} rejected: masked region)"
     print(f"Found {len(groove_centers)} grooves{edge_note}")
 
     if len(groove_centers) == 0:
@@ -360,10 +385,13 @@ def _analyze_single_file_traditional(filename, show_plots=True, settings=None):
                    settings)
     
     # Combine all results
-    return _package_results(filename, blaze_angles, stats, period_nm, period_std,
-                           groove_periods, quality, all_local_angles,
-                           raw_x, flat_y, groove_centers,
-                           flat_report=flat_report)
+    result = _package_results(filename, blaze_angles, stats, period_nm, period_std,
+                              groove_periods, quality, all_local_angles,
+                              raw_x, flat_y, groove_centers,
+                              flat_report=flat_report)
+    result.update(prep)
+    result['mask_rejected_grooves'] = n_mask_rejected
+    return result
 
 
 # ============ HELPER FUNCTIONS ============
@@ -381,6 +409,14 @@ def _load_and_validate(filename, settings):
                                           default_scan_size=settings.scan_x_size,
                                           settings=settings)
 
+        # The region mask first: levelling reads every pixel of a line, so a
+        # particle left in would move every line it sits on. Excluded pixels
+        # are NaN from here on; see core/region_mask.py.
+        data, n_masked = apply_region_mask(data, settings)
+        if n_masked:
+            print(f"Region mask: {describe_mask(settings)} "
+                  f"({n_masked} pixels excluded)")
+
         method = getattr(settings, 'image_flatten_method', 'none')
         if method != 'none':
             before = row_offset_spread(data)
@@ -389,7 +425,14 @@ def _load_and_validate(filename, settings):
                   f"(row-offset spread {before*1e9:.2f} -> "
                   f"{row_offset_spread(data)*1e9:.2f} nm)")
 
-        data, correction = apply_tip_correction(data, scan_x_size, settings)
+        # After levelling, which would otherwise read every row offset as a
+        # scar, and before tip correction, which would widen each scar
+        # sideways. See core/scars.py.
+        data, scars = repair_scars_for(data, settings)
+        if scars.method != 'none':
+            print(f"Scar repair: {scars.summary}")
+
+        data, correction = tip_correct_around_nan(data, scan_x_size, settings)
         if correction is not None:
             # The uncertain pixels are upper bounds, not measurements. Facet
             # fits mostly live on open facets where the apex tracks, but the
@@ -397,10 +440,19 @@ def _load_and_validate(filename, settings):
             # scan was corrected and by what tip.
             print(f"Tip correction: {correction.summary}")
 
-        return data, scan_x_size
+        # Recorded with the result: a repaired or masked scan is a different
+        # measurement of the same file, and the summary has to say which.
+        prep = {
+            'scar_repair': scars.method,
+            'scar_lines': scars.n_lines,
+            'scar_pixels': scars.n_pixels,
+            'region_mask': describe_mask(settings),
+            'masked_pixels': n_masked,
+        }
+        return data, scan_x_size, prep
     except Exception as e:
         print(f"Error loading {filename}: {e}")
-        return None, None
+        return None, None, None
 
 
 def _plot_2d_image(data, scan_x_size, filename):
@@ -416,8 +468,10 @@ def _plot_2d_image(data, scan_x_size, filename):
 
 def _process_profile(data, scan_x_size, show_plots, settings):
     """Extract profile, flatten it, and show diagnostics"""
-    # Extract profile
-    raw_x, raw_y = raw_data(data, scan_x_size)
+    # Extract profile. Masked columns are NaN in `measured_y`; the bridged
+    # `raw_y` is only for flattening and detection.
+    raw_x, measured_y = raw_data(data, scan_x_size)
+    raw_y = bridge_nan(measured_y)
     
     # Calculate scan parameters
     scan_width_nm = scan_x_size * 1000
@@ -444,7 +498,7 @@ def _process_profile(data, scan_x_size, show_plots, settings):
     # Print flattening info
     _print_flattening_info(raw_x, background, settings)
     
-    return raw_x, raw_y, flat_y, background, period_nm_est, flat_report
+    return raw_x, raw_y, flat_y, background, period_nm_est, flat_report, measured_y
 
 
 def _print_flattening_info(raw_x, background, settings):
