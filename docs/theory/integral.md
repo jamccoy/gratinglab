@@ -119,6 +119,27 @@ numbers refer to M&P §4.6.
   - the principal-value diagonals of K, L and D_t V are taken from the neighbour
     on the node's own side of a corner, since the neighbour across it sits where
     the kernel is of order 1/distance.
+
+  The finite-conductivity system needs two more, because it is first kind in
+  its densities and so does not absorb an error confined to the nodes next to a
+  corner the way the perfectly conducting second-kind TM equation does (§5):
+
+  - **K⁺ is singularity-subtracted at the corners**
+    (`_nystrom.corner_subtraction`). For a node a distance a from a corner the
+    double-layer kernel over the facet across it varies on the scale a, and the
+    graded nodes there are spaced on the same scale, so the rule's error at that
+    node is a fixed fraction of the integrand: refinement moves it to a closer
+    node instead of shrinking it (up to 0.16 against the identity's 1/2 on a
+    lamellar). Writing `K φ = K(φ − φ(s_i)) + φ(s_i) K1` and supplying the
+    Laplace part of `K1` exactly, as minus the angle each polygon segment
+    subtends over 2π, removes it. `L⁻` carries the same kind of error and needs
+    nothing, because it appears only inside `V⁺`, whose weights damp it.
+  - **D_t V⁻ is the composition `D_t (V⁻ w)`**, the spectral τ-derivative of the
+    assembled trace, instead of the single operator of §8. The trace is smooth in
+    τ on this mesh even where w is singular, while the single operator's Cauchy
+    remainder is not continuous across a corner. It too appears only inside
+    `V⁺`, and its corner error still stalled the conical solve. On the equal-arc
+    mesh it is the other way round, and that mesh keeps the single operator.
 - **Kummer acceleration.** The raw Green's sum converges like 1/m. The
   large-|m| asymptote sums in closed form to two logarithms (eqs. 4.82–4.85); the
   paired remainder decays like m⁻³ on the diagonal (eq. 4.87) and at worst like
@@ -185,21 +206,66 @@ The measured behaviour is as follows.
   balance alone, on a cornered TE solve; the graded mesh settles it to 5e-6.
 - **Finite conductivity** holds `R + A = 1` to ~1e-4 on smooth profiles
   (measured: 1.2e-4 for Au at 2 nm, 1.5° graze, P = 256; 1e-5 on a flat
-  interface). Corners now limit both polarizations at first order, since the
-  edge-singular densities meet the same equal-arc mesh, and this is reported
-  through the same deviation.
-- **Finite conductivity on a graded mesh is refused for now.** Measured with
-  fixed indices on the coupled system directly: TE improves everywhere (a
-  visible-light metal, n = 0.2 + 3.5i, on the lamellar and the blaze: 1e-4 to
-  2.7e-6 and 3.9e-4 to 6.9e-6 at P = 512), and the conical X-ray blaze
-  (n = 0.998 + 0.002i, 1.5° graze) goes from 8.3e-2 to 4.1e-4 at order 6. But
-  TM on the visible-light metal stalls near 4e-3 at order 4 and diverges at
-  order 6 (0.2 at P = 512), and the conical X-ray lamellar is erratic on both
-  meshes. Kress's convergence proof for graded Nyström needs a modification at
-  the nodes nearest the corner that is not implemented, and a negative
-  permittivity gives a corner oscillatory edge singularities that no grading
-  resolves. Until that is understood, `corner_grading` with
-  `conductivity="tabulated"` raises `UnsupportedConfiguration`.
+  interface). On the equal-arc mesh corners limit both polarizations at first
+  order, since the edge-singular densities meet evenly spaced nodes, and this
+  is reported through the same deviation.
+- **Finite conductivity on a graded mesh**, measured on 2026-10-24 on the
+  coupled system directly at fixed indices, with the two corrections of §4. The
+  visible-light metal is n = 0.2 + 3.5i at 600 nm, period 1000 nm, α = 10°
+  in-plane, on `Lamellar(0.2)` and the 29.5°/70.5° blaze. The X-ray cases are
+  n = 0.998 + 0.002i at 2 nm, period 315.15 nm, off-plane at 1.5° graze and 25°
+  azimuth, on `Lamellar(0.05)` and the same blaze. The deviation of `R + A`
+  from 1 for the TM incident state:
+
+  | case | mesh | P = 128 | 256 | 512 |
+  |---|---|---|---|---|
+  | visible, lamellar | equal arc | 1.3e-2 | 7.1e-3 | 9.3e-3 |
+  | visible, lamellar | p = 4 | 1.3e-4 | 1.9e-5 | 3.4e-6 |
+  | visible, lamellar | p = 6 | 1.6e-4 | 2.3e-5 | 4.0e-6 |
+  | visible, blaze | equal arc | 1.0e-2 | 8.3e-3 | 4.9e-3 |
+  | visible, blaze | p = 4 | 1.3e-3 | 1.7e-4 | 2.4e-5 |
+  | visible, blaze | p = 6 | 1.7e-3 | 2.2e-4 | (3.1e-5) |
+  | X-ray, lamellar | equal arc | 1.7e-1 | 1.3e-1 | 1.6e-1 |
+  | X-ray, lamellar | p = 4 | (4.1e-4) | 1.6e-5 | 2.0e-6 |
+  | X-ray, lamellar | p = 6 | (6.1e-4) | 2.7e-5 | 2.2e-6 |
+  | X-ray, blaze | equal arc | 1.6e-1 | 1.5e-1 | 8.3e-2 |
+  | X-ray, blaze | p = 4 | (2.3e-4) | 2.7e-5 | 2.9e-6 |
+  | X-ray, blaze | p = 6 | (2.5e-4) | 3.2e-5 | (1.7e-6) |
+
+  Bracketed rungs are ones the solver refuses: the graded X-ray meshes at
+  P = 128 fall below the resolution floor (151 to 207 nodes needed), and p = 6
+  at P = 512 on the 1000 nm blaze and on the X-ray blaze puts two nodes closer
+  than the separation floor. That floor is earning its keep: past it the same
+  solve degrades (the visible blaze reads 6.8e-2 at p = 6, P = 1024). The TE
+  state reads the same as TM off-plane, where the two couple, and in-plane
+  falls from 1e-4 and 3.9e-4 on equal arc to 2.7e-6 and 7.0e-6 at p = 4. Orders
+  2, 3 and 5 converge with the rest (X-ray lamellar, p = 5: 2.0e-5, 2.1e-6,
+  8.8e-7 at P = 256, 512, 768).
+
+  Without the `K⁺` subtraction the visible-metal TM stalled between 3e-3 and
+  5e-3, and the X-ray lamellar read 1.2 at P = 256, worse than the equal-arc
+  mesh. Without the
+  composition `D_t (V⁻ w)` the conical cases converged erratically, and at
+  order 5 the X-ray lamellar stalled near 7e-3 from P = 256 to 768. The
+  previous version of this section blamed oscillatory corner singularities from
+  the negative permittivity. They are not the cause: the TM corner exponent at
+  ε = n² ≈ −12.2 + 1.4i is ν = 0.600 − 0.009i at the lamellar's corners and
+  0.564 − 0.010i at the blaze apex (against 2/3 and 0.643 for a perfect
+  conductor), real to two decimals, and the grading resolves it like any other.
+
+  **The balance cannot tell the two `D_t V⁻` paths apart, and the composition
+  is the one that converges.** On the X-ray lamellar the single operator
+  balances to 1.1e-6 at P = 1024 and the composition to 8e-7 at P = 768, yet at
+  P = 1280 their efficiencies differ by 2.9e-5. Between rungs the single
+  operator's efficiencies still move by 4.6e-5 (P = 768 to 1024) and 1.9e-5
+  (1024 to 1280), while the composition's move by 3.2e-6 and 1.1e-6. This is the
+  same blindness as the TE sawtooth above.
+
+  The `K` subtraction is not applied to the perfectly conducting TM equation,
+  which is second kind and was not limited by this error. Tried there, it helps
+  the lamellar (1.8e-6 to 3.7e-7 at P = 512) and hurts the ideal sawtooth (6.6e-6
+  to 1.6e-5, and 25 times worse at P = 256), so the perfectly conducting results
+  stay exactly as measured above.
 
 ## 6. Validation evidence
 
@@ -262,8 +328,9 @@ visible-light metals (|n| of a few), which is why that regime costs nodes here
 - Smooth profiles: convergence is fast, and the harness typically certifies P in
   the low hundreds.
 - Cornered profiles + TM: on the default equal-arc mesh the energy-balance
-  deviation shrinks only linearly. Pass `corner_grading=4` with a perfect
-  conductor, which reaches 1e-5 at P ≈ 256 on the profiles in §5. Either way,
+  deviation shrinks only linearly. Pass `corner_grading=4`, which reaches 1e-5
+  at P ≈ 256 on the perfectly conducting profiles in §5 and 2e-5 to 2e-4 on the
+  finite-conductivity ones, against 7e-3 to 0.15 on equal arc. Either way,
   `check_convergence` (which sweeps this knob) should be left to pick the
   plateau, in preference to trusting a single run. On a graded mesh the
   resolution floor applies to the coarsest spacing, about twice the mean, so it
@@ -325,9 +392,12 @@ this project's operators (outward normal up, `_nystrom` scalings), is as follows
 
   with `c_E = n² k_t⁺²/k_t⁻²`, `c_B = k_t⁺²/k_t⁻²`, and
   `s = cos γ (1 − k_t⁺²/k_t⁻²)`. The tangential derivatives act on the
-  continuous traces, so they are `D_t V⁻` on the densities: a spectral
-  differentiation matrix that depends only on the geometry and requires no new
-  singular quadrature (G&S §3 note the same option).
+  continuous traces, so they are `D_t V⁻` on the densities. On the equal-arc
+  mesh that product is one operator, the derivative taken analytically on the
+  kernel (`tangential_layer_matrix`), because a spectral derivative of an
+  assembled `V⁻` leaves an O(1) error there. On a corner-graded mesh it is that
+  composition after all, the spectral τ-derivative of the assembled trace,
+  which is smooth in τ there (§4, §5).
 
 The result is a 2×2 block system in `(w, τ)`, with diagonal blocks
 `(I/2 + K⁺)V⁻ − c V⁺(L⁻ − I/2)` and cross blocks `∓ s V⁺ D_t V⁻`. In-plane

@@ -32,6 +32,8 @@ class PhysicalBoundary:
     ``weights`` is ``None`` on the equal-arc mesh, where every node carries
     ``arc_length / len(x)`` (see :meth:`gratinglab.profiles.Profile.boundary`),
     and holds the per-node quadrature weights of a graded mesh otherwise.
+    ``polygon`` is a graded mesh's open vertex list ``(x, y)`` in nm, on
+    whose straight pieces every node lies, and ``None`` otherwise.
     """
 
     x: NDArray[np.float64]
@@ -40,6 +42,7 @@ class PhysicalBoundary:
     ny: NDArray[np.float64]
     arc_length: float
     weights: NDArray[np.float64] | None = None
+    polygon: tuple[NDArray[np.float64], NDArray[np.float64]] | None = None
 
     @property
     def graded(self) -> bool:
@@ -93,6 +96,7 @@ def physical_boundary(
     )
     period = problem.period
     graded = bool(getattr(curve, "graded", False))
+    polygon = getattr(curve, "polygon", None) if graded else None
     return PhysicalBoundary(
         x=np.asarray(curve.t, dtype=np.float64) * period,
         y=np.asarray(curve.y, dtype=np.float64) * period,
@@ -101,5 +105,10 @@ def physical_boundary(
         arc_length=float(curve.arc_length) * period,
         weights=(
             np.asarray(curve.ds, dtype=np.float64) * period if graded else None
+        ),
+        polygon=(
+            None
+            if polygon is None
+            else tuple(np.asarray(v, dtype=np.float64) * period for v in polygon)
         ),
     )

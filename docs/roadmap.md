@@ -68,7 +68,7 @@ the product.
 | CI (Linux py3.11/3.12, macOS and Windows py3.12) | green. CI runs with `PYTHONWARNDEFAULTENCODING=1`, so a text `open()` that leaves its encoding to the platform fails on every platform, Windows included |
 | RCWA | **contributed, not yet integrated** |
 | C-method | not started |
-| **Integral method** ([theory](theory/integral.md)) | perfect-conductivity and finite-conductivity milestones done. Conical from the start, undercut-capable, with a GUI tab; validated against M&P Table 4.1 and, order by order, against an independent integral-method code on the private corpus (a comparison that also identified the TASTE profile). **Experimental**: not yet used for real analysis. M20 added `conductivity="tabulated"`, the coupled conical system of Goray & Schmidt (2010): absolute efficiencies with absorption recorded, a flat limit equal to Fresnel to 6e-5, their Table 3 reproduced per order, and both boundary conditions selectable in the GUI. A graded corner mesh (`corner_grading`) is done for perfect conductivity and refused with finite conductivity, whose stability near corners is the named successor |
+| **Integral method** ([theory](theory/integral.md)) | perfect-conductivity and finite-conductivity milestones done. Conical from the start, undercut-capable, with a GUI tab; validated against M&P Table 4.1 and, order by order, against an independent integral-method code on the private corpus (a comparison that also identified the TASTE profile). **Experimental**: not yet used for real analysis. M20 added `conductivity="tabulated"`, the coupled conical system of Goray & Schmidt (2010): absolute efficiencies with absorption recorded, a flat limit equal to Fresnel to 6e-5, their Table 3 reproduced per order, and both boundary conditions selectable in the GUI. A graded corner mesh (`corner_grading`) is done for both boundary conditions |
 
 The suite holds roughly 1450 tests; the skipped tests are those that need the
 private reference corpus or the AFM scans. The figure is deliberately rounded:
@@ -124,10 +124,11 @@ The remaining integral milestones, in order, are:
   `corner_grading=p` (opt-in, 4 recommended). Cornered TM went from first order
   to an energy-balance deviation of ~1e-5 at P = 256, and reciprocity improved
   by the same factor; see [`theory/integral.md`](theory/integral.md) §5. **With
-  finite conductivity it is refused**: TE gains as much, but TM on a
-  visible-light metal and the conical X-ray lamellar were measured unstable.
-  That is the named successor: Kress's near-corner modification, then a
-  re-measurement of both, and only then lifting the refusal.
+  finite conductivity it is done too** (2026-10-24): `R + A` reaches 2e-6 to
+  3e-5 at P = 512 on a visible-light metal and on conical X-ray gratings. It took
+  a corner singularity subtraction of `K⁺` and the tangential derivative taken on
+  the assembled trace, not Kress's near-corner modification, and the negative
+  permittivity turned out not to matter ([`findings.md`](findings.md)).
 - ~~A solver-contract conformance test~~: done; see the note under RCWA below.
 
 ### 1. RCWA: integrating a contributed backend

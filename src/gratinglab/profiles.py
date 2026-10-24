@@ -105,6 +105,11 @@ class BoundaryCurve:
         are then equally spaced in a mesh parameter, not in arc length, and
         ``ds`` holds the exact quadrature weight ``s'(tau) / n`` of each
         point, which the integral method must use node by node.
+    polygon
+        On a graded mesh, the open vertex list ``(t, y)`` of the polygon the
+        points lie on, over one period and normalised like ``t`` and ``y``.
+        The integral method integrates its corner kernels over these straight
+        pieces in closed form. ``None`` on the equal-arc mesh.
     """
 
     t: NDArray[np.float64]
@@ -113,6 +118,7 @@ class BoundaryCurve:
     ny: NDArray[np.float64]
     ds: NDArray[np.float64]
     graded: bool = False
+    polygon: tuple[NDArray[np.float64], NDArray[np.float64]] | None = None
 
     @property
     def arc_length(self) -> float:
@@ -392,6 +398,7 @@ def _graded_polyline(
         ny=tx_all[order_index],
         ds=ds_all[order_index],
         graded=True,
+        polygon=(vx.copy(), vy.copy()),
     )
 
 
