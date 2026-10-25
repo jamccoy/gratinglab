@@ -1051,10 +1051,11 @@ So the "severe" orderwise disagreement quoted under
 [scalar validity in a conical mount](#scalar-validity-in-a-conical-mount-follows-the-reduced-wavelength)
 was mostly the reflection, and the cast-shadowing note that the horizon model
 "moved the blaze order from 0.69 toward the rigorous 0.21" now reads the other
-way: the rigorous value is 0.76, above bare scalar. Both passages are left as
-written, with this entry as their correction, until the shadowing comparison is
-re-run. The reduced-ratio guard itself rests on the sinusoid ladder, which a
-reflection cannot touch, and stands.
+way: the rigorous value is 0.76, above bare scalar. The shadowing comparison has
+been re-run, in gold as well, and its result is recorded where the claim was made,
+under [the facet-normal test](#the-facet-normal-test-misses-cast-shadows-almost-entirely-on-the-exit-side).
+The reduced-ratio guard itself rests on the sinusoid ladder, which a reflection
+cannot touch, and stands.
 
 ---
 
@@ -1167,6 +1168,33 @@ Cast shadowing moved the blaze order from 0.69 toward the rigorous 0.21 of the
 is suggestive and does not constitute validation. As with the geometric-mean
 weight, the horizon model ships as opt-in until a finite-conductivity A/B
 comparison exists.
+
+**That reading was wrong, and so was its direction.** The 0.21 came from the
+integral solver drawing the groove mirrored (see
+[the entry on that](#the-integral-solver-solved-every-blazed-grating-as-its-mirror-image)).
+Re-run on 2026-10-25 with the fixed solver, and with the finite-conductivity
+A/B the paragraph above was waiting for, at the same geometry (γ = 1.25°,
+α = 19.99°). The integral is graded to order 4 and agrees with itself between
+512 and 1024 points to 2e-4 or better throughout:
+
+| λ, blaze order | bare scalar | horizon | integral |
+|---|---:|---:|---:|
+| Au, unpolarized, 2.226 nm, m=+3 | 0.514 | 0.348 | 0.574 |
+| Au, 3.0 nm, m=+2 | 0.415 | 0.343 | 0.637 |
+| Au, 4.0 nm, m=+2 | 0.253 | 0.165 | 0.253 |
+| Au, 5.0 nm, m=+1 | 0.334 | 0.325 | 0.748 |
+| perfect, TE, 2.226 nm, m=+3 | 0.688 | 0.466 | 0.763 |
+| perfect, TE, 3.0 nm, m=+2 | 0.573 | 0.452 | 0.851 |
+
+The rigorous blaze efficiency is at or above bare scalar at every wavelength
+here, so the horizon model never moves toward it. At the blaze wavelength in
+gold it widens the gap from 0.06 to 0.23. This does not fault the shadow
+geometry, which the closed-form tests above pin; it faults removing the
+shadowed power from a scalar result that is already short, its orders summing
+to 0.35 to 0.54 against the integral's 0.74 to 0.76. The geometry is also
+outside scalar's regime (reduced ratio 0.32), so it says nothing about the
+horizon model inside it. Opt-in remains right, and the A/B it was waiting for
+now argues against it rather than for it.
 
 ---
 
