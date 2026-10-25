@@ -109,8 +109,12 @@ class TestBoundary:
     def test_graded_boundary_carries_its_polygon_in_nm(self):
         boundary = physical_boundary(LAMELLAR, 64, grading=4)
         vx, vy = boundary.polygon
-        np.testing.assert_allclose(vx, [0.0, 500.0, 500.0, 1000.0])
-        np.testing.assert_allclose(vy, [300.0, 300.0, 0.0, 0.0])
+        # Reflected onto x = (1 - t) P: the wall that closed the profile's
+        # list at t = 1 opens this one at x = 0, and the list closes on
+        # (P, 300). The nodes on that wall sit at x = 0 too, which is what
+        # keeps it inside the three periods the corner subtraction covers.
+        np.testing.assert_allclose(vx, [0.0, 0.0, 500.0, 500.0])
+        np.testing.assert_allclose(vy, [300.0, 0.0, 0.0, 300.0])
         assert physical_boundary(LAMELLAR, 64).polygon is None
 
 

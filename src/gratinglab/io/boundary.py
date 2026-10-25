@@ -63,7 +63,8 @@ class BoundaryFile:
     """A groove profile read back from a gratinglab ``.json``."""
 
     period_nm: float
-    #: Fractions of one period, as :class:`~gratinglab.profiles.FromProfileData` takes them.
+    #: Fractions of one period along ``+d-hat``, as ``x_norm`` and a ``.ggp``
+    #: hold them; :meth:`profile` reflects them into the profile parameter.
     t: tuple[float, ...]
     y: tuple[float, ...]
     #: Grooves averaged into this profile, carried onto the problem.
@@ -77,7 +78,9 @@ class BoundaryFile:
         """The shape, as the solvers take it."""
         from ..profiles import FromProfileData
 
-        return FromProfileData(t=self.t, y=self.y, blaze_angle=self.blaze_angle)
+        return FromProfileData.along_dispersion(
+            self.t, self.y, blaze_angle=self.blaze_angle
+        )
 
     def to_problem(self, *, coating=None, substrate=None, roughness=0.0):
         """This groove as an efficiency problem, with the period it was measured at.

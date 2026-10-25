@@ -2,8 +2,13 @@
 
 A ``.ggp`` holds a groove profile normalised to the period: ``x`` runs 0 to 1
 across exactly one period and ``y`` is height as a fraction of that period.
-This is the same convention :mod:`gratinglab.profiles` uses, so no rescaling is
-needed.
+The scale is the one :mod:`gratinglab.profiles` uses, so no rescaling is
+needed. The direction is not: ``x`` advances along the dispersion direction
+and a profile's ``t`` against it (``docs/conventions.md``, "Direction of the
+profile parameter"), so :func:`to_profile` and :func:`write_ggp` reflect the
+points through :meth:`~gratinglab.profiles.FromProfileData.along_dispersion`
+and its inverse. The PCGrate corpus is what fixes the file's direction: the
+TASTE run matches only with ``x`` along ``+d-hat``.
 
 Canonical form::
 
@@ -196,9 +201,10 @@ def to_profile(ggp: GgpFile) -> FromProfileData:
     """Convert to a :class:`~gratinglab.profiles.FromProfileData`.
 
     Heights are referenced to the profile minimum so the valley sits at zero,
-    matching every analytic profile in :mod:`gratinglab.profiles`.
+    matching every analytic profile in :mod:`gratinglab.profiles`. The file's
+    ``x`` runs along ``+d-hat``, so the points are reflected into ``t``.
     """
-    return FromProfileData(t=tuple(ggp.t), y=tuple(ggp.y - ggp.y.min()))
+    return FromProfileData.along_dispersion(ggp.t, ggp.y - ggp.y.min())
 
 
 def read_profile(path: str | Path) -> FromProfileData:
@@ -216,7 +222,10 @@ def write_ggp(
 ) -> Path:
     """Write a profile in the canonical, PCGrate-loadable form.
 
-    Pass either a ``profile`` or explicit ``t``/``y`` arrays.
+    Pass either a ``profile`` or explicit ``t``/``y`` arrays. A profile is
+    reflected onto the file's ``+d-hat`` axis, the inverse of
+    :func:`to_profile`. Explicit arrays are written as given, so they are
+    file coordinates already, as the metrology pipeline's ``x_norm`` is.
 
     Values are written to six decimals, single-space separated and newline
     terminated. The format is
@@ -231,8 +240,7 @@ def write_ggp(
                 "cannot write an undercut profile as .ggp: PCGrate's polygonal "
                 "border expects a boundary that advances monotonically in x"
             )
-        t_values = np.asarray(profile.t, dtype=np.float64)
-        y_values = np.asarray(profile.y, dtype=np.float64)
+        t_values, y_values = profile.dispersion_axis()
     else:
         t_values = np.asarray(t, dtype=np.float64)
         y_values = np.asarray(y, dtype=np.float64)

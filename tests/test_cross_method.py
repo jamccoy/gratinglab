@@ -34,24 +34,30 @@ stated knobs; tolerances sit a factor of a few above them.
 import numpy as np
 
 from gratinglab.compare import align, sweep
+from gratinglab.geometry import blaze_direction
 from gratinglab.illumination import Illumination
 from gratinglab.problem import Problem
-from gratinglab.profiles import Sinusoidal
+from gratinglab.profiles import Blazed, Sinusoidal
 
 
-def compare_methods(problem, illumination, wavelengths, boundary_points):
+def compare_methods(
+    problem, illumination, wavelengths, boundary_points, corner_grading=0
+):
     """Both solvers on one problem; returns (comparison, summary, integral_ebd).
 
     ``integral_ebd`` is the integral solver's own energy-balance deviation --
     its discretisation-error estimate, which every test checks before trusting
     the integral answer as the reference.
     """
+    options = {"boundary_points": boundary_points}
+    if corner_grading:
+        options["corner_grading"] = corner_grading
     scans = sweep(
         problem,
         illumination,
         wavelengths,
         ["scalar", "integral"],
-        {"integral": {"boundary_points": boundary_points}},
+        {"integral": options},
     )
     comparison = align(scans)
     return (
@@ -109,6 +115,78 @@ class TestAgreementInTheOverlapRegime:
         relative = np.abs(scalar_eff[strong] - integral_eff[strong])
         assert (relative / integral_eff[strong]).max() < 0.05  # measured 0.49%
 
+
+
+class TestAgreementOnAnAsymmetricGroove:
+    """A blazed groove, so the two solvers must agree on which way it faces.
+
+    Every other case in this file is a sinusoid, and a mirrored sinusoid is
+    the same sinusoid shifted half a period, which changes no efficiency. So
+    nothing here could see a solver reading the profile parameter backwards,
+    and the integral solver did exactly that through 0.1.12: it placed the
+    curve at ``x = t P`` where ``docs/conventions.md`` puts ``t`` along
+    ``-d-hat``, and solved every asymmetric groove as its mirror image. On
+    this in-plane case that put 0.958 of the light in m = -2 instead of +2,
+    a disagreement of 0.975 with scalar theory, which reflects off the
+    documented facet.
+
+    A shallow facet at lambda/p = 0.05 is well inside scalar theory, so the
+    answers must match, and both must put the blaze in the order that
+    ``geometry.blaze_direction`` predicts, ``beta_b = 2 delta - alpha``.
+    TE on a graded mesh, because the sawtooth has corners.
+    """
+
+    PROFILE = Blazed(blaze_angle=3.0, antiblaze_angle=87.0)
+
+    def blazed_order(self, comparison, illumination, wavelength, period):
+        """The order nearest the blaze direction, and each solver's brightest."""
+        beta_b = np.radians(blaze_direction(3.0, illumination.alpha_deg))
+        reduced = wavelength / (period * illumination.sin_gamma)
+        predicted = round((np.sin(beta_b) + illumination.sin_alpha) / reduced)
+        scalar_eff, integral_eff = (np.ravel(e) for e in comparison.efficiency)
+        orders = np.ravel(comparison.orders)
+        return (
+            predicted,
+            int(orders[np.argmax(scalar_eff)]),
+            int(orders[np.argmax(integral_eff)]),
+        )
+
+    def test_in_plane(self):
+        problem = Problem(period=500.0, profile=self.PROFILE)
+        illumination = Illumination.classical(alpha=10.0, polarization="TE")
+
+        comparison, summary, integral_ebd = compare_methods(
+            problem, illumination, [25.0], boundary_points=256, corner_grading=4
+        )
+
+        assert integral_ebd < 1e-4  # measured 6.2e-6; 512 points moves 3.5e-5
+        # Measured 1.7e-2: integral 0.958 against scalar 0.975 in m = +2.
+        assert summary["max_abs_difference"] < 0.04
+        predicted, scalar_m, integral_m = self.blazed_order(
+            comparison, illumination, 25.0, 500.0
+        )
+        assert predicted == 2
+        assert scalar_m == integral_m == predicted
+
+    def test_off_plane(self):
+        problem = Problem(period=500.0, profile=self.PROFILE)
+        illumination = Illumination.offplane(
+            graze=5.0, azimuth=8.0, polarization="TE"
+        )
+
+        comparison, summary, integral_ebd = compare_methods(
+            problem, illumination, [2.18], boundary_points=256, corner_grading=4
+        )
+
+        assert integral_ebd < 1e-4  # measured 6.2e-6
+        # Reduced ratio lambda/(p sin gamma) = 0.050. Measured 1.5e-2:
+        # integral 0.957 against scalar 0.972 in m = +2.
+        assert summary["max_abs_difference"] < 0.04
+        predicted, scalar_m, integral_m = self.blazed_order(
+            comparison, illumination, 2.18, 500.0
+        )
+        assert predicted == 2
+        assert scalar_m == integral_m == predicted
 
 class TestDivergenceWithGrooveDepth:
     """Groove depth is scalar theory's dominant failure axis.

@@ -148,9 +148,14 @@ class TestEitherFormat:
     def test_a_json_reads_as_a_profile(self, tmp_path):
         p = _profile()
         profile = read_profile_file(write_boundary_json(tmp_path / "g.json", p))
-        assert profile.t == tuple(p.x_norm)
+        # The file keeps x_norm, along +d-hat; the profile holds t against it.
+        x, y = profile.dispersion_axis()
+        np.testing.assert_allclose(x, p.x_norm, atol=1e-12)
+        np.testing.assert_allclose(y, p.y_norm, atol=1e-12)
 
     def test_a_ggp_still_does(self, tmp_path):
         p = _profile()
         path = write_ggp(tmp_path / "g.ggp", t=p.x_norm, y=p.y_norm)
-        np.testing.assert_allclose(read_profile_file(path).t, p.x_norm, atol=1e-6)
+        x, y = read_profile_file(path).dispersion_axis()
+        np.testing.assert_allclose(x, p.x_norm, atol=1e-6)
+        np.testing.assert_allclose(y, p.y_norm - p.y_norm.min(), atol=1e-6)

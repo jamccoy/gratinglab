@@ -88,6 +88,15 @@ def physical_boundary(
     ``grading`` is passed to the profile only when non-zero, so a profile
     written against the older ``boundary(n)`` signature still serves the
     equal-arc mesh.
+
+    The profile parameter runs against the dispersion direction,
+    ``t-hat = -d-hat`` (``docs/conventions.md``, "Direction of the profile
+    parameter"), so the curve is reflected onto ``x = (1 - t) P``. The nodes
+    are reversed with it, which keeps them advancing in ``+x`` as every
+    operator here assumes, and ``nx`` changes sign. Through 0.1.12 this placed
+    ``x = t P``, so every asymmetric groove was solved as its mirror image:
+    a blazed grating sent its blaze to the wrong side of the normal while the
+    scalar solver, on the same problem, sent it to the documented one.
     """
     curve = (
         problem.profile.boundary(n, grading=grading)
@@ -98,17 +107,31 @@ def physical_boundary(
     graded = bool(getattr(curve, "graded", False))
     polygon = getattr(curve, "polygon", None) if graded else None
     return PhysicalBoundary(
-        x=np.asarray(curve.t, dtype=np.float64) * period,
-        y=np.asarray(curve.y, dtype=np.float64) * period,
-        nx=np.asarray(curve.nx, dtype=np.float64),
-        ny=np.asarray(curve.ny, dtype=np.float64),
+        x=(1.0 - np.asarray(curve.t, dtype=np.float64)[::-1]) * period,
+        y=np.asarray(curve.y, dtype=np.float64)[::-1] * period,
+        nx=-np.asarray(curve.nx, dtype=np.float64)[::-1],
+        ny=np.asarray(curve.ny, dtype=np.float64)[::-1],
         arc_length=float(curve.arc_length) * period,
         weights=(
-            np.asarray(curve.ds, dtype=np.float64) * period if graded else None
+            np.asarray(curve.ds, dtype=np.float64)[::-1] * period if graded else None
         ),
-        polygon=(
-            None
-            if polygon is None
-            else tuple(np.asarray(v, dtype=np.float64) * period for v in polygon)
-        ),
+        polygon=None if polygon is None else _mirrored_polygon(polygon, period),
     )
+
+
+def _mirrored_polygon(
+    polygon: tuple[NDArray[np.float64], NDArray[np.float64]], period: float
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """The open vertex list ``(t, y)`` reflected onto ``x = (1 - t) P``.
+
+    The list closes by continuing to ``(t[0] + 1, y[0])``, so reversing the
+    traversal brings that closing segment to the front: the reflected list
+    starts at the image of ``t[0] + 1``, which is ``-t[0]``, then runs
+    ``1 - t`` back down to vertex 1, and closes on ``1 - t[0]``. Reversing
+    the list alone would leave the first wall outside the three periods the
+    corner subtraction integrates, offsetting every node's correction.
+    """
+    t = np.asarray(polygon[0], dtype=np.float64)
+    y = np.asarray(polygon[1], dtype=np.float64)
+    x = np.concatenate(([-t[0]], 1.0 - t[:0:-1]))
+    return x * period, np.concatenate(([y[0]], y[:0:-1])) * period

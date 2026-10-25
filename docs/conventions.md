@@ -181,6 +181,16 @@ references. The references themselves state no handedness and quote only `|G_m|�
 omission is itself the finding. The behaviour is pinned by
 `tests/test_geometry.py::TestFacetHandedness`; see also `docs/findings.md`.
 
+Not every consumer takes only `|G_m|²`. The integral solver places the curve
+itself, and through 0.1.12 it placed it at `x = t P`, solving every asymmetric
+groove as its mirror image. It now places it at `x = (1 − t) P`
+(`solvers/integral/_boundary.py`), and
+`tests/test_cross_method.py::TestAgreementOnAnAsymmetricGroove` holds both
+solvers to the same blaze order. Files that run along `+d̂`, PCGrate's `.ggp`
+and the metrology pipeline's `x_norm`, cross into `t` in one place,
+`FromProfileData.along_dispersion` and its inverse `dispersion_axis`, as the
+preamble of this document requires of an external convention.
+
 #### Alternate names in the literature
 
 Two naming conflicts in the literature are described here so that neither is resolved
