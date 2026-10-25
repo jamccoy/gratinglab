@@ -321,9 +321,14 @@ class TestProvenance:
         assert any("not consulted" in w for w in scan.provenance.warnings)
 
     def test_corner_deficit_is_reported_never_rescaled(self):
+        # azimuth -25 is the case this was measured on (deviation 0.0061):
+        # it read +25 against the mirrored groove the solver drew through
+        # 0.1.12. At +25 the corrected solver's deficit is 0.0012, under the
+        # 0.5% warning, which is the corner error landing elsewhere and not
+        # a change in what is reported.
         scan = integral.solve(
             OFFPLANE,
-            Illumination.offplane(graze=1.5, azimuth=25.0, polarization="TM"),
+            Illumination.offplane(graze=1.5, azimuth=-25.0, polarization="TM"),
             [2.5],
             boundary_points=96,
         )

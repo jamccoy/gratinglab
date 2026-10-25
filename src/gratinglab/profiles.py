@@ -708,6 +708,34 @@ class FromProfileData(_BaseProfile):
             blaze_angle=blaze_angle,
         )
 
+    @classmethod
+    def along_dispersion(
+        cls,
+        x: ArrayLike,
+        y: ArrayLike,
+        *,
+        blaze_angle: float | None = None,
+    ) -> "FromProfileData":
+        """A profile from points that advance along ``+d-hat``.
+
+        PCGrate's ``.ggp`` and the metrology pipeline's ``x_norm`` both run
+        along the dispersion direction, while ``t`` runs against it
+        (``docs/conventions.md``, "Direction of the profile parameter"). This
+        is the one place that difference is absorbed: ``t = 1 - x``, with the
+        point order reversed so ``t`` still advances. :meth:`dispersion_axis`
+        is the inverse.
+        """
+        x = np.asarray(x, dtype=np.float64)
+        y = np.asarray(y, dtype=np.float64)
+        return cls(
+            t=tuple(1.0 - x[::-1]), y=tuple(y[::-1]), blaze_angle=blaze_angle
+        )
+
+    def dispersion_axis(self) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+        """The points as ``(x, y)`` advancing along ``+d-hat``, as a ``.ggp`` holds them."""
+        t = np.asarray(self.t, dtype=np.float64)
+        return 1.0 - t[::-1], np.asarray(self.y, dtype=np.float64)[::-1]
+
     @property
     def depth(self) -> float:
         return float(np.ptp(np.asarray(self.y)))

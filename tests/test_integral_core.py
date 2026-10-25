@@ -157,14 +157,19 @@ class TestEnergyBalance:
 
     @pytest.mark.parametrize("problem", CORNERED, ids=["blazed-vertical", "lamellar"])
     def test_cornered_profiles(self, problem):
+        # sin_alpha = -0.35 is the configuration these bounds were measured
+        # on: until the boundary was reflected onto t-hat = -d-hat it was
+        # written +0.35 against the mirrored groove, and new(-a) equals
+        # old(+a) exactly. TM on an ungraded corner is first order, so its
+        # error depends on where the nodes fall; at +0.35 it is 0.068.
         te = solve_transverse(
             physical_boundary(problem, 200),
-            wavelength=500.0, period=600.0, sin_alpha=0.35,
+            wavelength=500.0, period=600.0, sin_alpha=-0.35,
             polarization="TE", terms=90,
         )
         tm = solve_transverse(
             physical_boundary(problem, 200),
-            wavelength=500.0, period=600.0, sin_alpha=0.35,
+            wavelength=500.0, period=600.0, sin_alpha=-0.35,
             polarization="TM", terms=90,
         )
         assert te.total == pytest.approx(1.0, abs=1e-4)

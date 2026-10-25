@@ -979,6 +979,86 @@ shows the reference run never used.
 
 ---
 
+## The integral solver solved every blazed grating as its mirror image
+
+Found 2026-10-24 by the gratinglab app, whose JavaScript port of the scalar
+solver was being checked against this package's integral method on a title
+figure. At `Blazed(9)`, p = 1667 nm, 550 nm, α = ±40°, unpolarized, perfect
+conductor, 400 graded points:
+
+| α | integral (old) | integral (fixed) | scalar |
+|---:|---|---|---|
+| +40° | m=−1 0.56, m=0 0.17 | m=+1 0.80, m=0 0.17 | m=+1 0.89, m=0 0.10 |
+| −40° | m=−1 0.80, m=0 0.17 | m=+1 0.56, m=0 0.17 | m=+1 0.27, m=0 0.10 |
+
+`blaze_direction(9, 40)` is −22°, which is where m = +1 goes, so the scalar
+solver and the documented convention agreed and the integral solver was the
+odd one out. Its old answer at +α is its new answer at −α with the orders
+negated, digit for digit: a reflection, not an error of accuracy.
+
+**The cause** is one line. `physical_boundary` placed the curve at
+`x = t P`, while [`t̂ = −d̂`](#the-profile-parameter-runs-backwards-and-nothing-had-noticed)
+puts it at `x = −t P`. That entry says no numerical result depends on the
+direction, which is true of `|G_m|²` and was the reason it went unnoticed, but
+the integral method does not take `|G_m|²`: it draws the boundary. It now
+places it at `x = (1 − t) P` with the nodes reversed and `nx` negated, which
+keeps them advancing in `+x` as every operator assumes.
+The corner-graded mesh's polygon is reflected with them, and its vertex list
+has to start at the image of the closing vertex, not merely be reversed: the
+wall that closed the profile's list now opens the curve, and left at the end it
+falls outside the three periods the corner subtraction integrates, which put a
+0.07 offset on every node. Two tests of ungraded TM corners had been tuned
+against the mirrored groove; their incidence angles change sign so they still
+measure the case they were written for, since the new solver at −α is the old
+one at +α exactly.
+
+**Nothing caught it because every cross-method case was a sinusoid**, and a
+mirrored sinusoid is the same sinusoid half a period along. The guard is
+`tests/test_cross_method.py::TestAgreementOnAnAsymmetricGroove`: a 3° facet at
+λ/p = 0.05, in-plane and off-plane, where integral and scalar agree to 0.017
+and both put about 0.96 in the order `blaze_direction` predicts. On the old
+boundary the same test fails by 0.97.
+
+**The PCGrate corpus pinned the other half.** The TASTE match fed the `.ggp`'s
+`x` straight in as `t`, on the old boundary, and matched orderwise to 7.8e-4 at
+α = +19.99° with the mirrored candidates far off. Since α and the order labels
+were recovered in this project's frame, that match says the `.ggp` runs along
+`+d̂`. So the adapters reflect too (`FromProfileData.along_dispersion`), and the
+fixed solver on the reflected points reproduces the old solver on the raw
+points to 2.2e-14, measured on an asymmetric measured-style groove in the
+TASTE mount (TE, equal-arc and graded) and in-plane (TM). The corpus test
+could not be run when this was fixed, because the corpus was on no machine to
+hand; that identity is what carries its result across, and it should still be
+run. Its negative control, the design sawtooth, is now solved the other way
+round from when its margin was measured, so its 0.05 bound is unverified.
+
+The scalar solver, by contrast, **had** been solving every `.ggp` and every
+AFM profile mirrored relative to PCGrate, since it honoured `t̂ = −d̂` and the
+files never passed through a reflection. That is the half of this fix that
+changes results on measured data.
+
+**Two earlier conclusions in this file rest on the mirrored solver.** At the
+reference geometry (`Blazed(29.5, 70.5)`, p = 315.15 nm, γ = 1.25°,
+α = 19.99°, λ = 2.226 nm, TE):
+
+| | m=+1 | m=+2 | m=+3 |
+|---|---:|---:|---:|
+| integral, old | 0.05 | 0.42 | 0.21 |
+| integral, fixed | 0.13 | 0.06 | 0.76 |
+| scalar | | | 0.69 |
+
+So the "severe" orderwise disagreement quoted under
+[scalar validity in a conical mount](#scalar-validity-in-a-conical-mount-follows-the-reduced-wavelength)
+was mostly the reflection, and the cast-shadowing note that the horizon model
+"moved the blaze order from 0.69 toward the rigorous 0.21" now reads the other
+way: the rigorous value is 0.76, above bare scalar. The shadowing comparison has
+been re-run, in gold as well, and its result is recorded where the claim was made,
+under [the facet-normal test](#the-facet-normal-test-misses-cast-shadows-almost-entirely-on-the-exit-side).
+The reduced-ratio guard itself rests on the sinusoid ladder, which a reflection
+cannot touch, and stands.
+
+---
+
 ## Scalar validity in a conical mount follows the reduced wavelength
 
 The λ/period guard was testing the wrong ratio, and the flagship off-plane
@@ -1088,6 +1168,33 @@ Cast shadowing moved the blaze order from 0.69 toward the rigorous 0.21 of the
 is suggestive and does not constitute validation. As with the geometric-mean
 weight, the horizon model ships as opt-in until a finite-conductivity A/B
 comparison exists.
+
+**That reading was wrong, and so was its direction.** The 0.21 came from the
+integral solver drawing the groove mirrored (see
+[the entry on that](#the-integral-solver-solved-every-blazed-grating-as-its-mirror-image)).
+Re-run on 2026-10-25 with the fixed solver, and with the finite-conductivity
+A/B the paragraph above was waiting for, at the same geometry (γ = 1.25°,
+α = 19.99°). The integral is graded to order 4 and agrees with itself between
+512 and 1024 points to 2e-4 or better throughout:
+
+| λ, blaze order | bare scalar | horizon | integral |
+|---|---:|---:|---:|
+| Au, unpolarized, 2.226 nm, m=+3 | 0.514 | 0.348 | 0.574 |
+| Au, 3.0 nm, m=+2 | 0.415 | 0.343 | 0.637 |
+| Au, 4.0 nm, m=+2 | 0.253 | 0.165 | 0.253 |
+| Au, 5.0 nm, m=+1 | 0.334 | 0.325 | 0.748 |
+| perfect, TE, 2.226 nm, m=+3 | 0.688 | 0.466 | 0.763 |
+| perfect, TE, 3.0 nm, m=+2 | 0.573 | 0.452 | 0.851 |
+
+The rigorous blaze efficiency is at or above bare scalar at every wavelength
+here, so the horizon model never moves toward it. At the blaze wavelength in
+gold it widens the gap from 0.06 to 0.23. This does not fault the shadow
+geometry, which the closed-form tests above pin; it faults removing the
+shadowed power from a scalar result that is already short, its orders summing
+to 0.35 to 0.54 against the integral's 0.74 to 0.76. The geometry is also
+outside scalar's regime (reduced ratio 0.32), so it says nothing about the
+horizon model inside it. Opt-in remains right, and the A/B it was waiting for
+now argues against it rather than for it.
 
 ---
 
