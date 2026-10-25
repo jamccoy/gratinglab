@@ -124,6 +124,18 @@ class TestWriting:
         assert np.allclose(recovered.t, profile.t, atol=1e-6)
         assert np.allclose(recovered.y, profile.y, atol=1e-6)
 
+    def test_the_file_runs_along_the_dispersion_direction(self, tmp_path):
+        """A ``.ggp``'s x runs along +d-hat and t against it, so a facet
+        that rises with x in the file descends with t in the profile. The
+        PCGrate TASTE match is what fixes the file's direction; see
+        docs/findings.md. A symmetric groove could not tell the two apart."""
+        path = write_ggp(tmp_path / "saw.ggp", t=[0.0, 0.8, 1.0], y=[0.0, 0.4, 0.0])
+        profile = read_profile(path)
+        np.testing.assert_allclose(profile.t, [0.0, 0.2, 1.0], atol=1e-6)
+        np.testing.assert_allclose(profile.y, [0.0, 0.4, 0.0], atol=1e-6)
+        written = write_ggp(tmp_path / "back.ggp", profile).read_text(encoding="utf-8")
+        assert "0.800000 0.400000" in written
+
     def test_refuses_to_write_an_undercut_profile(self, tmp_path):
         """PCGrate's polygonal border expects a monotonic boundary."""
         undercut = FromProfileData(t=(0.0, 0.5, 0.3, 0.9), y=(0.0, 0.2, 0.4, 0.1))
