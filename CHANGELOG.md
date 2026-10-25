@@ -88,6 +88,25 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Fixed
 
+- The integral solver read the profile parameter backwards and solved every
+  asymmetric groove as its mirror image. It placed the curve at `x = t P`
+  where `docs/conventions.md` puts `t` along `-d̂`, so a `Blazed` grating
+  sent its blaze to the wrong side of the normal while the scalar solver, on
+  the same problem, sent it where `geometry.blaze_direction` says. At
+  `Blazed(9)`, α = 40°, 550 nm, p = 1667 nm the integral put 0.56 in m = −1
+  and now puts 0.80 in m = +1, beside scalar's 0.89. Symmetric profiles,
+  including every sinusoid, are unchanged, which is why the cross-method
+  tests never saw it; an asymmetric case now guards it.
+- `.ggp` files and the metrology pipeline's `x_norm` advance along `+d̂`,
+  which the PCGrate TASTE match fixes, so reading or writing one now reflects
+  the points into `t` (`FromProfileData.along_dispersion` and
+  `dispersion_axis`). A measured groove therefore reaches both solvers facing
+  the way PCGrate sees it. The integral solver's results on a `.ggp` are
+  unchanged, to 2e-14, because its two reflections cancel; the scalar
+  solver's change, because it had been solving every measured asymmetric
+  groove mirrored. `read_profile(path).t` is now `1 − x` reversed rather than
+  the file's `x`, and the boundary `.json` keeps storing `x_norm`.
+
 - **The slow-axis scan size ignored `\Aspect Ratio`, so the measured groove
   rotation was too small by that ratio on most scans.** Nanoscope writes the
   same number twice in `Scan Size` even for a rectangular scan and records the

@@ -114,10 +114,10 @@ class BoundaryProfile:
 
         return Problem(
             period=self.period_nm,
-            profile=FromProfileData(
-                t=tuple(float(v) for v in self.x_norm),
-                y=tuple(float(v) for v in self.y_norm),
-                blaze_angle=blaze_angle,
+            # x_norm advances along +d-hat, as the .ggp written from it
+            # does; the profile parameter runs against it.
+            profile=FromProfileData.along_dispersion(
+                self.x_norm, self.y_norm, blaze_angle=blaze_angle
             ),
             coating=coating,
             substrate=substrate,

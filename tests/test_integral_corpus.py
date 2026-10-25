@@ -40,6 +40,13 @@ def taste_profile() -> FromProfileData:
     a truncated pair mid-file would silently shift the profile. Here the
     damage is provably *after* the profile: pairs are taken in order and the
     non-monotone stray at the tail is dropped.
+
+    A ``.ggp`` runs along ``+d-hat`` and ``t`` against it, so the points go
+    through ``FromProfileData.along_dispersion`` as ``io.ggp`` sends them.
+    The agreement below was first measured with ``x`` passed straight in as
+    ``t`` while the integral solver also placed ``t`` along ``+x``; the two
+    reflections cancel, and the fixed solver on the mirrored points
+    reproduces that run to 2e-14 (``docs/findings.md``).
     """
     pairs = []
     with (reference_dir() / "OGRE" / "AFM_test.ggp").open(encoding="utf-8", errors="replace") as handle:
@@ -52,8 +59,8 @@ def taste_profile() -> FromProfileData:
                     continue
     t, y = np.array(pairs).T
     keep = np.concatenate(([True], np.diff(t) >= 0))
-    return FromProfileData(
-        t=tuple(np.clip(t[keep], 0.0, 1.0)), y=tuple(y[keep] - y[keep].min())
+    return FromProfileData.along_dispersion(
+        np.clip(t[keep], 0.0, 1.0), y[keep] - y[keep].min()
     )
 
 

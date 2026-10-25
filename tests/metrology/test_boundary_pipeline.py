@@ -248,8 +248,10 @@ def test_to_problem_produces_the_same_shape_as_the_ggp_export():
     """Whichever route a profile takes, it must be the same groove."""
     p = _profile()
     profile = p.to_problem().profile
-    assert np.allclose(profile.t, p.x_norm)
-    assert np.allclose(profile.y, p.y_norm)
+    # x_norm runs along +d-hat, as the .ggp does, and t against it.
+    x, y = profile.dispersion_axis()
+    assert np.allclose(x, p.x_norm)
+    assert np.allclose(y, p.y_norm)
 
 
 def test_to_problem_carries_a_fitted_blaze_angle_when_given_one():
