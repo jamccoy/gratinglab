@@ -72,6 +72,8 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Changed
 
+- `write_ggp` no longer ends the file with a line break after the last point.
+  PCGrate rejects a `.ggp` that ends in one, as `np.savetxt` output does.
 - The default analysis now corrects a groove rotation of 0.2° or more. A
   synthetic scan with none, including the committed fixture, is unaffected
   (it measures -0.002 ± 0.002° and is left alone). **The real scans have not
