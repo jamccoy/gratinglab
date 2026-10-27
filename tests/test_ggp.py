@@ -154,7 +154,10 @@ class TestWriting:
             write_ggp(tmp_path / "x.ggp", t=[0, 1], y=[0, 1, 2])
 
     def test_writes_the_exact_pcgrate_line_format(self, tmp_path):
-        """Six decimals, one space, newline -- the form PCGrate accepts.
+        """Six decimals, one space, no break after the last point.
+
+        PCGrate rejects a file ending in a line break (reported 2026-10-27),
+        which is why the last point is not followed by one.
 
         This began as a byte-compatibility check against `afm_blaze_meas`,
         which shipped a second `write_ggp`. That copy is gone and this module
@@ -163,7 +166,8 @@ class TestWriting:
         is still a fact about PCGrate, and still worth pinning.
         """
         path = write_ggp(tmp_path / "fmt.ggp", t=[0.0, 0.5], y=[0.0, 0.25])
-        assert path.read_text(encoding="utf-8") == GGP_HEADER + "\n0.000000 0.000000\n0.500000 0.250000\n"
+        assert path.read_text(encoding="utf-8") == GGP_HEADER + "\n0.000000 0.000000\n0.500000 0.250000"
+        assert not path.read_bytes().endswith((b"\n", b"\r"))
 
 
 class TestProfileIntegration:
