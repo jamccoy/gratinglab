@@ -208,6 +208,21 @@ def test_written_file_has_the_uncommented_two_line_header():
     assert len(lines) == 102, "two header lines plus one per point"
 
 
+def test_the_cli_export_honours_the_header_setting(tmp_path, monkeypatch):
+    """GGP_WRITE_HEADER = False in config reaches the file the CLI writes."""
+    import gratinglab.metrology.workflows as workflows
+    from gratinglab.io.ggp import read_ggp
+
+    monkeypatch.setattr(workflows, 'RESULTS_DIR', str(tmp_path))
+    settings = AnalysisSettings.from_config().with_(ggp_write_header=False)
+    with contextlib.redirect_stdout(io.StringIO()):
+        out = workflows.run_boundary_profile_export(settings, filename=SOURCE)
+
+    ggp = read_ggp(out['ggp_path'])
+    assert ggp.header_variant == "none"
+    assert len(ggp.t) == len(out['x'])
+
+
 if __name__ == '__main__':
     failures = 0
     for name, fn in sorted(globals().items()):
