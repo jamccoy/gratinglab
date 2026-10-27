@@ -20,6 +20,15 @@ comment header:
 The scan width is read from that header when it is present; otherwise the
 fallback value in `SCAN_X_SIZE` is used.
 
+A **line profile** export is accepted too: two columns per line, position and
+height, in metres unless the header names a unit in brackets (`x [nm]`). It is
+read as a scan of one line, and its width is the span of the x column, so no
+header or fallback is involved. The x column has to be evenly spaced, and a
+file where it is not is refused rather than stretched. A profile is one line of
+the image, or the average Gwyddion took along it, so it carries less
+information than the image it came from: orientation correction and scar
+repair have nothing to work with. Prefer the image when you have it.
+
 Until recently this was the only supported input, and every file in `data/` is
 a text export. Its drawback is that the export is an untracked manual step:
 nothing in the file records which channel was exported, which scan direction was
