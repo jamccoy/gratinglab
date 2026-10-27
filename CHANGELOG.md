@@ -14,6 +14,10 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- Two-column line profiles (`x z`, as Gwyddion's profile export writes them)
+  load as a one-line scan, with the width taken from the x column. The same
+  surface exported as an image and as a profile averages to the same groove
+  (`tests/metrology/test_line_profile.py`).
 - Groove orientation in the AFM pipeline: a sample mounted a degree or two
   off square is measured and, when it matters, corrected, with no rotating by
   eye in Gwyddion. `metrology.core.orientation` finds the grooves band by band,
