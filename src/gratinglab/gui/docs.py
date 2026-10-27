@@ -46,6 +46,7 @@ __all__ = [
 _TITLES = {
     "scalar": "Scalar (Kirchhoff)",
     "integral": "Integral (boundary integral equation)",
+    "rcwa": "RCWA (Fourier modal method)",
 }
 
 #: Non-solver reference pages: (key, title, filename relative to docs/).
