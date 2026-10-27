@@ -156,7 +156,7 @@ class TestWriting:
     def test_writes_the_exact_pcgrate_line_format(self, tmp_path):
         """Six decimals, one space, no break after the last point.
 
-        PCGrate rejects a file ending in a line break (reported 2026-10-27),
+        PCGrate rejects a file ending in a line break (found by Aditi, 2026-10-27),
         which is why the last point is not followed by one.
 
         This began as a byte-compatibility check against `afm_blaze_meas`,

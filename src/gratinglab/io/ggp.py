@@ -237,7 +237,7 @@ def write_ggp(
     the points alone, as ``np.savetxt`` with no ``header`` does. It exists to
     test the claim in the module docstring that PCGrate needs the header:
     that claim comes from the files found on disk, not from PCGrate's
-    documentation, and a headerless file has been reported in use (2026-10-27).
+    documentation, and Aditi's script writes headerless files (2026-10-27).
     Reading such a file back reports ``header_variant == "none"``.
     """
     if (profile is None) == (t is None):
@@ -264,6 +264,7 @@ def write_ggp(
               for x_value, height in zip(t_values, y_values))
     with path.open("w", encoding="utf-8") as handle:
         # No line break after the last point: PCGrate reads a trailing one as
-        # an extra, empty point and rejects the file (reported 2026-10-27).
+        # an extra, empty point and rejects the file (found by Aditi,
+        # 2026-10-27).
         handle.write("\n".join([GGP_HEADER, *points] if header else points))
     return path
