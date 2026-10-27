@@ -85,7 +85,7 @@ bench.
 | GUI (Qt/PySide6): tabs, geometry dock, 3D conical view | done |
 | CI (Linux py3.11/3.12, macOS and Windows py3.12) | green. CI runs with `PYTHONWARNDEFAULTENCODING=1`, so a text `open()` that leaves its encoding to the platform fails on every platform, Windows included |
 | RCWA | **planned, written in-house** (§1); no longer expected as a contribution |
-| C-method | not started |
+| **C-method** ([theory](theory/cmethod.md)) | first slice done (unreleased): perfect conductor in any mount and one interface into a material, absorbing or lossless, conical and coupled. Validated against Goray & Schmidt Table 3 (Li's C-method), Fresnel, Maréchal–Stroke and the integral solver. Refuses vertical facets and undercuts; slow on sawtooth corners and unstable at high truncation on profiles deeper than about P/2, both reported in provenance. **Experimental.** No coatings or layer stacks, and no GUI tab yet |
 | **Integral method** ([theory](theory/integral.md)) | perfect-conductivity and finite-conductivity milestones done. Conical from the start, undercut-capable, with a GUI tab; validated against M&P Table 4.1 and, order by order, against an independent integral-method code on the private corpus (a comparison that also identified the TASTE profile). **Experimental**: not yet used for real analysis. M20 added `conductivity="tabulated"`, the coupled conical system of Goray & Schmidt (2010): absolute efficiencies with absorption recorded, a flat limit equal to Fresnel to 6e-5, their Table 3 reproduced per order, and both boundary conditions selectable in the GUI. A graded corner mesh (`corner_grading`) is done for both boundary conditions |
 
 The suite holds roughly 1450 tests; the skipped tests are those that need the

@@ -1,0 +1,450 @@
+"""The C-method, against every answer that does not come from this code.
+
+In order of strictness: the profile's Fourier series against a closed form,
+a flat boundary against Fresnel (amplitude and phase), Goray & Schmidt's
+Table 3 (which is itself Li's C-method), the Marechal-Stroke theorem, Maystre
+& Popov's Table 4.1, the energy theorems, the perfect-conductor limit of the
+coupled system, reciprocity, and agreement with the integral solver -- a
+different method, sharing nothing below ``Problem``. Then the two failure
+regions the method note measures (corners and deep profiles), and the
+refusals. ``docs/theory/cmethod.md`` section 6 records the numbers.
+"""
+
+import numpy as np
+import pytest
+from scipy.special import jv
+
+from gratinglab.checks import check_energy_balance, check_reciprocity
+from gratinglab.convergence import check_convergence
+from gratinglab.illumination import Illumination
+from gratinglab.materials import fresnel
+from gratinglab.problem import Problem
+from gratinglab.profiles import Blazed, FromProfileData, Lamellar, Sinusoidal
+from gratinglab.solvers import UnsupportedConfiguration, cmethod, get_solver, integral
+from gratinglab.solvers.cmethod._core import Harmonics, solve_finite, solve_perfect
+from gratinglab.solvers.cmethod._series import profile_series
+from gratinglab.solvers.integral._boundary import physical_boundary
+from gratinglab.solvers.integral._finite import solve_finite_states
+from gratinglab.solvers.integral._nystrom import OperatorAssembler
+
+GOLD_VISIBLE = 0.2 + 3.0j
+XRAY = 1.0 - 1e-3 + 1e-4j
+GLASS = 1.5 + 0.0j
+
+FLAT = Problem(period=600.0, profile=FromProfileData(t=(0.0, 0.5, 1.0), y=(0.0, 0.0, 0.0)))
+SINE = Problem(period=500.0, profile=Sinusoidal(depth_fraction=0.3))
+
+
+def harmonics(problem, truncation, center=0):
+    return Harmonics.build(profile_series(problem), center, truncation)
+
+
+def by_order(orders, values):
+    return dict(zip(np.asarray(orders).tolist(), np.asarray(values)))
+
+
+def integral_finite(problem, *, wavelength, sin_alpha, index, cos_gamma, incident, points):
+    boundary = physical_boundary(problem, points)
+    terms = points // 2
+    solution = solve_finite_states(
+        boundary,
+        wavelength=wavelength,
+        period=problem.period,
+        sin_alpha=sin_alpha,
+        index=index,
+        cos_gamma=cos_gamma,
+        incidents=[incident],
+        terms=terms,
+        assembler=OperatorAssembler(boundary, period=problem.period, terms=terms),
+    )[0]
+    return solution
+
+
+class TestRegistration:
+    def test_available_by_name(self):
+        assert get_solver("cmethod") is cmethod
+
+    def test_capabilities(self):
+        caps = cmethod.capabilities
+        assert caps.rigorous and caps.conical and caps.reports_progress
+        assert caps.accuracy_knob == "truncation"
+        assert not caps.handles_undercut
+
+
+class TestProfileSeries:
+    """The two inputs every mode is built from, against closed forms."""
+
+    def test_sinusoid_plane_wave_is_a_bessel_series(self):
+        """``exp(i beta a)`` with ``a = (D/2)(1 - cos 2 pi s)`` has
+        coefficients ``exp(i beta D/2) (-i)^j J_j(beta D/2)``, from the
+        Jacobi-Anger expansion -- an answer the FFT path cannot share."""
+        series = profile_series(SINE)
+        depth = SINE.depth
+        beta = 0.013
+        j = np.arange(-12, 13)
+        expected = np.exp(0.5j * beta * depth) * (-1j) ** j * jv(j, 0.5 * beta * depth)
+        assert np.allclose(series.plane_wave(beta, j), expected, atol=1e-14)
+
+    def test_sawtooth_slope_coefficients_are_exact(self):
+        """The polygon path integrates each facet in closed form. The slope
+        of a sawtooth is a two-level step, whose coefficients are known."""
+        problem = Problem(period=1000.0, profile=Blazed(blaze_angle=20.0, antiblaze_angle=50.0))
+        series = profile_series(problem)
+        s0, width, _, slope = series._segments()
+        j = np.arange(1, 9)
+        expected = sum(
+            sigma * (np.exp(-2j * np.pi * j * a) - np.exp(-2j * np.pi * j * (a + w)))
+            / (2j * np.pi * j)
+            for a, w, sigma in zip(s0, width, slope)
+        )
+        assert np.allclose(series.slope(j), expected, atol=1e-15)
+        assert series.slope(np.array([0]))[0] == pytest.approx(0.0, abs=1e-15)
+        # Mirrored onto x = (1 - t) P: the blaze facet descends with x.
+        assert set(np.round(slope, 12)) == {
+            round(-np.tan(np.radians(20.0)), 12),
+            round(np.tan(np.radians(50.0)), 12),
+        }
+
+
+class TestFlatInterfaceIsFresnel:
+    """Amplitude and phase: this pins every sign in the coupled system and
+    the plane-wave flux, TE against r_s and TM against r_p."""
+
+    @pytest.mark.parametrize("index", [GOLD_VISIBLE, XRAY, GLASS], ids=["gold", "xray", "glass"])
+    @pytest.mark.parametrize("sin_alpha", [0.0, 0.5])
+    def test_amplitudes_and_energy(self, index, sin_alpha):
+        te, tm = solve_finite(
+            harmonics(FLAT, 6),
+            wavelength=550.0,
+            period=600.0,
+            sin_alpha=sin_alpha,
+            sin_gamma=1.0,
+            cos_gamma=0.0,
+            index=index,
+            incidents=[(1.0, 0.0), (0.0, 1.0)],
+        )
+        r_s, r_p = fresnel.amplitude(index, np.pi / 2.0 - np.arcsin(sin_alpha))
+        zero = list(te.orders).index(0)
+        assert te.e_amplitudes[zero] == pytest.approx(complex(r_s), abs=1e-12)
+        assert tm.h_amplitudes[zero] == pytest.approx(complex(r_p), abs=1e-12)
+        assert np.allclose(te.h_amplitudes, 0.0, atol=1e-14)
+        for solution in (te, tm):
+            assert solution.efficiencies.sum() + solution.absorption == pytest.approx(1.0, abs=1e-12)
+        if index.imag == 0.0:
+            # Lossless: the flux into the glass is the transmitted order.
+            assert te.transmitted_efficiencies.sum() == pytest.approx(te.absorption, abs=1e-12)
+
+
+class TestGorayEtSchmidtTable3:
+    """Dielectric sine, n = 2, conical (their theta = 60, phi = 15 deg),
+    pure E_z incidence. Their table is a comparison against Li's
+    coordinate-transformation method, so this is the C-method's own
+    published result. Measured: within 1.4e-5 of every order, reflected and
+    transmitted; the table is quoted to about 1e-4. Their order n is our
+    m = -n (as in test_integral_finite.py)."""
+
+    REFLECTED = {0: 0.1033, 1: 0.03873, 2: 0.03741, 3: 0.01121}
+    TRANSMITTED = {
+        -2: 0.06351, -1: 0.5183, 0: 0.07146, 1: 0.09925,
+        2: 0.04922, 3: 0.007396, 4: 0.00002466, 5: 0.0001858,
+    }
+
+    def test_every_order(self):
+        problem = Problem(period=600.0, profile=Sinusoidal(depth_fraction=0.3))
+        (solution,) = solve_finite(
+            harmonics(problem, 20, center=1),
+            wavelength=300.0,
+            period=600.0,
+            sin_alpha=float(np.sin(np.radians(60.0))),
+            sin_gamma=float(np.cos(np.radians(15.0))),
+            cos_gamma=float(np.sin(np.radians(15.0))),
+            index=2.0 + 0.0j,
+            incidents=[(1.0, 0.0)],
+        )
+        got_r = by_order(solution.orders, solution.efficiencies)
+        got_t = by_order(solution.transmitted_orders, solution.transmitted_efficiencies)
+        assert sorted(got_t) == sorted(self.TRANSMITTED)
+        for m, expected in self.REFLECTED.items():
+            assert got_r[m] == pytest.approx(expected, abs=5e-5), f"R m={m}"
+        for m, expected in self.TRANSMITTED.items():
+            assert got_t[m] == pytest.approx(expected, abs=5e-5), f"T m={m}"
+        total = solution.efficiencies.sum() + solution.transmitted_efficiencies.sum()
+        assert total == pytest.approx(1.0, abs=1e-10)
+        assert np.abs(solution.h_amplitudes).max() > 0.01  # polarization converts
+
+
+class TestPerfectConductorBenchmarks:
+    def test_marechal_stroke(self):
+        """A 30/60 deg echelette illuminated normal to its blaze facet sends
+        all TM power into the blaze order (M&P 4.7.2). The exact field is two
+        plane waves, so the C-method lands on it at any truncation; this pins
+        the plane-wave flux and that the blaze is on the documented side."""
+        problem = Problem(period=600.0, profile=Blazed(blaze_angle=30.0, antiblaze_angle=60.0))
+        solution = solve_perfect(
+            harmonics(problem, 8),
+            wavelength=600.0, period=600.0, sin_alpha=0.5, sin_gamma=1.0, polarization="TM",
+        )
+        got = by_order(solution.orders, solution.efficiencies)
+        assert got[1] == pytest.approx(1.0, abs=1e-12)
+        assert got[0] == pytest.approx(0.0, abs=1e-12)
+
+    @pytest.mark.parametrize("polarization", ["TE", "TM"])
+    def test_maystre_popov_table_4_1(self, polarization):
+        """Sinusoid 600 nm, depth 180 nm, Littrow at 600 nm. TM matches the
+        printed 0.9579. TE does not match the printed 0.4659: this solver
+        and the integral solver both give 0.466441 (the integral at every
+        mesh from 110 to 512 points), so the gap is in the table, and the
+        pin is the cross-method value."""
+        problem = Problem(period=600.0, profile=Sinusoidal(depth_fraction=0.3))
+        solution = solve_perfect(
+            harmonics(problem, 16),
+            wavelength=600.0, period=600.0, sin_alpha=0.5, sin_gamma=1.0,
+            polarization=polarization,
+        )
+        got = by_order(solution.orders, solution.efficiencies)
+        expected = {"TE": 0.466441, "TM": 0.9579}[polarization]
+        assert got[1] == pytest.approx(expected, abs=1e-5 if polarization == "TE" else 1e-4)
+
+
+class TestEnergyTheorem:
+    @pytest.mark.parametrize("polarization", ["TE", "TM"])
+    @pytest.mark.parametrize("graze", [90.0, 30.0], ids=["in-plane", "conical"])
+    def test_perfect_conductor_sums_to_one(self, polarization, graze):
+        illumination = (
+            Illumination.classical(alpha=20.0, polarization=polarization)
+            if graze == 90.0
+            else Illumination.offplane(graze=graze, azimuth=20.0, polarization=polarization)
+        )
+        scan = cmethod.solve(SINE, illumination, [350.0, 400.0, 600.0], truncation=16)
+        assert check_energy_balance(scan, tolerance=1e-10, lossless=True).passed
+        assert scan.provenance.notes["energy_balance_deviation"] < 1e-10
+
+    def test_perfect_conductor_limit_of_the_coupled_system(self):
+        """As |n| grows the conical coupled system must approach the
+        decoupled perfect-conductor solve, with cross-polarization and the
+        difference both falling as 1/|n| (Leontovich). Measured at 100i and
+        300i: differences 1.5e-3 and 4.9e-4 (TE), cross-polarization 8.5e-3
+        and 2.8e-3. A real negative permittivity is the case this exercises,
+        and the one that once fell through the lossless branch."""
+        h = harmonics(SINE, 16)
+        args = dict(
+            wavelength=280.0, period=500.0, sin_alpha=0.2,
+            sin_gamma=float(np.sin(np.radians(30.0))),
+        )
+        cos_gamma = float(np.cos(np.radians(30.0)))
+        perfect = solve_perfect(h, polarization="TE", **args)
+        gaps, cross = [], []
+        for n in (100j, 300j):
+            (finite,) = solve_finite(h, cos_gamma=cos_gamma, index=n, incidents=[(1.0, 0.0)], **args)
+            gaps.append(np.abs(finite.efficiencies - perfect.efficiencies).max())
+            cross.append(np.abs(finite.h_amplitudes).max())
+            assert finite.absorption == pytest.approx(0.0, abs=1e-12)  # lossless
+        assert gaps[1] < 2e-3 and cross[1] < 1e-2
+        assert gaps[0] / gaps[1] == pytest.approx(3.0, rel=0.2)
+        assert cross[0] / cross[1] == pytest.approx(3.0, rel=0.2)
+
+
+class TestAgreementWithTheIntegralSolver:
+    """A different rigorous method, sharing nothing below ``Problem``."""
+
+    @pytest.mark.parametrize("polarization, tolerance", [("TE", 1e-6), ("TM", 3e-5)])
+    def test_perfect_conductor_sinusoid(self, polarization, tolerance):
+        illumination = Illumination.classical(alpha=20.0, polarization=polarization)
+        ours = cmethod.solve(SINE, illumination, [400.0], truncation=16)
+        theirs = integral.solve(SINE, illumination, [400.0], boundary_points=400)
+        assert np.abs(ours.efficiency - theirs.efficiency).max() < tolerance
+
+    @pytest.mark.parametrize("incident", [(1.0, 0.0), (0.0, 1.0)], ids=["Ez", "Hz"])
+    @pytest.mark.parametrize("graze", [90.0, 60.0], ids=["in-plane", "conical"])
+    def test_finite_conductivity_gold(self, incident, graze):
+        """Measured differences 2e-6 to 1.7e-5, the integral's own error at
+        512 points; asserted at 5e-5 with 384."""
+        sin_gamma = float(np.sin(np.radians(graze)))
+        cos_gamma = 0.0 if graze == 90.0 else float(np.cos(np.radians(graze)))
+        (ours,) = solve_finite(
+            harmonics(SINE, 16), wavelength=600.0, period=500.0,
+            sin_alpha=float(np.sin(np.radians(20.0))), sin_gamma=sin_gamma,
+            cos_gamma=cos_gamma, index=GOLD_VISIBLE, incidents=[incident],
+        )
+        theirs = integral_finite(
+            SINE, wavelength=600.0, sin_alpha=float(np.sin(np.radians(20.0))),
+            index=GOLD_VISIBLE, cos_gamma=cos_gamma, incident=incident, points=384,
+        )
+        assert np.array_equal(ours.orders, theirs.orders)
+        assert np.abs(ours.efficiencies - theirs.efficiencies).max() < 5e-5
+        assert ours.absorption == pytest.approx(theirs.absorption, abs=5e-5)
+
+    def test_off_plane_xray_gold_through_the_solver(self):
+        """The founding application's mount, Au from the shipped CXRO table,
+        absolute efficiencies with absorption. Measured 8.8e-5 per order
+        and 5.4e-5 in absorption against the integral at 512 points. The gap
+        is the integral's: this solve is converged (N = 24 and 48 agree to
+        1e-14), and the integral closes on it, 2.6e-5 at 768 points, as its
+        own energy deviation falls from 2.8e-4 to 8e-5."""
+        problem = Problem(period=600.0, profile=Sinusoidal(depth_fraction=0.05), coating="Au")
+        illumination = Illumination.offplane(graze=1.5, azimuth=25.0, polarization="TE")
+        ours = cmethod.solve(problem, illumination, [2.0, 5.0], truncation=24, conductivity="tabulated")
+        theirs = integral.solve(
+            problem, illumination, [2.0, 5.0], boundary_points=512, conductivity="tabulated"
+        )
+        assert np.abs(ours.efficiency - theirs.efficiency).max() < 2e-4
+        assert np.abs(ours.absorption - theirs.absorption).max() < 2e-4
+        assert check_energy_balance(ours, tolerance=1e-10, lossless=True).passed
+        assert ours.provenance.notes["normalization"] == "absolute"
+        assert ours.provenance.notes["material"] == "Au"
+
+    def test_shallow_sawtooth_converges_to_it(self):
+        """Corners: the C-method approaches the integral solver's graded-mesh
+        answer slowly. Measured on 10/30 deg: 2e-5 at N = 80, and the gap
+        shrinks with N."""
+        problem = Problem(period=1000.0, profile=Blazed(blaze_angle=10.0, antiblaze_angle=30.0))
+        illumination = Illumination.classical(alpha=15.0, polarization="TM")
+        reference = integral.solve(
+            problem, illumination, [600.0], boundary_points=512, corner_grading=4
+        ).efficiency
+        gaps = [
+            np.abs(cmethod.solve(problem, illumination, [600.0], truncation=n).efficiency
+                   - reference).max()
+            for n in (20, 64)
+        ]
+        assert gaps[1] < gaps[0]
+        assert gaps[1] < 1e-4
+
+
+class TestReciprocity:
+    def test_perfect_conductor_sawtooth(self):
+        """An asymmetric profile, where reciprocity is not a symmetry of the
+        geometry. Measured 3.5e-7 (TM) and 1.4e-6 (TE) at N = 40, which is
+        the truncation error on a cornered profile."""
+        problem = Problem(period=1000.0, profile=Blazed(blaze_angle=10.0, antiblaze_angle=30.0))
+        for polarization in ("TE", "TM"):
+            report = check_reciprocity(
+                cmethod, problem,
+                Illumination.classical(alpha=15.0, polarization=polarization),
+                [600.0], tolerance=1e-5, truncation=40,
+            )
+            assert report.passed, report
+
+    def test_absorbing_off_plane(self):
+        """Measured 2.1e-7 on Au at 2 nm, gamma = 1.5 deg."""
+        problem = Problem(period=600.0, profile=Sinusoidal(depth_fraction=0.05), coating="Au")
+        report = check_reciprocity(
+            cmethod, problem,
+            Illumination.offplane(graze=1.5, azimuth=25.0, polarization="TE"),
+            [2.0], tolerance=1e-6, max_orders=4, truncation=24, conductivity="tabulated",
+        )
+        assert report.passed, report
+
+
+class TestConvergence:
+    def test_a_smooth_profile_plateaus(self):
+        report = check_convergence(
+            cmethod,
+            Problem(period=500.0, profile=Sinusoidal(depth_fraction=0.2)),
+            Illumination.classical(alpha=10.0, polarization="TM"),
+            [450.0, 600.0],
+            values=(4, 8, 16, 32),
+        )
+        assert report.passed
+
+    def test_unpolarized_is_the_mean(self):
+        illumination = Illumination.offplane(graze=30.0, azimuth=20.0, polarization="TE")
+        scans = {
+            p: cmethod.solve(SINE, illumination.model_copy(update={"polarization": p}),
+                             [400.0], truncation=12)
+            for p in ("TE", "TM", "unpolarized")
+        }
+        mean = 0.5 * (scans["TE"].efficiency + scans["TM"].efficiency)
+        assert np.allclose(scans["unpolarized"].efficiency, mean, atol=1e-14)
+
+
+class TestWhereItIsWeak:
+    """Both failure regions the method note measures, each reported."""
+
+    def test_corners_warn_that_the_balance_is_not_an_error_estimate(self):
+        """Blazed 20/70, TE: the balance closes to 2e-5 at N = 40 while the
+        efficiencies are still 6e-4 from the converged answer. A reader who
+        took the balance as the error would be misled by an order of
+        magnitude and more, so the solver says so."""
+        problem = Problem(period=1000.0, profile=Blazed(blaze_angle=20.0, antiblaze_angle=70.0))
+        illumination = Illumination.classical(alpha=15.0, polarization="TE")
+        scan = cmethod.solve(problem, illumination, [600.0], truncation=40)
+        reference = integral.solve(
+            problem, illumination, [600.0], boundary_points=512, corner_grading=4
+        )
+        balance = scan.provenance.notes["energy_balance_deviation"]
+        error = np.abs(scan.efficiency - reference.efficiency).max()
+        assert error > 10 * balance
+        assert any("corners" in w for w in scan.provenance.warnings)
+
+    def test_a_smooth_profile_does_not_warn_about_corners(self):
+        scan = cmethod.solve(SINE, Illumination.classical(alpha=10.0), [450.0], truncation=8)
+        assert not any("corners" in w for w in scan.provenance.warnings)
+
+    def test_a_deep_profile_loses_digits_and_says_so(self):
+        """Sinusoid one period deep, TM: right at N = 16 and wrong by 1e-2 at
+        N = 32, as the evanescent modes exhaust double precision. The rung
+        that went wrong carries both warnings. The reference is the integral
+        solver at 768 points, 0.844609 in the strongest order (measured
+        2026-10-27; its own error there is about 1e-5), pinned rather than
+        recomputed because that solve takes 40 s."""
+        problem = Problem(period=500.0, profile=Sinusoidal(depth_fraction=1.0))
+        illumination = Illumination.classical(alpha=10.0, polarization="TM")
+        good = cmethod.solve(problem, illumination, [450.0], truncation=16)
+        bad = cmethod.solve(problem, illumination, [450.0], truncation=32)
+        assert good.efficiency.max() == pytest.approx(0.844609, abs=2e-4)
+        assert abs(bad.efficiency.max() - 0.844609) > 1e-3
+        assert not good.provenance.warnings
+        assert any("condition number" in w for w in bad.provenance.warnings)
+        assert any("strays from unity" in w for w in bad.provenance.warnings)
+
+
+class TestRefusals:
+    @pytest.mark.parametrize(
+        "profile",
+        [
+            Lamellar(depth_fraction=0.2),
+            Blazed(blaze_angle=30.0),  # vertical anti-blaze facet
+            FromProfileData(t=(0.0, 0.5, 0.5, 1.0), y=(0.0, 0.0, 0.2, 0.0)),
+            FromProfileData(t=(0.0, 0.5, 1.0), y=(0.0, 0.2, 0.1)),  # step at the wrap
+        ],
+        ids=["lamellar", "vertical-facet", "vertical-segment", "step-at-the-ends"],
+    )
+    def test_infinite_slopes(self, profile):
+        with pytest.raises(UnsupportedConfiguration):
+            cmethod.solve(Problem(period=500.0, profile=profile), Illumination.classical(alpha=10.0), [450.0])
+
+    def test_undercut(self):
+        undercut = FromProfileData(t=(0.0, 0.55, 0.45, 1.0), y=(0.0, 0.4, 0.1, 0.0))
+        with pytest.raises(UnsupportedConfiguration):
+            cmethod.solve(Problem(period=500.0, profile=undercut), Illumination.classical(alpha=10.0), [450.0])
+
+    def test_unknown_boundary_condition(self):
+        with pytest.raises(UnsupportedConfiguration):
+            cmethod.solve(SINE, Illumination.classical(alpha=10.0), [450.0], conductivity="leontovich")
+
+    def test_tabulated_without_a_material(self):
+        with pytest.raises(UnsupportedConfiguration, match="needs a material"):
+            cmethod.solve(SINE, Illumination.classical(alpha=10.0), [450.0], conductivity="tabulated")
+
+    @pytest.mark.parametrize("truncation", [0, 1, 257, True, 4.0])
+    def test_truncation_outside_its_range(self, truncation):
+        """1 is below what orders -1 to 0 need with an evanescent harmonic
+        beyond each end; 257 above the cost ceiling."""
+        with pytest.raises(ValueError):
+            cmethod.solve(SINE, Illumination.classical(alpha=10.0), [450.0], truncation=truncation)
+
+    def test_a_wavelength_exactly_on_a_rayleigh_anomaly(self):
+        """sin(alpha) = 0.2 and lambda = 0.6 P puts order -1 at grazing."""
+        with pytest.raises(ValueError, match="Rayleigh anomaly"):
+            cmethod.solve(
+                SINE,
+                Illumination.classical(alpha=float(np.degrees(np.arcsin(0.2)))),
+                [300.0],
+            )
+
+    def test_a_coating_is_not_consulted_in_perfect_mode(self):
+        problem = Problem(period=500.0, profile=Sinusoidal(depth_fraction=0.3), coating="Au")
+        scan = cmethod.solve(problem, Illumination.classical(alpha=10.0), [450.0], truncation=8)
+        assert any("not consulted" in w for w in scan.provenance.warnings)
+        assert scan.absorption is None
