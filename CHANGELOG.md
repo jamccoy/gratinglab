@@ -14,6 +14,26 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- An RCWA backend, `rcwa`, written in-house: the first working slice of
+  roadmap item 2. It is the Fourier modal method with Li's factorization
+  rules (the inverse rule for the field component normal to the ridge walls),
+  Rumpf's symmetric S-matrix rather than a transmittance matrix, and the full
+  vectorial conical formulation, so off-plane incidence and TE-TM conversion
+  are exact. `truncation` is the accuracy knob. A lamellar groove is one exact
+  slab; any other single-valued profile is a staircase whose `slices` follow
+  the truncation by default, and an undercut is refused. A `Problem` means
+  what it means to the integral solver's tabulated mode, so efficiencies are
+  absolute and `absorption` is the power that enters the structure. The core
+  solves a layer stack with films above and below the grating region;
+  `Problem` cannot describe one yet, so that is tested at the core only.
+  Validated without the corpus: Fresnel on a flat interface to 1e-13, the
+  Airy formula for a film to 1e-12, reciprocity falling with truncation, Li's
+  rule converging on metallic TM where Laurent's is off by a fifth, and the
+  integral solver agreeing order by order (to 5e-7 on a dielectric and 8e-4 in
+  metallic TM, the gap shrinking as both refine). It registers, so it appears
+  in the conformance suite and the Help menu; it has no GUI tab yet. The
+  design note and what is not yet validated are in `docs/theory/rcwa.md`.
+
 - Groove orientation in the AFM pipeline: a sample mounted a degree or two
   off square is measured and, when it matters, corrected, with no rotating by
   eye in Gwyddion. `metrology.core.orientation` finds the grooves band by band,

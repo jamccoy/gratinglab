@@ -70,6 +70,35 @@ These rules are required for the RCWA backend. Without the correct
 factorization, TM metallic cases converge badly, and cross-method plots would
 then misrepresent RCWA instead of revealing anything about the physics.
 
+**Li, L.** *Use of Fourier series in the analysis of discontinuous periodic
+structures.* J. Opt. Soc. Am. A **13**(9), 1870 (1996).
+
+The paper behind the rule above, and the one `theory/rcwa.md` §3 follows: the
+inverse rule for the field component normal to a discontinuity, Laurent's for
+the tangential ones.
+
+**Lalanne, P. & Morris, G. M.** *Highly improved convergence of the
+coupled-wave method for TM polarization.* J. Opt. Soc. Am. A **13**(4), 779
+(1996). **Granet, G. & Guizal, B.** *Efficient implementation of the
+coupled-wave method for metallic lamellar gratings in TM polarization.* J. Opt.
+Soc. Am. A **13**(5), 1019 (1996).
+
+The in-plane TM formulation that Li's rules reduce to.
+
+**Rumpf, R. C.** *Improved formulation of scattering matrices for
+semi-analytical methods that is consistent with convention.* Prog.
+Electromagn. Res. B **35**, 241 (2011).
+
+The symmetric S-matrix in a zero-thickness gap medium that the backend uses for
+propagation (`theory/rcwa.md` §4).
+
+**Popov, E., Nevière, M., Gralak, B. & Tayeb, G.** *Staircase approximation
+validity for arbitrary-shaped gratings.* J. Opt. Soc. Am. A **19**(1), 33
+(2002).
+
+Why a staircased metallic profile converges slowly in TM, and the reason the
+backend warns when it staircases one (`theory/rcwa.md` §5).
+
 ---
 
 ## C-method

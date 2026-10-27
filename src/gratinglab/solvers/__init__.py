@@ -15,6 +15,7 @@ from .base import (
     register,
 )
 from .integral import IntegralSolver, integral
+from .rcwa import RcwaSolver, rcwa
 from .scalar import ScalarSolver, interference_factor, scalar
 
 __all__ = [
@@ -29,6 +30,8 @@ __all__ = [
     "ScalarSolver",
     "IntegralSolver",
     "integral",
+    "RcwaSolver",
+    "rcwa",
     "interference_factor",
     "scalar",
 ]
