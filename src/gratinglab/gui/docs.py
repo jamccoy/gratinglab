@@ -44,6 +44,7 @@ __all__ = [
 #: name for anything not listed here, so a new solver still gets a menu entry
 #: before anyone remembers to add a nicer title.
 _TITLES = {
+    "cmethod": "C-method (Chandezon)",
     "scalar": "Scalar (Kirchhoff)",
     "integral": "Integral (boundary integral equation)",
 }

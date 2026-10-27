@@ -70,6 +70,21 @@ entries under "Unreleased" into a section named for the new version;
   A window that was closed comes back with its state, since closing does not
   destroy it while the launcher holds a reference.
 
+- A C-method (Chandezon) solver, registered as `cmethod`, with the integral
+  solver's two boundary conditions: `conductivity="perfect"` in any mount and
+  `"tabulated"`, one interface into a material read from the coating, coupled
+  `E_z`/`H_z` off-plane, absolute efficiencies with the flux into the material
+  recorded as `absorption`. The knob is `truncation`. It reproduces Goray &
+  Schmidt's Table 3, which is Li's C-method, to 1.4e-5 on all twelve orders,
+  Fresnel exactly on a flat boundary, and the integral solver to that
+  solver's own error on sinusoids in-plane, at 60° and off-plane at 1.5° on
+  CXRO gold. Vertical facets, sidewalls and undercuts are refused. Two weak
+  regions are measured and reported in provenance rather than hidden: on a
+  sawtooth it converges at about first order and its energy balance closes
+  long before its efficiencies do, and on a profile deeper than about half
+  the period a high truncation exhausts double precision and makes the answer
+  worse. The method note is `docs/theory/cmethod.md`; no GUI tab yet.
+
 ### Changed
 
 - The default analysis now corrects a groove rotation of 0.2° or more. A
