@@ -131,6 +131,7 @@ class AnalysisSettings:
     ggp_apply_smoothing: bool = True
     ggp_smoothing_window: int = 5
     ggp_min_half_width: int = 10
+    ggp_write_header: bool = True   # the two-line PCGrate header; see io/ggp.py
 
     # Row groups
     use_row_groups: bool = True
@@ -187,6 +188,7 @@ class AnalysisSettings:
             ggp_apply_smoothing=getattr(config, 'GGP_APPLY_SMOOTHING', True),
             ggp_smoothing_window=getattr(config, 'GGP_SMOOTHING_WINDOW', 5),
             ggp_min_half_width=getattr(config, 'GGP_MIN_HALF_WIDTH', 10),
+            ggp_write_header=getattr(config, 'GGP_WRITE_HEADER', True),
             use_row_groups=config.USE_ROW_GROUPS,
             n_row_groups=config.N_ROW_GROUPS,
             show_2d_image=config.SHOW_2D_IMAGE,

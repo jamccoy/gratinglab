@@ -205,7 +205,8 @@ def run_boundary_profile_export(settings=None, filename=None):
     stem = os.path.splitext(os.path.basename(filename))[0]
     ggp_path = os.path.join(RESULTS_DIR, f'averaged_groove_profile_{stem}.ggp')
     met_path = os.path.join(RESULTS_DIR, f'groove_analysis_metrics_{stem}.txt')
-    write_ggp(ggp_path, t=profile.x_norm, y=profile.y_norm)
+    write_ggp(ggp_path, t=profile.x_norm, y=profile.y_norm,
+              header=settings.ggp_write_header)
     write_profile_metrics(met_path, profile.metrics)
 
     print(f"\n  Groove depth: {profile.metrics['groove_depth']:.4f} of period")

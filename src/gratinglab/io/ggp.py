@@ -219,6 +219,7 @@ def write_ggp(
     t: ArrayLike | None = None,
     y: ArrayLike | None = None,
     fmt: str = "%f",
+    header: bool = True,
 ) -> Path:
     """Write a profile in the canonical, PCGrate-loadable form.
 
@@ -231,6 +232,13 @@ def write_ggp(
     line, with no line break after the last point. PCGrate rejects a file
     that ends in one, as ``np.savetxt`` output does. The format is pinned by
     ``tests/test_ggp.py``; PCGrate rejects variations on it.
+
+    ``header=False`` leaves out the two :data:`GGP_HEADER` lines and writes
+    the points alone, as ``np.savetxt`` with no ``header`` does. It exists to
+    test the claim in the module docstring that PCGrate needs the header:
+    that claim comes from the files found on disk, not from PCGrate's
+    documentation, and a headerless file has been reported in use (2026-10-27).
+    Reading such a file back reports ``header_variant == "none"``.
     """
     if (profile is None) == (t is None):
         raise ValueError("pass either a profile or both t and y, not both or neither")
@@ -257,5 +265,5 @@ def write_ggp(
     with path.open("w", encoding="utf-8") as handle:
         # No line break after the last point: PCGrate reads a trailing one as
         # an extra, empty point and rejects the file (reported 2026-10-27).
-        handle.write("\n".join([GGP_HEADER, *points]))
+        handle.write("\n".join([GGP_HEADER, *points] if header else points))
     return path

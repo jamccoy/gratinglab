@@ -14,6 +14,11 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- The PCGrate header on a written `.ggp` is optional: `write_ggp(header=False)`,
+  `GGP_WRITE_HEADER` in the metrology config, and a "Write the PCGrate header"
+  checkbox on the Boundary tab, on by default. Whether PCGrate needs the header
+  rests on the files found on disk rather than its documentation, and this is
+  how to test it.
 - Two-column line profiles (`x z`, as Gwyddion's profile export writes them)
   load as a one-line scan, with the width taken from the x column. The same
   surface exported as an image and as a profile averages to the same groove

@@ -169,6 +169,16 @@ class TestWriting:
         assert path.read_text(encoding="utf-8") == GGP_HEADER + "\n0.000000 0.000000\n0.500000 0.250000"
         assert not path.read_bytes().endswith((b"\n", b"\r"))
 
+    def test_header_can_be_left_out(self, tmp_path):
+        """The option exists to test whether PCGrate needs the header at all."""
+        path = write_ggp(tmp_path / "bare.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.25, 0.0],
+                         header=False)
+        assert path.read_text(encoding="utf-8") == \
+            "0.000000 0.000000\n0.500000 0.250000\n1.000000 0.000000"
+        ggp = read_ggp(path)
+        assert ggp.header_variant == "none"
+        assert list(ggp.t) == [0.0, 0.5, 1.0]
+
 
 class TestProfileIntegration:
     def test_becomes_a_usable_profile(self, tmp_path):
