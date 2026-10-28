@@ -176,6 +176,7 @@ GGP_N_POINTS = 2000          # Points in the exported profile
 GGP_APPLY_SMOOTHING = True   # Light smoothing to remove interpolation kinks
 GGP_SMOOTHING_WINDOW = 5     # Larger = smoother
 GGP_MIN_HALF_WIDTH = 10      # Skip grooves whose symmetric half-extent is <= this
+GGP_WRITE_HEADER = True      # Start the .ggp with "3 0 - Polygonal type" / "Period: 1 PSC: 1"
                              # many samples (i.e. clipped by the scan edge)
 
 # ============ FILE SELECTION ============

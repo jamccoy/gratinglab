@@ -137,6 +137,16 @@ class BoundaryView(QWidget):
         self.min_half_spin.valueChanged.connect(self.refresh)
         layout.addWidget(self.min_half_spin)
 
+        # Only the written file changes, not the profile, so no refresh.
+        self.header_check = QCheckBox("Write the PCGrate header")
+        self.header_check.setChecked(self._defaults.ggp_write_header)
+        self.header_check.setToolTip(
+            "Start the .ggp with the two lines\n"
+            "    3 0 - Polygonal type\n"
+            "    Period: 1 PSC: 1\n"
+            "Untick to write the points alone.")
+        layout.addWidget(self.header_check)
+
         self.export_btn = QPushButton("Export…")
         self.export_btn.setEnabled(False)
         self.export_btn.setToolTip(
@@ -209,6 +219,7 @@ class BoundaryView(QWidget):
             ggp_apply_smoothing=self.smoothing_check.isChecked(),
             ggp_smoothing_window=self.smoothing_spin.value(),
             ggp_min_half_width=self.min_half_spin.value(),
+            ggp_write_header=self.header_check.isChecked(),
         )
 
     @property
@@ -423,7 +434,8 @@ class BoundaryView(QWidget):
             metrics_path = os.path.splitext(path)[0] + '_metrics.txt'
             write_profile_metrics(metrics_path, self._profile.metrics)
         else:
-            write_ggp(path, t=self._profile.x_norm, y=self._profile.y_norm)
+            write_ggp(path, t=self._profile.x_norm, y=self._profile.y_norm,
+                      header=self.header_check.isChecked())
             metrics_path = os.path.splitext(path)[0] + '_metrics.txt'
             write_profile_metrics(metrics_path, self._profile.metrics)
         return path, metrics_path

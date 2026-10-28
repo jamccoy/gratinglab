@@ -187,6 +187,9 @@ def _load_text_profile(filename):
 
     Returns None for anything that is not exactly two numbers per data line,
     so the image path below sees every file it saw before.
+
+    Ported from Aditi's version of the groove-averaging script (2026-10-27),
+    which handled both formats and took the width from the x column.
     """
     import re
 
