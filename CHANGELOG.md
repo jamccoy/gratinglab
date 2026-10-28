@@ -30,6 +30,12 @@ entries under "Unreleased" into a section named for the new version;
   - The metrology wiki's page list, order and titles come from
     `endstation.docs.index.load_pages`. `WikiPage` and `is_empty` are
     unchanged.
+  - `SolveCancelled` is now a subclass of `endstation.progress.Cancelled`.
+    It keeps its name and module, so `except SolveCancelled` and
+    `raise SolveCancelled` work as before; `except Cancelled` now catches it
+    too. The efficiency window's progress callback is endstation's
+    `cancelling(throttled(...))`, still throttled to whole percent with the
+    cancel checked on every call, and it raises `Cancelled`.
 
 ## 0.2.1 (2026-10-28)
 
