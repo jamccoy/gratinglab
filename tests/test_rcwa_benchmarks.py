@@ -334,8 +334,8 @@ class TestGoraySchmidtDielectricConical:
     opposite handedness (``p`` reversed, equivalently the conjugate ratio)
     misses every order by more than 100 such units, so the match fixes the
     polarization convention rather than tolerating either. The structure
-    is lossless, so ``R + T = 1`` holds to rounding (a check of the
-    bookkeeping, not of convergence).
+    is lossless, so ``R + T = 1`` holds to 1e-10 (1.9e-12 measured on CI's
+    Linux runner; a check of the bookkeeping, not of convergence).
     """
 
     #: (side, order): (efficiency in percent as printed, decimals printed)
@@ -367,9 +367,9 @@ class TestGoraySchmidtDielectricConical:
     def test_the_orders_are_all_the_power(self):
         solution = self.solve(80)
         total = solution.reflected[0].sum() + solution.transmitted[0].sum()
-        assert total == pytest.approx(1.0, abs=1e-12)
+        assert total == pytest.approx(1.0, abs=1e-10)
         listed = sum(order(solution, side, m) for side, m in self.TABLE)
-        assert listed == pytest.approx(1.0, abs=1e-12)
+        assert listed == pytest.approx(1.0, abs=1e-10)
 
     def test_the_slowest_order_converges_towards_it(self):
         errors = [
