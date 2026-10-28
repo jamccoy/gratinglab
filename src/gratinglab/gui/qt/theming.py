@@ -22,14 +22,16 @@ import os
 from collections.abc import Callable
 
 from PySide6.QtCore import QObject, QSettings, Qt, Signal
-from PySide6.QtGui import QColor, QGuiApplication, QIcon, QPalette, QPixmap
-from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import (QAction, QActionGroup, QColor, QGuiApplication,
+                           QIcon, QPalette, QPixmap)
+from PySide6.QtWidgets import QApplication, QMenu
 
 from ..theme import DARK, LIGHT, SYSTEM, THEMES, Theme, rc_params
 
 __all__ = [
     "QIcon",
     "SETTINGS_ENV",
+    "ThemeMenu",
     "ThemeManager",
     "current",
     "install",
@@ -185,6 +187,50 @@ def subscribe(callback: Callable[[Theme], None]) -> None:
     found = manager()
     if found is not None:
         found.changed.connect(callback)
+
+
+class ThemeMenu(QMenu):
+    """The View > Theme submenu, one per window, all kept in step.
+
+    Every window that has a menu bar carries one, built here so that none can
+    be left without it: the AFM window had no theme choice at all while the
+    efficiency window did. Choosing in one window re-checks the others,
+    because each menu follows the manager's ``changed`` signal rather than
+    its own clicks.
+    """
+
+    def __init__(self, parent=None) -> None:
+        super().__init__("&Theme", parent)
+        self._group = QActionGroup(self)
+        self._group.setExclusive(True)
+        choices = [(SYSTEM, "System")] + [(k, t.label) for k, t in THEMES.items()]
+        for key, label in choices:
+            action = self.addAction(label)
+            action.setCheckable(True)
+            action.setData(key)
+            action.triggered.connect(self._chosen)
+            self._group.addAction(action)
+            if key == SYSTEM:
+                self.addSeparator()
+        found = manager()
+        if found is not None:
+            found.changed.connect(self._sync)
+        self._sync()
+
+    def actions_by_key(self) -> dict[str, QAction]:
+        return {a.data(): a for a in self._group.actions()}
+
+    def _chosen(self) -> None:
+        action = self.sender()
+        found = manager()
+        if found is not None and isinstance(action, QAction):
+            found.set_choice(action.data())
+
+    def _sync(self, _theme=None) -> None:
+        found = manager()
+        choice = found.choice if found is not None else SYSTEM
+        for key, action in self.actions_by_key().items():
+            action.setChecked(key == choice)
 
 
 def swatch(color: str, size: int = 12) -> QIcon:

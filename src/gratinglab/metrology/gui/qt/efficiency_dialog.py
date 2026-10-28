@@ -35,6 +35,9 @@ from PySide6.QtWidgets import (
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from gratinglab.gui.qt import theming
+from gratinglab.gui.theme import style_figure
+
 from gratinglab import materials
 from gratinglab.illumination import Illumination
 from gratinglab.resolution import describe
@@ -89,6 +92,8 @@ class EfficiencyDialog(QDialog):
         self.figure = Figure(figsize=(6, 4.6))
         self.canvas = FigureCanvas(self.figure)
         root.addWidget(self.canvas, stretch=1)
+        self._placeholder = None
+        theming.subscribe(self._on_theme)
 
     def _build_geometry_group(self):
         group = QGroupBox("Grating")
@@ -237,14 +242,31 @@ class EfficiencyDialog(QDialog):
     # ── Draw ─────────────────────────────────────────────────────────────────
 
     def _show_placeholder(self, message):
+        self._placeholder = message
         self.figure.clear()
         axes = self.figure.add_subplot(111)
         axes.text(0.5, 0.5, message, ha='center', va='center', fontsize=11,
-                  color='gray', transform=axes.transAxes, wrap=True)
+                  color=theming.current().muted, transform=axes.transAxes, wrap=True)
         axes.set_axis_off()
         self.canvas.draw()
 
+    def _on_theme(self, theme):
+        """Draw the figure again in the new theme.
+
+        Each draw clears the figure and builds fresh axes, which take their
+        colours from matplotlib's settings, so redrawing is the restyle. The
+        figure predates the change and needs its own background set first.
+        """
+        style_figure(self.figure, theme)
+        if self._placeholder is None and getattr(self, '_scan', None) is not None:
+            self._draw()
+        elif self._placeholder is not None:
+            self._show_placeholder(self._placeholder)
+        else:
+            self.canvas.draw_idle()
+
     def _draw(self):
+        self._placeholder = None
         scan = self._scan
         self.figure.clear()
         axes = self.figure.add_subplot(111)
@@ -258,7 +280,8 @@ class EfficiencyDialog(QDialog):
 
         for m, efficiency in carried[:8]:
             axes.plot(scan.wavelengths, efficiency, lw=1.3, label=f"m = {m}")
-        axes.plot(scan.wavelengths, scan.total, 'k--', lw=1.0, alpha=0.6,
+        axes.plot(scan.wavelengths, scan.total, '--', color=theming.current().ink,
+                  lw=1.0, alpha=0.6,
                   label="total")
 
         axes.set_xlabel("Wavelength (nm)")
@@ -270,7 +293,7 @@ class EfficiencyDialog(QDialog):
             axes.legend(fontsize=8, ncol=2)
         else:
             axes.text(0.5, 0.5, "No order carries more than 0.5%",
-                      ha='center', va='center', color='gray',
+                      ha='center', va='center', color=theming.current().muted,
                       transform=axes.transAxes)
         self.figure.tight_layout()
         self.canvas.draw()

@@ -145,6 +145,15 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status)
         self._set_status("Ready. Open an AFM file to begin.")
 
+        # View > Theme, the same menu the efficiency window carries. Held on
+        # the instance: a QMenu reached back through the menu bar is not
+        # reliably alive under PySide6 (see the efficiency window's note).
+        from gratinglab.gui.qt.theming import ThemeMenu
+
+        self._view_menu = self.menuBar().addMenu("&View")
+        self._theme_menu = ThemeMenu(self)
+        self._view_menu.addMenu(self._theme_menu)
+
     def _build_analysis_group(self):
         group = QGroupBox("Analysis parameters")
         layout = QVBoxLayout(group)
