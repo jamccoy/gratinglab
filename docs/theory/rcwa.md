@@ -292,7 +292,9 @@ per row).
 
 ## 8. Validation evidence
 
-Everything here is in `tests/test_rcwa.py` and runs without the private corpus.
+Everything here runs without the private corpus: `tests/test_rcwa.py`,
+`tests/test_rcwa_benchmarks.py`, `tests/test_rayleigh_anomaly.py` and
+`tests/test_conditioning.py`.
 
 | Reference | What it pins | Independent of this code? |
 |---|---|---|
@@ -306,13 +308,83 @@ Everything here is in `tests/test_rcwa.py` and runs without the private corpus.
 | reciprocity, `checks.check_reciprocity`, metallic lamellar in TE and TM | the symmetry of the scattering problem | yes |
 | truncation sweep, metallic lamellar in TM: Li's rule converges, Laurent's visibly does not | that §3 is in effect | yes |
 | the integral solver (`conductivity="tabulated"`, corner-graded) on lamellar glass and metal, TE and TM, in-plane and conical | the whole method, against a different method | yes |
+| **published**: Granet's metallic lamellar, TM, `R0 = 0.8484781` | metallic TM through `Problem` and the convergence harness | yes |
+| **published**: Lalanne & Hugonin's dielectric lamellar on glass, TM, `T-1 = 51.062%` | transmitted orders, a substrate unlike the ridges | yes |
+| **published**: Gralak's free-standing silicon rods, p, `R0 = 0.9487` | a high-index dielectric with vacuum on both sides | yes |
+| a sweep through a Rayleigh anomaly, to 1e-8 nm either side and on it | the external `kz -> 0`: finite, balanced, continuous | yes |
 
 The measured numbers are in the test docstrings, beside the assertions they
 justify.
 
-No published benchmark table is committed yet. Moharam & Gaylord's and Li's
-cases (`references.md`, Validation) are the obvious next ones, and their values
-want transcribing from the papers rather than from memory.
+### The published benchmarks
+
+Each value was read in a primary text that is free to read, and is cited in
+the test with its page. Measured 2026-10-27, error against the published value
+by truncation:
+
+| case | source | M = 20 | 40 | 80 | asserted |
+|---|---|---|---|---|---|
+| metal `n = 0.22 + 6.71i`, period = wavelength = depth, fill 0.5, 30°, TM `R0` | Granet 1999, as printed by Lalanne & Hugonin, JOSA A 17, 1033 (2000), Fig. 3, and by Popov (ed.) 2014, Tab. 5.1 | -4.2e-3 | -1.7e-3 | -6.3e-4 | 1e-3 at M = 80 |
+| ridges of 2.3 on 1.5, period two wavelengths, fill 0.234, 30°, TM `T-1` | Lalanne & Hugonin 2000, Fig. 6 | +1.2e-3 | +2.0e-4 | +1.4e-5 | 1e-4 at M = 60 |
+| silicon rods `eps = 12.96`, width 0.28 d, height `d/(2 sqrt 2)`, 45°, p `R0` | Gralak, ch. 10 of Popov (ed.) 2014, §10.6 | -2.2e-3 | -3.2e-4 | -6.6e-5 | 1e-4 at M = 80 |
+
+The metallic TM case converges from below and slowly (-2.1e-4 still at
+M = 200), as §3 leads one to expect. Lalanne & Hugonin's own RCWA column reads
+0.84677 at 81 orders, the same error as this backend at M = 40, which is 81
+orders. The dielectric case fixed two conventions its paper leaves to a figure
+that could not be read: the fill is the ridge's, and the order is this code's
+`-1`. The other three readings miss by more than 0.4, so the match identifies
+the convention rather than being tuned to it.
+
+The canonical papers are **not** used. Moharam, Grann, Pommet & Gaylord, JOSA A
+12, 1068 (1995); Lalanne & Morris, JOSA A 13, 779 (1996); Li, JOSA A 13, 1870
+(1996); and Granet & Guizal, JOSA A 13, 1019 (1996) are all closed access, and
+no number from them could be confirmed in the original. Granet 1999 is closed
+too, so its values enter only as quoted by the two sources above, which agree
+with each other. The two published values that do **not** match are in §9.
+
+### Rayleigh anomalies
+
+Where an order passes off, its `kz` goes to zero, and the external region's
+`V = Q kz^-1` with it; `_KZ_FLOOR` keeps the exact point finite. The physics is
+a square-root branch point, so the gap between the rows at `lambda* - d` and
+`lambda* + d` should be `C sqrt(d / lambda*)` with `C` constant. Measured on a
+metallic lamellar at M = 20, `C` is 0.96 in TE and 0.86 in TM, constant to 4%
+from `d = 1e-2` to `1e-8` nm, and the tabulated integral solver finds 0.96 and
+0.95 on the same grating. `R + A = 1` holds to rounding at every row, and the
+exact point sits within 1.6e-6 of its neighbours. A real step would make `C`
+grow a thousandfold across the sweep.
+
+### Conditioning
+
+Every dense solve and inverse in `_core` goes through
+`solvers/_conditioning.py`: one LU factorisation serves both the solve and
+LAPACK's `gecon` estimate of the 1-norm condition number, which costs `O(n^2)`
+on top. The solves are numpy's to rounding. The worst estimate in a scan goes
+to `Provenance.notes["condition"]` in two groups: `modes` (each slab's `W` and
+`V`) and `smatrix` (each slab's `A` and `D`, the external connections' `A`, the
+star products' `I - S S`, and the plane-flux solves). Measured 2026-10-27,
+in-plane at 500 nm on period 600 unless stated:
+
+| case | M | `modes` | `smatrix` |
+|---|---|---|---|
+| glass lamellar, depth 180 nm or 3 um | 20 | 3.7e2 | 7.4e3 |
+| | 100 | 1.3e4 | 1.9e6 |
+| metal `0.2 + 3i`, either depth | 20 | 9.2e2 | 2.2e4 |
+| | 100 | 2.6e4 | 4.3e6 |
+| | 200 | 1.3e5 | 4.4e7 |
+| metal `0.03 + 20i` | 60 | 6.2e4 | 1.7e6 |
+| a slab within 1e-11 of homogeneous, normal and conical incidence | 10 | 8.4e1 | 8.1e2 |
+| metal, an order 1e-12 nm from grazing | 20 | 2.3e3 | 9.0e6 |
+| metal, an order exactly at grazing (`kz` on its floor) | 20 | 2.3e3 | 5.0e11 |
+
+Depth changes nothing, which is the S-matrix doing its job (§4), and neither
+does the near-degenerate slab, where `numpy.linalg.eig` might have returned
+nearly parallel eigenvectors. The estimate grows as `M^2` to `M^3`. The
+warning threshold is `1e10`, more than two decades above every ordinary case,
+and the one case past it is the exact anomaly. The answer there was still right
+(above), because the near-singular direction is the grazing order's own
+amplitude, so the warning means "unusual", not "wrong".
 
 ## 9. Not yet validated, and decisions to make
 
@@ -328,7 +400,28 @@ Not yet validated:
 - the soft-X-ray grazing regime. It is not refused, and it is expensive: a
   groove hundreds of wavelengths deep needs very many slices and harmonics,
   which is why the integral method is the method of record there;
-- a published benchmark table (§8).
+- conical incidence against a published value. Goray & Schmidt's lamellar
+  Tables 12.1 and 12.2 (ch. 12 of Popov (ed.) 2014) are the candidates, and
+  want that chapter's angle and polarization conventions read first.
+
+Two published values this backend does **not** reproduce, recorded rather than
+dropped:
+
+- **Granet's metallic lamellar in TE** (`R0 = 0.7342789`, the same table as the
+  TM benchmark in §8). This backend converges cleanly to `R0 = 0.13170` (M = 80
+  to 200 agree to 8e-6), and the integral solver, a different method on the
+  same `Problem`, finds 0.13070 at 400 graded nodes. The published number is
+  matched instead, to 9e-6 at M = 160, by this code's **Littrow** order
+  (`m = +1` here): 0.7342881. The groove is half a wavelength wide, at the TE
+  slot-mode cutoff, so TE is very sensitive to the geometry; but no change of
+  geometry moves TE alone, and TM's `R0` matches. Fig. 1 of Lalanne & Hugonin
+  2000, which defines the parameters, could not be read, and neither could
+  Granet 1999. Unresolved.
+- **Gralak's silicon rods in s** (`R0 = 0.7323`, the p case's companion). This
+  backend converges to 0.74230 (M = 40 to 120 agree to 6e-5), 0.0100 above it,
+  and no other order is near the printed value. With vacuum on both sides the
+  integral solver cannot check it. Possibly a one-digit misprint; not
+  established.
 
 Decisions for the project rather than for this backend:
 
