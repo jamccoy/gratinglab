@@ -10,6 +10,21 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- An RCWA tab in the efficiency window, the third solver tab, on the same
+  skeleton as the integral one. It has the truncation (the knob the
+  Check convergence button sweeps) and the staircase's slices (blank follows
+  the truncation), and a note that says, once the geometry is known, whether
+  the profile is one exact lamellar slab or a staircase, with the TM caveat
+  for the latter. Its form refuses what the solver would: no coating, a scan
+  outside the material's table, gain, and a truncation that cannot hold every
+  reflected or transmitted order, the last through the solver's own
+  `required_truncation`, now public, so the two cannot disagree. Conformal
+  layers are not on the form yet; `Problem.layers` remains code-only.
+
 ## 0.2.0 (2026-10-27)
 
 A minor release, for two reasons the versioning policy names: the in-house
