@@ -1935,7 +1935,7 @@ class TestOpeningASavedBoundary:
 
 
 class TestGarbageCollectionStaysOnTheGuiThread:
-    """See gratinglab.gui.qt.gc_guard: a collection on a worker thread can
+    """See endstation.qt.gc_guard: a collection on a worker thread can
     destroy Qt objects there, which segfaulted the macOS CI leg."""
 
     def test_solves_never_collect_on_the_worker(self, qtbot, win):
@@ -1967,7 +1967,7 @@ class TestGarbageCollectionStaysOnTheGuiThread:
     def test_automatic_collection_is_off_while_a_window_exists(self, win):
         import gc
 
-        from gratinglab.gui.qt import gc_guard
+        from endstation.qt import gc_guard
 
         assert gc_guard.is_active()
         assert not gc.isenabled()
@@ -1977,7 +1977,7 @@ class TestGarbageCollectionStaysOnTheGuiThread:
 
         from PySide6.QtWidgets import QApplication
 
-        from gratinglab.gui.qt import gc_guard
+        from endstation.qt import gc_guard
         from gratinglab.gui.qt.main_window import MainWindow
 
         from PySide6.QtCore import QCoreApplication, QEvent
@@ -2006,7 +2006,7 @@ def test_exit_restores_collection_even_with_a_window_still_open(qtbot, win):
     after Qt is gone (the py3.11 bool_dealloc abort)."""
     import gc
 
-    from gratinglab.gui.qt import gc_guard
+    from endstation.qt import gc_guard
 
     assert gc_guard.is_active() and not gc.isenabled()
     try:

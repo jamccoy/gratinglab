@@ -665,7 +665,7 @@ class TestTipShapePicker:
 class TestGarbageCollectionStaysOnTheGuiThread:
     """CI run 39835186938 segfaulted on macOS with "Garbage-collecting" at the
     top of the analysis worker's stack: the cycle collector ran on the worker
-    thread and destroyed Qt objects there. gratinglab.gui.qt.gc_guard keeps it
+    thread and destroyed Qt objects there. endstation.qt.gc_guard keeps it
     on the GUI thread while a window exists."""
 
     def test_no_collection_runs_on_the_worker_during_an_analysis(self, qtbot, window):
