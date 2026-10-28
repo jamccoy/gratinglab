@@ -20,6 +20,7 @@ from __future__ import annotations
 from dataclasses import dataclass, replace
 
 from endstation.forms import FieldError as _FieldError
+from endstation.forms import FormErrors as _FormErrors
 from pathlib import Path
 from typing import Any
 
@@ -79,13 +80,11 @@ ANGLE_LABELS: dict[str, tuple[str, str | None]] = {
 #: from the module it is used in.
 FieldError = _FieldError
 
-
-class FormErrors(ValueError):
-    """Raised by :func:`build` when a form cannot be turned into a problem."""
-
-    def __init__(self, errors: tuple[FieldError, ...]) -> None:
-        self.errors = errors
-        super().__init__("; ".join(str(e) for e in errors))
+#: Raised by :func:`build`, and by each tab's ``build_options``, when a form
+#: cannot be turned into a problem. endstation's, re-exported for the same
+#: reason as `FieldError`. It derives from ``Exception``, not ``ValueError``
+#: as this module's own copy did; nothing here caught it as a ValueError.
+FormErrors = _FormErrors
 
 
 @dataclass(frozen=True, slots=True)
