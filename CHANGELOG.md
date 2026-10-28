@@ -27,6 +27,9 @@ entries under "Unreleased" into a section named for the new version;
     reads `GRATINGLAB_AFM_DIR` with `data_root`, which also expands `~` in
     it. Both stay strings. The suite's corpus and scan helpers skip through
     `endstation.testing`.
+  - The metrology wiki's page list, order and titles come from
+    `endstation.docs.index.load_pages`. `WikiPage` and `is_empty` are
+    unchanged.
 
 ## 0.2.1 (2026-10-28)
 
