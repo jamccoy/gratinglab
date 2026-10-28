@@ -17,7 +17,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from gratinglab.gui.qt import theming
-from gratinglab.gui.theme import style_figure
+from gratinglab.gui.theme import set_titles, style_figure
 
 __all__ = ["PlotCanvas"]
 
@@ -71,7 +71,8 @@ class PlotCanvas(FigureCanvas):
         ax.plot(disp_um, profile_nm, color='steelblue', linewidth=1.0)
         ax.set_xlabel("Position (µm)", fontsize=11)
         ax.set_ylabel("Height (nm)", fontsize=11)
-        ax.set_title(f"Raw profile, scan width {scan_size_um:.3f} µm", fontsize=11)
+        set_titles(ax, "Raw profile", f"scan width {scan_size_um:.3f} µm",
+                   theming.current())
         ax.grid(True, alpha=0.3)
         self.draw()
 
@@ -84,7 +85,8 @@ class PlotCanvas(FigureCanvas):
         self.fig.colorbar(im, ax=ax, label='Height (nm)')
         ax.set_xlabel("X (µm)", fontsize=11)
         ax.set_ylabel("Scan line", fontsize=11)
-        ax.set_title("Topography", fontsize=11)
+        set_titles(ax, "Topography", f"{data.shape[0]} scan lines",
+                   theming.current())
         self.draw()
 
     @_remembered
@@ -102,9 +104,9 @@ class PlotCanvas(FigureCanvas):
                 linewidth=1.8, label=f'Mean (n={n_groups})', zorder=5)
         ax.set_xlabel("Position (µm)", fontsize=11)
         ax.set_ylabel("Height (nm)", fontsize=11)
-        ax.set_title("Row-group profiles\n"
-                     f"{n_groups} groups × {group_info['rows_per_group']} rows each  |  "
-                     f"Scan width: {scan_size_um:.3f} µm", fontsize=10)
+        set_titles(ax, "Row-group profiles",
+                   f"{n_groups} groups of {group_info['rows_per_group']} rows, "
+                   f"scan width {scan_size_um:.3f} µm", theming.current())
         ax.legend(fontsize=10)
         ax.grid(True, alpha=0.3)
 
@@ -140,7 +142,8 @@ class PlotCanvas(FigureCanvas):
 
         ax.set_xlabel("Position (µm)", fontsize=11)
         ax.set_ylabel("Height (nm)", fontsize=11)
-        ax.set_title("Groove detection", fontsize=11)
+        set_titles(ax, "Groove detection", f"{len(centers)} grooves",
+                   theming.current())
         ax.legend(fontsize=9)
         ax.grid(True, alpha=0.3)
         self.draw()
@@ -160,8 +163,8 @@ class PlotCanvas(FigureCanvas):
                     label=f'Mean {mean:.2f}°')
         ax1.set_xlabel("Blaze angle (°)", fontsize=10)
         ax1.set_ylabel("Count", fontsize=10)
-        ax1.set_title(f"Distribution (N={len(angles)})\nσ={result['std_angle']:.2f}°",
-                      fontsize=10)
+        set_titles(ax1, "Distribution",
+                   f"N = {len(angles)}, σ = {result['std_angle']:.2f}°", theming.current())
         ax1.legend(fontsize=9)
         ax1.grid(True, alpha=0.3)
 
@@ -169,16 +172,18 @@ class PlotCanvas(FigureCanvas):
         ax2.hist(r2, bins=20, edgecolor=theming.current().ink, alpha=0.75, color='seagreen')
         ax2.set_xlabel("Fit R²", fontsize=10)
         ax2.set_ylabel("Count", fontsize=10)
-        ax2.set_title(f"Fit quality\nworst R² = {np.nanmin(r2):.4f}", fontsize=10)
+        set_titles(ax2, "Fit quality", f"worst R² {np.nanmin(r2):.4f}",
+                   theming.current())
         ax2.grid(True, alpha=0.3)
 
         widths = np.array([q.get('blaze_width_nm', np.nan) for q in quality])
         ax3.plot(widths, angles, 'o', markersize=4, alpha=0.45, color='darkorange')
         ax3.set_xlabel("Blaze facet width (nm)", fontsize=10)
         ax3.set_ylabel("Blaze angle (°)", fontsize=10)
-        ax3.set_title("Angle vs facet width\n(narrow facets = unreliable fits)",
-                      fontsize=10)
+        set_titles(ax3, "Angle against facet width", "narrow facets fit poorly",
+                   theming.current())
         ax3.grid(True, alpha=0.3)
 
-        self.fig.suptitle(f"Blaze angle {mean:.2f}° ± {sem:.3f}° (SEM)", fontsize=11)
+        self.fig.suptitle(f"Blaze angle {mean:.2f}° ± {sem:.3f}° (SEM)",
+                          x=0.01, ha="left", fontsize=12, fontweight="semibold")
         self.draw()

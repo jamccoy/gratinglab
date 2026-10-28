@@ -36,7 +36,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from gratinglab.gui.qt import theming
-from gratinglab.gui.theme import style_figure
+from gratinglab.gui.theme import set_titles, style_figure
 
 from gratinglab import materials
 from gratinglab.illumination import Illumination
@@ -286,7 +286,8 @@ class EfficiencyDialog(QDialog):
 
         axes.set_xlabel("Wavelength (nm)")
         axes.set_ylabel("Absolute efficiency")
-        axes.set_title(f"Measured groove, period {self._profile.period_nm:.2f} nm")
+        set_titles(axes, "Measured groove",
+                   f"period {self._profile.period_nm:.2f} nm", theming.current())
         axes.grid(True, alpha=0.3)
         axes.set_ylim(bottom=0)
         if carried:

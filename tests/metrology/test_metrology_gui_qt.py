@@ -247,9 +247,28 @@ class TestBoundaryTab:
         name = os.path.basename(SAMPLE)
         assert window.windowTitle().startswith(name)
         for figure in (window.canvas.fig, window.importer.figure, window.boundary.figure):
-            titles = [ax.get_title() for ax in figure.axes]
+            # Every title slot: the plots carry a title on the left and report figures
+            # on the right, so the centre alone would check nothing.
+            titles = [ax.get_title(loc) for ax in figure.axes
+                      for loc in ("left", "center", "right")]
             titles.append(figure._suptitle.get_text() if figure._suptitle else "")
             assert not any(name in t for t in titles), titles
+
+    def test_the_controls_column_can_be_resized(self, qtbot, window):
+        """Each tab's controls sit in a splitter, not a fixed 272 px column."""
+        from PySide6.QtWidgets import QSplitter
+
+        from gratinglab.metrology.gui.qt.layout import MIN_CONTROLS_WIDTH
+
+        window.resize(1400, 860)
+        window.show()
+        for tab in (window.importer, window.tabs.widget(1), window.boundary):
+            splitter = tab.findChild(QSplitter)
+            assert splitter is not None, tab
+            column = splitter.widget(0)
+            assert column.minimumWidth() >= MIN_CONTROLS_WIDTH
+            assert column.maximumWidth() > 10_000, "the column must not be fixed"
+            assert not splitter.childrenCollapsible()
 
     def test_efficiency_button_tracks_the_export_button(self, qtbot, window):
         """All three need one thing -- a profile -- so they must not drift apart."""

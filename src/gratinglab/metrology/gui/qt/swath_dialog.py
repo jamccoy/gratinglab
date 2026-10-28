@@ -23,7 +23,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from gratinglab.gui.qt import theming
-from gratinglab.gui.theme import style_figure
+from gratinglab.gui.theme import set_titles, style_figure
 
 from ...boundary import swath_statistics
 from ...config import RESULTS_DIR
@@ -144,7 +144,8 @@ class SwathDialog(QDialog):
         shapes.plot(s.t, s.whole.y_norm, color=theming.current().ink, lw=1.4, ls="--", label="whole scan")
         shapes.set_xlabel("position (fraction of period)")
         shapes.set_ylabel("height (fraction of period)")
-        shapes.set_title(f"{s.n_swaths} swaths, coloured top to bottom of the scan")
+        set_titles(shapes, "Groove shape by swath",
+                   f"{s.n_swaths} swaths, coloured top to bottom", theming.current())
         shapes.legend(loc="best", fontsize=8)
 
         centre = [(a + b - 1) / 2 for a, b in s.row_ranges]

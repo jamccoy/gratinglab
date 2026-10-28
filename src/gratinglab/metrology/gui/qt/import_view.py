@@ -22,14 +22,16 @@ from . import *  # noqa: F401,F403 - sets QT_API before matplotlib's shim loads
 import numpy as np
 from PySide6.QtCore import Signal
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QDoubleSpinBox, QFileDialog, QFrame, QGroupBox,
-    QHBoxLayout, QLabel, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
+    QApplication, QComboBox, QDoubleSpinBox, QFileDialog, QGroupBox,
+    QHBoxLayout, QLabel, QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from gratinglab.gui.qt import theming
-from gratinglab.gui.theme import style_figure
+from gratinglab.gui.theme import set_titles, style_figure
+
+from .layout import controls_beside
 from matplotlib.patches import Rectangle
 from matplotlib.widgets import RectangleSelector
 
@@ -96,7 +98,6 @@ class ImportView(QWidget):
         root.setSpacing(8)
 
         left = QWidget()
-        left.setFixedWidth(272)
         column = QVBoxLayout(left)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(8)
@@ -106,23 +107,12 @@ class ImportView(QWidget):
         column.addWidget(self._build_profile_group())
         column.addStretch()
 
-        scroll = QScrollArea()
-        scroll.setWidget(left)
-        scroll.setWidgetResizable(True)
-        scroll.setFixedWidth(292)
-        scroll.setFrameShape(QFrame.NoFrame)
-
         self.figure = Figure(figsize=(8, 6), tight_layout=True)
         self.canvas = FigureCanvas(self.figure)
         self._show_placeholder()
         theming.subscribe(self._on_theme)
 
-        root.addWidget(scroll)
-        divider = QFrame()
-        divider.setFrameShape(QFrame.VLine)
-        divider.setFrameShadow(QFrame.Sunken)
-        root.addWidget(divider)
-        root.addWidget(self.canvas, stretch=1)
+        root.addWidget(controls_beside(left, self.canvas), stretch=1)
 
     def _build_file_group(self):
         group = QGroupBox("File")
@@ -574,8 +564,8 @@ class ImportView(QWidget):
             minspanx=0, minspany=0, spancoords='data', interactive=False,
             props=dict(facecolor='crimson', edgecolor='crimson', alpha=0.25,
                        fill=True))
-        image_ax.set_title(
-            f"Image flattening: {self.image_method_combo.currentText()}", fontsize=10)
+        set_titles(image_ax, "Image flattening",
+                   self.image_method_combo.currentText(), theming.current())
 
         try:
             x_um, profile_nm = raw_data(self._flat, self._scan_size)
@@ -606,9 +596,9 @@ class ImportView(QWidget):
                         linewidth=1.0, label='After flattening')
         profile_ax.set_xlabel("Position (µm)", fontsize=10)
         profile_ax.set_ylabel("Height (nm)", fontsize=10)
-        profile_ax.set_title(
-            f"Profile flattening: {self.profile_method_combo.currentText()}"
-            f"  (removes {np.ptp(background):.1f} nm of background)", fontsize=10)
+        set_titles(profile_ax, "Profile flattening",
+                   f"{self.profile_method_combo.currentText()}, removes "
+                   f"{np.ptp(background):.1f} nm of background", theming.current())
         profile_ax.legend(fontsize=8)
         profile_ax.grid(True, alpha=0.3)
 
