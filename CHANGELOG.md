@@ -14,6 +14,17 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- A published conical benchmark for RCWA: Goray & Schmidt's lamellar Tables
+  12.1 and 12.2 (ch. 12 of Popov (ed.), *Gratings*, 2014), with the chapter's
+  own definitions of the conical angles and of the polarization angles `delta`
+  and `psi` mapped onto `solve_stack`, which takes the elliptically polarized
+  incident field directly. The dielectric table is matched in all eight
+  orders, reflected and transmitted, to half a unit of its last printed digit
+  at M = 80, and the opposite handedness misses every order by more than a
+  hundred such units. The metallic table is matched only to 1.1e-3 (`R0`),
+  and the integral solver, fed the same state, converges to RCWA's answer and
+  away from the table (within 6e-5 of RCWA at 1200 points, within 2.2e-4 of
+  the table at the paper's 400); recorded in `docs/theory/rcwa.md` section 9.
 - RCWA against published lamellar benchmarks (`tests/test_rcwa_benchmarks.py`),
   each value read in a free primary text and cited with its page: Granet's
   metallic TM `R0 = 0.8484781` (as printed by Lalanne & Hugonin 2000 and in
