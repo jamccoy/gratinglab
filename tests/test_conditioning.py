@@ -30,6 +30,29 @@ def hilbert(n):
     return 1.0 / (i[:, None] + i[None, :] + 1.0)
 
 
+def exact_hilbert_condition(n):
+    """``||H||_1 ||H^-1||_1`` in exact arithmetic: the inverse of a Hilbert
+    matrix has a closed form in integers (Choi, Amer. Math. Monthly 90, 301,
+    1983). 4.115445e16 for n = 12."""
+    from fractions import Fraction
+    from math import comb
+
+    inverse = [
+        [
+            (-1) ** (i + j)
+            * (i + j + 1)
+            * comb(n + i, n - j - 1)
+            * comb(n + j, n - i - 1)
+            * comb(i + j, i) ** 2
+            for j in range(n)
+        ]
+        for i in range(n)
+    ]
+    norm = max(sum(Fraction(1, i + j + 1) for i in range(n)) for j in range(n))
+    norm_inverse = max(sum(abs(inverse[i][j]) for i in range(n)) for j in range(n))
+    return float(norm * norm_inverse)
+
+
 @pytest.fixture
 def library(tmp_path, monkeypatch):
     write_ari(
@@ -83,9 +106,22 @@ class TestTheSolve:
         _, kappa = solve(matrix, np.ones(len(matrix)))
         exact = np.linalg.cond(matrix, 1)
         # gecon is a lower bound, within a small factor in practice
-        # (Higham, Accuracy and Stability, section 15.3); measured here it is
-        # exact to rounding for all four.
-        assert exact / 3.0 <= kappa <= exact * (1.0 + 1e-6)
+        # (Higham, Accuracy and Stability, section 15.3). Where the reference
+        # is itself trustworthy, cond * eps small, it is exact to rounding.
+        if exact * np.finfo(np.float64).eps < 1e-3:
+            assert exact / 3.0 <= kappa <= exact * (1.0 + 1e-6)
+            return
+        # Near 1/eps no computed reference is good to better than a factor of
+        # order one: rounding the stored entries alone moves the condition
+        # number that much. Hilbert(12) is that case. numpy's cond and gecon
+        # read 3.0% low here and 6.3% and 4.7% low on macOS CI (run
+        # 40621517579), so the earlier 1e-6 bound failed there. Its exact value
+        # comes from the closed-form integer inverse, and the estimate is held
+        # to the same factor of three on both sides.
+        n = len(matrix)
+        assert np.allclose(matrix, hilbert(n), rtol=0, atol=0)
+        true = exact_hilbert_condition(n)
+        assert true / 3.0 <= kappa <= true * 3.0
 
     def test_a_singular_matrix_raises_as_numpy_does(self):
         with pytest.raises(np.linalg.LinAlgError):
