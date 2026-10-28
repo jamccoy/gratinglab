@@ -54,7 +54,7 @@ class StackSolution:
     plane, top first, normalised by the incident power. The first plane is
     just below the superstrate, so ``reflected.sum() + plane_flux[:, 0] = 1``
     for every passive stack, and in a lossless one every plane carries the
-    same flux.
+    same flux. A solve asked for ``planes="top"`` has that first column only.
 
     ``condition`` is the worst 1-norm condition estimate per group of dense
     systems the solve factored (:mod:`gratinglab.solvers._conditioning`):
@@ -131,16 +131,94 @@ def _slab_modes(slab: Slab, harmonics: int, kx, ky, factorization):
     )
     q = np.block([[-kx_ @ ky_, kx_ @ kx_ - laurent], [exx - ky_ @ ky_, ky_ @ kx_]])
     squared, w = np.linalg.eig(p @ q)
+    kappa = _forward_branch(squared)
+    return w, q @ w / kappa[None, :], kappa
+
+
+def _forward_branch(squared) -> NDArray[np.complex128]:
+    """``kappa`` from the eigenvalues ``kappa^2``, on the forward branch.
+
+    Decaying downward, or propagating downward on the real axis. The
+    tolerance keeps rounding in Im from flipping a lossless propagating mode.
+    """
     kappa = np.sqrt(squared.astype(np.complex128))
-    # The forward branch: decaying downward, or propagating downward on the
-    # real axis. The tolerance keeps rounding in Im from flipping a lossless
-    # propagating mode.
     scale = np.abs(kappa)
     flip = (kappa.imag < -1e-12 * scale) | (
         (np.abs(kappa.imag) <= 1e-12 * scale) & (kappa.real < 0.0)
     )
     kappa = np.where(flip, -kappa, kappa)
-    kappa = np.where(np.abs(kappa) < _KZ_FLOOR, _KZ_FLOOR + 0j, kappa)
+    return np.where(np.abs(kappa) < _KZ_FLOOR, _KZ_FLOOR + 0j, kappa)
+
+
+# In-plane (``ky = 0``) the ``2N`` problem is two ``N`` problems. ``PQ`` is
+# block diagonal, so the modes are pure ``Ex`` (TM) or pure ``Ey`` (TE); ``Q``
+# and every ``V`` are anti-diagonal, pairing ``Ex`` with ``Uy`` and ``Ey`` with
+# ``Ux``; and so every product the S-matrix algebra forms (``V^-1 V0``,
+# ``V0^-1 V``) is block diagonal. Each polarization then runs the same S-matrix
+# code on its own ``N``-square blocks: an eigenproblem an eighth the cost and
+# matrix products a quarter, and a polarization nothing excites is skipped.
+# ``V`` below is the block that maps a system's ``E`` component to its ``U``.
+
+
+@dataclass(frozen=True, slots=True)
+class _System:
+    """Which rows of ``[Ex, Ey]`` and ``[Ux, Uy]`` one decoupled system owns."""
+
+    name: Literal["coupled", "TM", "TE"]
+    e_rows: NDArray[np.int64]
+    u_rows: NDArray[np.int64]
+
+
+def _systems(size: int, decoupled: bool) -> tuple[_System, ...]:
+    if not decoupled:
+        rows = np.arange(2 * size)
+        return (_System("coupled", rows, rows),)
+    x, y = np.arange(size), np.arange(size, 2 * size)
+    return (_System("TM", x, y), _System("TE", y, x))
+
+
+def _homogeneous_v(system: _System, index: complex, kx, ky):
+    """``(V, kappa)`` of a homogeneous medium for one system (``W = I``)."""
+    if system.name == "coupled":
+        _, v, kappa = _homogeneous_modes(index, kx, ky)
+        return v, kappa
+    epsilon = complex(index) ** 2
+    kz = _kz(epsilon, kx, 0.0)
+    if system.name == "TM":  # Uy = eps Ex / kz
+        return np.diag(epsilon / kz), kz
+    return np.diag((kx.astype(np.complex128) ** 2 - epsilon) / kz), kz  # Ux from Ey
+
+
+def _gap_v(system: _System, kx, ky):
+    """``V0`` of the gap (``kz = 1`` in every harmonic) for one system."""
+    epsilon = 1.0 + kx**2 + ky**2
+    if system.name == "coupled":
+        return _q_homogeneous(epsilon, kx, ky)
+    if system.name == "TM":
+        return np.diag(epsilon.astype(np.complex128))
+    return -np.eye(len(kx), dtype=np.complex128)
+
+
+def _slab_modes_decoupled(system: _System, slab: Slab, harmonics, kx, factorization):
+    """``(W, V, kappa)`` of one in-plane polarization in a slab, ``N``-square."""
+    if slab.homogeneous:
+        v, kappa = _homogeneous_v(system, slab.background, kx, 0.0)
+        return np.eye(len(kx), dtype=np.complex128), v, kappa
+    laurent = fourier_matrix(slab, harmonics, inverse=False)
+    kx_ = np.diag(kx.astype(np.complex128))
+    if system.name == "TE":  # Ey: (eps - kx^2) Ey = kappa^2 Ey
+        q = kx_ @ kx_ - laurent
+        squared, w = np.linalg.eig(-q)
+    else:  # Ex: (1 - kx eps_zz^-1 kx) exx Ex = kappa^2 Ex
+        exx = (
+            fourier_matrix(slab, harmonics, inverse=True)
+            if factorization == "li"
+            else laurent
+        )
+        p = np.eye(len(kx)) - kx_ @ np.linalg.solve(laurent, kx_)
+        q = exx
+        squared, w = np.linalg.eig(p @ q)
+    kappa = _forward_branch(squared)
     return w, q @ w / kappa[None, :], kappa
 
 
@@ -222,6 +300,8 @@ def solve_stack(
     incidents: Sequence[NDArray[np.complex128]],
     truncation: int,
     factorization: Literal["li", "laurent"] = "li",
+    planes: Literal["all", "top"] = "all",
+    decouple: bool | None = None,
 ) -> StackSolution:
     """Reflected and transmitted power per harmonic for each incident field.
 
@@ -230,11 +310,19 @@ def solve_stack(
     full 3-vectors from :func:`incident_field`; only their transverse parts
     enter, in harmonic ``m = 0``. The superstrate must be lossless, since the
     incidence angles and the reflected efficiencies are defined in it.
+
+    ``planes="top"`` forms ``plane_flux`` at the first plane only, which is
+    all ``absorbed`` needs, and skips the products from the top and the solve
+    at every interior plane. ``decouple`` splits an in-plane mount into its TE
+    and TM systems; ``None`` does so whenever ``ky == 0``, and ``False``
+    exists so a test can hold the split against the coupled ``2N`` solve.
     """
     if complex(stack.superstrate).imag != 0.0:
         raise ValueError("the superstrate must be lossless")
     if factorization not in ("li", "laurent"):
         raise ValueError(f"unknown factorization {factorization!r}")
+    if planes not in ("all", "top"):
+        raise ValueError(f"planes must be 'all' or 'top', got {planes!r}")
 
     size = 2 * truncation + 1
     harmonics = np.arange(-truncation, truncation + 1)
@@ -242,73 +330,108 @@ def solve_stack(
     k0 = 2.0 * np.pi / wavelength
 
     # The gap: kz = 1 in every harmonic, so W0 = I and V0 = Q0.
-    v0 = _q_homogeneous(1.0 + kx**2 + ky**2, kx, ky)
-    v0_inv = np.linalg.inv(v0)
-
-    _, v_ref, kappa_ref = _homogeneous_modes(stack.superstrate, kx, ky)
-    _, v_trn, kappa_trn = _homogeneous_modes(stack.substrate, kx, ky)
-
     log = ConditionLog()
-    blocks = [_external_s(v_ref, v0_inv, log, top=True)]
-    for slab in stack.slabs:
-        w, v, kappa = _slab_modes(slab, truncation, kx, ky, factorization)
-        blocks.append(_layer_s(w, v, kappa, slab.thickness * k0, v0, log))
-    blocks.append(_external_s(v_trn, v0_inv, log, top=False))
-
-    # Partial products from each end, so the field at every interior plane
-    # comes from the S-matrices above and below it.
-    above = [blocks[0]]
-    for block in blocks[1:]:
-        above.append(_star(above[-1], block, log))
-    below = [blocks[-1]]
-    for block in reversed(blocks[:-1]):
-        below.append(_star(block, below[-1], log))
-    below.reverse()
-    total = above[-1]
-
     source = np.zeros((2 * size, len(incidents)), dtype=np.complex128)
-    kz0 = float(np.real(kappa_ref[truncation]))
+    kz_ref = _kz(complex(stack.superstrate) ** 2, kx, ky)
+    kz0 = float(np.real(kz_ref[truncation]))
     incident_power = np.empty(len(incidents))
     for column, field in enumerate(incidents):
         source[truncation, column] = field[0]
         source[size + truncation, column] = field[1]
         incident_power[column] = kz0 * float(np.sum(np.abs(field) ** 2))
 
+    if decouple is None:
+        decouple = ky == 0.0
+    elif decouple and ky != 0.0:
+        raise ValueError("decouple=True needs an in-plane mount (ky = 0)")
+
+    # The full fields, filled system by system: each owns disjoint rows.
+    r = np.zeros_like(source)
+    t = np.zeros_like(source)
+    u_trn = np.zeros_like(source)
+    n_planes = len(stack.slabs) + 1 if planes == "all" else 1
+    plane_e = np.zeros((n_planes, 2 * size, len(incidents)), dtype=np.complex128)
+    plane_u = np.zeros_like(plane_e)
+
+    for system in _systems(size, decouple):
+        sub_source = source[system.e_rows]
+        if not sub_source.any():
+            continue  # in-plane and unexcited: its every amplitude is zero
+        v0 = _gap_v(system, kx, ky)
+        v0_inv = np.linalg.inv(v0)
+        v_ref, _ = _homogeneous_v(system, stack.superstrate, kx, ky)
+        v_trn, _ = _homogeneous_v(system, stack.substrate, kx, ky)
+
+        blocks = [_external_s(v_ref, v0_inv, log, top=True)]
+        for slab in stack.slabs:
+            if system.name == "coupled":
+                w, v, kappa = _slab_modes(slab, truncation, kx, ky, factorization)
+            else:
+                w, v, kappa = _slab_modes_decoupled(
+                    system, slab, truncation, kx, factorization
+                )
+            blocks.append(_layer_s(w, v, kappa, slab.thickness * k0, v0, log))
+        blocks.append(_external_s(v_trn, v0_inv, log, top=False))
+
+        # Partial products from the bottom, so the field at a plane comes
+        # from the S-matrices above and below it; from the top too only when
+        # every plane is wanted.
+        below = [blocks[-1]]
+        for block in reversed(blocks[:-1]):
+            below.append(_star(block, below[-1], log))
+        below.reverse()
+        if planes == "all":
+            above = [blocks[0]]
+            for block in blocks[1:-1]:
+                above.append(_star(above[-1], block, log))
+        else:
+            above = [blocks[0]]
+        total = below[0]
+
+        r[system.e_rows] = total.s11 @ sub_source
+        sub_t = total.s21 @ sub_source
+        t[system.e_rows] = sub_t
+        u_trn[system.u_rows] = v_trn @ sub_t
+
+        eye = np.eye(len(v0))
+        for plane, (upper, lower) in enumerate(zip(above, below[1:])):
+            forward = log.solve(
+                "smatrix", eye - upper.s22 @ lower.s11, upper.s21 @ sub_source
+            )
+            backward = lower.s11 @ forward
+            plane_e[plane][system.e_rows] = forward + backward
+            plane_u[plane][system.u_rows] = v0 @ (forward - backward)
+
     # Reflected: in the lossless superstrate, flux is kz |E|^2 with the full
     # vector, so a propagating order is non-negative by construction.
-    r = total.s11 @ source
     rx, ry = r[:size], r[size:]
-    kz_ref = kappa_ref[:size]
     rz = (kx[:, None] * rx + ky * ry) / kz_ref[:, None]  # upward wave: k.E = 0
     reflected = (
         np.real(kz_ref)[:, None] * (np.abs(rx) ** 2 + np.abs(ry) ** 2 + np.abs(rz) ** 2)
     ).T / incident_power[:, None]
 
-    t = total.s21 @ source
     if complex(stack.substrate).imag == 0.0:
+        # Lossless: kz |E|^2 with the full vector, as for the reflected orders.
+        kz_trn = _kz(complex(stack.substrate) ** 2, kx, ky)
         tx, ty = t[:size], t[size:]
-        kz_trn = kappa_trn[:size]
         tz = -(kx[:, None] * tx + ky * ty) / kz_trn[:, None]  # downward: k.E = 0
         transmitted = (
             np.real(kz_trn)[:, None]
             * (np.abs(tx) ** 2 + np.abs(ty) ** 2 + np.abs(tz) ** 2)
         ).T / incident_power[:, None]
     else:
-        transmitted = _flux(t, v_trn @ t, size) / incident_power[:, None]
+        transmitted = _flux(t, u_trn, size) / incident_power[:, None]
 
-    planes = []
-    eye = np.eye(2 * size)
-    for upper, lower in zip(above[:-1], below[1:]):
-        forward = log.solve("smatrix", eye - upper.s22 @ lower.s11, upper.s21 @ source)
-        backward = lower.s11 @ forward
-        flux = _flux(forward + backward, v0 @ (forward - backward), size)
-        planes.append(flux.sum(axis=1) / incident_power)
+    fluxes = [
+        _flux(e, u, size).sum(axis=1) / incident_power
+        for e, u in zip(plane_e, plane_u)
+    ]
 
     return StackSolution(
         harmonics=harmonics,
         kx=kx,
         reflected=reflected,
         transmitted=transmitted,
-        plane_flux=np.array(planes).T,
+        plane_flux=np.array(fluxes).T,
         condition=dict(log.worst),
     )

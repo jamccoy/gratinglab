@@ -59,6 +59,7 @@ from ...illumination import Illumination
 from ...problem import Problem
 from ...result import EfficiencyScan, Provenance, Transmission
 from .._conditioning import ESTIMATOR, ConditionLog
+from .._execution import capped_blas, check_blas_threads, check_workers, run_rows
 from ..base import Capabilities, Progress, UnsupportedConfiguration, register
 from ._boundary import physical_boundary
 from ._core import solve_transverse
@@ -181,6 +182,8 @@ class IntegralSolver:
         spectral_terms: int | None = None,
         conductivity: Literal["perfect", "tabulated"] = "perfect",
         corner_grading: int = 0,
+        workers: int = 1,
+        blas_threads: int | None = 1,
         progress: "Progress | None" = None,
     ) -> EfficiencyScan:
         """Efficiency over a wavelength scan at fixed geometry.
@@ -220,6 +223,19 @@ class IntegralSolver:
             (a vertex turning by more than
             :data:`gratinglab.profiles.CORNER_TURN_DEGREES`) keeps the
             equal-arc mesh whatever is passed. Both boundary conditions.
+        workers
+            Threads solving wavelengths concurrently. ``1`` (the default) is
+            the serial loop. Each thread has its own kernel memo over the
+            scan's shared geometry, and LAPACK releases the GIL, so up to the
+            core count this divides a scan's time nearly by ``workers``; the
+            result is identical to the serial one. See
+            :mod:`gratinglab.solvers._execution`.
+        blas_threads
+            The BLAS thread cap for the length of the call, restored on the
+            way out. ``1`` (the default) is the measured fastest at these
+            matrix sizes on a busy machine; ``None`` leaves the process's
+            setting alone, which can win for one very large solve on an idle
+            machine.
         progress
             Per-wavelength callback under the contract in
             :class:`~gratinglab.solvers.base.Solver`.
@@ -254,6 +270,8 @@ class IntegralSolver:
                 f"from 2 to {_MAX_GRADING}, got {corner_grading!r}"
             )
         corner_grading = int(corner_grading)
+        workers = check_workers(workers)
+        threads = check_blas_threads(blas_threads)
 
         started = time.perf_counter()
         sin_alpha = illumination.sin_alpha
@@ -369,84 +387,103 @@ class IntegralSolver:
         conditioning = ConditionLog()
         ill_conditioned: list[float] = []
 
-        # One kernel assembly for the whole scan: the geometry-only half
-        # (including the cached Kummer tails) is what every wavelength and
-        # both media share; the per-wavelength memo is cleared each row.
-        assembler = OperatorAssembler(
-            boundary, period=problem.period, terms=terms
-        )
-
-        for row, wavelength in enumerate(wavelengths):
-            if progress is not None:
-                # Top of the row: (0, n) before any work, and a cancellation
-                # point ahead of every wavelength (see scalar.py).
-                progress(row, len(wavelengths))
-            assembler.clear()
-
-            sines = sin_beta(
-                all_orders, wavelength, problem.period, sin_alpha, sin_gamma
+        with capped_blas(threads):
+            # One kernel assembly for the whole scan: the geometry-only half
+            # (including the cached Kummer tails) is what every wavelength
+            # and both media share; the per-wavelength memo is cleared each
+            # row. A worker thread gets a fork of it, sharing the geometry.
+            assembler = OperatorAssembler(
+                boundary, period=problem.period, terms=terms
             )
-            live = is_propagating(sines)
-            if not live.any():
-                continue
-            if np.abs(cos_beta(sines[live])).min() < _ANOMALY_COS:
-                anomalous.append(float(wavelength))
+            forks = iter([assembler])
 
-            values = np.zeros(int(live.sum()))
-            row_log = ConditionLog()
-            if conductivity == "perfect":
-                reduced = float(wavelength) / sin_gamma
-                for polarization in polarizations:
-                    solution = solve_transverse(
+            def worker_assembler() -> OperatorAssembler:
+                return next(forks, None) or assembler.fork()
+
+            def solve_row(row: int, assembler: OperatorAssembler):
+                assembler.clear()
+                wavelength = wavelengths[row]
+                sines = sin_beta(
+                    all_orders, wavelength, problem.period, sin_alpha, sin_gamma
+                )
+                live = is_propagating(sines)
+                if not live.any():
+                    return None
+                values = np.zeros(int(live.sum()))
+                absorbed = 0.0
+                transmitted: dict[int, float] = {}
+                row_log = ConditionLog()
+                if conductivity == "perfect":
+                    reduced = float(wavelength) / sin_gamma
+                    for polarization in polarizations:
+                        solution = solve_transverse(
+                            boundary,
+                            wavelength=reduced,
+                            period=problem.period,
+                            sin_alpha=sin_alpha,
+                            polarization=polarization,
+                            terms=terms,
+                            assembler=assembler,
+                        )
+                        row_log.record("nystrom", solution.condition)
+                        columns = np.searchsorted(all_orders[live], solution.orders)
+                        values[columns] += solution.efficiencies / len(polarizations)
+                else:
+                    solutions = solve_finite_states(
                         boundary,
-                        wavelength=reduced,
+                        wavelength=float(wavelength),
                         period=problem.period,
                         sin_alpha=sin_alpha,
-                        polarization=polarization,
+                        index=complex(indices[row]),
+                        cos_gamma=cos_gamma,
+                        incidents=[incidents[p] for p in polarizations],
                         terms=terms,
                         assembler=assembler,
                     )
-                    row_log.record("nystrom", solution.condition)
-                    columns = np.searchsorted(all_orders[live], solution.orders)
-                    values[columns] += solution.efficiencies / len(polarizations)
-            else:
-                solutions = solve_finite_states(
-                    boundary,
-                    wavelength=float(wavelength),
-                    period=problem.period,
-                    sin_alpha=sin_alpha,
-                    index=complex(indices[row]),
-                    cos_gamma=cos_gamma,
-                    incidents=[incidents[p] for p in polarizations],
-                    terms=terms,
-                    assembler=assembler,
-                )
-                for solution in solutions:
-                    row_log.record("nystrom", solution.condition)
-                    columns = np.searchsorted(all_orders[live], solution.orders)
-                    values[columns] += solution.efficiencies / len(polarizations)
-                    absorption[row] += solution.absorption / len(polarizations)
-                    for order, value in zip(
-                        solution.transmitted_orders.tolist(),
-                        solution.transmitted_efficiencies,
-                    ):
-                        transmitted_rows[row][order] = transmitted_rows[row].get(
-                            order, 0.0
-                        ) + float(value) / len(polarizations)
-                # The boundary integral is the power that crossed into the
-                # material. What a lossless one transmits into orders is
-                # recorded as transmission, so absorption keeps only the rest,
-                # which for a lossless material is the discretisation error.
-                absorption[row] -= sum(transmitted_rows[row].values())
+                    for solution in solutions:
+                        row_log.record("nystrom", solution.condition)
+                        columns = np.searchsorted(all_orders[live], solution.orders)
+                        values[columns] += solution.efficiencies / len(polarizations)
+                        absorbed += solution.absorption / len(polarizations)
+                        for order, value in zip(
+                            solution.transmitted_orders.tolist(),
+                            solution.transmitted_efficiencies,
+                        ):
+                            transmitted[order] = transmitted.get(order, 0.0) + float(
+                                value
+                            ) / len(polarizations)
+                    # The boundary integral is the power that crossed into the
+                    # material. What a lossless one transmits into orders is
+                    # recorded as transmission, so absorption keeps only the
+                    # rest, which for a lossless material is the
+                    # discretisation error.
+                    absorbed -= sum(transmitted.values())
 
+                return live, values, absorbed, transmitted, row_log
+
+            rows = run_rows(
+                len(wavelengths),
+                solve_row,
+                state=worker_assembler,
+                workers=workers,
+                progress=progress,
+            )
+
+        for row, (wavelength, solved) in enumerate(zip(wavelengths, rows)):
+            if solved is None:
+                continue
+            live, values, absorbed, transmitted_rows[row], row_log = solved
+            sines = sin_beta(
+                all_orders, wavelength, problem.period, sin_alpha, sin_gamma
+            )
+            if np.abs(cos_beta(sines[live])).min() < _ANOMALY_COS:
+                anomalous.append(float(wavelength))
             conditioning.merge(row_log)
             if row_log.worst.get("nystrom", 0.0) > _WARN_KAPPA:
                 ill_conditioned.append(float(wavelength))
             efficiency[row, live] = values
             propagating[row, live] = True
-
-        if progress is not None:
-            progress(len(wavelengths), len(wavelengths))
+            absorption[row] = absorbed
 
         if anomalous:
             span = f"{min(anomalous):.6g}-{max(anomalous):.6g} nm"

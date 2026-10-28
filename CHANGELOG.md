@@ -65,6 +65,53 @@ entries under "Unreleased" into a section named for the new version;
   at the solver's usual accuracy, and the gap either side is a square-root
   branch point, `C sqrt(d / lambda*)` with `C` constant to 4% over six
   decades of `d`, which is what tells continuity from a step.
+- The rigorous solvers, `integral` and `rcwa`, cap BLAS at one thread for
+  the length of a solve and restore the process's setting on the way out,
+  however the solve ends. OpenBLAS's thread-per-core default is slower at
+  these matrix sizes, and on a busy machine much slower: RCWA paid 20 to 135x
+  and the integral solver 1.1 to 3.7x. `blas_threads=None` opts out. The cap
+  is process-wide, as a BLAS pool is, and reference-counted so overlapping
+  solves on different threads share it. New dependency: `threadpoolctl`
+  (pure Python, BSD-3), the maintained way to reach NumPy's and SciPy's
+  separate OpenBLAS copies.
+- `workers=N` on both rigorous solvers solves wavelengths on `N` threads.
+  The default, 1, is the serial loop. The scan is identical to the serial
+  one, and the progress contract holds: every call on the caller's thread,
+  `(0, n)` first, `done` stepping by one, and `SolveCancelled` re-raised
+  unchanged once the rows already running finish, with nothing left running.
+  The integral solver gives each thread its own kernel memo over the scan's
+  shared geometry (`OperatorAssembler.fork`).
+- RCWA solves an in-plane mount as two decoupled `N`-square systems, TE and
+  TM, instead of one coupled `2N` system, and skips a polarization nothing
+  excites. The backend also forms the flux at the top plane only, which is
+  all `absorption` needs; `solve_stack(planes="all")`, still the core's
+  default, gives every plane. Both agree with the paths they skip to 1e-12
+  (`tests/test_solver_execution.py`).
+- `benchmarks/solver_speed.py` times each case in a fresh interpreter under
+  inherited and single-thread BLAS. Before and after, on MC1 (16 cores) with
+  another session's solver running alongside, best of 3, one wavelength
+  unless noted:
+
+  | case | before, default BLAS | before, 1 thread | after |
+  |---|---|---|---|
+  | integral, 512 points | 2.94 s | 1.43 s | 1.07 s |
+  | integral, 1024 points | 10.93 s | 7.80 s | 9.63 s |
+  | integral, tabulated conical, 512 | 3.12 s | 2.66 s | 2.65 s |
+  | rcwa lamellar in-plane, M=30 | 4.93 s | 0.057 s | 0.024 s |
+  | rcwa lamellar in-plane, M=80 | 15.01 s | 0.733 s | 0.232 s |
+  | rcwa lamellar conical, M=30 | 3.16 s | 0.046 s | 0.059 s |
+  | rcwa lamellar conical, M=80 | 14.18 s | 0.761 s | 0.947 s |
+  | rcwa sinusoid in-plane, M=30, 16 slabs | 64.00 s | 0.470 s | 0.322 s |
+  | integral, 8 wavelengths, 512 | 13.10 s | 3.55 s | 5.49 s; 1.87 s at `workers=8` |
+  | rcwa conical sinusoid, 8 wavelengths | 324.3 s | 4.99 s | 5.18 s; 0.66 s at `workers=8` |
+
+  "After" is with the inherited environment, so it is what a caller now
+  gets without setting anything. The conical and integral rows run the same
+  arithmetic as the single-thread column before and differ from it by the
+  machine's load, which moved between runs (12% to 25% at the start of each,
+  and higher while they ran); read differences under about 30% there as
+  noise. The in-plane RCWA gain over the single-thread column, 2 to 3x, is
+  the decoupling.
 
 - An RCWA backend, `rcwa`, written in-house: the first working slice of
   roadmap item 2. It is the Fourier modal method with Li's factorization
