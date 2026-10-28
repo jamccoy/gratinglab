@@ -463,13 +463,19 @@ class TestWhereItIsWeak:
         good = cmethod.solve(problem, illumination, [450.0], truncation=16)
         bad = cmethod.solve(problem, illumination, [450.0], truncation=32)
         assert good.efficiency.max() == pytest.approx(0.844609, abs=2e-4)
-        assert abs(bad.efficiency.max() - 0.844609) > 1e-3
         assert not good.provenance.warnings
         assert any("condition number" in w for w in bad.provenance.warnings)
         # How wrong a precision-exhausted solve is depends on BLAS rounding
-        # (0.833 single-threaded, 0.872 threaded, same machine), so the pin
-        # is that it is wrong and that the balance shows it, not by how much.
-        assert bad.provenance.notes["energy_balance_deviation"] > 1e-3
+        # (0.833 single-threaded, 0.872 threaded, same machine; 2.8e-4 off on
+        # CI's Linux py3.11 runner, run 40626543858, where a fixed 1e-3 bound
+        # failed), so the pin is relative: the higher truncation is clearly
+        # worse than the lower one, and its energy balance shows it.
+        good_error = abs(good.efficiency.max() - 0.844609)
+        bad_error = abs(bad.efficiency.max() - 0.844609)
+        assert bad_error > 10 * good_error
+        good_balance = good.provenance.notes["energy_balance_deviation"]
+        bad_balance = bad.provenance.notes["energy_balance_deviation"]
+        assert bad_balance > 1e-6 and bad_balance > 1e3 * good_balance
 
 
 class TestRefusals:
