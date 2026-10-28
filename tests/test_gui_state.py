@@ -293,3 +293,40 @@ class TestTheSurfaceFields:
             FormState(period="x", coating="zz", roughness="-1")
         )}
         assert fields == {"period", "coating", "roughness"}
+
+
+class TestLayers:
+    """The Layers field: ``"Au 20, Cr 5"``, innermost first, into
+    ``Problem.layers``. Au is the bundled table."""
+
+    def test_empty_is_a_bare_grating(self):
+        assert build(FormState()).problem.layers == ()
+
+    def test_entries_become_layers_in_order(self):
+        from gratinglab.problem import ConformalLayer
+
+        layers = build(FormState(coating="Au", layers="Au 20, Au 2.5")).problem.layers
+        assert layers == (
+            ConformalLayer(material="Au", thickness=20.0),
+            ConformalLayer(material="Au", thickness=2.5),
+        )
+
+    def test_spacing_and_a_trailing_comma_are_forgiven(self):
+        assert len(build(FormState(layers="  Au   20 ,  ")).problem.layers) == 1
+
+    def test_every_bad_entry_is_named_in_one_error_on_the_field(self):
+        with pytest.raises(FormErrors) as caught:
+            build(FormState(layers="Au, Au -1, Au x, Unobtainium 5, Au 3"))
+        (error,) = caught.value.errors
+        assert error.field == "layers"
+        for fragment in (
+            "layer 1", "layer 2", "layer 3", "layer 4", "'Unobtainium'"
+        ):
+            assert fragment in error.message
+        assert "layer 5" not in error.message
+
+    def test_its_error_comes_with_the_others(self):
+        """`build` reports every bad field at once, layers included."""
+        with pytest.raises(FormErrors) as caught:
+            build(FormState(period="-1", layers="Au"))
+        assert {e.field for e in caught.value.errors} >= {"period", "layers"}

@@ -23,6 +23,22 @@ entries under "Unreleased" into a section named for the new version;
   Solvers may declare `Capabilities.accuracy_ceiling`, and the default
   convergence ladder stops there: the C-method's ran on to 2048, so a sweep
   that had not settled by 256 failed on a refused rung instead of reporting.
+- An RCWA tab in the efficiency window, the third solver tab, on the same
+  skeleton as the integral one. It has the truncation (the knob the
+  Check convergence button sweeps) and the staircase's slices (blank follows
+  the truncation), and a note that says, once the geometry is known, whether
+  the profile is one exact lamellar slab or a staircase, with the TM caveat
+  for the latter. Its form refuses what the solver would: no coating, a scan
+  outside the material's table, gain, and a truncation that cannot hold every
+  reflected or transmitted order, the last through the solver's own
+  `required_truncation`, now public, so the two cannot disagree.
+- Coated gratings in the window: a Layers field in the geometry panel's
+  Surface group, written `Au 20, Cr 5` (material and thickness in nm,
+  innermost first), fills `Problem.layers`. Every bad entry is named in one
+  error on the field, and a material must be installed, as the coating must.
+  A tab whose solver cannot model layers (Scalar, Integral, C-method)
+  refuses on the field before anything reaches the worker, rather than
+  solving the bare grating; the RCWA tab solves them.
 
 ## 0.2.0 (2026-10-27)
 

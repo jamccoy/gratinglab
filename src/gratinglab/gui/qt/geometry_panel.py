@@ -156,6 +156,18 @@ class GeometryPanel(QWidget):
 
         entry(surface_form, "Roughness σ (nm)", "roughness")
 
+        layers = entry(surface_form, "Layers", "layers")
+        layers.setPlaceholderText("none, e.g. Au 20, Cr 5")
+        layers.setToolTip(
+            "Conformal layers on the grating, innermost first: a material\n"
+            "and a thickness in nm each, separated by commas. Each follows the\n"
+            "surface beneath it as its true offset, so convex corners are\n"
+            "rounded and concave ones stay sharp. The grating itself is cut\n"
+            "into the Coating material.\n"
+            "Only the RCWA tab models layers; the others refuse a problem\n"
+            "that has any rather than solve the bare grating beneath them."
+        )
+
         scan = QGroupBox("Wavelengths (nm)")
         scan_form = QFormLayout(scan)
         entry(scan_form, "Start", "wavelength_start")

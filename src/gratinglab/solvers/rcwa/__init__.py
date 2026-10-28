@@ -53,7 +53,7 @@ from ..base import Capabilities, Progress, UnsupportedConfiguration, register
 from ._core import incident_field, solve_stack
 from ._stack import groove_geometry
 
-__all__ = ["RcwaSolver", "rcwa"]
+__all__ = ["RcwaSolver", "rcwa", "required_truncation"]
 
 #: ``min |cos beta_m|`` below which an order is passing off: the external
 #: region's ``V = Q kz^-1`` is nearly singular there (a Rayleigh anomaly).
@@ -91,6 +91,48 @@ def _resolve_index(problem: Problem):
             "conductor is the integral solver's conductivity='perfect'."
         )
     return name, lookup(name)
+
+
+def required_truncation(
+    period: float,
+    sin_alpha: float,
+    sin_gamma: float,
+    wavelengths,
+    indices=None,
+    material: str = "the substrate",
+) -> tuple[int, str]:
+    """The narrowest harmonic window, ``M``, that holds every order a scan needs.
+
+    Every reflected order propagating at the shortest wavelength, and every
+    order transmitted into the substrate at any wavelength where it is
+    lossless (``indices`` real), must sit inside ``-M..M``. Returns ``M`` and
+    a phrase naming the order that sets it. The solver refuses a smaller
+    ``truncation`` with that phrase, and the window's form
+    (``gui/rcwa_options.py``) checks against the same function, so the two
+    cannot disagree.
+    """
+    wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=np.float64))
+    shortest = float(wavelengths.min())
+    orders = order_range(shortest, period, sin_alpha, sin_gamma)
+    widest = int(orders[np.argmax(np.abs(orders))])
+    needed, reason = abs(widest), f"order {widest} propagates at {shortest:.6g} nm"
+    if indices is None:
+        return needed, reason
+
+    kx0 = -sin_alpha * sin_gamma
+    cos_gamma_sq = 1.0 - sin_gamma**2
+    indices = np.broadcast_to(np.asarray(indices, dtype=np.complex128), wavelengths.shape)
+    for wavelength, index in zip(wavelengths, indices):
+        if index.imag != 0.0 or index.real**2 <= cos_gamma_sq:
+            continue  # absorbing, or nothing propagates in it
+        reach = np.sqrt(index.real**2 - cos_gamma_sq)
+        low = int(np.ceil((-reach - kx0) * period / wavelength))
+        high = int(np.floor((reach - kx0) * period / wavelength))
+        for m in (low, high):
+            if abs(m) > needed:
+                needed = abs(m)
+                reason = f"order {m} is transmitted into {material} at {wavelength:.6g} nm"
+    return needed, reason
 
 
 class RcwaSolver:
@@ -184,14 +226,6 @@ class RcwaSolver:
         all_orders = order_range(
             float(wavelengths.min()), problem.period, sin_alpha, sin_gamma
         )
-        widest = int(all_orders[np.argmax(np.abs(all_orders))])
-        if truncation < abs(widest):
-            raise ValueError(
-                f"truncation={truncation} keeps harmonics -{truncation}..{truncation}, "
-                f"but order {widest} propagates at {wavelengths.min():.6g} nm; "
-                f"need at least {abs(widest)}"
-            )
-
         kx0 = -sin_alpha * sin_gamma
         kz0 = cos_alpha * sin_gamma
 
@@ -223,23 +257,20 @@ class RcwaSolver:
         # Orders transmitted into the substrate, wherever it is lossless: the
         # substrate admits more than the vacuum does, and every one of them
         # must sit inside the harmonic window too.
+        needed, reason = required_truncation(
+            problem.period, sin_alpha, sin_gamma, wavelengths, indices, material
+        )
+        if truncation < needed:
+            raise ValueError(
+                f"truncation={truncation} keeps harmonics -{truncation}..{truncation}, "
+                f"but {reason}; need at least {needed}"
+            )
         harmonics = np.arange(-truncation, truncation + 1)
         lossless = indices.imag == 0.0
         cone = np.zeros((len(wavelengths), len(harmonics)), dtype=bool)
         for row in np.flatnonzero(lossless):
             kx = kx_of(harmonics, wavelengths[row])
             cone[row] = kx**2 + cos_gamma**2 <= indices[row].real ** 2
-            for edge in (-truncation, truncation):
-                beyond = edge + np.sign(edge)
-                if kx_of(beyond, wavelengths[row]) ** 2 + cos_gamma**2 <= (
-                    indices[row].real ** 2
-                ):
-                    raise ValueError(
-                        f"truncation={truncation} keeps harmonics "
-                        f"-{truncation}..{truncation}, but order {beyond} is "
-                        f"transmitted into {material} at {wavelengths[row]:.6g} "
-                        "nm; raise truncation until the substrate's orders fit"
-                    )
         transmitted_columns = np.flatnonzero(cone.any(axis=0))
 
         groove = groove_geometry(
