@@ -19,11 +19,10 @@ Two boundary conditions, named as the integral solver names them, so one
 - ``conductivity="tabulated"``: one interface into a material read per
   wavelength from ``coating`` (falling back to ``substrate``). In a conical
   mount ``E_z`` and ``H_z`` couple through ``k_z`` at the boundary.
-  Efficiencies are absolute, and the flux into the material is computed from
-  the fields on the boundary and recorded as the scan's ``absorption``, so
-  ``R + A = 1`` is a check. For a lossless material that flux is the
-  transmitted total; the transmitted orders themselves are solved but the
-  scan carries reflected orders only.
+  Efficiencies are absolute. The flux into the material is computed from the
+  fields on the boundary; into a lossless material the transmitted orders
+  are recorded as the scan's ``transmission`` and ``absorption`` keeps the
+  remainder, so ``R + T + A = 1`` is a check, not an identity.
 
 The accuracy knob is ``truncation``: ``N`` retained harmonics on each side of
 the centre of the propagating orders, ``2N + 1`` in all.
@@ -47,7 +46,7 @@ from numpy.typing import ArrayLike
 from ...geometry import cos_beta, is_propagating, order_range, sin_beta
 from ...illumination import Illumination
 from ...problem import Problem
-from ...result import EfficiencyScan, Provenance
+from ...result import EfficiencyScan, Provenance, Transmission
 from ..base import Capabilities, Progress, UnsupportedConfiguration, register
 from ._core import Harmonics, solve_finite, solve_perfect
 from ._series import profile_series
@@ -191,17 +190,10 @@ class CMethodSolver:
         )
         lo, hi = int(all_orders.min()), int(all_orders.max())
         center = (lo + hi) // 2
-        needed = max(hi - center, center - lo) + 1
-        if truncation < needed:
-            raise ValueError(
-                f"truncation={truncation} cannot represent orders {lo} to {hi} "
-                f"with an evanescent harmonic beyond each end; need at least "
-                f"{needed}"
-            )
-        harmonics = Harmonics.build(series, center, truncation)
 
         material: str | None = None
         indices = None
+        lossless = np.zeros(len(wavelengths), dtype=bool)
         if conductivity == "tabulated":
             material, constants = _resolve_index(problem)
             indices = np.asarray(constants.n(wavelengths), dtype=np.complex128)
@@ -209,6 +201,32 @@ class CMethodSolver:
                 raise ValueError(
                     f"material {material!r} tabulates a negative absorption (gain)"
                 )
+            lossless = indices.imag == 0.0
+
+        # Every order the harmonics must hold: the vacuum's, and where the
+        # material is lossless the ones it transmits, which for n > 1 are
+        # more. A transmitted order outside the harmonics would be missing
+        # from the record, not zero, so the truncation is refused instead.
+        lo_need, hi_need, where = lo, hi, "orders"
+        for row in np.flatnonzero(lossless):
+            k = 2.0 * np.pi / wavelengths[row]
+            kappa2 = k * k * float(indices[row].real) ** 2 - (k * cos_gamma) ** 2
+            if kappa2 <= 0.0:
+                continue
+            shift = k * sin_alpha * sin_gamma * problem.period / (2.0 * np.pi)
+            reach = np.sqrt(kappa2) * problem.period / (2.0 * np.pi)
+            t_lo, t_hi = int(np.ceil(shift - reach)), int(np.floor(shift + reach))
+            if t_lo < lo_need or t_hi > hi_need:
+                where = "reflected and transmitted orders"
+            lo_need, hi_need = min(lo_need, t_lo), max(hi_need, t_hi)
+        needed = max(hi_need - center, center - lo_need) + 1
+        if truncation < needed:
+            raise ValueError(
+                f"truncation={truncation} cannot represent {where} {lo_need} to "
+                f"{hi_need} with an evanescent harmonic beyond each end; need at "
+                f"least {needed}"
+            )
+        harmonics = Harmonics.build(series, center, truncation)
 
         polarizations = (
             ("TE", "TM")
@@ -219,6 +237,8 @@ class CMethodSolver:
 
         efficiency = np.zeros((len(wavelengths), len(all_orders)))
         absorption = np.zeros(len(wavelengths))
+        # Transmitted orders per row, for a lossless material: {order: value}.
+        transmitted_rows: list[dict[int, float]] = [{} for _ in wavelengths]
         propagating = np.zeros_like(efficiency, dtype=bool)
         anomalous: list[float] = []
         condition = 1.0
@@ -269,6 +289,18 @@ class CMethodSolver:
                 values[columns] += solution.efficiencies / len(polarizations)
                 absorption[row] += solution.absorption / len(polarizations)
                 condition = max(condition, solution.condition)
+                for order, value in zip(
+                    solution.transmitted_orders.tolist(),
+                    solution.transmitted_efficiencies,
+                ):
+                    transmitted_rows[row][order] = transmitted_rows[row].get(
+                        order, 0.0
+                    ) + float(value) / len(polarizations)
+            # The flux through the boundary is the power that entered the
+            # material. What a lossless one carries away in orders is the
+            # transmission, so absorption keeps only the remainder, which
+            # for a lossless material is the truncation error.
+            absorption[row] -= sum(transmitted_rows[row].values())
 
             efficiency[row, live] = values
             propagating[row, live] = True
@@ -310,7 +342,21 @@ class CMethodSolver:
                 "sum over orders is relative to a perfect reflector"
             )
 
+        transmission = None
+        if any(transmitted_rows):
+            seen = sorted({m for row_orders in transmitted_rows for m in row_orders})
+            t_orders = np.arange(seen[0], seen[-1] + 1)
+            t_efficiency = np.zeros((len(wavelengths), len(t_orders)))
+            t_propagating = np.zeros_like(t_efficiency, dtype=bool)
+            for row, row_orders in enumerate(transmitted_rows):
+                for order, value in row_orders.items():
+                    t_efficiency[row, order - seen[0]] = value
+                    t_propagating[row, order - seen[0]] = True
+            transmission = Transmission(t_orders, t_efficiency, t_propagating)
+
         totals = np.where(propagating, efficiency, 0.0).sum(axis=1)
+        if transmission is not None:
+            totals = totals + transmission.total
         if conductivity == "tabulated":
             totals = totals + absorption
         computed = totals[propagating.any(axis=1)]
@@ -342,10 +388,11 @@ class CMethodSolver:
             notes["boundary_condition"] = "finite-conductivity, single interface"
             notes["normalization"] = "absolute"
             notes["material"] = material
-            if (indices.imag == 0.0).any():
+            if lossless.any():
                 notes["absorption"] = (
-                    "flux into the material; where it is lossless this is the "
-                    "transmitted total"
+                    "power absorbed; where the material is lossless the power "
+                    "that entered it is the transmission, and absorption is the "
+                    "truncation error left over"
                 )
 
         return EfficiencyScan(
@@ -363,6 +410,7 @@ class CMethodSolver:
                 notes=notes,
             ),
             absorption=absorption if conductivity == "tabulated" else None,
+            transmission=transmission,
         )
 
 

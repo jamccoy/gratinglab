@@ -18,6 +18,7 @@ from gratinglab.checks import check_energy_balance, check_reciprocity
 from gratinglab.convergence import check_convergence
 from gratinglab.illumination import Illumination
 from gratinglab.materials import fresnel
+from gratinglab.materials.optical import OpticalConstants, write_ari
 from gratinglab.problem import Problem
 from gratinglab.profiles import Blazed, FromProfileData, Lamellar, Sinusoidal
 from gratinglab.solvers import UnsupportedConfiguration, cmethod, get_solver, integral
@@ -171,6 +172,74 @@ class TestGorayEtSchmidtTable3:
         total = solution.efficiencies.sum() + solution.transmitted_efficiencies.sum()
         assert total == pytest.approx(1.0, abs=1e-10)
         assert np.abs(solution.h_amplitudes).max() > 0.01  # polarization converts
+
+
+class TestTransmittedOrdersInTheScan:
+    """Into a lossless material the transmitted orders are recorded as the
+    scan's ``transmission``, beside the reflected ones, and ``absorption``
+    keeps only what is left over -- the truncation error."""
+
+    #: n = 2 exactly, lossless, over the wavelengths these tests use.
+    N2 = OpticalConstants(
+        name="cmethod-n2", wavelength_nm=(200.0, 700.0),
+        decrement=(-1.0, -1.0), absorption=(0.0, 0.0), source="test_cmethod",
+    )
+
+    @pytest.fixture(autouse=True)
+    def library(self, tmp_path, monkeypatch):
+        write_ari(self.N2, tmp_path / f"{self.N2.name}.ari")
+        monkeypatch.setenv("GRATINGLAB_MATERIALS", str(tmp_path))
+
+    def test_goray_schmidt_table_3_through_the_solver(self):
+        """The Table 3 case end to end: their theta = 60, phi = 15 deg is
+        alpha = 60 deg on a cone of half-angle gamma = 75 deg."""
+        problem = Problem(
+            period=600.0, profile=Sinusoidal(depth_fraction=0.3), coating=self.N2.name
+        )
+        illumination = Illumination.offplane(graze=75.0, azimuth=60.0, polarization="TE")
+        scan = cmethod.solve(problem, illumination, [300.0], truncation=20, conductivity="tabulated")
+        assert scan.transmission is not None
+        reflected = by_order(scan.orders, scan.efficiency[0])
+        transmitted = by_order(scan.transmission.orders, scan.transmission.efficiency[0])
+        live = set(scan.transmission.orders[scan.transmission.propagating[0]].tolist())
+        assert live == set(TestGorayEtSchmidtTable3.TRANSMITTED)
+        for m, expected in TestGorayEtSchmidtTable3.REFLECTED.items():
+            assert reflected[m] == pytest.approx(expected, abs=5e-5), f"R m={m}"
+        for m, expected in TestGorayEtSchmidtTable3.TRANSMITTED.items():
+            assert transmitted[m] == pytest.approx(expected, abs=5e-5), f"T m={m}"
+        assert abs(scan.absorption[0]) < 1e-10  # lossless: the remainder only
+        assert check_energy_balance(scan, tolerance=1e-10, lossless=True).passed
+
+    @pytest.mark.parametrize("polarization", ["TE", "TM"])
+    def test_flat_glass_transmits_the_fresnel_fraction(self, polarization):
+        flat = Problem(period=600.0, profile=FLAT.profile, coating=self.N2.name)
+        illumination = Illumination.classical(alpha=30.0, polarization=polarization)
+        scan = cmethod.solve(flat, illumination, [550.0], truncation=4, conductivity="tabulated")
+        r_s, r_p = fresnel.amplitude(2.0 + 0.0j, np.radians(60.0))
+        r = complex(r_s if polarization == "TE" else r_p)
+        assert scan.transmission.order(0)[0] == pytest.approx(1.0 - abs(r) ** 2, abs=1e-12)
+        assert scan.transmission.total[0] == pytest.approx(1.0 - abs(r) ** 2, abs=1e-12)
+
+    def test_an_absorbing_material_records_no_transmission(self):
+        problem = Problem(period=600.0, profile=Sinusoidal(depth_fraction=0.05), coating="Au")
+        scan = cmethod.solve(
+            problem, Illumination.offplane(graze=1.5, azimuth=25.0), [2.0],
+            truncation=24, conductivity="tabulated",
+        )
+        assert scan.transmission is None
+        assert scan.absorption[0] > 0.1
+
+    def test_truncation_must_hold_every_transmitted_order(self):
+        """In n = 2 at 300 nm the substrate admits orders -2 to 5 against the
+        vacuum's 0 to 3; a truncation that holds the vacuum's but not the
+        substrate's would drop transmitted orders, so it is refused."""
+        problem = Problem(
+            period=600.0, profile=Sinusoidal(depth_fraction=0.3), coating=self.N2.name
+        )
+        illumination = Illumination.offplane(graze=75.0, azimuth=60.0, polarization="TE")
+        cmethod.solve(problem, illumination, [300.0], truncation=4, conductivity="perfect")
+        with pytest.raises(ValueError, match="transmitted"):
+            cmethod.solve(problem, illumination, [300.0], truncation=4, conductivity="tabulated")
 
 
 class TestPerfectConductorBenchmarks:
@@ -384,7 +453,8 @@ class TestWhereItIsWeak:
     def test_a_deep_profile_loses_digits_and_says_so(self):
         """Sinusoid one period deep, TM: right at N = 16 and wrong by 1e-2 at
         N = 32, as the evanescent modes exhaust double precision. The rung
-        that went wrong carries both warnings. The reference is the integral
+        that went wrong carries the condition warning, and its energy balance
+        shows the error. The reference is the integral
         solver at 768 points, 0.844609 in the strongest order (measured
         2026-10-27; its own error there is about 1e-5), pinned rather than
         recomputed because that solve takes 40 s."""
@@ -396,7 +466,10 @@ class TestWhereItIsWeak:
         assert abs(bad.efficiency.max() - 0.844609) > 1e-3
         assert not good.provenance.warnings
         assert any("condition number" in w for w in bad.provenance.warnings)
-        assert any("strays from unity" in w for w in bad.provenance.warnings)
+        # How wrong a precision-exhausted solve is depends on BLAS rounding
+        # (0.833 single-threaded, 0.872 threaded, same machine), so the pin
+        # is that it is wrong and that the balance shows it, not by how much.
+        assert bad.provenance.notes["energy_balance_deviation"] > 1e-3
 
 
 class TestRefusals:

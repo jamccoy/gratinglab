@@ -22,7 +22,7 @@ flat, and the only approximation is the truncation of the Fourier series.
 | Mode | Physics | Normalisation |
 |---|---|---|
 | `"perfect"` (default) | Perfect conductor, any mount. TE is `E_z = 0` on the boundary, TM is `∂H_z/∂n = 0`. | Relative to a perfect reflector; the sum over orders is 1 in the continuum. |
-| `"tabulated"` | One interface into a semi-infinite material read per wavelength from `coating` (else `substrate`). Absorbing, or lossless with transmitted orders. | **Absolute**. The flux into the material is recorded on the scan as `absorption` (for a lossless material that flux *is* the transmitted total), so `R + A = 1` is checkable. |
+| `"tabulated"` | One interface into a semi-infinite material read per wavelength from `coating` (else `substrate`). Absorbing, or lossless with transmitted orders. | **Absolute**. The flux into the material is computed from the boundary fields. Into a lossless material the transmitted orders are recorded as the scan's `transmission`, with their own order axis, and `absorption` keeps the remainder, so `R + T + A = 1` is checkable. |
 
 The two options are named exactly as the integral solver names them, so one
 `Problem` and one option dictionary reach either method and their results are
@@ -156,9 +156,6 @@ error estimate; on a cornered one it is not (§6).
   with parallel or differing interfaces (Li, Chandezon, Granet & Plumey 1999),
   propagated by an S-matrix; none of that is here. A `Problem` names one
   material and this solver treats it as a semi-infinite substrate.
-- **Transmitted orders in the scan.** For a lossless material they are
-  computed (and validated, §6) but `EfficiencyScan` carries reflected orders
-  only, so the scan records their total as the flux into the material.
 - **Adaptive spatial resolution** and other improvements for steep or deep
   profiles. On a sawtooth convergence is roughly first order (§6), and the
   integral method with `corner_grading` is the better tool there.
@@ -217,7 +214,10 @@ Not yet validated: a measured (AFM) profile with many short segments.
 of the propagating orders at the shortest wavelength, so the off-plane X-ray
 case, whose orders are far from symmetric about 0, does not waste half of
 them. It must leave at least one evanescent harmonic beyond each end of the
-propagating orders. Cost is dominated by two dense eigenproblems of size
+propagating orders, counting the transmitted ones into a lossless material,
+which for n > 1 reach further than the reflected ones; a truncation that
+would drop a transmitted order is refused rather than leaving it out of the
+record. Cost is dominated by two dense eigenproblems of size
 `2(2N+1)` per wavelength, so it grows as `N³`; the accepted maximum is 256.
 
 On smooth profiles convergence is exponential: a sinusoid of depth 0.3 P

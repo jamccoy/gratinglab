@@ -73,8 +73,9 @@ entries under "Unreleased" into a section named for the new version;
 - A C-method (Chandezon) solver, registered as `cmethod`, with the integral
   solver's two boundary conditions: `conductivity="perfect"` in any mount and
   `"tabulated"`, one interface into a material read from the coating, coupled
-  `E_z`/`H_z` off-plane, absolute efficiencies with the flux into the material
-  recorded as `absorption`. The knob is `truncation`. It reproduces Goray &
+  `E_z`/`H_z` off-plane, absolute efficiencies. Into a lossless material the
+  transmitted orders are recorded as the scan's `transmission`, with
+  `absorption` keeping the remainder. The knob is `truncation`. It reproduces Goray &
   Schmidt's Table 3, which is Li's C-method, to 1.4e-5 on all twelve orders,
   Fresnel exactly on a flat boundary, and the integral solver to that
   solver's own error on sinusoids in-plane, at 60° and off-plane at 1.5° on
