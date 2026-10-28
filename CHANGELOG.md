@@ -22,6 +22,11 @@ entries under "Unreleased" into a section named for the new version;
     and its message is endstation's (`pip install -e '.[gui]'`, quoted for
     zsh). `QT_API` is set by importing `endstation.qt`. The console scripts
     still exit with the message rather than a traceback.
+  - `metrology.config` finds the project root with
+    `endstation.paths.find_project_root` (still `pyproject.toml` only) and
+    reads `GRATINGLAB_AFM_DIR` with `data_root`, which also expands `~` in
+    it. Both stay strings. The suite's corpus and scan helpers skip through
+    `endstation.testing`.
 
 ## 0.2.1 (2026-10-28)
 

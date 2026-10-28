@@ -21,10 +21,10 @@ imports conftest under a name of its own choosing, so importing *from* it breaks
 under a tool that drives pytest in-process from a copied tree. mutmut is one.
 """
 
-import os
 from pathlib import Path
 
 import pytest
+from endstation.testing.plugin import skip_without_data
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -46,11 +46,9 @@ SYNTHETIC_TIP_HALF_ANGLE_DEG = 18.0
 DEFAULT_SCAN_DIR = Path.home() / "Documents" / "afm_scans"
 
 
-def scan_dir() -> Path | None:
-    """The directory of real scans, or ``None`` if unavailable."""
-    override = os.environ.get("GRATINGLAB_AFM_DIR")
-    candidate = Path(override) if override else DEFAULT_SCAN_DIR
-    return candidate if candidate.is_dir() else None
+def scan_dir() -> Path:
+    """The directory of real scans, or a skip that names GRATINGLAB_AFM_DIR."""
+    return skip_without_data("GRATINGLAB_AFM_DIR", DEFAULT_SCAN_DIR)
 
 
 def real_scan(name: str) -> Path:
@@ -59,14 +57,9 @@ def real_scan(name: str) -> Path:
     Skips rather than fails: a contributor without the group's measurement data
     must still get a green suite, exactly as with the PCGrate corpus. The
     message names the environment variable, because "file not found" does not
-    tell anyone what to do about it.
+    tell anyone what to do about it; endstation's `skip_without_data` writes it.
     """
     directory = scan_dir()
-    if directory is None:
-        pytest.skip(
-            "AFM scans not found; set GRATINGLAB_AFM_DIR to enable "
-            f"(looked in {DEFAULT_SCAN_DIR})"
-        )
     path = directory / name
     if not path.exists():
         pytest.skip(f"{name} not in {directory}")
