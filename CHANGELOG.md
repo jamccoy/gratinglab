@@ -33,6 +33,39 @@ entries under "Unreleased" into a section named for the new version;
   `check_energy_balance` adds its total, and the window's plot and provenance
   show `T` and `Σ + T + A`.
 
+- RCWA against published lamellar benchmarks (`tests/test_rcwa_benchmarks.py`),
+  each value read in a free primary text and cited with its page: Granet's
+  metallic TM `R0 = 0.8484781` (as printed by Lalanne & Hugonin 2000 and in
+  Popov's *Gratings*, 2014) to 6.3e-4 at M = 80, run through
+  `check_convergence` so the one-call converged path is exercised on it;
+  Lalanne & Hugonin's dielectric TM `T-1 = 51.062%` to 5.4e-5 at M = 60; and
+  Gralak's silicon rods, p, `R0 = 0.9487` to 6.6e-5 at M = 80. Tolerances come
+  from truncation sweeps recorded in the tests. Moharam et al. 1995, Lalanne &
+  Morris 1996, Li 1996 and Granet & Guizal 1996 are closed access and no value
+  from them is used. Two published values are not reproduced and are recorded
+  in `docs/theory/rcwa.md` section 9: Granet's TE `R0`, which this code's
+  Littrow order matches instead (and the integral solver agrees with RCWA),
+  and Gralak's s `R0`, 0.0100 off.
+- Condition estimates for the rigorous solvers' dense systems. Every solve
+  and inverse in RCWA's core and the integral method's Nystrom systems goes
+  through `solvers/_conditioning.py`, which takes LAPACK's `gecon` 1-norm
+  estimate from the same LU factorisation for `O(n^2)` extra; the solutions
+  are numpy's to rounding. The worst value per group lands in
+  `Provenance.notes["condition"]` (`modes` and `smatrix` for RCWA, `nystrom`
+  for the integral method), and each solver warns past its own threshold,
+  placed by measurement above everything it reaches on ordinary problems:
+  `1e10` for RCWA (ordinary at most 4.4e7) and `1e14` for the integral method
+  (ordinary up to 2.8e11 on a corner-graded mesh at 1600 points). Measured at
+  a Rayleigh anomaly, both stay accurate far past those values, so the warning
+  says a problem is unusual, not that its answer is wrong.
+- A Rayleigh-anomaly sweep for both rigorous solvers
+  (`tests/test_rayleigh_anomaly.py`): RCWA and the integral method under both
+  boundary conditions, approaching an order passing off to 1e-8 nm from each
+  side and landing on it. Every efficiency stays finite, energy balance holds
+  at the solver's usual accuracy, and the gap either side is a square-root
+  branch point, `C sqrt(d / lambda*)` with `C` constant to 4% over six
+  decades of `d`, which is what tells continuity from a step.
+
 - An RCWA backend, `rcwa`, written in-house: the first working slice of
   roadmap item 2. It is the Fourier modal method with Li's factorization
   rules (the inverse rule for the field component normal to the ridge walls),

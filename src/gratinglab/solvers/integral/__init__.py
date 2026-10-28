@@ -58,6 +58,7 @@ from ...geometry import cos_beta, is_propagating, order_range, sin_beta
 from ...illumination import Illumination
 from ...problem import Problem
 from ...result import EfficiencyScan, Provenance, Transmission
+from .._conditioning import ESTIMATOR, ConditionLog
 from ..base import Capabilities, Progress, UnsupportedConfiguration, register
 from ._boundary import physical_boundary
 from ._core import solve_transverse
@@ -116,6 +117,17 @@ def _coincident_nodes(boundary, period: float) -> "tuple[float, float] | None":
 #: ``min |cos beta_m|`` below which an order is passing off and the kernel's
 #: ``1/gamma_m`` makes the solve numerically delicate (a Rayleigh anomaly).
 _ANOMALY_COS = 1e-3
+
+
+#: Condition estimate above which the solve warns. The second-kind TM and
+#: coupled systems stay small, but TE's first-kind single layer grows with
+#: the mesh, and a corner-graded mesh crowds nodes together: measured
+#: 2026-10-27 (``docs/theory/integral.md`` section 9), ordinary problems
+#: reach ``2.8e11`` (blazed, TE, graded, 1600 points, growing as ``P^4``),
+#: and an order passing off pushes it as ``|lambda - lambda*|^-1/2`` to
+#: ``9e15`` exactly at grazing. The answer was still right there, so the
+#: warning says "unusual", not "wrong".
+_WARN_KAPPA = 1e14
 
 
 def _resolve_index(problem: Problem) -> "tuple[str, OpticalConstants]":
@@ -354,6 +366,8 @@ class IntegralSolver:
         propagating = np.zeros_like(efficiency, dtype=bool)
         warnings: list[str] = []
         anomalous: list[float] = []
+        conditioning = ConditionLog()
+        ill_conditioned: list[float] = []
 
         # One kernel assembly for the whole scan: the geometry-only half
         # (including the cached Kummer tails) is what every wavelength and
@@ -379,6 +393,7 @@ class IntegralSolver:
                 anomalous.append(float(wavelength))
 
             values = np.zeros(int(live.sum()))
+            row_log = ConditionLog()
             if conductivity == "perfect":
                 reduced = float(wavelength) / sin_gamma
                 for polarization in polarizations:
@@ -391,6 +406,7 @@ class IntegralSolver:
                         terms=terms,
                         assembler=assembler,
                     )
+                    row_log.record("nystrom", solution.condition)
                     columns = np.searchsorted(all_orders[live], solution.orders)
                     values[columns] += solution.efficiencies / len(polarizations)
             else:
@@ -406,6 +422,7 @@ class IntegralSolver:
                     assembler=assembler,
                 )
                 for solution in solutions:
+                    row_log.record("nystrom", solution.condition)
                     columns = np.searchsorted(all_orders[live], solution.orders)
                     values[columns] += solution.efficiencies / len(polarizations)
                     absorption[row] += solution.absorption / len(polarizations)
@@ -422,6 +439,9 @@ class IntegralSolver:
                 # which for a lossless material is the discretisation error.
                 absorption[row] -= sum(transmitted_rows[row].values())
 
+            conditioning.merge(row_log)
+            if row_log.worst.get("nystrom", 0.0) > _WARN_KAPPA:
+                ill_conditioned.append(float(wavelength))
             efficiency[row, live] = values
             propagating[row, live] = True
 
@@ -436,6 +456,11 @@ class IntegralSolver:
                 "the kernel's 1/gamma_m is nearly singular there and those "
                 "rows are numerically delicate"
             )
+        conditioning_warning = conditioning.warning(
+            "integral", ill_conditioned, _WARN_KAPPA
+        )
+        if conditioning_warning is not None:
+            warnings.append(conditioning_warning)
         if conductivity == "perfect" and problem.coating is not None:
             warnings.append(
                 f"coating {problem.coating!r} is not consulted: the perfectly "
@@ -490,6 +515,11 @@ class IntegralSolver:
         notes: dict = {
             "spectral_terms": terms,
             "energy_balance_deviation": deviation,
+            "condition": {
+                "estimator": ESTIMATOR,
+                "warn_above": _WARN_KAPPA,
+                **conditioning.worst,
+            },
             "mesh": (
                 f"corner-graded, order {corner_grading}"
                 if boundary.graded

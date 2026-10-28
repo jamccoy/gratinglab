@@ -201,6 +201,27 @@ documents the measurement method used at ALS beamline 6.3.2.
 
 **Li, L.** Crossed-grating benchmarks.
 
+Neither is yet used: the papers (Moharam, Grann, Pommet & Gaylord, JOSA A 12,
+1068 (1995); Li, JOSA A 13, 1870 (1996); likewise Lalanne & Morris, JOSA A 13,
+779 (1996) and Granet & Guizal, JOSA A 13, 1019 (1996)) are closed access, and
+no value is transcribed from memory. The RCWA benchmarks in use come from:
+
+**Lalanne, P. & Hugonin, J.-P.** *Numerical performance of finite-difference
+modal methods for the electromagnetic analysis of one-dimensional lamellar
+gratings.* J. Opt. Soc. Am. A **17**(6), 1033-1042 (2000). Open copy on HAL,
+hal-00867708. Fig. 3 (Granet's metallic case, printed as 84.848% TM) and Fig. 6
+(a dielectric case, 51.062%).
+
+**Popov, E. (ed.)** *Gratings: Theory and Numeric Applications*, 2nd revisited
+edition. Institut Fresnel (2014). Open copy on HAL, hal-01084458. Ch. 5 Tab.
+5.1 prints Granet's metallic case to seven digits; ch. 10 §10.6 (Gralak) gives
+the silicon-rod case.
+
+**Granet, G.** *Reformulation of the lamellar grating problem through the
+concept of adaptive spatial resolution.* J. Opt. Soc. Am. A **16**, 2510-2516
+(1999). The origin of the metallic values; closed access, so used only as the
+two sources above print them.
+
 These cases lie in the visible and near-IR, which is why that regime serves as
 the project's *validation* regime even though the application is in the soft
 X-ray. See [`roadmap.md`](roadmap.md#regimes-and-the-methods-that-serve-them).

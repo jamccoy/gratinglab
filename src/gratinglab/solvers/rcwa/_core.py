@@ -12,12 +12,14 @@ chosen with ``kz = 1`` in every harmonic, so ``W0 = I`` and ``V0 = Q0``.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass
 from typing import Literal, Sequence
 
 import numpy as np
 from numpy.typing import NDArray
 
+from .._conditioning import ConditionLog
 from ._stack import Slab, Stack, fourier_matrix
 
 __all__ = ["StackSolution", "solve_stack", "incident_field"]
@@ -53,6 +55,13 @@ class StackSolution:
     just below the superstrate, so ``reflected.sum() + plane_flux[:, 0] = 1``
     for every passive stack, and in a lossless one every plane carries the
     same flux.
+
+    ``condition`` is the worst 1-norm condition estimate per group of dense
+    systems the solve factored (:mod:`gratinglab.solvers._conditioning`):
+    ``"modes"`` for the slabs' mode matrices ``W`` and ``V``, ``"smatrix"``
+    for every S-matrix denominator (each slab's ``A`` and ``D``, the external
+    connections' ``A``, the star products' ``I - S S`` and the plane-flux
+    solves).
     """
 
     harmonics: NDArray[np.int64]
@@ -60,6 +69,7 @@ class StackSolution:
     reflected: NDArray[np.float64]
     transmitted: NDArray[np.float64]
     plane_flux: NDArray[np.float64]
+    condition: dict[str, float] = dataclasses.field(default_factory=dict)
 
     @property
     def absorbed(self) -> NDArray[np.float64]:
@@ -134,38 +144,40 @@ def _slab_modes(slab: Slab, harmonics: int, kx, ky, factorization):
     return w, q @ w / kappa[None, :], kappa
 
 
-def _layer_s(w, v, kappa, thickness_k0: float, v0) -> _S:
+def _layer_s(w, v, kappa, thickness_k0: float, v0, log: ConditionLog) -> _S:
     """Rumpf's symmetric S-matrix of a slab, in gap-mode amplitudes."""
-    w_inv = np.linalg.inv(w)
-    v_inv_v0 = np.linalg.solve(v, v0)
+    w_inv = log.inverse("modes", w)
+    v_inv_v0 = log.solve("modes", v, v0)
     a = w_inv + v_inv_v0
     b = w_inv - v_inv_v0
     x = np.diag(np.exp(1j * kappa * thickness_k0))
-    a_inv = np.linalg.inv(a)
+    a_inv = log.inverse("smatrix", a)
     xba = x @ b @ a_inv
     d = a - xba @ x @ b
-    s11 = np.linalg.solve(d, xba @ x @ a - b)
-    s12 = np.linalg.solve(d, x @ (a - b @ a_inv @ b))
+    both = log.solve(
+        "smatrix", d, np.hstack([xba @ x @ a - b, x @ (a - b @ a_inv @ b)])
+    )
+    s11, s12 = both[:, : len(d)], both[:, len(d) :]
     return _S(s11, s12, s12, s11)
 
 
-def _external_s(v, v0_inv, *, top: bool) -> _S:
+def _external_s(v, v0_inv, log: ConditionLog, *, top: bool) -> _S:
     """The connection of a semi-infinite homogeneous region (``W = I``)."""
     eye = np.eye(len(v))
     a = eye + v0_inv @ v
     b = eye - v0_inv @ v
-    a_inv = np.linalg.inv(a)
+    a_inv = log.inverse("smatrix", a)
     across = 0.5 * (a - b @ a_inv @ b)
     if top:
         return _S(-a_inv @ b, 2.0 * a_inv, across, b @ a_inv)
     return _S(b @ a_inv, across, 2.0 * a_inv, -a_inv @ b)
 
 
-def _star(sa: _S, sb: _S) -> _S:
+def _star(sa: _S, sb: _S, log: ConditionLog) -> _S:
     """The Redheffer star product ``sa (x) sb``, ``sa`` above ``sb``."""
     eye = np.eye(len(sa.s11))
-    left = np.linalg.inv(eye - sb.s11 @ sa.s22)
-    right = np.linalg.inv(eye - sa.s22 @ sb.s11)
+    left = log.inverse("smatrix", eye - sb.s11 @ sa.s22)
+    right = log.inverse("smatrix", eye - sa.s22 @ sb.s11)
     return _S(
         sa.s11 + sa.s12 @ left @ sb.s11 @ sa.s21,
         sa.s12 @ left @ sb.s12,
@@ -236,20 +248,21 @@ def solve_stack(
     _, v_ref, kappa_ref = _homogeneous_modes(stack.superstrate, kx, ky)
     _, v_trn, kappa_trn = _homogeneous_modes(stack.substrate, kx, ky)
 
-    blocks = [_external_s(v_ref, v0_inv, top=True)]
+    log = ConditionLog()
+    blocks = [_external_s(v_ref, v0_inv, log, top=True)]
     for slab in stack.slabs:
         w, v, kappa = _slab_modes(slab, truncation, kx, ky, factorization)
-        blocks.append(_layer_s(w, v, kappa, slab.thickness * k0, v0))
-    blocks.append(_external_s(v_trn, v0_inv, top=False))
+        blocks.append(_layer_s(w, v, kappa, slab.thickness * k0, v0, log))
+    blocks.append(_external_s(v_trn, v0_inv, log, top=False))
 
     # Partial products from each end, so the field at every interior plane
     # comes from the S-matrices above and below it.
     above = [blocks[0]]
     for block in blocks[1:]:
-        above.append(_star(above[-1], block))
+        above.append(_star(above[-1], block, log))
     below = [blocks[-1]]
     for block in reversed(blocks[:-1]):
-        below.append(_star(block, below[-1]))
+        below.append(_star(block, below[-1], log))
     below.reverse()
     total = above[-1]
 
@@ -286,7 +299,7 @@ def solve_stack(
     planes = []
     eye = np.eye(2 * size)
     for upper, lower in zip(above[:-1], below[1:]):
-        forward = np.linalg.solve(eye - upper.s22 @ lower.s11, upper.s21 @ source)
+        forward = log.solve("smatrix", eye - upper.s22 @ lower.s11, upper.s21 @ source)
         backward = lower.s11 @ forward
         flux = _flux(forward + backward, v0 @ (forward - backward), size)
         planes.append(flux.sum(axis=1) / incident_power)
@@ -297,4 +310,5 @@ def solve_stack(
         reflected=reflected,
         transmitted=transmitted,
         plane_flux=np.array(planes).T,
+        condition=dict(log.worst),
     )
