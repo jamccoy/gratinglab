@@ -15,7 +15,13 @@ entries under "Unreleased" into a section named for the new version;
 ### Changed
 
 - Requires endstation 0.2.6, and uses its copies of components this package
-  had carried its own versions of. Nothing a user sees changes.
+  had carried its own versions of. Nothing a user sees changes beyond the
+  wording of one message:
+  - The missing-PySide6 check in `gratinglab-gui`, `gratinglab-app` and
+    `gratinglab.metrology.gui.require_qt` is endstation's `require_extra`,
+    and its message is endstation's (`pip install -e '.[gui]'`, quoted for
+    zsh). `QT_API` is set by importing `endstation.qt`. The console scripts
+    still exit with the message rather than a traceback.
 
 ## 0.2.1 (2026-10-28)
 
