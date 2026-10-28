@@ -303,12 +303,13 @@ class TestTheRcwaTab:
                 widget.setText(value)
 
     def test_it_is_a_tab_with_its_short_title(self, win):
-        from gratinglab.gui.docs import short_title
+        from gratinglab.gui.docs import display_title, short_title
 
         tab = win.tabs["rcwa"]
         index = win._tab_widget.indexOf(tab)
         assert index >= 0
         assert win._tab_widget.tabText(index) == short_title("rcwa")
+        assert win._tab_widget.tabToolTip(index) == display_title("rcwa")
 
     def test_a_solve_equals_a_direct_one(self, qtbot, win):
         """`TestNotASecondSourceOfTruth`, for RCWA: the tab must not compute,
