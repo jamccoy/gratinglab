@@ -28,7 +28,16 @@ entries under "Unreleased" into a section named for the new version;
   sawtooth it converges at about first order and its energy balance closes
   long before its efficiencies do, and on a profile deeper than about half
   the period a high truncation exhausts double precision and makes the answer
-  worse. The method note is `docs/theory/cmethod.md`; no GUI tab yet.
+  worse. The method note is `docs/theory/cmethod.md`.
+- A "C-method (Chandezon)" tab in the GUI: `truncation` (1 to 256, default
+  32), the same `conductivity` selector as the integral tab, progress and a
+  working Cancel, and the convergence sweep. The solver's warnings (corners,
+  condition number, energy balance) print in the provenance panel. A too-small
+  truncation is refused on its field before a solve starts, by
+  `cmethod.truncation_floor`, the function the solver itself now applies.
+  Solvers may declare `Capabilities.accuracy_ceiling`, and the default
+  convergence ladder stops there: the C-method's ran on to 2048, so a sweep
+  that had not settled by 256 failed on a refused rung instead of reporting.
 
 ## 0.1.13 (2026-10-27)
 

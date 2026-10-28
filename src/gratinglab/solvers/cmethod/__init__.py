@@ -38,7 +38,7 @@ overstates its accuracy there (measured; see the method note, section 6).
 from __future__ import annotations
 
 import time
-from typing import Literal
+from typing import Literal, NamedTuple
 
 import numpy as np
 from numpy.typing import ArrayLike
@@ -51,7 +51,7 @@ from ..base import Capabilities, Progress, UnsupportedConfiguration, register
 from ._core import Harmonics, solve_finite, solve_perfect
 from ._series import profile_series
 
-__all__ = ["CMethodSolver", "cmethod"]
+__all__ = ["CMethodSolver", "TruncationFloor", "cmethod", "truncation_floor"]
 
 #: Largest ``truncation`` accepted. The eigenproblem is ``2(2N+1)`` square
 #: per medium per wavelength, dense, so its cost grows as ``N^3``; at 256 a
@@ -87,6 +87,60 @@ _GRAZING_COS = 1e-6
 _CORNER_DEGREES = 10.0
 
 
+class TruncationFloor(NamedTuple):
+    """The smallest ``truncation`` that holds every order a scan can carry."""
+
+    needed: int
+    message: str
+
+
+def truncation_floor(
+    problem: Problem,
+    illumination: Illumination,
+    wavelengths: ArrayLike,
+    indices: "np.ndarray | None" = None,
+) -> TruncationFloor:
+    """The truncation below which :meth:`CMethodSolver.solve` refuses a scan.
+
+    Every order the harmonics must hold: the vacuum's, and where the material
+    (``indices``, one complex index per wavelength, or ``None`` for a perfect
+    conductor) is lossless the ones it transmits, which for n > 1 are more. A
+    transmitted order outside the harmonics would be missing from the record,
+    not zero, so the truncation is refused instead. Public so a form can
+    place the refusal on its field before a solve starts; the solver applies
+    the same function, so the two cannot disagree.
+    """
+    wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=np.float64))
+    sin_alpha = illumination.sin_alpha
+    sin_gamma = illumination.sin_gamma
+    cos_gamma = float(np.sqrt(1.0 - sin_gamma**2))
+    all_orders = order_range(
+        float(wavelengths.min()), problem.period, sin_alpha, sin_gamma
+    )
+    lo, hi = int(all_orders.min()), int(all_orders.max())
+    center = (lo + hi) // 2
+
+    lo_need, hi_need, where = lo, hi, "orders"
+    if indices is not None:
+        for row in np.flatnonzero(np.asarray(indices).imag == 0.0):
+            k = 2.0 * np.pi / wavelengths[row]
+            kappa2 = k * k * float(indices[row].real) ** 2 - (k * cos_gamma) ** 2
+            if kappa2 <= 0.0:
+                continue
+            shift = k * sin_alpha * sin_gamma * problem.period / (2.0 * np.pi)
+            reach = np.sqrt(kappa2) * problem.period / (2.0 * np.pi)
+            t_lo, t_hi = int(np.ceil(shift - reach)), int(np.floor(shift + reach))
+            if t_lo < lo_need or t_hi > hi_need:
+                where = "reflected and transmitted orders"
+            lo_need, hi_need = min(lo_need, t_lo), max(hi_need, t_hi)
+    needed = max(hi_need - center, center - lo_need) + 1
+    return TruncationFloor(
+        needed,
+        f"cannot represent {where} {lo_need} to {hi_need} with an evanescent "
+        f"harmonic beyond each end; need at least {needed}",
+    )
+
+
 def _resolve_index(problem: Problem):
     from ...materials import lookup
 
@@ -119,6 +173,7 @@ class CMethodSolver:
         rigorous=True,
         handles_undercut=False,
         reports_progress=True,
+        accuracy_ceiling=_MAX_TRUNCATION,
     )
 
     def solve(
@@ -203,29 +258,9 @@ class CMethodSolver:
                 )
             lossless = indices.imag == 0.0
 
-        # Every order the harmonics must hold: the vacuum's, and where the
-        # material is lossless the ones it transmits, which for n > 1 are
-        # more. A transmitted order outside the harmonics would be missing
-        # from the record, not zero, so the truncation is refused instead.
-        lo_need, hi_need, where = lo, hi, "orders"
-        for row in np.flatnonzero(lossless):
-            k = 2.0 * np.pi / wavelengths[row]
-            kappa2 = k * k * float(indices[row].real) ** 2 - (k * cos_gamma) ** 2
-            if kappa2 <= 0.0:
-                continue
-            shift = k * sin_alpha * sin_gamma * problem.period / (2.0 * np.pi)
-            reach = np.sqrt(kappa2) * problem.period / (2.0 * np.pi)
-            t_lo, t_hi = int(np.ceil(shift - reach)), int(np.floor(shift + reach))
-            if t_lo < lo_need or t_hi > hi_need:
-                where = "reflected and transmitted orders"
-            lo_need, hi_need = min(lo_need, t_lo), max(hi_need, t_hi)
-        needed = max(hi_need - center, center - lo_need) + 1
-        if truncation < needed:
-            raise ValueError(
-                f"truncation={truncation} cannot represent {where} {lo_need} to "
-                f"{hi_need} with an evanescent harmonic beyond each end; need at "
-                f"least {needed}"
-            )
+        floor = truncation_floor(problem, illumination, wavelengths, indices)
+        if truncation < floor.needed:
+            raise ValueError(f"truncation={truncation} {floor.message}")
         harmonics = Harmonics.build(series, center, truncation)
 
         polarizations = (
