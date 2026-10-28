@@ -12,6 +12,16 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+### Changed
+
+- Solver tabs carry a short label ("Integral" rather than "Integral
+  (boundary integral equation)"), with the full name as the tab's tooltip and
+  still in the Help menu. The full names overflowed the tab bar.
+- The AFM window names the loaded file once, in its window title, instead of
+  in the title of every plot on every tab.
+- The Boundary tab's ±1σ band is drawn with edges, and more strongly on a
+  dark theme, where it had been all but invisible.
+
 ### Fixed
 
 - The theme choice is now in every window. The AFM window had no menu bar

@@ -575,8 +575,7 @@ class ImportView(QWidget):
             props=dict(facecolor='crimson', edgecolor='crimson', alpha=0.25,
                        fill=True))
         image_ax.set_title(
-            f"{os.path.basename(self._filename)}: image flattening: "
-            f"{self.image_method_combo.currentText()}", fontsize=10)
+            f"Image flattening: {self.image_method_combo.currentText()}", fontsize=10)
 
         try:
             x_um, profile_nm = raw_data(self._flat, self._scan_size)

@@ -315,13 +315,19 @@ class BoundaryView(QWidget):
         x_nm = p.x_avg_um * 1000
         avg_ax.plot(x_nm, p.y_avg_nm, color='crimson', linewidth=1.8,
                     label=f'Average of {p.n_used} grooves')
-        avg_ax.fill_between(x_nm, p.y_avg_nm - p.y_std_nm,
-                            p.y_avg_nm + p.y_std_nm,
-                            color='crimson', alpha=0.2, label='±1σ')
+        # The band was crimson at alpha 0.2 alone, which vanishes against a
+        # dark axes, and a narrow band hides behind the line. Edges show its
+        # width even then.
+        low, high = p.y_avg_nm - p.y_std_nm, p.y_avg_nm + p.y_std_nm
+        dark = theming.current().dark
+        avg_ax.fill_between(x_nm, low, high, color='crimson',
+                            alpha=0.35 if dark else 0.2, linewidth=0, label='±1σ')
+        for edge in (low, high):
+            avg_ax.plot(x_nm, edge, color='crimson', linewidth=0.6,
+                        alpha=0.8 if dark else 0.6)
         avg_ax.set_xlabel("Position (nm)", fontsize=10)
         avg_ax.set_ylabel("Height (nm)", fontsize=10)
-        avg_ax.set_title(
-            f"Averaged groove: {os.path.basename(self._filename)}", fontsize=10)
+        avg_ax.set_title("Averaged groove", fontsize=10)
         avg_ax.legend(fontsize=8)
         avg_ax.grid(True, alpha=0.3)
 
