@@ -260,3 +260,209 @@ class TestGralakSiliconRodsTM:
     def test_it_converges_towards_it_from_below(self):
         errors = [self.specular(m) - self.REFERENCE for m in (20, 40, 80)]
         assert errors[0] < errors[1] < errors[2] < 0.0
+
+
+def goray_schmidt(eps, depth, theta, phi, delta, psi, truncation, *, flip_p=False):
+    """A conical lamellar case of Goray & Schmidt, in their own conventions.
+
+    Their frame (Popov (ed.) 2014, ch. 12, section 12.2.1 and Fig. 12.2) is
+    this project's: ``x`` across the grooves, ``y`` the normal pointing into
+    the incident medium, ``z`` along the grooves, ``exp(-i omega t)``, and
+    the incident wave vector ``k (sin t cos f, -cos t cos f, sin f)``. Orders
+    are ``alpha_n = alpha + 2 pi n / d`` (section 12.2.2), the core's ``m``.
+    The polarization basis (section 12.8.1) is ``s = k x y / |k x y|``,
+    ``p = s x k / |k|``, with ``delta = arctan |E_s / E_p|`` and
+    ``psi = -arg(E_s / E_p)``. In the core's frame ``(x, z_gs, -y_gs)``
+    (``rcwa.md`` section 2) every vector is the same rotation of theirs, so
+    the cross products are taken there directly.
+
+    The grating is one profile between the cover (``eps = 1``) and the
+    substrate ``eps``, so the ridges are the substrate's material. With fill
+    0.5 a ridge and a groove differ by half a period, which moves only the
+    orders' phases, so which one ``c`` measures cannot change an efficiency.
+    ``flip_p`` reverses ``p``, the other reading a sign slip would give.
+    """
+    t, f = np.radians(theta), np.radians(phi)
+    k = np.array([np.sin(t) * np.cos(f), np.sin(f), np.cos(t) * np.cos(f)])
+    s = np.cross(k, [0.0, 0.0, -1.0])  # y_gs is -z in the core's frame
+    s /= np.linalg.norm(s)
+    p = np.cross(s, k) * (-1.0 if flip_p else 1.0)
+    field = p + np.tan(np.radians(delta)) * np.exp(-1j * np.radians(psi)) * s
+    n = np.sqrt(complex(eps))
+    return solve_stack(
+        Stack(1.0, (Slab(depth, 1.0, ((0.0, 0.5, n),)),), n),
+        wavelength=500.0,
+        period=1000.0,
+        kx0=k[0],
+        ky=k[1],
+        incidents=[field / np.linalg.norm(field)],
+        truncation=truncation,
+    )
+
+
+def order(solution, side, m):
+    rows = solution.reflected if side == "R" else solution.transmitted
+    return float(rows[0, solution.harmonics == m][0])
+
+
+class TestGoraySchmidtDielectricConical:
+    """Dielectric lamellar, conical, elliptically polarized: ``c/d = 0.5``,
+    ``2H/d = 0.5``, cover ``eps = 1``, substrate and ridges ``eps = 2.25``,
+    ``lambda/d = 0.5``, ``theta = 35.264``, ``phi = 30``, ``delta = 45``,
+    ``psi = 90`` (degrees). L. Goray and G. Schmidt, ch. 12 of Popov (ed.),
+    *Gratings: Theory and Numeric Applications*, 2nd ed. (2014), Table 12.2
+    and section 12.9.1, p. 12.61, HAL hal-01084458. Their integral method at
+    400 points, energy balance ~1e-5. Efficiencies in percent, every
+    propagating order, reflected and transmitted. The conventions are
+    mapped in :func:`goray_schmidt`.
+
+    Error by truncation, in units of half the last printed digit (1.00 is
+    exactly the rounding of the printed value):
+
+    ====  =====  =====  =====  =====  =====  =====  =====  =====
+    M     R-2    R-1    R0     T-3    T-2    T-1    T0     T1
+    ====  =====  =====  =====  =====  =====  =====  =====  =====
+    20    +6.56  -2.93  +0.21  +0.53  +0.41  +0.52  -0.00  -0.82
+    40    +1.61  -0.41  -0.26  +0.05  +0.36  +0.27  +0.26  -0.66
+    80    +0.82  +0.12  -0.39  -0.16  +0.35  +0.23  +0.33  -0.64
+    120   +0.71  +0.21  -0.41  -0.20  +0.34  +0.23  +0.34  -0.64
+    ====  =====  =====  =====  =====  =====  =====  =====  =====
+
+    So from M = 80 all eight agree with the table to its printed precision,
+    and the remaining residuals are the table's rounding, not truncation.
+    Asserted at M = 80 within half a unit of each printed digit. The
+    opposite handedness (``p`` reversed, equivalently the conjugate ratio)
+    misses every order by more than 100 such units, so the match fixes the
+    polarization convention rather than tolerating either. The structure
+    is lossless, so ``R + T = 1`` holds to rounding (a check of the
+    bookkeeping, not of convergence).
+    """
+
+    #: (side, order): (efficiency in percent as printed, decimals printed)
+    TABLE = {
+        ("R", -2): (0.1612, 4),
+        ("R", -1): (0.3807, 4),
+        ("R", 0): (1.854, 3),
+        ("T", -3): (3.363, 3),
+        ("T", -2): (10.35, 2),
+        ("T", -1): (31.87, 2),
+        ("T", 0): (14.19, 2),
+        ("T", 1): (37.83, 2),
+    }
+
+    @staticmethod
+    def solve(truncation, **kwargs):
+        return goray_schmidt(2.25, 500.0, 35.264, 30.0, 45.0, 90.0, truncation, **kwargs)
+
+    @staticmethod
+    def half_digit(decimals):
+        return 0.5 * 10.0**-decimals / 100.0
+
+    def test_every_order_to_the_printed_digit(self):
+        solution = self.solve(80)
+        for (side, m), (percent, decimals) in self.TABLE.items():
+            value = order(solution, side, m)
+            assert abs(value - percent / 100.0) < self.half_digit(decimals), (side, m)
+
+    def test_the_orders_are_all_the_power(self):
+        # 1e-11, not 1e-12: a lossless substrate's transmitted orders are
+        # formed from kz |E|^2 like the reflected ones, which agrees with the
+        # Poynting-flux form to rounding, measured 1.0e-12 off unity here.
+        solution = self.solve(80)
+        total = solution.reflected[0].sum() + solution.transmitted[0].sum()
+        assert total == pytest.approx(1.0, abs=1e-11)
+        listed = sum(order(solution, side, m) for side, m in self.TABLE)
+        assert listed == pytest.approx(1.0, abs=1e-11)
+
+    def test_the_slowest_order_converges_towards_it(self):
+        errors = [
+            order(self.solve(m), "R", -2) - 0.1612 / 100.0 for m in (20, 40, 80)
+        ]
+        assert errors[0] > errors[1] > errors[2] > 0.0
+
+    def test_the_other_handedness_does_not_match(self):
+        solution = self.solve(80, flip_p=True)
+        for (side, m), (percent, decimals) in self.TABLE.items():
+            miss = abs(order(solution, side, m) - percent / 100.0)
+            assert miss > 100.0 * self.half_digit(decimals), (side, m)
+
+
+class TestGoraySchmidtMetallicConical:
+    """Metallic lamellar, conical, linearly polarized at 45 degrees between
+    s and p: ``c/d = 0.5``, ``2H/d = 1``, cover ``eps = 1``, substrate and
+    ridges ``eps = -24.99 + 1i`` (printed as the pair ``(-24.99, 1)``;
+    ``exp(-i omega t)``, so ``Im eps > 0`` is loss), ``lambda/d = 0.5``,
+    ``theta = 22.208``, ``phi = 20.705``, ``delta = 45``, ``psi = 0``.
+    Goray & Schmidt, ch. 12 of Popov (ed.) 2014, Table 12.1 and section
+    12.9.1, p. 12.61, HAL hal-01084458: 400 points, energy balance ~1e-6.
+    Reflected orders only, in percent: 7.52, 13.25, 44.27, 31.05.
+
+    This backend converges, by truncation, to (percent):
+
+    ====  ========  ========  ========  ========  ======
+    M     R-2       R-1       R0        R1        A
+    ====  ========  ========  ========  ========  ======
+    20    7.32686   13.20862  44.77115  30.76040  3.9330
+    40    7.51128   13.25739  44.22653  31.03343  3.9714
+    80    7.54694   13.26440  44.15887  31.08989  3.9399
+    160   7.55388   13.26487  44.15589  31.10358  3.9218
+    240   7.55510   13.26477  44.15716  31.10652  3.9164
+    ====  ========  ========  ========  ========  ======
+
+    which is not the table: ``R0`` settles 1.1e-3 below it and ``R1`` and
+    ``R-2`` 5.7e-4 and 3.5e-4 above, ten to a hundred times the printed
+    rounding. The integral solver (``_finite.solve_finite_states``, a
+    different method, fed the same state as ``(E_z, B_z)``, corner grading
+    4) agrees with RCWA rather than with the table:
+
+    ======  ========  ========  ========  ========  ======
+    points  R-2       R-1       R0        R1        A
+    ======  ========  ========  ========  ========  ======
+    400     7.53493   13.25233  44.24931  31.05256  3.9093
+    600     7.55026   13.26085  44.18537  31.09340  3.9096
+    800     7.55387   13.26297  44.17024  31.10321  3.9094
+    1200    7.55559   13.26404  44.16283  31.10807  3.9094
+    ======  ========  ========  ========  ========  ======
+
+    At 1200 points it is within 6e-5 of RCWA at M = 240 in every order,
+    and its ladder moves away from the table towards that answer. At 400
+    points, the paper's own count, it sits within 2.2e-4 of the table. So
+    the printed values look like an integral solution not yet converged in
+    its discretization, which an energy balance of 1e-6 cannot reveal (it
+    is a check of the solve, not of convergence; ``rcwa.md`` section 4).
+    That is an inference from two of this project's solvers, not something
+    the chapter states; see ``rcwa.md`` section 9.
+
+    Asserted at M = 80 within 1.5e-3 of every printed order, which covers
+    the measured disagreement and no more, so the case still pins the
+    conical kinematics, the metal and the polarization mapping: the other
+    linear polarization (``p`` reversed, ``E_s = -E_p``) misses ``R-1`` by
+    0.093 and ``R-2`` by 0.051, and that is asserted too.
+    """
+
+    TABLE = {-2: 7.52, -1: 13.25, 0: 44.27, 1: 31.05}
+
+    @staticmethod
+    def solve(truncation, **kwargs):
+        return goray_schmidt(
+            -24.99 + 1j, 1000.0, 22.208, 20.705, 45.0, 0.0, truncation, **kwargs
+        )
+
+    def test_every_reflected_order_within_the_measured_gap(self):
+        solution = self.solve(80)
+        for m, percent in self.TABLE.items():
+            assert order(solution, "R", m) == pytest.approx(percent / 100.0, abs=1.5e-3), m
+
+    def test_absorption_closes_the_balance(self):
+        """The table's reflected orders sum to 96.09%, so 3.91% absorbed;
+        this backend's ``A`` at M = 80 is 3.940%."""
+        solution = self.solve(80)
+        absorbed = float(solution.absorbed[0])
+        reflected = float(solution.reflected[0].sum())
+        assert reflected + absorbed == pytest.approx(1.0, abs=1e-10)
+        assert absorbed == pytest.approx(1.0 - sum(self.TABLE.values()) / 100.0, abs=5e-4)
+
+    def test_the_other_linear_polarization_does_not_match(self):
+        solution = self.solve(80, flip_p=True)
+        assert abs(order(solution, "R", -1) - self.TABLE[-1] / 100.0) > 0.05
+        assert abs(order(solution, "R", -2) - self.TABLE[-2] / 100.0) > 0.03
