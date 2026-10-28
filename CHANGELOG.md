@@ -36,6 +36,8 @@ entries under "Unreleased" into a section named for the new version;
     too. The efficiency window's progress callback is endstation's
     `cancelling(throttled(...))`, still throttled to whole percent with the
     cancel checked on every call, and it raises `Cancelled`.
+  - Both windows tell a stale result from a current one with
+    `endstation.qt.tokens.StaleGuard`.
 
 ## 0.2.1 (2026-10-28)
 
