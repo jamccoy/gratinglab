@@ -55,7 +55,7 @@ entries under "Unreleased" into a section named for the new version;
   for the integral method), and each solver warns past its own threshold,
   placed by measurement above everything it reaches on ordinary problems:
   `1e10` for RCWA (ordinary at most 4.4e7) and `1e14` for the integral method
-  (ordinary up to 2.8e11 on a corner-graded mesh at 1600 points). Measured at
+  (ordinary up to 4.5e12 on a corner-graded mesh at 3200 points). Measured at
   a Rayleigh anomaly, both stay accurate far past those values, so the warning
   says a problem is unusual, not that its answer is wrong.
 - A Rayleigh-anomaly sweep for both rigorous solvers

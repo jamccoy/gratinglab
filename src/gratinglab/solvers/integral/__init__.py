@@ -124,7 +124,7 @@ _ANOMALY_COS = 1e-3
 #: coupled systems stay small, but TE's first-kind single layer grows with
 #: the mesh, and a corner-graded mesh crowds nodes together: measured
 #: 2026-10-27 (``docs/theory/integral.md`` section 9), ordinary problems
-#: reach ``2.8e11`` (blazed, TE, graded, 1600 points, growing as ``P^4``),
+#: reach ``4.5e12`` (blazed, TE, graded, 3200 points, growing as ``P^4``),
 #: and an order passing off pushes it as ``|lambda - lambda*|^-1/2`` to
 #: ``9e15`` exactly at grazing. The answer was still right there, so the
 #: warning says "unusual", not "wrong".
