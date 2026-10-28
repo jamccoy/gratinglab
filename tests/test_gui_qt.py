@@ -352,6 +352,63 @@ class TestTheRcwaTab:
         assert "field(s) need attention" in shown
 
 
+class TestTheLayersField:
+    """Layers on the geometry panel: the RCWA tab models them, the others
+    refuse them on the field rather than from the worker."""
+
+    FORM = dict(
+        profile_kind="Lamellar", coating="Au",
+        wavelength_start="4.0", wavelength_stop="4.5", wavelength_count="2",
+    )
+
+    def set_geometry(self, win, form):
+        for field, value in form.items():
+            widget = win.geometry._fields[field]
+            if hasattr(widget, "setCurrentIndex"):
+                index = widget.findData(value)
+                widget.setCurrentIndex(index if index >= 0 else widget.findText(value))
+            else:
+                widget.setText(value)
+
+    def test_it_reaches_the_problem(self, win):
+        self.set_geometry(win, {**self.FORM, "layers": "Au 2"})
+        problem = build(win.geometry.read_form()).problem
+        assert [(x.material, x.thickness) for x in problem.layers] == [("Au", 2.0)]
+
+    @pytest.mark.parametrize("name", ["scalar", "integral"])
+    def test_a_solver_without_layers_refuses_on_the_field(self, win, name):
+        self.set_geometry(win, {**self.FORM, "layers": "Au 2"})
+        before = win.tabs[name]._scan
+        win.solve(name)
+        shown = win.tabs[name]._provenance.toPlainText()
+        assert "layers" in shown and "cannot model conformal layers" in shown
+        assert win.tabs[name]._scan is before  # nothing reached the worker
+
+    def test_the_rcwa_tab_solves_them_as_a_direct_solve_would(self, qtbot, win):
+        from gratinglab.gui.rcwa_options import RcwaOptionsState
+        from gratinglab.gui.rcwa_options import build_options as build_rcwa_options
+        from gratinglab.solvers import rcwa
+
+        form = {**self.FORM, "layers": "Au 2"}
+        self.set_geometry(win, form)
+        tab = win.tabs["rcwa"]
+        tab._fields["truncation"].setText("8")
+        tab._fields["slices"].setText("4")
+        resolve(qtbot, win, "rcwa")
+
+        parsed = build(FormState(**form))
+        options = build_rcwa_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths,
+            RcwaOptionsState(truncation="8", slices="4"),
+        )
+        expected = rcwa.solve(
+            parsed.problem, parsed.illumination, parsed.wavelengths, **options
+        )
+        assert np.array_equal(tab._scan.efficiency, expected.efficiency)
+        assert tab._scan.provenance.notes["layers"] == ["Au 2 nm"]
+        assert "staircase" in tab._profile_note.text()
+
+
 class TestBehaviour:
     def test_solves_on_construction(self, win):
         """Opening the app shows something, not an empty window."""
