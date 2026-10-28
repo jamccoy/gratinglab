@@ -67,6 +67,41 @@ entries under "Unreleased" into a section named for the new version;
   in the conformance suite and the Help menu; it has no GUI tab yet. The
   design note and what is not yet validated are in `docs/theory/rcwa.md`.
 
+### Changed
+
+- Solver tabs carry a short label ("Integral" rather than "Integral
+  (boundary integral equation)"), with the full name as the tab's tooltip and
+  still in the Help menu. The full names overflowed the tab bar.
+- The AFM window names the loaded file once, in its window title, instead of
+  in the title of every plot on every tab.
+- The Boundary tab's ±1σ band is drawn with edges, and more strongly on a
+  dark theme, where it had been all but invisible.
+
+### Fixed
+
+- The theme choice is now in every window. The AFM window had no menu bar
+  and so no View > Theme at all, and its plots ignored the theme: in Dark the
+  controls went dark and every figure stayed white. Both windows now carry the
+  same Theme menu (`theming.ThemeMenu`), checked in step whichever one it was
+  used in, and the AFM window's five figures redraw in the new theme, with
+  their black lines and grey captions taken from it.
+
+## 0.1.13 (2026-10-27)
+
+### Added
+
+- The PCGrate header on a written `.ggp` is optional: `write_ggp(header=False)`,
+  `GGP_WRITE_HEADER` in the metrology config, and a "Write the PCGrate header"
+  checkbox on the Boundary tab, on by default. Whether PCGrate needs the header
+  rests on the files found on disk rather than its documentation, and this is
+  how to test it. Prompted by Aditi, whose script writes `.ggp` files with no
+  header.
+- Two-column line profiles (`x z`, as Gwyddion's profile export writes them)
+  load as a one-line scan, with the width taken from the x column. The same
+  surface exported as an image and as a profile averages to the same groove
+  (`tests/metrology/test_line_profile.py`). From Aditi's changes to the
+  groove-averaging script (`afm_scan_avg_a270.py`), which detect the two
+  formats and take the scan width from the file.
 - Groove orientation in the AFM pipeline: a sample mounted a degree or two
   off square is measured and, when it matters, corrected, with no rotating by
   eye in Gwyddion. `metrology.core.orientation` finds the grooves band by band,
@@ -121,6 +156,9 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Changed
 
+- `write_ggp` no longer ends the file with a line break after the last point.
+  PCGrate rejects a `.ggp` that ends in one, as `np.savetxt` output does.
+  Found by Aditi.
 - The default analysis now corrects a groove rotation of 0.2° or more. A
   synthetic scan with none, including the committed fixture, is unaffected
   (it measures -0.002 ± 0.002° and is left alone). **The real scans have not

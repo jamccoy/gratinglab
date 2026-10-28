@@ -230,6 +230,27 @@ class TestBoundaryTab:
         assert lines[1] == "Period: 1 PSC: 1"
         assert os.path.exists(str(tmp_path / "out_metrics.txt"))
 
+    def test_unticking_the_header_writes_the_points_alone(self, qtbot, window, tmp_path):
+        from gratinglab.io.ggp import read_ggp
+        window.load(SAMPLE)
+        assert window.boundary.header_check.isChecked(), "on by default"
+        window.boundary.header_check.setChecked(False)
+        path, _ = window.boundary.write_profile(str(tmp_path / "bare.ggp"))
+        ggp = read_ggp(path)
+        assert ggp.header_variant == "none"
+        assert len(ggp.t) == len(window.boundary.profile.x_norm)
+        assert window.boundary.settings_overrides()["ggp_write_header"] is False
+
+    def test_the_file_is_named_once_in_the_window_title(self, qtbot, window):
+        """Not repeated in the title of every plot on every tab."""
+        window.load(SAMPLE)
+        name = os.path.basename(SAMPLE)
+        assert window.windowTitle().startswith(name)
+        for figure in (window.canvas.fig, window.importer.figure, window.boundary.figure):
+            titles = [ax.get_title() for ax in figure.axes]
+            titles.append(figure._suptitle.get_text() if figure._suptitle else "")
+            assert not any(name in t for t in titles), titles
+
     def test_efficiency_button_tracks_the_export_button(self, qtbot, window):
         """All three need one thing -- a profile -- so they must not drift apart."""
         assert not window.boundary.export_btn.isEnabled()

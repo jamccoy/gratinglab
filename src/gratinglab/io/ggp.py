@@ -219,6 +219,7 @@ def write_ggp(
     t: ArrayLike | None = None,
     y: ArrayLike | None = None,
     fmt: str = "%f",
+    header: bool = True,
 ) -> Path:
     """Write a profile in the canonical, PCGrate-loadable form.
 
@@ -227,9 +228,17 @@ def write_ggp(
     :func:`to_profile`. Explicit arrays are written as given, so they are
     file coordinates already, as the metrology pipeline's ``x_norm`` is.
 
-    Values are written to six decimals, single-space separated and newline
-    terminated. The format is
-    pinned by ``tests/test_ggp.py``; PCGrate rejects variations on it.
+    Values are written to six decimals, single-space separated, one point per
+    line, with no line break after the last point. PCGrate rejects a file
+    that ends in one, as ``np.savetxt`` output does. The format is pinned by
+    ``tests/test_ggp.py``; PCGrate rejects variations on it.
+
+    ``header=False`` leaves out the two :data:`GGP_HEADER` lines and writes
+    the points alone, as ``np.savetxt`` with no ``header`` does. It exists to
+    test the claim in the module docstring that PCGrate needs the header:
+    that claim comes from the files found on disk, not from PCGrate's
+    documentation, and Aditi's script writes headerless files (2026-10-27).
+    Reading such a file back reports ``header_variant == "none"``.
     """
     if (profile is None) == (t is None):
         raise ValueError("pass either a profile or both t and y, not both or neither")
@@ -251,8 +260,11 @@ def write_ggp(
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
+    points = (f"{fmt % x_value} {fmt % height}"
+              for x_value, height in zip(t_values, y_values))
     with path.open("w", encoding="utf-8") as handle:
-        handle.write(GGP_HEADER + "\n")
-        for x_value, height in zip(t_values, y_values):
-            handle.write(f"{fmt % x_value} {fmt % height}\n")
+        # No line break after the last point: PCGrate reads a trailing one as
+        # an extra, empty point and rejects the file (found by Aditi,
+        # 2026-10-27).
+        handle.write("\n".join([GGP_HEADER, *points] if header else points))
     return path

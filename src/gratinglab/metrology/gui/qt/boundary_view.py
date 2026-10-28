@@ -27,6 +27,9 @@ from PySide6.QtWidgets import (
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from gratinglab.gui.qt import theming
+from gratinglab.gui.theme import style_figure
+
 from ...boundary import build_boundary_profile
 from ...core.tip import format_angles
 from ...config import RESULTS_DIR
@@ -79,6 +82,7 @@ class BoundaryView(QWidget):
         self.figure = Figure(figsize=(8, 6), tight_layout=True)
         self.canvas = FigureCanvas(self.figure)
         self._show_placeholder()
+        theming.subscribe(self._on_theme)
 
         root.addWidget(scroll)
         divider = QFrame()
@@ -136,6 +140,16 @@ class BoundaryView(QWidget):
             "shares, and normalisation would then stretch the profile.")
         self.min_half_spin.valueChanged.connect(self.refresh)
         layout.addWidget(self.min_half_spin)
+
+        # Only the written file changes, not the profile, so no refresh.
+        self.header_check = QCheckBox("Write the PCGrate header")
+        self.header_check.setChecked(self._defaults.ggp_write_header)
+        self.header_check.setToolTip(
+            "Start the .ggp with the two lines\n"
+            "    3 0 - Polygonal type\n"
+            "    Period: 1 PSC: 1\n"
+            "Untick to write the points alone.")
+        layout.addWidget(self.header_check)
 
         self.export_btn = QPushButton("Export…")
         self.export_btn.setEnabled(False)
@@ -209,6 +223,7 @@ class BoundaryView(QWidget):
             ggp_apply_smoothing=self.smoothing_check.isChecked(),
             ggp_smoothing_window=self.smoothing_spin.value(),
             ggp_min_half_width=self.min_half_spin.value(),
+            ggp_write_header=self.header_check.isChecked(),
         )
 
     @property
@@ -280,10 +295,11 @@ class BoundaryView(QWidget):
             f"Max curvature   : {m['max_curvature']:.4f}{rotation}{tip}")
 
     def _show_placeholder(self, message="Load an AFM file in the Import tab"):
+        self._placeholder = message
         self.figure.clear()
         axes = self.figure.add_subplot(111)
         axes.text(0.5, 0.5, message, ha='center', va='center', fontsize=12,
-                  color='gray', transform=axes.transAxes)
+                  color=theming.current().muted, transform=axes.transAxes)
         axes.set_axis_off()
         self.canvas.draw()
 
@@ -299,19 +315,25 @@ class BoundaryView(QWidget):
         x_nm = p.x_avg_um * 1000
         avg_ax.plot(x_nm, p.y_avg_nm, color='crimson', linewidth=1.8,
                     label=f'Average of {p.n_used} grooves')
-        avg_ax.fill_between(x_nm, p.y_avg_nm - p.y_std_nm,
-                            p.y_avg_nm + p.y_std_nm,
-                            color='crimson', alpha=0.2, label='±1σ')
+        # The band was crimson at alpha 0.2 alone, which vanishes against a
+        # dark axes, and a narrow band hides behind the line. Edges show its
+        # width even then.
+        low, high = p.y_avg_nm - p.y_std_nm, p.y_avg_nm + p.y_std_nm
+        dark = theming.current().dark
+        avg_ax.fill_between(x_nm, low, high, color='crimson',
+                            alpha=0.35 if dark else 0.2, linewidth=0, label='±1σ')
+        for edge in (low, high):
+            avg_ax.plot(x_nm, edge, color='crimson', linewidth=0.6,
+                        alpha=0.8 if dark else 0.6)
         avg_ax.set_xlabel("Position (nm)", fontsize=10)
         avg_ax.set_ylabel("Height (nm)", fontsize=10)
-        avg_ax.set_title(
-            f"Averaged groove: {os.path.basename(self._filename)}", fontsize=10)
+        avg_ax.set_title("Averaged groove", fontsize=10)
         avg_ax.legend(fontsize=8)
         avg_ax.grid(True, alpha=0.3)
 
         # What lands in the file.
         norm_ax.plot(p.x_norm, p.y_norm, color='steelblue', linewidth=1.6)
-        norm_ax.axhline(0, color='k', linestyle='--', linewidth=0.5)
+        norm_ax.axhline(0, color=theming.current().ink, linestyle='--', linewidth=0.5)
         norm_ax.set_xlabel("Normalised position (0 to 1 = one period)", fontsize=10)
         norm_ax.set_ylabel("Height (fraction of period)", fontsize=10)
         norm_ax.set_title(
@@ -320,6 +342,19 @@ class BoundaryView(QWidget):
         norm_ax.grid(True, alpha=0.3)
 
         self.canvas.draw()
+
+    def _on_theme(self, theme):
+        """Draw the figure again in the new theme.
+
+        Each draw clears the figure and builds fresh axes, which take their
+        colours from matplotlib's settings, so redrawing is the restyle. The
+        figure predates the change and needs its own background set first.
+        """
+        style_figure(self.figure, theme)
+        if self._profile is not None:
+            self._draw()
+        else:
+            self._show_placeholder(self._placeholder)
 
     def _set_actions_enabled(self, enabled: bool) -> None:
         """All four actions need only a profile, so they are enabled together."""
@@ -423,7 +458,8 @@ class BoundaryView(QWidget):
             metrics_path = os.path.splitext(path)[0] + '_metrics.txt'
             write_profile_metrics(metrics_path, self._profile.metrics)
         else:
-            write_ggp(path, t=self._profile.x_norm, y=self._profile.y_norm)
+            write_ggp(path, t=self._profile.x_norm, y=self._profile.y_norm,
+                      header=self.header_check.isChecked())
             metrics_path = os.path.splitext(path)[0] + '_metrics.txt'
             write_profile_metrics(metrics_path, self._profile.metrics)
         return path, metrics_path

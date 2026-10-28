@@ -26,7 +26,7 @@ from __future__ import annotations
 import threading
 
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
-from PySide6.QtGui import QActionGroup, QKeySequence
+from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QDockWidget,
     QMainWindow,
@@ -38,7 +38,6 @@ from PySide6.QtWidgets import (
 
 from .. import provenance
 from ..state import FormErrors, build, validate
-from ..theme import SYSTEM, THEMES
 from . import theming
 from .geometry_panel import GeometryPanel
 from .geometry_tab import GeometryTab
@@ -189,7 +188,7 @@ class MainWindow(QMainWindow):
         self.resizeDocks([dock], [300], Qt.Orientation.Horizontal)
 
     def _build_tabs(self) -> QWidget:
-        from ..docs import display_title
+        from ..docs import display_title, short_title
         from ...solvers import available_solvers
 
         self.tabs: dict[str, QWidget] = {}
@@ -220,7 +219,8 @@ class MainWindow(QMainWindow):
                 # has nothing to sweep and should not carry the button.
                 converge.connect(lambda _checked=False, n=name: self.solve(n, sweep=True))
             self.tabs[name] = tab
-            self._tab_widget.addTab(tab, display_title(name))
+            index = self._tab_widget.addTab(tab, short_title(name))
+            self._tab_widget.setTabToolTip(index, display_title(name))
 
         # Setup is leftmost so it is easy to find, but a solver tab -- not
         # the explanatory stub -- is what should be showing, and solving,
@@ -284,19 +284,11 @@ class MainWindow(QMainWindow):
         self._view_menu.addSeparator()
 
         # One exclusive group: System follows the OS, the rest are fixed.
-        self._theme_menu = self._view_menu.addMenu("&Theme")
-        self._theme_actions = QActionGroup(self)
-        self._theme_actions.setExclusive(True)
-        choices = [(SYSTEM, "System")] + [(k, t.label) for k, t in THEMES.items()]
-        for key, label in choices:
-            action = self._theme_menu.addAction(label)
-            action.setCheckable(True)
-            action.setData(key)
-            action.setChecked(key == self._themes.choice)
-            action.triggered.connect(lambda _checked=False, k=key: self.set_theme(k))
-            self._theme_actions.addAction(action)
-            if key == SYSTEM:
-                self._theme_menu.addSeparator()
+        # Shared with the AFM window, so both offer it and both stay checked
+        # in step whichever one the choice was made in.
+        self._theme_menu = theming.ThemeMenu(self)
+        self._view_menu.addMenu(self._theme_menu)
+        self._theme_actions = self._theme_menu._group
 
         menu = self._help_menu = self._menu_bar.addMenu("&Help")
         menu.addAction("About GratingLab", self.show_about)
@@ -320,8 +312,6 @@ class MainWindow(QMainWindow):
     def set_theme(self, choice: str) -> None:
         """Switch theme by key, or ``"system"``; the menu calls this."""
         self._themes.set_choice(choice)
-        for action in self._theme_actions.actions():
-            action.setChecked(action.data() == choice)
 
     def _start_worker(self) -> None:
         self._thread = QThread(self)

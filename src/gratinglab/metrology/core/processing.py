@@ -113,7 +113,11 @@ def _load_text(filename, default_scan_size=2.0):
     the dispatcher above stays readable. The stored baselines depend on it.
     """
     import re
-    
+
+    profile = _load_text_profile(filename)
+    if profile is not None:
+        return profile
+
     scan_x_size = default_scan_size
     
     # Try to read scan size from header
@@ -161,6 +165,81 @@ def _load_text(filename, default_scan_size=2.0):
         print(f"  Using default scan size: {scan_x_size} µm")
     
     return data, scan_x_size
+
+
+_PROFILE_UNITS = {'m': 1e6, 'mm': 1e3, 'um': 1.0, 'µm': 1.0, 'nm': 1e-3}
+
+
+def _load_text_profile(filename):
+    """
+    A two-column ``x z`` line profile, as one 1-row image, or None.
+
+    Gwyddion's profile export writes one line per sample: position along the
+    profile and height, both in metres unless the header names a unit in
+    brackets (``x [nm]``). Every caller downstream expects a 2-D height image
+    and a scan width, so the profile is handed back in that shape: one scan
+    line, and the width it actually spans, ``x[-1] - x[0]``. There is no
+    header width to trust here; the x column is the measurement.
+
+    The x column must be evenly spaced, because ``raw_data`` rebuilds the axis
+    from the width and the sample count. A profile that is not would be
+    silently stretched, so it is refused instead.
+
+    Returns None for anything that is not exactly two numbers per data line,
+    so the image path below sees every file it saw before.
+
+    Ported from Aditi's version of the groove-averaging script (2026-10-27),
+    which handled both formats and took the width from the x column.
+    """
+    import re
+
+    try:
+        with open(filename, encoding="utf-8", errors="replace") as handle:
+            lines = handle.readlines()
+    except OSError:
+        return None     # the image path reports it, as it always has
+
+    header, rows = [], []
+    for line in lines:
+        fields = line.split()
+        if not fields:
+            continue
+        try:
+            values = [float(f) for f in fields]
+        except ValueError:
+            if rows:
+                return None     # text after the data: not this format
+            header.append(line)
+            continue
+        if len(values) != 2:
+            return None
+        rows.append(values)
+
+    if len(rows) < 3:
+        return None
+
+    xz = np.asarray(rows)
+    x, z = xz[:, 0], xz[:, 1]
+
+    # Units from a bracketed header label, x's first and z's second; metres
+    # when the header says nothing, which is what Gwyddion writes.
+    units = re.findall(r'\[\s*(m|mm|um|µm|nm)\s*\]', ''.join(header), re.IGNORECASE)
+    x_unit = units[0].lower() if units else 'm'
+    z_unit = units[1].lower() if len(units) > 1 else x_unit
+    x_um = x * _PROFILE_UNITS[x_unit]
+    z_m = z * _PROFILE_UNITS[z_unit] * 1e-6
+
+    step = np.diff(x_um)
+    if not (np.all(step > 0) and np.allclose(step, step.mean(), rtol=1e-3)):
+        raise ValueError(
+            f"{filename}: the x column of this profile is not evenly spaced "
+            f"(steps {step.min():.4g} to {step.max():.4g} µm), and the groove "
+            "averaging assumes it is. Re-export the profile from the image.")
+
+    scan_x_size = float(x_um[-1] - x_um[0])
+    print(f"  Line profile: {len(z)} points over {scan_x_size:g} µm "
+          f"(x in {x_unit}, height in {z_unit})")
+    return z_m[np.newaxis, :], scan_x_size
 
 
 def raw_data(data, scan_x_size):

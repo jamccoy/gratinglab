@@ -22,6 +22,9 @@ from matplotlib import colormaps
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from gratinglab.gui.qt import theming
+from gratinglab.gui.theme import style_figure
+
 from ...boundary import swath_statistics
 from ...config import RESULTS_DIR
 
@@ -89,6 +92,7 @@ class SwathDialog(QDialog):
         self.figure = Figure(figsize=(7, 6), layout="constrained")
         self.canvas = FigureCanvas(self.figure)
         root.addWidget(self.canvas, stretch=1)
+        theming.subscribe(self._on_theme)
 
     @property
     def stats(self):
@@ -114,6 +118,19 @@ class SwathDialog(QDialog):
         self.summary_label.setText(text)
         self._draw()
 
+    def _on_theme(self, theme):
+        """Draw the figure again in the new theme.
+
+        Each draw clears the figure and builds fresh axes, which take their
+        colours from matplotlib's settings, so redrawing is the restyle. The
+        figure predates the change and needs its own background set first.
+        """
+        style_figure(self.figure, theme)
+        if self._stats is not None:
+            self._draw()
+        else:
+            self.canvas.draw_idle()
+
     def _draw(self):
         s = self._stats
         self.figure.clear()
@@ -124,7 +141,7 @@ class SwathDialog(QDialog):
             shapes.plot(s.t, profile, color=colour, lw=0.8, alpha=0.8)
         shapes.fill_between(s.t, s.mean - 2 * s.std, s.mean + 2 * s.std,
                             color="0.6", alpha=0.35, lw=0, label="±2σ between swaths")
-        shapes.plot(s.t, s.whole.y_norm, color="k", lw=1.4, ls="--", label="whole scan")
+        shapes.plot(s.t, s.whole.y_norm, color=theming.current().ink, lw=1.4, ls="--", label="whole scan")
         shapes.set_xlabel("position (fraction of period)")
         shapes.set_ylabel("height (fraction of period)")
         shapes.set_title(f"{s.n_swaths} swaths, coloured top to bottom of the scan")
