@@ -47,7 +47,7 @@ wherever both apply.
 | Soft X-ray and EUV, grazing incidence, in-plane | grazing monochromators, beamline optics | integral, scalar | served by the same solvers, less exercised |
 | UV to near-IR, in-plane or conical, metallic | spectrometers, monochromators, pulse compression | integral (finite conductivity); C-method and RCWA planned | integral reproduces the published benchmark tables |
 | Dielectric, lamellar and transmission gratings | beam splitters, telecom, transmission spectroscopy | RCWA; integral for one interface into a lossless substrate | RCWA agrees with the integral solver on lamellar gratings; transmitted orders are not yet in `EfficiencyScan`, only their total |
-| Coated and multilayer gratings | EUV multilayer gratings, protected and overcoated metals | RCWA | the RCWA core solves a layer stack (checked against the Airy formula), but `Problem` cannot describe one yet |
+| Coated and multilayer gratings | EUV multilayer gratings, protected and overcoated metals | RCWA | `Problem.layers` (conformal, rounded corners) solved by the RCWA; checked against the integral solver where it can say anything, slow in metallic TM |
 | Crossed (2D), volume, radial and VLS gratings | photonic structures, imaging spectrographs | later | not started |
 
 The validation logic of the first milestones generalises rather than changes.
@@ -84,7 +84,7 @@ bench.
 | **Tip deconvolution** ([`core/tip.py`](../src/gratinglab/metrology/core/tip.py), [theory §4b](theory/metrology.md)) | done at M22: Villarrubia erosion with the certainty map, opt-in via `tip_correction='erosion'`, validated pointwise on a committed dilated fixture. Applied to the real TASTE scan, it narrowed the rounded-groove open question by excluding a nominal tip ([`findings.md`](findings.md)) |
 | GUI (Qt/PySide6): tabs, geometry dock, 3D conical view | done |
 | CI (Linux py3.11/3.12, macOS and Windows py3.12) | green. CI runs with `PYTHONWARNDEFAULTENCODING=1`, so a text `open()` that leaves its encoding to the platform fails on every platform, Windows included |
-| **RCWA** ([theory](theory/rcwa.md)) | **first slice done** (unreleased, 2026-10-27): Li's rules, S-matrix, vectorial and conical, lamellar exact and other profiles staircased, a layer stack in the core. Validated on lamellar gratings against Fresnel, Airy, reciprocity and the integral solver (to 8e-4 in metallic TM). Not yet: staircase accuracy in TM, layers through `Problem`, a published benchmark table, a GUI tab. **Experimental** |
+| **RCWA** ([theory](theory/rcwa.md)) | **first slice done** (unreleased, 2026-10-27): Li's rules, S-matrix, vectorial and conical, lamellar exact and other profiles staircased, transmitted orders, conformal layers (`Problem.layers`). Validated on lamellar gratings against Fresnel, Airy, reciprocity and the integral solver (to 8e-4 in metallic TM). Not yet: staircase accuracy in metallic TM, layers of a second material against an independent code, a published benchmark table, a GUI tab. **Experimental** |
 | C-method | not started |
 | **Integral method** ([theory](theory/integral.md)) | perfect-conductivity and finite-conductivity milestones done. Conical from the start, undercut-capable, with a GUI tab; validated against M&P Table 4.1 and, order by order, against an independent integral-method code on the private corpus (a comparison that also identified the TASTE profile). **Experimental**: not yet used for real analysis. M20 added `conductivity="tabulated"`, the coupled conical system of Goray & Schmidt (2010): absolute efficiencies with absorption recorded, a flat limit equal to Fresnel to 6e-5, their Table 3 reproduced per order, and both boundary conditions selectable in the GUI. A graded corner mesh (`corner_grading`) is done for both boundary conditions |
 
@@ -180,10 +180,11 @@ The remaining integral milestones, in order, are:
 
 **First slice done, 2026-10-27**: `solvers/rcwa/`, with the design note and
 its validation in [`theory/rcwa.md`](theory/rcwa.md). Every requirement below
-is met in it. What remains is listed in that page's §9, together with three
-decisions that belong to the package rather than the backend: how `Problem`
-describes a layer stack, whether a staircase should be allowed by default, and
-whether transmitted orders belong in `EfficiencyScan`.
+is met in it. What remains is listed in that page's §9. The three decisions
+it raised for the package were settled the same day: a coated grating is
+`Problem.layers` of conformal layers with rounded convex corners, a staircase
+is allowed by default with its TM warning, and transmitted orders are recorded
+in `EfficiencyScan.transmission`.
 
 RCWA will be written within this project. Until 2026-10-24 it was expected as
 contributed code (`fgrise` has an implementation), and this section was a list

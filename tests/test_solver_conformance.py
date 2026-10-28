@@ -20,7 +20,7 @@ import numpy as np
 import pytest
 
 from gratinglab.illumination import Illumination
-from gratinglab.problem import Problem
+from gratinglab.problem import ConformalLayer, Problem
 from gratinglab.materials.optical import OpticalConstants, write_ari
 from gratinglab.profiles import Blazed, FromProfileData, Lamellar, Sinusoidal
 from gratinglab.result import EfficiencyScan
@@ -187,6 +187,17 @@ class TestRefusingWhatItCannotDo:
         else:
             with pytest.raises(UnsupportedConfiguration):
                 caps.check(undercut, case.illumination)
+
+    def test_conformal_layers_are_refused_unless_handled(self, solver, case):
+        caps = solver.capabilities
+        coated = case.problem.model_copy(
+            update={"layers": (ConformalLayer(material="any", thickness=5.0),)}
+        )
+        if caps.handles_layers:
+            caps.check(coated, case.illumination)
+        else:
+            with pytest.raises(UnsupportedConfiguration):
+                caps.check(coated, case.illumination)
 
     def test_an_off_plane_mount_is_refused_unless_conical(self, solver, case):
         caps = solver.capabilities

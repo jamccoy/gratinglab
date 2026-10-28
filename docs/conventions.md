@@ -217,6 +217,18 @@ The `θ` in this table is unrelated to `θ_c`, the total-external-reflection cri
 angle used elsewhere in this project (`docs/theory/scalar.md` §7). The two never appear
 in the same equation, but a reader of both documents should not conflate them.
 
+### Conformal layers
+
+`Problem.layers` lists the layers on a coated grating, innermost first. Layer
+`k` occupies every point within its `thickness` of the surface beneath it and
+outside that surface, so its outer surface is the true offset of the one below
+along the normal: a convex corner becomes an arc of radius `thickness` and a
+concave corner stays sharp (decided 2026-10-27, as the closest description of
+an evaporated or sputtered film). Thickness is in nm, like every length here.
+`coating` (or `substrate`) remains the material the grating is cut into. A
+solver that cannot model layers refuses a problem that has any
+(`Capabilities.handles_layers`).
+
 ---
 
 ## 4. The grating equation

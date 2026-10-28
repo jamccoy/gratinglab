@@ -34,9 +34,9 @@ truncating the orders.
 
 ### The problem it is given
 
-`Problem` has no layer stack and no superstrate. The mapping today is therefore
-the one the integral solver's tabulated mode uses, so that the same `Problem`
-means the same grating to both:
+`Problem` has no superstrate field. The mapping of a bare grating is the one the
+integral solver's tabulated mode uses, so that the same `Problem` means the
+same grating to both:
 
 | | |
 |---|---|
@@ -44,6 +44,7 @@ means the same grating to both:
 | grating region | ridges of the named material, grooves filled with vacuum |
 | substrate | the same material, semi-infinite, below the bottom of the grooves |
 | material | `problem.coating`, falling back to `substrate` (as the integral solver does); naming neither is refused |
+| layers | `problem.layers`, conformal, on top of the grating (§6) |
 
 Efficiencies are **absolute** (conventions §5). The method needs a complex
 index; there is no perfect-conductor mode, because a perfect conductor has no
@@ -51,9 +52,8 @@ permittivity to Fourier-transform. Comparisons with the integral solver use its
 `conductivity="tabulated"` mode.
 
 Where `coating` and `substrate` are both named and differ, the substrate is not
-consulted and a provenance warning says so. A coated grating needs a coating
-*thickness*, which `Problem` cannot carry; see §6 and the decisions at the end
-of this page.
+consulted and a provenance warning says so. A coating of some thickness on the
+grating is a conformal layer (§6), not a second material name.
 
 ## 2. Formulation: vectorial and conical
 
@@ -244,17 +244,37 @@ segments and not a new code path. The S-matrix composition is the same loop
 whatever the stack holds, so a multilayer costs one more star product per layer
 and no new physics.
 
-What exists today, stated plainly:
+### Conformal layers, through `Problem.layers`
 
-- **In the core and tested**: homogeneous layers above and below the grating
-  region, against the closed-form Airy formula for a single film, including a
-  film beneath a lamellar slab whose energy balance is checked (§8).
-- **Not reachable from `solve()`**, because `Problem` has no field for a layer:
-  its `coating` is a material name without a thickness. A `Problem` therefore
-  always becomes vacuum / grating / substrate with no layers. How to describe a
-  stack on `Problem` is an interface decision for the whole package, since every
-  solver must then either model the layers or refuse them, so it is listed in §9
-  rather than settled inside the backend.
+A coated grating is `Problem.layers`, a list of `ConformalLayer(material,
+thickness)` innermost first, each following the surface beneath it as its true
+offset (conventions §3, decided 2026-10-27): convex corners rounded into arcs
+of radius `thickness`, concave ones sharp. Every other solver refuses a problem
+with layers (`Capabilities.handles_layers`), rather than solving the bare
+grating beneath them.
+
+Geometrically, surface `k` is the profile offset by the first `k` thicknesses,
+and since offsets by disks add, that is one offset of the profile, not a chain.
+Its height over `x` is computed exactly: for each segment of the profile's
+polyline, the top of its stadium of radius `thickness` is concave along the
+segment and so maximised in closed form, and the surface is the largest over
+segments. Lamellar and blazed profiles use their exact vertices, so a vertical
+wall stays a vertical segment; smooth profiles are sampled at 4096 points.
+
+Each slab then takes, at its mid-height, the material of the innermost surface
+it lies under, with every material boundary refined by bisection as the bare
+walls are. Slab boundaries are placed at every height where some surface has a
+flat (the profile's top and bottom, and their offsets), so on a lamellar groove
+the flats are exact and only the rounded corners are staircased. A layered
+grating is therefore always a staircase, `slices` applies, and the TM warning of
+§5 applies to it.
+
+### Homogeneous layers in the core
+
+The core's `Stack` also takes homogeneous films above and below the grating
+region, tested against the closed-form Airy formula for a single film (§8). No
+`Problem` produces those yet: a planar film under a grating is not a conformal
+layer, and nothing has needed one.
 
 ## 7. What is refused, rather than approximated
 
@@ -278,7 +298,10 @@ Everything here is in `tests/test_rcwa.py` and runs without the private corpus.
 |---|---|---|
 | flat interface against `materials.fresnel`, in-plane, TE and TM, glass and a visible metal | signs and normalisation in the external regions | yes |
 | flat interface, conical, unpolarized against `(Rs + Rp)/2` at the true angle of incidence | the conical kinematics, and that TE/TM by the grooves span the polarizations | yes |
-| a single film on a substrate against the Airy formula, s and p, in-plane and conical | the layer stack | yes |
+| a single film on a substrate against the Airy formula, s and p, in-plane and conical | the core's homogeneous layers | yes |
+| a conformal layer of the superstrate's own index against the bare grating, to 1e-12 | the layered geometry's bookkeeping | yes |
+| a conformal layer of the grating's own material against the integral solver on the hand-written offset groove: 2e-5 dielectric, 2e-4 metal TE | the offset geometry and its staircase | yes |
+| a conformal film on a vanishing groove against the Airy formula | layers in the flat limit | yes |
 | lossless dielectric lamellar, `R + A = 1` with `A` the transmitted power, in-plane and conical | the S-matrix composition and flux bookkeeping (§4: not convergence) | partly |
 | reciprocity, `checks.check_reciprocity`, metallic lamellar in TE and TM | the symmetry of the scattering problem | yes |
 | truncation sweep, metallic lamellar in TM: Li's rule converges, Laurent's visibly does not | that §3 is in effect | yes |
@@ -296,8 +319,12 @@ want transcribing from the papers rather than from memory.
 Not yet validated:
 
 - staircase accuracy for blazed and sinusoidal profiles, in TM above all (§5);
-- multilayers beyond one film, and anything reachable through `solve()` with
-  layers, since nothing is (§6);
+- conformal layers on a metal in TM: they converge, slowly, toward the integral
+  solver (1.1e-2 at truncation 40 and 160 slices on a 40 nm layer), the
+  staircase weakness of §5 met at the rounded corners;
+- conformal layers of a *different* material from the grating: nothing
+  independent checks them yet beyond energy balance, the vacuum-layer identity
+  and the Airy limit, because no other solver here models two interfaces;
 - the soft-X-ray grazing regime. It is not refused, and it is expensive: a
   groove hundreds of wavelengths deep needs very many slices and harmonics,
   which is why the integral method is the method of record there;
@@ -305,12 +332,13 @@ Not yet validated:
 
 Decisions for the project rather than for this backend:
 
-1. **How `Problem` describes a layer stack**, and what a coated grating means:
-   a conformal coating of given thickness on the profile, a planar overcoat, or
-   both. The core can represent all of these (§6); `Problem` can represent none.
-2. **Whether a staircase is acceptable by default**, with a warning, or should
-   need `slices` passed explicitly. The default here follows the integral
-   solver's convention of one knob refining everything.
+1. ~~**How `Problem` describes a layer stack.**~~ Decided 2026-10-27: a coated
+   grating means a layer that follows the groove, `Problem.layers` of
+   `ConformalLayer`, its surface the true offset with rounded convex corners
+   (§6).
+2. ~~**Whether a staircase is acceptable by default.**~~ Decided 2026-10-27:
+   yes, with the TM warning. RCWA can represent nothing but slabs, so the
+   choice was only ever how many and when to warn.
 3. ~~**Whether transmitted orders belong in `EfficiencyScan`.**~~ Decided
    2026-10-27: yes, as `EfficiencyScan.transmission`, filled by this backend
    and the integral solver (§4).
