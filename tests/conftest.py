@@ -20,6 +20,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from endstation.testing.plugin import data_dir_fixture
 
 # Re-exported so existing fixtures keep working. The definitions live in
 # `corpus.py` because a module-level `from .conftest import ...` breaks under
@@ -42,14 +43,8 @@ _settings.write_text("[appearance]\ntheme=light\n", encoding="utf-8")
 os.environ["GRATINGLAB_SETTINGS"] = str(_settings)
 
 
-@pytest.fixture(scope="session")
-def ref_dir() -> Path:
-    directory = reference_dir()
-    if directory is None:
-        pytest.skip(
-            "PCGrate reference corpus not found; set GRATINGLAB_REF_DIR to enable"
-        )
-    return directory
+#: The PCGrate corpus, or a skip that names GRATINGLAB_REF_DIR. Session-scoped.
+ref_dir = data_dir_fixture("GRATINGLAB_REF_DIR", DEFAULT_REF_DIR)
 
 
 @pytest.fixture(scope="session")
