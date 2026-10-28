@@ -10,7 +10,8 @@ only the latter, because ``sweep`` reaches a NumPy-bound call with no check
 point and a Python thread cannot be killed, so there was nothing to interrupt
 from here. `Capabilities.reports_progress` changed that: the solver calls back
 once per wavelength, and a callback that raises
-:class:`~gratinglab.solvers.base.SolveCancelled` unwinds it.
+:class:`~endstation.progress.Cancelled` (or its subclass
+:class:`~gratinglab.solvers.base.SolveCancelled`) unwinds it.
 
 The token is still needed, because real cancellation does not remove the race
 it was covering. The worker may already have finished when Cancel is clicked,
@@ -28,9 +29,8 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING, NamedTuple
 
+from endstation.progress import Cancelled, cancelling, throttled
 from PySide6.QtCore import QObject, Signal, Slot
-
-from ...solvers.base import SolveCancelled
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type checkers only
     from ...checks import EnergyReport
@@ -123,7 +123,7 @@ class SolveWorker(QObject):
                 progress=self._reporter(token, cancel),
             )[0]
             self.finished.emit(token, method, SolveResult(scan, _energy(scan)))
-        except SolveCancelled:
+        except Cancelled:
             # Before the broad handler: the user asked for this, so
             # it is not a failure and rendering it as one would be the same
             # category mistake M8 fixed for the no-coating default.
@@ -176,7 +176,7 @@ class SolveWorker(QObject):
                 SolveResult(report.scan, _energy(report.scan)),
                 report,
             )
-        except SolveCancelled:
+        except Cancelled:
             self.cancelled.emit(token, method)
         except Exception as exc:  # noqa: BLE001 - see `run`
             self.failed.emit(token, method, f"{type(exc).__name__}: {exc}")
@@ -190,16 +190,14 @@ class SolveWorker(QObject):
         that could not have been seen. The cancellation check is not
         throttled: it runs on every call, so a Cancel click takes effect at
         the next wavelength instead of the next percent.
+
+        Both halves are endstation's: :func:`~endstation.progress.throttled`
+        for the bar and :func:`~endstation.progress.cancelling` for the stop,
+        which raises :class:`~endstation.progress.Cancelled`, the base class
+        of :class:`~gratinglab.solvers.base.SolveCancelled`.
         """
-        last = -1
 
-        def report(done: int, total: int) -> None:
-            nonlocal last
-            percent = done * 100 // total if total else 100
-            if percent != last:
-                last = percent
-                self.progress.emit(token, done, total)
-            if cancel.is_set():
-                raise SolveCancelled(f"cancelled at {done} of {total}")
+        def emit(done: int, total: int) -> None:
+            self.progress.emit(token, done, total)
 
-        return report
+        return cancelling(throttled(emit), cancel.is_set)
