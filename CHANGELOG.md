@@ -10,7 +10,12 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
-## Unreleased
+## 0.2.0 (2026-10-27)
+
+A minor release, for two reasons the versioning policy names: the in-house
+RCWA backend arrives, with the C-method beside it, and `absorption` changes
+meaning (see Changed). The metrology milestone that 0.2 was planned around
+has not been signed off yet; see `docs/roadmap.md`.
 
 ### Added
 
