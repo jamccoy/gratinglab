@@ -14,6 +14,21 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- A C-method (Chandezon) solver, registered as `cmethod`, with the integral
+  solver's two boundary conditions: `conductivity="perfect"` in any mount and
+  `"tabulated"`, one interface into a material read from the coating, coupled
+  `E_z`/`H_z` off-plane, absolute efficiencies. Into a lossless material the
+  transmitted orders are recorded as the scan's `transmission`, with
+  `absorption` keeping the remainder. The knob is `truncation`. It reproduces
+  Goray & Schmidt's Table 3, which is Li's C-method, to 1.4e-5 on all twelve
+  orders, Fresnel exactly on a flat boundary, and the integral solver to that
+  solver's own error on sinusoids in-plane, at 60° and off-plane at 1.5° on
+  CXRO gold. Vertical facets, sidewalls and undercuts are refused. Two weak
+  regions are measured and reported in provenance rather than hidden: on a
+  sawtooth it converges at about first order and its energy balance closes
+  long before its efficiencies do, and on a profile deeper than about half
+  the period a high truncation exhausts double precision and makes the answer
+  worse. The method note is `docs/theory/cmethod.md`; no GUI tab yet.
 - Coated gratings: `Problem.layers`, a tuple of `ConformalLayer(material,
   thickness)`, innermost first, each following the surface beneath it as its
   true offset, so convex corners are rounded and concave ones sharp

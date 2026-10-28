@@ -14,6 +14,7 @@ from .base import (
     get_solver,
     register,
 )
+from .cmethod import CMethodSolver, cmethod
 from .integral import IntegralSolver, integral
 from .rcwa import RcwaSolver, rcwa
 from .scalar import ScalarSolver, interference_factor, scalar
@@ -27,6 +28,8 @@ __all__ = [
     "available_solvers",
     "get_solver",
     "register",
+    "CMethodSolver",
+    "cmethod",
     "ScalarSolver",
     "IntegralSolver",
     "integral",
