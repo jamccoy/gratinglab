@@ -182,12 +182,16 @@ filterwarnings = [
     "ignore:Enum value .Qt..ApplicationAttribute.AA_UseHighDpiPixmaps. is marked as deprecated:DeprecationWarning:matplotlib.backends.backend_qt",
     # CI runs with PYTHONWARNDEFAULTENCODING=1, so any text open() here that
     # leaves the encoding to the platform fails on every OS, not only on
-    # Windows with a non-ASCII file. These three are other projects' calls.
+    # Windows with a non-ASCII file. These four are other projects' calls.
     # numpy's savetxt touches its output with a bare open() whatever encoding
-    # it is given. Inert without the flag.
+    # it is given. threadpoolctl reads /proc/self/maps with a bare open(), so
+    # on Linux only, every rigorous solve (which caps BLAS through it) failed
+    # here: master's CI run 40624677314, both ubuntu jobs. Inert without the
+    # flag.
     "ignore::EncodingWarning:matplotlib.font_manager",
     "ignore::EncodingWarning:numpy.lib._npyio_impl",
     "ignore::EncodingWarning:numpy.lib._datasource",
+    "ignore::EncodingWarning:threadpoolctl",
 ]
 # pytest-qt would otherwise probe every binding it knows. Verified clean under
 # `python -W error -c "import PySide6.QtWidgets"`, so `filterwarnings = error`
