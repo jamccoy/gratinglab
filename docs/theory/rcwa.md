@@ -279,7 +279,8 @@ thickness)` innermost first, each following the surface beneath it as its true
 offset (conventions §3, decided 2026-10-27): convex corners rounded into arcs
 of radius `thickness`, concave ones sharp. Every other solver refuses a problem
 with layers (`Capabilities.handles_layers`), rather than solving the bare
-grating beneath them.
+grating beneath them. In the window they are the geometry panel's Layers
+field, `Au 20, Cr 5`, and a tab that cannot model them refuses on that field.
 
 Geometrically, surface `k` is the profile offset by the first `k` thicknesses,
 and since offsets by disks add, that is one offset of the profile, not a chain.

@@ -37,7 +37,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import provenance
-from ..state import FormErrors, build, validate
+from ..state import FieldError, FormErrors, build, validate
 from . import theming
 from .geometry_panel import GeometryPanel
 from .geometry_tab import GeometryTab
@@ -83,6 +83,24 @@ _REDRAW_DEBOUNCE_MS = 120
 #: `show_convergence(scan, energy, lambda_over_period, report)` -- optional
 #: because a backend with no `accuracy_knob` has nothing to sweep.
 _TAB_FACTORIES = {"scalar": ScalarTab, "integral": IntegralTab, "rcwa": RcwaTab}
+
+
+def _refuse_layers_unless_handled(name: str, problem) -> None:
+    """Put a solver's refusal of layers on the Layers field, not the worker.
+
+    ``Capabilities.check`` would refuse the same problem inside the solve, but
+    as an exception from the worker thread naming no field. Asked here, it
+    lands beside every other form error, on the field that caused it.
+    """
+    from ...solvers import get_solver
+    from ..docs import short_title
+
+    if problem.layers and not get_solver(name).capabilities.handles_layers:
+        raise FormErrors((FieldError(
+            "layers",
+            f"the {short_title(name)} solver cannot model conformal layers; "
+            "the RCWA tab can. Clear Layers to solve the bare grating here.",
+        ),))
 
 
 class MainWindow(QMainWindow):
@@ -411,6 +429,7 @@ class MainWindow(QMainWindow):
 
         try:
             geometry = build(self.geometry.read_form())
+            _refuse_layers_unless_handled(name, geometry.problem)
             options = tab.build_options(
                 geometry.problem, geometry.illumination, geometry.wavelengths
             )
