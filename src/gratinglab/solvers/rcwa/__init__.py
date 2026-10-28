@@ -43,6 +43,7 @@ from ...geometry import cos_beta, is_propagating, order_range, sin_beta
 from ...illumination import Illumination
 from ...problem import Problem
 from ...result import EfficiencyScan, Provenance
+from .._execution import capped_blas, check_blas_threads, check_workers, run_rows
 from ..base import Capabilities, Progress, UnsupportedConfiguration, register
 from ._core import incident_field, solve_stack
 from ._stack import groove_geometry
@@ -99,6 +100,8 @@ class RcwaSolver:
         *,
         truncation: int = 20,
         slices: int | None = None,
+        workers: int = 1,
+        blas_threads: int | None = 1,
         progress: "Progress | None" = None,
     ) -> EfficiencyScan:
         """Efficiency over a wavelength scan at fixed geometry.
@@ -116,6 +119,17 @@ class RcwaSolver:
             ``truncation`` refines the staircase too; pass a number to pin
             it. Not consulted for a :class:`~gratinglab.profiles.Lamellar`
             groove, which is one exact slab.
+        workers
+            Threads solving wavelengths concurrently. ``1`` (the default) is
+            the serial loop. Each wavelength is independent and LAPACK
+            releases the GIL, so up to the core count this divides a scan's
+            time nearly by ``workers``; the result is identical to the
+            serial one. See :mod:`gratinglab.solvers._execution`.
+        blas_threads
+            The BLAS thread cap for the length of the call, restored on the
+            way out. ``1`` (the default) is the measured fastest for these
+            matrix sizes, by up to two orders of magnitude on a busy
+            machine; ``None`` leaves the process's setting alone.
         progress
             Per-wavelength callback under the contract in
             :class:`~gratinglab.solvers.base.Solver`.
@@ -143,6 +157,8 @@ class RcwaSolver:
         slice_count = (
             int(slices) if slices is not None else max(_MIN_SLICES, 2 * truncation)
         )
+        workers = check_workers(workers)
+        threads = check_blas_threads(blas_threads)
 
         started = time.perf_counter()
         sin_alpha = illumination.sin_alpha
@@ -186,35 +202,47 @@ class RcwaSolver:
         anomalous: list[float] = []
         columns = all_orders + truncation  # harmonic m sits at index m + M
 
-        for row, wavelength in enumerate(wavelengths):
-            if progress is not None:
-                # (0, n) before any work, and a cancellation point ahead of
-                # every wavelength (see scalar.py).
-                progress(row, len(wavelengths))
+        def solve_row(row: int, _state: None):
+            # Only the top plane: `absorbed` is all the scan records, and the
+            # interior planes cost a product chain and a solve each.
+            solution = solve_stack(
+                groove.stack(complex(indices[row])),
+                wavelength=float(wavelengths[row]),
+                period=problem.period,
+                kx0=kx0,
+                ky=cos_gamma,
+                incidents=incidents,
+                truncation=truncation,
+                planes="top",
+            )
+            return (
+                solution.reflected[:, columns].mean(axis=0),
+                float(solution.absorbed.mean()),
+            )
 
+        # (0, n) before any work, and a cancellation point ahead of every
+        # wavelength (see scalar.py); run_rows keeps that with workers too.
+        with capped_blas(threads):
+            rows = run_rows(
+                len(wavelengths),
+                solve_row,
+                state=lambda: None,
+                workers=workers,
+                progress=progress,
+            )
+
+        for row, (wavelength, (reflected, absorbed)) in enumerate(
+            zip(wavelengths, rows)
+        ):
             sines = sin_beta(
                 all_orders, wavelength, problem.period, sin_alpha, sin_gamma
             )
             live = is_propagating(sines)
             if live.any() and np.abs(cos_beta(sines[live])).min() < _ANOMALY_COS:
                 anomalous.append(float(wavelength))
-
-            solution = solve_stack(
-                groove.stack(complex(indices[row])),
-                wavelength=float(wavelength),
-                period=problem.period,
-                kx0=kx0,
-                ky=cos_gamma,
-                incidents=incidents,
-                truncation=truncation,
-            )
-            reflected = solution.reflected[:, columns].mean(axis=0)
             efficiency[row, live] = reflected[live]
             propagating[row, live] = True
-            absorption[row] = float(solution.absorbed.mean())
-
-        if progress is not None:
-            progress(len(wavelengths), len(wavelengths))
+            absorption[row] = absorbed
 
         warnings: list[str] = []
         if anomalous:
@@ -257,6 +285,11 @@ class RcwaSolver:
             "profile": "exact (lamellar)" if groove.exact else "staircase",
             "factorization": "Li: inverse rule for Ex, Laurent for Ey and Ez",
             "propagation": "S-matrix (Rumpf 2011)",
+            "systems": (
+                "TE and TM decoupled (in-plane)"
+                if cos_gamma == 0.0
+                else "coupled 2N (conical)"
+            ),
             "normalization": "absolute",
             "material": material,
             "energy_balance": (

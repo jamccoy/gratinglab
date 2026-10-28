@@ -358,6 +358,24 @@ class OperatorAssembler:
             )
         return self._subtraction
 
+    def fork(self) -> "OperatorAssembler":
+        """An assembler sharing this one's geometry, with a memo of its own.
+
+        The geometry and the geometry-only matrices are read-only once
+        built, so threads solving different wavelengths can share them; the
+        per-wavelength memo cannot be shared, since each thread clears it.
+        """
+        twin = object.__new__(OperatorAssembler)
+        twin.boundary = self.boundary
+        twin.period = self.period
+        twin.terms = self.terms
+        twin.geometry = self.geometry
+        twin._factors = {}
+        twin._cores = {}
+        twin._hilbert = self._hilbert
+        twin._subtraction = self._subtraction
+        return twin
+
     def clear(self) -> None:
         """Drop the per-wavelength memo; the geometry stays."""
         self._factors.clear()

@@ -192,6 +192,34 @@ signs, normalisation and the S-matrix composition. It is not an error estimate.
 Convergence is shown by the truncation sweep alone, and the provenance notes say
 so.
 
+### Cost, and the two shortcuts
+
+Per patterned slab the work is one eigenproblem of size `2N` and a handful
+of `2N`-square products and inverses, `N = 2M + 1`. Two cases need less, and
+the core takes both.
+
+**In-plane, the system splits.** With `ky = 0`, `PQ` is block diagonal, so
+every mode is pure `Ex` (TM) or pure `Ey` (TE), and `Q` and every `V` are
+anti-diagonal, pairing `Ex` with `Uy` and `Ey` with `Ux`. Every product the
+S-matrix algebra forms, `V⁻¹V0` and `V0⁻¹V`, is then block diagonal, so each
+polarization runs the same code on its own `N`-square blocks: an eigenproblem
+an eighth of the cost, products a quarter, and a polarization that nothing
+excites is not solved at all. `decouple=False` on `solve_stack` keeps the
+coupled solve, which is how the tests hold the two together (to `1e-12`).
+
+**Only the top plane is needed.** The backend records `absorption`, which is
+the flux through the first plane, and that needs the partial products from
+the bottom and nothing from the top. `planes="top"` skips the top-down
+products and the solve at every interior plane. The core's default stays
+`planes="all"`, since a film's tests want every plane.
+
+BLAS threading matters more than either. At these sizes OpenBLAS's threads
+cost more than they compute, and on a busy machine a 122-square inverse took
+a tenth of a second; the backend caps BLAS at one thread for the call
+(`solvers/_execution.py`) and parallelises over wavelengths instead
+(`workers`). The measurements are in the changelog and
+`benchmarks/solver_speed.py` reproduces them.
+
 ## 5. Profiles: exact slabs, and the staircase
 
 | Profile | Slabs |

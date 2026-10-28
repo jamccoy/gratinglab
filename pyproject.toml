@@ -52,6 +52,13 @@ dependencies = [
     # so this line adds no transitive weight -- the Qt and matplotlib parts sit
     # behind its own extras, which our `gui` extra asks for by name.
     "endstation>=0.2.2",
+    # The rigorous solvers cap BLAS threads for the length of a solve
+    # (solvers/_execution.py): OpenBLAS's thread-per-core default made RCWA
+    # up to 135x slower on a busy machine, measured in benchmarks/
+    # solver_speed.py. NumPy and SciPy each load their own OpenBLAS, and
+    # this is the one maintained way to reach both. Pure Python, BSD-3, no
+    # dependencies of its own.
+    "threadpoolctl>=3.1",
 ]
 
 [project.optional-dependencies]
