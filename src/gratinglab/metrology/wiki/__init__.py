@@ -17,6 +17,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from endstation.docs.index import load_pages
+
 __all__ = ["WikiPage", "pages", "page", "PAGE_ORDER"]
 
 WIKI_DIR = Path(__file__).resolve().parent
@@ -57,20 +59,6 @@ class WikiPage:
         return not body.strip()
 
 
-def _title_of(markdown: str, slug: str) -> str:
-    """The leading `# ` heading, or a readable fallback built from the slug."""
-    match = _TITLE_RE.search(markdown)
-    if match:
-        return match.group(1).strip()
-    return slug.replace("-", " ").capitalize()
-
-
-def _load(path: Path) -> WikiPage:
-    markdown = path.read_text(encoding="utf-8")
-    slug = path.stem
-    return WikiPage(slug=slug, title=_title_of(markdown, slug), markdown=markdown)
-
-
 def pages() -> tuple[WikiPage, ...]:
     """
     Every wiki page, in reading order.
@@ -79,13 +67,15 @@ def pages() -> tuple[WikiPage, ...]:
     import, so editing a page and reopening the tab shows the edit. The pages
     are prose under active revision, and a stale cache would be confusing to
     debug.
+
+    Which pages exist, their order and their titles come from
+    :func:`endstation.docs.index.load_pages`, which applies the rules
+    `PAGE_ORDER` describes.
     """
-    found = {path.stem: path for path in sorted(WIKI_DIR.glob("*.md"))}
-
-    ordered = [found.pop(slug) for slug in PAGE_ORDER if slug in found]
-    ordered.extend(found[slug] for slug in sorted(found))
-
-    return tuple(_load(path) for path in ordered)
+    return tuple(
+        WikiPage(slug=entry.slug, title=entry.title, markdown=entry.read())
+        for entry in load_pages(WIKI_DIR, PAGE_ORDER)
+    )
 
 
 def page(slug: str) -> WikiPage | None:
