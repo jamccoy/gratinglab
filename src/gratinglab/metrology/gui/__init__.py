@@ -23,14 +23,15 @@ Importing `gui.qt` requires PySide6, which is an optional extra::
 """
 from __future__ import annotations
 
+from endstation.optional import missing_extra_message, require_extra
+
 __all__ = ["main", "require_qt", "QT_MISSING_MESSAGE"]
 
-QT_MISSING_MESSAGE = (
-    "the Qt interface needs PySide6, which is an optional extra.\n"
-    "Install it with:\n\n"
-    "    pip install -e '.[gui]'\n\n"
+_STILL_WORKS = (
     "The analysis, the .ggp export and the ICC diagnostic all work without it."
 )
+
+QT_MISSING_MESSAGE = missing_extra_message("PySide6", "gui", still_works=_STILL_WORKS)
 
 
 def require_qt() -> None:
@@ -39,16 +40,13 @@ def require_qt() -> None:
     ``ModuleNotFoundError: No module named 'PySide6'`` tells a user nothing about
     what to do, and this is the most likely first-run failure.
 
-    The check uses find_spec instead of an import because this module sits
-    outside `gui/qt`, and the rule that only `gui/qt` touches a toolkit is
-    enforced by `tests/test_gui_boundary.py`. Checking availability should
-    also not cost a full toolkit import, since the aim is to fail quickly and
-    clearly.
+    The check is :func:`endstation.optional.require_extra`, a ``find_spec``
+    call rather than an import, because this module sits outside `gui/qt` and
+    the rule that only `gui/qt` touches a toolkit is enforced by
+    `tests/test_gui_boundary.py`. It raises
+    :class:`~endstation.optional.MissingExtra`, a ``ModuleNotFoundError``.
     """
-    from importlib.util import find_spec
-
-    if find_spec("PySide6") is None:  # pragma: no cover - depends on environment
-        raise ModuleNotFoundError(QT_MISSING_MESSAGE)
+    require_extra("PySide6", "gui", still_works=_STILL_WORKS)
 
 
 def main(argv=None):

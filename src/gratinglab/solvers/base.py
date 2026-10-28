@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from importlib.metadata import entry_points
 from typing import Callable, Protocol, runtime_checkable
 
+from endstation.progress import Cancelled
 from numpy.typing import ArrayLike
 
 from ..illumination import Illumination, Polarization
@@ -46,7 +47,7 @@ class UnsupportedConfiguration(NotImplementedError):
     """A solver was asked for something outside its declared capabilities."""
 
 
-class SolveCancelled(Exception):
+class SolveCancelled(Cancelled):
     """Raised by a caller's progress callback to abandon a solve.
 
     A Python thread cannot be killed and a NumPy-bound call has no check
@@ -65,6 +66,12 @@ class SolveCancelled(Exception):
     aborting the process, and an unhandled ``BaseException`` on a worker
     thread is a worse failure than the one being guarded against. The
     contract is therefore stated and tested.
+
+    It is a subclass of :class:`endstation.progress.Cancelled`, the same
+    convention in the shared library, so code that catches ``Cancelled``
+    catches this too. The window's own callback raises ``Cancelled`` itself,
+    through :func:`endstation.progress.cancelling`; a solver lets either
+    through, as rule 3 of :class:`Solver` says of any exception.
     """
 
 

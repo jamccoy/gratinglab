@@ -3,6 +3,8 @@ Configuration file for AFM blaze angle analysis
 """
 import os
 
+from endstation.paths import data_root, find_project_root
+
 # ============ PROJECT PATHS ============
 # All paths below are resolved relative to the project root, not the current
 # working directory, so the analysis runs the same from anywhere.
@@ -16,22 +18,16 @@ import os
 # An installed (non-editable) copy has no project root above it; fall back to the
 # working directory so `pip install gratinglab[metrology]` still runs against a user's
 # own data and results folders.
-def _find_project_root(start):
-    # pyproject.toml only. Searching for a "data" directory looked reasonable and
-    # was wrong: this package contains its own data subpackage
-    # (gratinglab/metrology/data/aggregation.py), so the walk stopped immediately and
-    # DATA_DIR pointed inside the source tree.
-    path = os.path.dirname(os.path.abspath(start))
-    while True:
-        if os.path.isfile(os.path.join(path, 'pyproject.toml')):
-            return path
-        parent = os.path.dirname(path)
-        if parent == path:
-            return os.getcwd()
-        path = parent
-
-
-PROJECT_ROOT = _find_project_root(__file__)
+#
+# pyproject.toml only, not endstation's default markers. Searching for a "data"
+# directory looked reasonable and was wrong: this package contains its own data
+# subpackage (gratinglab/metrology/data/aggregation.py), so the walk stopped
+# immediately and DATA_DIR pointed inside the source tree. A `.git` marker is
+# no better: an installed copy inside some other checkout would claim that
+# checkout's root.
+#
+# Kept as a str, as it always was: every consumer builds paths with os.path.
+PROJECT_ROOT = str(find_project_root(__file__, markers=("pyproject.toml",)))
 RESULTS_DIR = os.path.join(PROJECT_ROOT, 'results')
 
 # Scans live *outside* the checkout, and are not committed.
@@ -45,7 +41,7 @@ RESULTS_DIR = os.path.join(PROJECT_ROOT, 'results')
 #
 # Point GRATINGLAB_AFM_DIR somewhere else to override.
 DEFAULT_AFM_DIR = os.path.join(os.path.expanduser('~'), 'Documents', 'afm_scans')
-DATA_DIR = os.environ.get('GRATINGLAB_AFM_DIR') or DEFAULT_AFM_DIR
+DATA_DIR = str(data_root('GRATINGLAB_AFM_DIR', DEFAULT_AFM_DIR))
 
 
 def resolve_path(name):

@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import threading
 
+from endstation.qt.tokens import StaleGuard
 from PySide6.QtCore import Qt, QThread, QTimer, Signal
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
@@ -131,12 +132,12 @@ class MainWindow(QMainWindow):
 
         self._themes = theming.install(QApplication.instance())
         # Solves run on a worker thread; keep the cycle collector off it.
-        from .gc_guard import guard
+        from endstation.qt.gc_guard import guard
 
         guard(self)
 
         self._parsed = None
-        self._token = 0
+        self._tokens = StaleGuard()
         self._running = False
         self._active_name: str | None = None
         # Replaced per solve rather than reused, so a Cancel clicked between
@@ -441,7 +442,7 @@ class MainWindow(QMainWindow):
 
         self._active_name = name
         self._parsed = geometry
-        self._token += 1
+        token = self._tokens.issue()
         self._cancel = threading.Event()
         self._set_running(True)
         tab.show_solving(len(geometry.wavelengths))
@@ -455,7 +456,7 @@ class MainWindow(QMainWindow):
             _PROGRESS_DELAY_MS, tab, lambda: self._show_progress_if_still_running(tab)
         )
         signal = self._convergence_requested if sweep else self._requested
-        signal.emit(self._token, name, geometry, options, self._cancel)
+        signal.emit(token, name, geometry, options, self._cancel)
 
     def cancel(self) -> None:
         """Stop the running solve.
@@ -475,13 +476,13 @@ class MainWindow(QMainWindow):
         if not self._running:
             return
         self._cancel.set()
-        self._token += 1
+        self._tokens.invalidate()
         self._set_running(False)
         if self._active_name is not None:
             self.tabs[self._active_name].show_cancelled()
 
     def _on_solved(self, token: int, method: str, result) -> None:
-        if token != self._token:
+        if self._tokens.is_stale(token):
             return  # cancelled or superseded; the window has moved on
         self._set_running(False)
         # No `profile_panel.draw` here any more: the groove's shape owes
@@ -501,7 +502,7 @@ class MainWindow(QMainWindow):
         be enough to move a bar backwards over a result the window has already
         replaced.
         """
-        if token != self._token or self._active_name is None:
+        if self._tokens.is_stale(token) or self._active_name is None:
             return
         self.tabs[self._active_name].show_progress_value(done, total)
 
@@ -515,7 +516,7 @@ class MainWindow(QMainWindow):
         """
 
     def _on_converged(self, token: int, method: str, result, report) -> None:
-        if token != self._token:
+        if self._tokens.is_stale(token):
             return
         self._set_running(False)
         self.geometry_tab.show_geometry(self._parsed)
@@ -525,7 +526,7 @@ class MainWindow(QMainWindow):
         self.solved.emit()
 
     def _on_failed(self, token: int, method: str, message: str) -> None:
-        if token != self._token:
+        if self._tokens.is_stale(token):
             return
         self._set_running(False)
         self.tabs[method].show_error(message)

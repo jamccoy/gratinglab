@@ -15,22 +15,14 @@ from __future__ import annotations
 
 import sys
 
-_QT_HELP = """\
-gratinglab-gui needs PySide6, which this install does not have.
-
-  pip install -e ".[gui]"        (from a checkout)
-  pip install gratinglab[gui]    (once published)
-
-Everything except the GUI works without it.
-"""
+from . import exit_without_qt
 
 
 def _require_qt():
     """Import PySide6 with an explanation instead of a traceback."""
-    try:
-        from PySide6.QtWidgets import QApplication
-    except ImportError as exc:  # pragma: no cover - depends on the install
-        raise SystemExit(_QT_HELP) from exc
+    exit_without_qt()
+    from PySide6.QtWidgets import QApplication
+
     return QApplication
 
 

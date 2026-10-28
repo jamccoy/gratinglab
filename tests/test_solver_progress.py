@@ -221,3 +221,30 @@ class TestCancellationIsAvailableToAnyCaller:
 
         result = scalar.solve(blazed(), offplane(), WAVELENGTHS[:5], progress=spend)
         assert isinstance(result, EfficiencyScan)
+
+
+class TestTheSharedConvention:
+    """`SolveCancelled` is endstation's `Cancelled`, narrowed.
+
+    The window's callback raises `Cancelled` itself, through
+    `endstation.progress.cancelling`, and catches `Cancelled`. Code written
+    against this package catches `SolveCancelled`. Both work only while the
+    one is a subclass of the other, in that direction.
+    """
+
+    def test_solve_cancelled_is_a_cancelled(self):
+        from endstation.progress import Cancelled
+
+        assert issubclass(SolveCancelled, Cancelled)
+        assert not issubclass(Cancelled, SolveCancelled)
+
+    def test_the_shared_callback_stops_a_solve_too(self):
+        from endstation.progress import Cancelled, cancelling
+
+        seen = []
+        stop = cancelling(lambda done, total: seen.append(done),
+                          lambda: len(seen) >= 3)
+
+        with pytest.raises(Cancelled, match="cancelled at 2 of 40"):
+            solve(progress=stop)
+        assert seen == [0, 1, 2]
