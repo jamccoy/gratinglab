@@ -50,6 +50,14 @@ def draw_efficiency(
         scan.wavelengths, scan.total,
         color=theme.ink, ls="--", lw=1.0, alpha=0.7, label="Σ",
     )
+    transmitted = (
+        scan.transmission.total if scan.transmission is not None else 0.0
+    )
+    if scan.transmission is not None:
+        axes.plot(
+            scan.wavelengths, scan.transmission.total,
+            color=theme.ink, lw=1.0, ls=":", alpha=0.9, label="T",
+        )
     if scan.absorption is not None:
         # Under a finite-conductivity solve Σ alone is the reflected fraction
         # and sits below the unity line by exactly the absorbed one. Drawing
@@ -61,8 +69,9 @@ def draw_efficiency(
             color=theme.warn, lw=1.0, ls="-.", alpha=0.9, label="A",
         )
         axes.plot(
-            scan.wavelengths, scan.total + scan.absorption,
-            color=theme.ink, lw=1.0, ls="-", alpha=0.5, label="Σ + A",
+            scan.wavelengths, scan.total + transmitted + scan.absorption,
+            color=theme.ink, lw=1.0, ls="-", alpha=0.5,
+            label="Σ + T + A" if scan.transmission is not None else "Σ + A",
         )
     axes.axhline(1.0, color=theme.bad, lw=0.8, ls=":", alpha=0.8)
     axes.set_xlabel("wavelength (nm)")

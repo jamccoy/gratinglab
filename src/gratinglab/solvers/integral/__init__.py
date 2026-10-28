@@ -18,8 +18,11 @@ named ``coating`` (falling back to ``substrate``) through
 ``materials.lookup``. The problem is then the coupled conical system of
 Goray & Schmidt (JOSA A 27, 585, 2010), assembled in ``_finite``.
 Efficiencies are absolute. TE and TM couple through the cone angle, and each
-solve also returns the absorbed fraction from an independent boundary
-integral, so the recorded scan satisfies ``R + A = 1`` as a theorem. This
+solve also returns the power crossing into the material from an independent
+boundary integral. Into a lossless material that power leaves as
+transmitted orders, recorded as the scan's ``transmission``, and the
+absorption keeps only the remainder, which is then the discretisation error;
+so the recorded scan satisfies ``R + T + A = 1`` as a theorem. This
 relation succeeds the perfect-conductor sum rule and is what
 :func:`gratinglab.checks.check_energy_balance` checks. Folding a Fresnel
 reflectivity onto the perfect-conductivity result is not equivalent, and
@@ -54,7 +57,7 @@ from numpy.typing import ArrayLike
 from ...geometry import cos_beta, is_propagating, order_range, sin_beta
 from ...illumination import Illumination
 from ...problem import Problem
-from ...result import EfficiencyScan, Provenance
+from ...result import EfficiencyScan, Provenance, Transmission
 from ..base import Capabilities, Progress, UnsupportedConfiguration, register
 from ._boundary import physical_boundary
 from ._core import solve_transverse
@@ -346,6 +349,8 @@ class IntegralSolver:
 
         efficiency = np.zeros((len(wavelengths), len(all_orders)))
         absorption = np.zeros(len(wavelengths))
+        # Transmitted orders per row, for a lossless material: {order: value}.
+        transmitted_rows: list[dict[int, float]] = [{} for _ in wavelengths]
         propagating = np.zeros_like(efficiency, dtype=bool)
         warnings: list[str] = []
         anomalous: list[float] = []
@@ -404,6 +409,18 @@ class IntegralSolver:
                     columns = np.searchsorted(all_orders[live], solution.orders)
                     values[columns] += solution.efficiencies / len(polarizations)
                     absorption[row] += solution.absorption / len(polarizations)
+                    for order, value in zip(
+                        solution.transmitted_orders.tolist(),
+                        solution.transmitted_efficiencies,
+                    ):
+                        transmitted_rows[row][order] = transmitted_rows[row].get(
+                            order, 0.0
+                        ) + float(value) / len(polarizations)
+                # The boundary integral is the power that crossed into the
+                # material. What a lossless one transmits into orders is
+                # recorded as transmission, so absorption keeps only the rest,
+                # which for a lossless material is the discretisation error.
+                absorption[row] -= sum(transmitted_rows[row].values())
 
             efficiency[row, live] = values
             propagating[row, live] = True
@@ -427,13 +444,29 @@ class IntegralSolver:
                 "(docs/conventions.md section 10 item 5)"
             )
 
+        transmission = None
+        transmission_total = np.zeros(len(wavelengths))
+        if any(transmitted_rows):
+            seen = sorted({m for row_orders in transmitted_rows for m in row_orders})
+            t_orders = np.arange(seen[0], seen[-1] + 1)
+            t_efficiency = np.zeros((len(wavelengths), len(t_orders)))
+            t_propagating = np.zeros_like(t_efficiency, dtype=bool)
+            for row, row_orders in enumerate(transmitted_rows):
+                for order, value in row_orders.items():
+                    t_efficiency[row, order - seen[0]] = value
+                    t_propagating[row, order - seen[0]] = True
+            transmission = Transmission(
+                orders=t_orders, efficiency=t_efficiency, propagating=t_propagating
+            )
+            transmission_total = transmission.total
+
         # Report, never rescale: the theorem says 1 -- for the sum alone
         # (perfect) or the sum plus absorption (tabulated) -- and the
         # discretisation says how close it got. Corners push the solve off
         # at first order.
         totals = np.where(propagating, efficiency, 0.0).sum(axis=1)
         if conductivity == "tabulated":
-            totals = totals + absorption
+            totals = totals + absorption + transmission_total
         computed = totals[propagating.any(axis=1)]
         deviation = float(np.abs(computed - 1.0).max()) if computed.size else 0.0
         if deviation > _ENERGY_DEVIATION_WARN:
@@ -488,6 +521,7 @@ class IntegralSolver:
                 notes=notes,
             ),
             absorption=absorption if conductivity == "tabulated" else None,
+            transmission=transmission,
         )
 
 

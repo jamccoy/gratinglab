@@ -44,8 +44,10 @@ class StackSolution:
 
     Arrays are ``(n_incidents, 2M+1)`` over ``harmonics`` unless noted.
     ``reflected`` is formed in the lossless superstrate from ``kz |E|^2``, and
-    ``transmitted`` and ``plane_flux`` from the Poynting flux of the
-    transverse fields, which holds in an absorbing medium too. ``plane_flux``
+    so is ``transmitted`` when the substrate is lossless, so a propagating
+    order cannot come out negative by rounding. In an absorbing substrate
+    ``transmitted`` is the Poynting flux of the transverse fields just below
+    the interface, as is ``plane_flux`` everywhere. ``plane_flux``
     is ``(n_incidents, n_planes)``: the downward power through each interface
     plane, top first, normalised by the incident power. The first plane is
     just below the superstrate, so ``reflected.sum() + plane_flux[:, 0] = 1``
@@ -232,7 +234,7 @@ def solve_stack(
     v0_inv = np.linalg.inv(v0)
 
     _, v_ref, kappa_ref = _homogeneous_modes(stack.superstrate, kx, ky)
-    _, v_trn, _ = _homogeneous_modes(stack.substrate, kx, ky)
+    _, v_trn, kappa_trn = _homogeneous_modes(stack.substrate, kx, ky)
 
     blocks = [_external_s(v_ref, v0_inv, top=True)]
     for slab in stack.slabs:
@@ -270,7 +272,16 @@ def solve_stack(
     ).T / incident_power[:, None]
 
     t = total.s21 @ source
-    transmitted = _flux(t, v_trn @ t, size) / incident_power[:, None]
+    if complex(stack.substrate).imag == 0.0:
+        tx, ty = t[:size], t[size:]
+        kz_trn = kappa_trn[:size]
+        tz = -(kx[:, None] * tx + ky * ty) / kz_trn[:, None]  # downward: k.E = 0
+        transmitted = (
+            np.real(kz_trn)[:, None]
+            * (np.abs(tx) ** 2 + np.abs(ty) ** 2 + np.abs(tz) ** 2)
+        ).T / incident_power[:, None]
+    else:
+        transmitted = _flux(t, v_trn @ t, size) / incident_power[:, None]
 
     planes = []
     eye = np.eye(2 * size)

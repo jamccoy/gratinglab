@@ -14,6 +14,14 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- Transmitted orders. `EfficiencyScan.transmission` is a new optional
+  `Transmission` record (its own orders, efficiency and propagating flags,
+  under the same zero-means-evanescent rules), filled by the RCWA and by the
+  integral solver's tabulated mode whenever the material is lossless. A
+  substrate admits more orders than the vacuum, so it has its own order axis.
+  `check_energy_balance` adds its total, and the window's plot and provenance
+  show `T` and `Σ + T + A`.
+
 - An RCWA backend, `rcwa`, written in-house: the first working slice of
   roadmap item 2. It is the Fourier modal method with Li's factorization
   rules (the inverse rule for the field component normal to the ridge walls),
@@ -88,6 +96,12 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Changed
 
+- `absorption` on a scan is now power absorbed, not power that entered the
+  material. For the integral solver's tabulated mode on a lossless material it
+  used to equal the transmitted power; that is now `transmission`, and the
+  absorption is the small remainder, which is the discretisation error. The
+  conserved sum, and so `check_energy_balance`, is unchanged in value. On an
+  absorbing material nothing changes.
 - The default analysis now corrects a groove rotation of 0.2° or more. A
   synthetic scan with none, including the committed fixture, is unaffected
   (it measures -0.002 ± 0.002° and is left alone). **The real scans have not

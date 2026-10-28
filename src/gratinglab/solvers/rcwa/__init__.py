@@ -24,8 +24,10 @@ Four requirements from ``docs/roadmap.md`` section 1 shape it, each argued in
 
 A ``Problem`` means here what it means to the integral solver's tabulated
 mode: ridges of ``coating`` (or ``substrate``) in vacuum, on a semi-infinite
-substrate of the same material. Efficiencies are absolute, and the scan's
-``absorption`` is the power that enters the structure.
+substrate of the same material. Efficiencies are absolute. Into a lossless
+substrate the transmitted orders are recorded as the scan's ``transmission``;
+``absorption`` is what is absorbed, in the ridges or, for an absorbing
+substrate, in the substrate itself.
 
 A lamellar groove is one exact slab. Any other single-valued profile is a
 staircase of ``slices`` slabs, which by default follow ``truncation`` so the
@@ -42,7 +44,7 @@ from numpy.typing import ArrayLike
 from ...geometry import cos_beta, is_propagating, order_range, sin_beta
 from ...illumination import Illumination
 from ...problem import Problem
-from ...result import EfficiencyScan, Provenance
+from ...result import EfficiencyScan, Provenance, Transmission
 from ..base import Capabilities, Progress, UnsupportedConfiguration, register
 from ._core import incident_field, solve_stack
 from ._stack import groove_geometry
@@ -161,6 +163,12 @@ class RcwaSolver:
                 f"need at least {abs(widest)}"
             )
 
+        kx0 = -sin_alpha * sin_gamma
+        kz0 = cos_alpha * sin_gamma
+
+        def kx_of(m, wavelength):
+            return kx0 + np.asarray(m) * wavelength / problem.period
+
         material, constants = _resolve_index(problem)
         indices = np.asarray(constants.n(wavelengths), dtype=np.complex128)
         if (indices.imag < 0.0).any():
@@ -169,6 +177,28 @@ class RcwaSolver:
                 "a passive grating cannot be built from it"
             )
 
+        # Orders transmitted into the substrate, wherever it is lossless: the
+        # substrate admits more than the vacuum does, and every one of them
+        # must sit inside the harmonic window too.
+        harmonics = np.arange(-truncation, truncation + 1)
+        lossless = indices.imag == 0.0
+        cone = np.zeros((len(wavelengths), len(harmonics)), dtype=bool)
+        for row in np.flatnonzero(lossless):
+            kx = kx_of(harmonics, wavelengths[row])
+            cone[row] = kx**2 + cos_gamma**2 <= indices[row].real ** 2
+            for edge in (-truncation, truncation):
+                beyond = edge + np.sign(edge)
+                if kx_of(beyond, wavelengths[row]) ** 2 + cos_gamma**2 <= (
+                    indices[row].real ** 2
+                ):
+                    raise ValueError(
+                        f"truncation={truncation} keeps harmonics "
+                        f"-{truncation}..{truncation}, but order {beyond} is "
+                        f"transmitted into {material} at {wavelengths[row]:.6g} "
+                        "nm; raise truncation until the substrate's orders fit"
+                    )
+        transmitted_columns = np.flatnonzero(cone.any(axis=0))
+
         groove = groove_geometry(problem.profile, problem.period, slice_count)
 
         polarizations = (
@@ -176,11 +206,10 @@ class RcwaSolver:
             if illumination.polarization == "unpolarized"
             else (illumination.polarization,)
         )
-        kx0 = -sin_alpha * sin_gamma
-        kz0 = cos_alpha * sin_gamma
         incidents = [incident_field(p, kx0, cos_gamma, kz0) for p in polarizations]
 
         efficiency = np.zeros((len(wavelengths), len(all_orders)))
+        transmitted = np.zeros((len(wavelengths), len(transmitted_columns)))
         absorption = np.zeros(len(wavelengths))
         propagating = np.zeros_like(efficiency, dtype=bool)
         anomalous: list[float] = []
@@ -211,7 +240,14 @@ class RcwaSolver:
             reflected = solution.reflected[:, columns].mean(axis=0)
             efficiency[row, live] = reflected[live]
             propagating[row, live] = True
-            absorption[row] = float(solution.absorbed.mean())
+            entering = float(solution.absorbed.mean())
+            if lossless[row]:
+                through = cone[row, transmitted_columns]
+                values = solution.transmitted[:, transmitted_columns].mean(axis=0)
+                transmitted[row, through] = values[through]
+                # What enters and is not transmitted is absorbed in the ridges.
+                entering -= float(transmitted[row].sum())
+            absorption[row] = entering
 
         if progress is not None:
             progress(len(wavelengths), len(wavelengths))
@@ -260,7 +296,7 @@ class RcwaSolver:
             "normalization": "absolute",
             "material": material,
             "energy_balance": (
-                "R + A = 1 holds to rounding at every truncation (flux "
+                "R + T + A = 1 holds to rounding at every truncation (flux "
                 "continuity is built into the S-matrix); it checks the "
                 "implementation, not convergence"
             ),
@@ -281,6 +317,15 @@ class RcwaSolver:
                 notes=notes,
             ),
             absorption=absorption,
+            transmission=(
+                Transmission(
+                    orders=harmonics[transmitted_columns],
+                    efficiency=transmitted,
+                    propagating=cone[:, transmitted_columns],
+                )
+                if lossless.any()
+                else None
+            ),
         )
 
 

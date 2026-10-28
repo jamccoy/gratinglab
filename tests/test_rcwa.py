@@ -195,14 +195,15 @@ def lamellar(material, depth=0.3, duty=0.4, period=600.0):
 
 
 class TestEnergyBalance:
-    """``R + A = 1`` with ``A`` the power entering the structure. For RCWA
-    this is a check of the implementation and not of convergence
-    (``rcwa.md`` section 4), so it is asserted at rounding level and at a
-    deliberately low truncation."""
+    """``R + T + A = 1``. For RCWA this is a check of the implementation and
+    not of convergence (``rcwa.md`` section 4), so it is asserted at rounding
+    level and at a deliberately low truncation."""
 
     @pytest.mark.parametrize("gamma", [90.0, 50.0])
     @pytest.mark.parametrize("material", ["glass", "metal"])
-    def test_reflected_plus_entering_is_one(self, library, material, gamma):
+    def test_reflected_transmitted_and_absorbed_sum_to_one(
+        self, library, material, gamma
+    ):
         scan = rcwa.solve(
             lamellar(material),
             Illumination(alpha_deg=20.0, gamma_deg=gamma, polarization="unpolarized"),
@@ -210,7 +211,56 @@ class TestEnergyBalance:
             truncation=6,
         )
         assert check_energy_balance(scan, lossless=True, tolerance=1e-10).passed
-        assert (scan.absorption > 0.0).all()
+        if material == "glass":
+            # Lossless: everything that enters is transmitted, into orders.
+            assert scan.transmission is not None
+            assert (scan.transmission.total > 0.5).all()
+            assert np.abs(scan.absorption).max() < 1e-12
+        else:
+            # Nothing propagates in a metal, so what enters is absorbed.
+            assert scan.transmission is None
+            assert (scan.absorption > 0.0).all()
+
+
+class TestTransmission:
+    def test_a_flat_interface_transmits_the_fresnel_fraction(self):
+        """``Ts = (kz2/kz1)|ts|^2`` and the TM equivalent, formed here from
+        the textbook amplitudes and not from ``1 - R``: the transmitted
+        amplitudes are a separate output of the solve."""
+        solution = solve(Stack(1.0, (), GLASS), alpha=40.0, gamma=60.0)
+        kz1 = np.cos(np.radians(40.0)) * np.sin(np.radians(60.0))
+        kx = -np.sin(np.radians(40.0)) * np.sin(np.radians(60.0))
+        kz2 = np.sqrt(GLASS.real**2 - kx**2 - np.cos(np.radians(60.0)) ** 2)
+        eps = GLASS.real**2
+        t_s = 2 * kz1 / (kz1 + kz2)  # E-field ratio
+        t_p = 2 * eps * kz1 / (eps * kz1 + kz2)  # H-field ratio
+        expected = 0.5 * (kz2 / kz1 * t_s**2 + kz2 / (eps * kz1) * t_p**2)
+        assert solution.transmitted.sum(axis=1).mean() == pytest.approx(
+            expected, abs=1e-13
+        )
+
+    def test_the_substrate_admits_more_orders_than_the_vacuum(self, library):
+        """At 400 nm on a 600 nm period, alpha = 20: orders -1 and 0 reflect;
+        glass at n = 1.5 also transmits order -2 and +1."""
+        scan = rcwa.solve(
+            lamellar("glass"), Illumination.classical(alpha=20.0), [400.0],
+            truncation=8,
+        )
+        reflected = set(scan.orders[scan.propagating[0]].tolist())
+        transmitted = set(
+            scan.transmission.orders[scan.transmission.propagating[0]].tolist()
+        )
+        assert reflected < transmitted
+        assert (scan.transmission.efficiency[~scan.transmission.propagating] == 0).all()
+
+    def test_a_truncation_short_of_a_transmitted_order_is_refused(self, library):
+        """At 200 nm, orders 4 and 5 do not reflect but do transmit into
+        glass, so a window that holds every reflected order (3 is enough) can
+        still be too narrow."""
+        illumination = Illumination.classical(alpha=10.0)
+        with pytest.raises(ValueError, match="order 5 is transmitted into glass"):
+            rcwa.solve(lamellar("glass"), illumination, [200.0], truncation=4)
+        rcwa.solve(lamellar("glass"), illumination, [200.0], truncation=5)
 
 
 class TestReciprocity:
@@ -349,8 +399,8 @@ class TestRefusals:
         cannot hold order 3, and quietly dropping it would hand its power to
         nobody."""
         with pytest.raises(ValueError, match="order 3 propagates"):
-            rcwa.solve(lamellar("glass"), self.ILLUMINATION, [200.0], truncation=2)
-        rcwa.solve(lamellar("glass"), self.ILLUMINATION, [200.0], truncation=3)
+            rcwa.solve(lamellar("metal"), self.ILLUMINATION, [200.0], truncation=2)
+        rcwa.solve(lamellar("metal"), self.ILLUMINATION, [200.0], truncation=3)
 
     @pytest.mark.parametrize("value", [0, -1, 2.5, True])
     def test_knob_values_are_checked(self, library, value):
@@ -494,8 +544,16 @@ class TestAgreementWithTheIntegralSolver:
         assert np.array_equal(ours.orders, theirs.orders)
         assert np.array_equal(ours.propagating, theirs.propagating)
         assert np.abs(ours.efficiency - theirs.efficiency).max() < tolerance
-        # The power that enters, from two independent constructions.
+        # Absorbed power, and the transmitted orders of a lossless substrate,
+        # from two independent constructions.
         assert ours.absorption == pytest.approx(theirs.absorption, abs=5 * tolerance)
+        if material == "glass":
+            mine, other = ours.transmission, theirs.transmission
+            assert np.array_equal(mine.orders, other.orders)
+            assert np.array_equal(mine.propagating, other.propagating)
+            assert np.abs(mine.efficiency - other.efficiency).max() < 5 * tolerance
+        else:
+            assert ours.transmission is None and theirs.transmission is None
 
 
 class TestAnAsymmetricGroove:
