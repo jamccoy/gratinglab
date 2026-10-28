@@ -15,7 +15,7 @@ from typing import Any, Iterator
 import numpy as np
 from numpy.typing import NDArray
 
-__all__ = ["Provenance", "OrderEfficiency", "EfficiencyScan"]
+__all__ = ["Provenance", "OrderEfficiency", "Transmission", "EfficiencyScan"]
 
 
 def _frozen_array(values: Any, dtype: Any) -> np.ndarray:
@@ -134,6 +134,84 @@ class OrderEfficiency:
         return abs(self.total - 1.0)
 
 
+def _check_orders(efficiency, propagating, orders, n, what: str) -> None:
+    """The invariants reflected and transmitted orders share (conventions 4)."""
+    m = len(orders)
+    if efficiency.shape != (n, m):
+        raise ValueError(
+            f"{what} efficiency has shape {efficiency.shape}, "
+            f"expected ({n}, {m}) from {n} wavelengths and {m} orders"
+        )
+    if propagating.shape != (n, m):
+        raise ValueError(
+            f"{what} propagating has shape {propagating.shape}, expected ({n}, {m})"
+        )
+    if np.isnan(efficiency).any():
+        raise ValueError(
+            f"{what} efficiency contains NaN; evanescent orders must be recorded "
+            "as 0.0 with propagating=False (docs/conventions.md 4)"
+        )
+    if len(np.unique(orders)) != m:
+        raise ValueError(f"{what} orders contains duplicates")
+
+    # The invariant that keeps `total` trustworthy. Without it, a stray
+    # value on a non-propagating order silently inflates the energy
+    # balance -- the check the whole validation strategy rests on.
+    stray = efficiency[~propagating]
+    if stray.size and (stray != 0.0).any():
+        bad = int(np.count_nonzero(stray))
+        raise ValueError(
+            f"{bad} non-propagating {what} order(s) carry non-zero efficiency "
+            f"(largest {np.abs(stray).max():.6g}). Evanescent orders must be "
+            "exactly 0.0 (docs/conventions.md 4)"
+        )
+    if (efficiency < 0.0).any():
+        raise ValueError(f"{what} efficiency contains negative values")
+
+
+@dataclass(frozen=True, slots=True)
+class Transmission:
+    """Orders transmitted into the substrate, beside the reflected ones.
+
+    Its own ``orders`` axis, because a substrate of index ``n`` admits more
+    propagating orders than the vacuum above it. ``efficiency`` is
+    ``(n_wavelengths, n_orders)`` under the same rules as the reflected orders:
+    a non-propagating order is exactly ``0.0``, never ``NaN``, never dropped.
+
+    An order counts as transmitted only into a **lossless** substrate. In an
+    absorbing one every wave decays, so there is no far field to call an
+    order, and the power that enters is the scan's ``absorption`` instead.
+    """
+
+    orders: NDArray[np.int64]
+    efficiency: NDArray[np.float64]
+    propagating: NDArray[np.bool_]
+
+    def __post_init__(self) -> None:
+        for name, dtype in (
+            ("orders", np.int64),
+            ("efficiency", np.float64),
+            ("propagating", np.bool_),
+        ):
+            object.__setattr__(self, name, _frozen_array(getattr(self, name), dtype))
+        _check_orders(
+            self.efficiency, self.propagating, self.orders,
+            len(self.efficiency), "transmitted",
+        )
+
+    @property
+    def total(self) -> NDArray[np.float64]:
+        """Summed transmitted efficiency over propagating orders, per wavelength."""
+        return np.where(self.propagating, self.efficiency, 0.0).sum(axis=1)
+
+    def order(self, m: int) -> NDArray[np.float64]:
+        """Transmitted efficiency of order ``m`` across the scan."""
+        hit = np.flatnonzero(self.orders == m)
+        if not hit.size:
+            raise KeyError(f"order {m} is not among the transmitted orders")
+        return self.efficiency[:, hit[0]]
+
+
 @dataclass(frozen=True, slots=True)
 class EfficiencyScan:
     """Efficiency over a wavelength scan at fixed geometry.
@@ -146,11 +224,17 @@ class EfficiencyScan:
     They are never ``NaN`` and are never dropped, so that column j means order
     ``orders[j]`` at every wavelength (``docs/conventions.md`` 4).
 
-    ``absorption`` is the per-wavelength absorbed fraction for solvers that
-    compute one (the finite-conductivity integral method does, by an
-    independent boundary integral), and ``None`` everywhere else. When it is
-    present the conserved quantity is ``total + absorption``, which is what
-    :func:`gratinglab.checks.check_energy_balance` then checks.
+    ``transmission`` holds the orders transmitted into a lossless substrate,
+    for solvers that resolve them (:class:`Transmission`), and ``None``
+    everywhere else.
+
+    ``absorption`` is the per-wavelength fraction absorbed, for solvers that
+    compute one, and ``None`` everywhere else. It is power *absorbed*: what a
+    lossless substrate transmits is in ``transmission`` and not here.
+
+    The conserved quantity is ``total``, plus ``transmission.total`` and
+    ``absorption`` where present, which is what
+    :func:`gratinglab.checks.check_energy_balance` checks.
     """
 
     wavelengths: NDArray[np.float64]
@@ -159,6 +243,7 @@ class EfficiencyScan:
     propagating: NDArray[np.bool_]
     provenance: Provenance
     absorption: "NDArray[np.float64] | None" = None
+    transmission: "Transmission | None" = None
 
     def __post_init__(self) -> None:
         # Replace every field with an independent read-only copy, so a scan can
@@ -181,37 +266,18 @@ class EfficiencyScan:
                     f"{self.wavelengths.shape} (one value per wavelength)"
                 )
 
-        n, m = len(self.wavelengths), len(self.orders)
-        if self.efficiency.shape != (n, m):
+        _check_orders(
+            self.efficiency, self.propagating, self.orders,
+            len(self.wavelengths), "reflected",
+        )
+        if (
+            self.transmission is not None
+            and len(self.transmission.efficiency) != len(self.wavelengths)
+        ):
             raise ValueError(
-                f"efficiency has shape {self.efficiency.shape}, "
-                f"expected ({n}, {m}) from {n} wavelengths and {m} orders"
+                f"transmission has {len(self.transmission.efficiency)} rows, "
+                f"expected one per wavelength ({len(self.wavelengths)})"
             )
-        if self.propagating.shape != (n, m):
-            raise ValueError(
-                f"propagating has shape {self.propagating.shape}, expected ({n}, {m})"
-            )
-        if np.isnan(self.efficiency).any():
-            raise ValueError(
-                "efficiency contains NaN; evanescent orders must be recorded as "
-                "0.0 with propagating=False (docs/conventions.md 4)"
-            )
-        if len(np.unique(self.orders)) != m:
-            raise ValueError("orders contains duplicates")
-
-        # The invariant that keeps `total` trustworthy. Without it, a stray
-        # value on a non-propagating order silently inflates the energy
-        # balance -- the check the whole validation strategy rests on.
-        stray = self.efficiency[~self.propagating]
-        if stray.size and (stray != 0.0).any():
-            bad = int(np.count_nonzero(stray))
-            raise ValueError(
-                f"{bad} non-propagating order(s) carry non-zero efficiency "
-                f"(largest {np.abs(stray).max():.6g}). Evanescent orders must be "
-                "exactly 0.0 (docs/conventions.md 4)"
-            )
-        if (self.efficiency < 0.0).any():
-            raise ValueError("efficiency contains negative values")
 
     def __len__(self) -> int:
         return len(self.wavelengths)

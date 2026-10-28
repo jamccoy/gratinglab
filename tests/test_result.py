@@ -10,7 +10,7 @@ import numpy as np
 import pytest
 
 import gratinglab
-from gratinglab.result import EfficiencyScan, OrderEfficiency, Provenance
+from gratinglab.result import EfficiencyScan, OrderEfficiency, Provenance, Transmission
 
 
 def make_scan(**overrides) -> EfficiencyScan:
@@ -221,3 +221,47 @@ def test_the_citation_names_the_version_being_shipped():
     found = re.search(r"^version: (\S+)$", citation.read_text(encoding="utf-8"), re.M)
     assert found is not None, "CITATION.cff has no version line"
     assert found.group(1) == __version__
+
+
+class TestTransmission:
+    """The transmitted orders obey the reflected orders' rules
+    (conventions 4), on an order axis of their own."""
+
+    def make(self, **overrides):
+        fields = dict(
+            orders=np.array([-2, -1, 0, 1]),
+            efficiency=np.array([[0.0, 0.2, 0.5, 0.1]]),
+            propagating=np.array([[False, True, True, True]]),
+        )
+        fields.update(overrides)
+        return Transmission(**fields)
+
+    def test_total_sums_only_propagating_orders(self):
+        assert self.make().total == pytest.approx([0.8])
+
+    def test_a_value_on_an_evanescent_order_is_refused(self):
+        with pytest.raises(ValueError, match="non-propagating transmitted"):
+            self.make(efficiency=np.array([[0.01, 0.2, 0.5, 0.1]]))
+
+    def test_negative_and_nan_are_refused(self):
+        with pytest.raises(ValueError, match="negative"):
+            self.make(efficiency=np.array([[0.0, -0.2, 0.5, 0.1]]))
+        with pytest.raises(ValueError, match="NaN"):
+            self.make(efficiency=np.array([[0.0, np.nan, 0.5, 0.1]]))
+
+    def test_it_must_have_a_row_per_wavelength(self):
+        with pytest.raises(ValueError, match="one per wavelength"):
+            make_scan(
+                transmission=self.make(
+                    efficiency=np.zeros((5, 4)), propagating=np.zeros((5, 4), bool)
+                )
+            )
+
+    def test_it_is_read_only(self):
+        with pytest.raises(ValueError):
+            self.make().efficiency[0, 1] = 0.3
+
+    def test_order_lookup(self):
+        assert self.make().order(0) == pytest.approx([0.5])
+        with pytest.raises(KeyError):
+            self.make().order(7)
