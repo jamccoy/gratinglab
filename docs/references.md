@@ -294,8 +294,10 @@ blind tip estimation. Erosion bounds the true surface but does not recover it.
 on PyPI). This package is shared scaffolding for the author's desktop science
 tools and is gratinglab's one non-scientific dependency. It provides the
 optional-dependency guards behind every missing-extra message, form-error
-collection, Qt layout sizing, the toolkit-boundary test and pytest plugin, and
-the icon, macOS app and wiki-publishing tools. Its core declares no
+collection, the project and data-root lookups, the metrology wiki's page index,
+progress throttling and cancellation, stale-result tokens, the guard that keeps
+garbage collection on the GUI thread, Qt layout sizing, the toolkit-boundary
+test and pytest plugin, and the icon, macOS app and wiki-publishing tools. Its core declares no
 dependencies, so it adds nothing to a solver-only install. Fixes to any of these
 components belong in endstation, not in this repository.
 
