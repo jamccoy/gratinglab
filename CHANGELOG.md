@@ -14,10 +14,38 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- A C-method (Chandezon) solver, registered as `cmethod`, with the integral
+  solver's two boundary conditions: `conductivity="perfect"` in any mount and
+  `"tabulated"`, one interface into a material read from the coating, coupled
+  `E_z`/`H_z` off-plane, absolute efficiencies. Into a lossless material the
+  transmitted orders are recorded as the scan's `transmission`, with
+  `absorption` keeping the remainder. The knob is `truncation`. It reproduces
+  Goray & Schmidt's Table 3, which is Li's C-method, to 1.4e-5 on all twelve
+  orders, Fresnel exactly on a flat boundary, and the integral solver to that
+  solver's own error on sinusoids in-plane, at 60° and off-plane at 1.5° on
+  CXRO gold. Vertical facets, sidewalls and undercuts are refused. Two weak
+  regions are measured and reported in provenance rather than hidden: on a
+  sawtooth it converges at about first order and its energy balance closes
+  long before its efficiencies do, and on a profile deeper than about half
+  the period a high truncation exhausts double precision and makes the answer
+  worse. The method note is `docs/theory/cmethod.md`; no GUI tab yet.
+
+## 0.1.13 (2026-10-27)
+
+### Added
+
+- The PCGrate header on a written `.ggp` is optional: `write_ggp(header=False)`,
+  `GGP_WRITE_HEADER` in the metrology config, and a "Write the PCGrate header"
+  checkbox on the Boundary tab, on by default. Whether PCGrate needs the header
+  rests on the files found on disk rather than its documentation, and this is
+  how to test it. Prompted by Aditi, whose script writes `.ggp` files with no
+  header.
 - Two-column line profiles (`x z`, as Gwyddion's profile export writes them)
   load as a one-line scan, with the width taken from the x column. The same
   surface exported as an image and as a profile averages to the same groove
-  (`tests/metrology/test_line_profile.py`).
+  (`tests/metrology/test_line_profile.py`). From Aditi's changes to the
+  groove-averaging script (`afm_scan_avg_a270.py`), which detect the two
+  formats and take the scan width from the file.
 - Groove orientation in the AFM pipeline: a sample mounted a degree or two
   off square is measured and, when it matters, corrected, with no rotating by
   eye in Gwyddion. `metrology.core.orientation` finds the grooves band by band,
@@ -70,24 +98,11 @@ entries under "Unreleased" into a section named for the new version;
   A window that was closed comes back with its state, since closing does not
   destroy it while the launcher holds a reference.
 
-- A C-method (Chandezon) solver, registered as `cmethod`, with the integral
-  solver's two boundary conditions: `conductivity="perfect"` in any mount and
-  `"tabulated"`, one interface into a material read from the coating, coupled
-  `E_z`/`H_z` off-plane, absolute efficiencies. Into a lossless material the
-  transmitted orders are recorded as the scan's `transmission`, with
-  `absorption` keeping the remainder. The knob is `truncation`. It reproduces Goray &
-  Schmidt's Table 3, which is Li's C-method, to 1.4e-5 on all twelve orders,
-  Fresnel exactly on a flat boundary, and the integral solver to that
-  solver's own error on sinusoids in-plane, at 60° and off-plane at 1.5° on
-  CXRO gold. Vertical facets, sidewalls and undercuts are refused. Two weak
-  regions are measured and reported in provenance rather than hidden: on a
-  sawtooth it converges at about first order and its energy balance closes
-  long before its efficiencies do, and on a profile deeper than about half
-  the period a high truncation exhausts double precision and makes the answer
-  worse. The method note is `docs/theory/cmethod.md`; no GUI tab yet.
-
 ### Changed
 
+- `write_ggp` no longer ends the file with a line break after the last point.
+  PCGrate rejects a `.ggp` that ends in one, as `np.savetxt` output does.
+  Found by Aditi.
 - The default analysis now corrects a groove rotation of 0.2° or more. A
   synthetic scan with none, including the committed fixture, is unaffected
   (it measures -0.002 ± 0.002° and is left alone). **The real scans have not
