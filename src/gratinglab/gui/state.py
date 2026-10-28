@@ -27,7 +27,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ..illumination import Illumination
-from ..problem import Problem
+from ..problem import ConformalLayer, Problem
 from ..profiles import Blazed, Lamellar, Sinusoidal
 
 __all__ = [
@@ -128,6 +128,12 @@ class FormState:
     #: RMS surface roughness in nm. Damps the reflectivity, so it does nothing
     #: without a coating -- and the solver does not pretend otherwise.
     roughness: str = "0.0"
+    #: Conformal layers on the grating, innermost first, written
+    #: ``"Au 20, Cr 5"``: a material name and a thickness in nm per layer
+    #: (:class:`~gratinglab.problem.ConformalLayer`). Empty means a bare grating.
+    #: A `Problem` field, so it lives beside the coating; only a solver that
+    #: declares `handles_layers` will take a problem that has any.
+    layers: str = ""
 
     def with_field(self, name: str, value: Any) -> "FormState":
         """Return a copy with one field changed."""
@@ -344,6 +350,8 @@ def build(form: FormState) -> Parsed:
             FieldError("coating", f"unknown material {coating!r}; available: {known}")
         )
 
+    layers = _build_layers(form.layers, errors)
+
     if errors:
         raise FormErrors(tuple(errors))
 
@@ -352,11 +360,57 @@ def build(form: FormState) -> Parsed:
     assert roughness is not None
 
     problem = Problem(
-        period=period, profile=profile, coating=coating, roughness=roughness
+        period=period,
+        profile=profile,
+        coating=coating,
+        roughness=roughness,
+        layers=layers,
     )
     wavelengths = np.linspace(start, stop, int(count))
 
     return Parsed(problem=problem, illumination=illumination, wavelengths=wavelengths)
+
+
+def _build_layers(text: str, errors: list[FieldError]) -> tuple[ConformalLayer, ...]:
+    """Parse ``"Au 20, Cr 5"`` into conformal layers, innermost first.
+
+    Every bad entry is reported, in one error on the ``layers`` field that
+    names each, so a long stack is fixed in one pass. A material must be in
+    the library, as the coating must.
+    """
+    entries = [part.strip() for part in text.split(",") if part.strip()]
+    layers: list[ConformalLayer] = []
+    problems: list[str] = []
+    known = None
+    for position, entry in enumerate(entries, start=1):
+        words = entry.split()
+        if len(words) != 2:
+            problems.append(
+                f"layer {position} ({entry!r}) should be a material and a "
+                "thickness in nm, e.g. 'Au 20'"
+            )
+            continue
+        name, thickness_text = words
+        try:
+            thickness = float(thickness_text)
+        except ValueError:
+            problems.append(f"layer {position}: {thickness_text!r} is not a number")
+            continue
+        if not np.isfinite(thickness) or thickness <= 0.0:
+            problems.append(f"layer {position}: the thickness must be positive")
+            continue
+        if known is None:
+            known = _material_names()
+        if name not in known:
+            problems.append(
+                f"layer {position}: unknown material {name!r}; available: "
+                + (", ".join(known) or "none installed")
+            )
+            continue
+        layers.append(ConformalLayer(material=name, thickness=thickness))
+    if problems:
+        errors.append(FieldError("layers", "; ".join(problems)))
+    return tuple(layers)
 
 
 def _material_names() -> tuple[str, ...]:
