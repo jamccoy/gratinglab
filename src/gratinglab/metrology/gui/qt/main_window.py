@@ -14,6 +14,7 @@ import os
 
 from . import *  # noqa: F401,F403 - sets QT_API before matplotlib's shim loads
 
+from endstation.qt.tokens import StaleGuard
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
@@ -49,7 +50,7 @@ class MainWindow(QMainWindow):
         self.resize(1280, 760)
         # The analysis runs on a worker thread, and a cycle collection there
         # once destroyed Qt objects off the GUI thread: a segfault on macOS.
-        from gratinglab.gui.qt.gc_guard import guard
+        from endstation.qt.gc_guard import guard
 
         guard(self)
 
@@ -61,7 +62,7 @@ class MainWindow(QMainWindow):
         self._filename = None
         self._result = None
         self._settings = None
-        self._token = 0          # bumped to abandon an in-flight result
+        self._tokens = StaleGuard()  # abandons an in-flight result
 
         self._build_ui()
         self._start_worker()
@@ -78,7 +79,7 @@ class MainWindow(QMainWindow):
         self._thread.start()
 
     def closeEvent(self, event):
-        self._token += 1
+        self._tokens.invalidate()
         self._thread.quit()
         self._thread.wait(3000)
         super().closeEvent(event)
@@ -547,13 +548,13 @@ class MainWindow(QMainWindow):
             self._set_status("Fix the highlighted settings and try again.")
             return
 
-        self._token += 1
+        token = self._tokens.issue()
         self.run_btn.setEnabled(False)
         self._set_status("Running analysis…")
-        self._request_analysis.emit(self._filename, settings, self._token)
+        self._request_analysis.emit(self._filename, settings, token)
 
     def _on_finished(self, result, settings, token):
-        if token != self._token:
+        if self._tokens.is_stale(token):
             return  # a later run superseded this one
         self.run_btn.setEnabled(True)
 
@@ -581,7 +582,7 @@ class MainWindow(QMainWindow):
                          f"mean {result['mean_angle']:.2f}°")
 
     def _on_failed(self, message, token):
-        if token != self._token:
+        if self._tokens.is_stale(token):
             return
         self.run_btn.setEnabled(True)
         self._result = self._settings = None

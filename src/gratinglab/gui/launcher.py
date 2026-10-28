@@ -28,16 +28,9 @@ from __future__ import annotations
 import sys
 from dataclasses import dataclass
 
+from . import exit_without_qt
+
 __all__ = ["Mode", "MODES", "mode", "main"]
-
-_QT_HELP = """\
-gratinglab-app needs PySide6, which this install does not have.
-
-  pip install -e ".[gui]"        (from a checkout)
-  pip install gratinglab[gui]
-
-Everything except the GUI works without it.
-"""
 
 
 @dataclass(frozen=True)
@@ -91,10 +84,9 @@ def mode(key: str) -> Mode:
 
 def _require_qt():
     """Import PySide6 with an explanation instead of a traceback."""
-    try:
-        from PySide6.QtWidgets import QApplication
-    except ImportError as exc:  # pragma: no cover - depends on the install
-        raise SystemExit(_QT_HELP) from exc
+    exit_without_qt()
+    from PySide6.QtWidgets import QApplication
+
     return QApplication
 
 

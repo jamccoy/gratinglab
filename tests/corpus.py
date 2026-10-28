@@ -14,6 +14,8 @@ for.
 
 from pathlib import Path
 
+from endstation.paths import data_root
+
 DATA = Path(__file__).parent / "data"
 
 #: The corpus is reference data belonging to the research group and is
@@ -23,9 +25,11 @@ DEFAULT_REF_DIR = Path.home() / "Documents" / "diffraction_efficiency"
 
 
 def reference_dir() -> Path | None:
-    """The PCGrate reference corpus, or ``None`` if unavailable."""
-    import os
+    """The PCGrate reference corpus, or ``None`` if unavailable.
 
-    override = os.environ.get("GRATINGLAB_REF_DIR")
-    candidate = Path(override) if override else DEFAULT_REF_DIR
+    ``None`` rather than a skip, because the modules that import this decide a
+    ``skipif`` at collection; a test that wants the directory itself takes the
+    ``ref_dir`` fixture, which skips naming the variable.
+    """
+    candidate = data_root("GRATINGLAB_REF_DIR", DEFAULT_REF_DIR)
     return candidate if candidate.is_dir() else None

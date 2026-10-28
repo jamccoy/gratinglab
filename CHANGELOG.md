@@ -10,6 +10,43 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- Requires endstation 0.2.6, and uses its copies of components this package
+  had carried its own versions of. Nothing a user sees changes beyond the
+  wording of one message:
+  - The missing-PySide6 check in `gratinglab-gui`, `gratinglab-app` and
+    `gratinglab.metrology.gui.require_qt` is endstation's `require_extra`,
+    and its message is endstation's (`pip install -e '.[gui]'`, quoted for
+    zsh). `QT_API` is set by importing `endstation.qt`. The console scripts
+    still exit with the message rather than a traceback.
+  - `metrology.config` finds the project root with
+    `endstation.paths.find_project_root` (still `pyproject.toml` only) and
+    reads `GRATINGLAB_AFM_DIR` with `data_root`, which also expands `~` in
+    it. Both stay strings. The suite's corpus and scan helpers skip through
+    `endstation.testing`.
+  - The metrology wiki's page list, order and titles come from
+    `endstation.docs.index.load_pages`. `WikiPage` and `is_empty` are
+    unchanged.
+  - `SolveCancelled` is now a subclass of `endstation.progress.Cancelled`.
+    It keeps its name and module, so `except SolveCancelled` and
+    `raise SolveCancelled` work as before; `except Cancelled` now catches it
+    too. The efficiency window's progress callback is endstation's
+    `cancelling(throttled(...))`, still throttled to whole percent with the
+    cancel checked on every call, and it raises `Cancelled`.
+  - Both windows tell a stale result from a current one with
+    `endstation.qt.tokens.StaleGuard`.
+  - The guard that keeps Python's cycle collector on the GUI thread is
+    `endstation.qt.gc_guard`, which this package's copy moved into;
+    `gratinglab.gui.qt.gc_guard` is removed.
+  - `gratinglab.gui.state.FormErrors` is `endstation.forms.FormErrors`. This
+    is the one interface change here: it is no longer a `ValueError` (nothing
+    in this package caught it as one), and its `str()` puts each field error
+    on its own line instead of joining them with `"; "`. `.errors` is
+    unchanged.
+
 ## 0.2.1 (2026-10-28)
 
 ### Added

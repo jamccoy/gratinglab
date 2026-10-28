@@ -10,10 +10,12 @@ it belongs in `gui/state.py`, which is pure and tested headlessly.
 """
 from __future__ import annotations
 
-import os
-
 # matplotlib's Qt shim picks a binding from sys.modules first and QT_API second.
-# Without this, a stray PyQt5 in the environment would win and its canvas would
-# refuse to parent into a PySide6 window. This project shipped PyQt5 until
-# recently, so that stray binding is a realistic thing to find installed.
-os.environ.setdefault("QT_API", "PySide6")
+# Without QT_API, a stray PyQt5 in the environment would win and its canvas
+# would refuse to parent into a PySide6 window. This project shipped PyQt5
+# until recently, so that stray binding is a realistic thing to find installed.
+# Importing endstation.qt sets it, with setdefault; the modules here run
+# `from . import *` first thing to get this import, so it exports nothing.
+import endstation.qt  # noqa: F401
+
+__all__: list[str] = []

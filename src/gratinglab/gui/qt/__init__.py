@@ -14,9 +14,8 @@ headlessly.
 
 from __future__ import annotations
 
-import os
-
 # matplotlib's Qt shim picks a binding from sys.modules first and QT_API
-# second. Without this, a stray PyQt5 in the environment would win and its
-# canvas would refuse to parent into a PySide6 window.
-os.environ.setdefault("QT_API", "PySide6")
+# second. Without QT_API, a stray PyQt5 in the environment would win and its
+# canvas would refuse to parent into a PySide6 window. Importing endstation.qt
+# sets it, with setdefault, before anything here imports matplotlib.
+import endstation.qt  # noqa: F401

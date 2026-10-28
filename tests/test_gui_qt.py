@@ -589,9 +589,9 @@ class TestBackgroundSolve:
         threads; queueing would surprise the user with a stale-then-fresh
         double redraw."""
         win.solve("scalar")
-        token = win._token
+        token = win._tokens.current
         win.solve("scalar")
-        assert win._token == token
+        assert win._tokens.current == token
 
     def test_cancel_keeps_the_previous_result_on_screen(self, win):
         scalar_tab = win.tabs["scalar"]
@@ -615,7 +615,7 @@ class TestBackgroundSolve:
         from gratinglab.gui.qt.worker import SolveResult
 
         win.solve("scalar")
-        stale = win._token
+        stale = win._tokens.current
         win.cancel()
         # would crash if accepted
         win._on_solved(stale, "scalar", SolveResult(None, None))
@@ -624,10 +624,10 @@ class TestBackgroundSolve:
     def test_a_solver_exception_becomes_a_message_not_a_crash(self, win):
         """A Python exception escaping a slot under PySide6 can abort the
         process rather than surfacing."""
-        win._token += 1
+        win._tokens.invalidate()
         win._active_name = "scalar"
         win._set_running(True)
-        win._on_failed(win._token, "scalar", "ValueError: contrived")
+        win._on_failed(win._tokens.current, "scalar", "ValueError: contrived")
         scalar_tab = win.tabs["scalar"]
         assert "solve failed" in scalar_tab._provenance.toPlainText()
         assert scalar_tab._solve_button.isEnabled()
@@ -717,14 +717,14 @@ class TestOrderPanel:
         from gratinglab.gui.qt.scalar_tab import _ORDER_ROLE
 
         scalar_tab = win.tabs["scalar"]
-        token_before = win._token
+        token_before = win._tokens.current
         item = scalar_tab._order_list.item(0)
         order = item.data(_ORDER_ROLE)
         assert order in scalar_tab._visible_orders
 
         item.setCheckState(QtCoreQt.CheckState.Unchecked)
 
-        assert win._token == token_before, "toggling an order must not trigger a solve"
+        assert win._tokens.current == token_before, "toggling an order must not trigger a solve"
         assert order not in scalar_tab._visible_orders
 
     def test_the_none_button_hides_every_curve(self, win):
@@ -862,7 +862,7 @@ class TestCancellationReallyStops:
         seen = []
         win._worker.failed.connect(lambda t, m, msg: seen.append(msg))
         win._active_name = "scalar"
-        win._on_failed(win._token, "scalar", "ValueError: boom")
+        win._on_failed(win._tokens.current, "scalar", "ValueError: boom")
         assert "solve failed" in win.tabs["scalar"]._provenance.toPlainText()
 
     def test_each_solve_gets_its_own_event(self, win):
@@ -907,7 +907,7 @@ class TestTheProgressBar:
         bar = win.tabs["scalar"]._progress
         bar.setRange(0, 100)
         bar.setValue(50)
-        win._on_progress(win._token - 1, 7, 100)
+        win._on_progress(win._tokens.current - 1, 7, 100)
         assert bar.value() == 50
 
 
@@ -958,9 +958,9 @@ class TestTheConvergenceButton:
         win.solve("scalar", sweep=True)
         assert win._running
         assert not win.tabs["scalar"]._solve_button.isEnabled()
-        token = win._token
+        token = win._tokens.current
         win.solve("scalar")  # ignored while one is in flight
-        assert win._token == token
+        assert win._tokens.current == token
 
     def test_the_bar_counts_rungs_not_wavelengths(self, qtbot, win):
         """`check_convergence` reports per rung: the numbers a bar can show
@@ -1156,12 +1156,12 @@ class TestGeometryTab:
         """The geometry is already known; nothing here depends on a solver."""
         tab = win.geometry_tab
         before = tab._diagram.wavelength
-        token = win._token
+        token = win._tokens.current
 
         tab._slider.setValue(tab._slider.value() + 20)
 
         assert tab._diagram.wavelength != before
-        assert win._token == token, "moving the slider must not trigger a solve"
+        assert win._tokens.current == token, "moving the slider must not trigger a solve"
 
     def test_the_blaze_button_jumps_to_the_blaze_wavelength(self, win):
         """At the shipped defaults lambda_b(m=2) = 4.05 nm, inside the 1-5 nm
@@ -1411,9 +1411,9 @@ class TestLiveGeometry:
     def test_and_does_not_solve(self, qtbot, win):
         """The distinction the whole step rests on. A redraw that quietly
         started a solve would be the live re-solve ruled out of scope."""
-        token = win._token
+        token = win._tokens.current
         self._edit(qtbot, win, "period", "480")
-        assert win._token == token
+        assert win._tokens.current == token
         assert not win._running
 
     def test_the_3d_scene_follows_too(self, qtbot, win):
@@ -1856,25 +1856,30 @@ class TestEntryPoint:
     an install of `[dev]` without `[gui]` hits exactly this.
     """
 
-    def test_gives_an_explanation_not_a_traceback(self, monkeypatch):
-        import builtins
+    @pytest.mark.parametrize("module", ["app", "launcher"])
+    def test_gives_an_explanation_not_a_traceback(self, monkeypatch, module):
+        """The check is endstation's `require_extra`, which asks `find_spec`
+        rather than importing, so that is what a missing PySide6 is faked
+        through."""
+        import importlib
 
-        from gratinglab.gui import app as app_module
+        import endstation.optional
 
-        real_import = builtins.__import__
+        entry = importlib.import_module(f"gratinglab.gui.{module}")
+        real_find_spec = endstation.optional.find_spec
 
-        def refuse(name, *args, **kwargs):
-            if name == "PySide6.QtWidgets" or name.startswith("PySide6"):
-                raise ImportError("No module named 'PySide6'")
-            return real_import(name, *args, **kwargs)
+        def absent(name, *args, **kwargs):
+            if name == "PySide6" or name.startswith("PySide6."):
+                return None
+            return real_find_spec(name, *args, **kwargs)
 
-        monkeypatch.setattr(builtins, "__import__", refuse)
+        monkeypatch.setattr(endstation.optional, "find_spec", absent)
 
         with pytest.raises(SystemExit) as excinfo:
-            app_module._require_qt()
+            entry._require_qt()
 
         message = str(excinfo.value)
-        assert 'pip install -e ".[gui]"' in message
+        assert "pip install -e '.[gui]'" in message
         assert "Everything except the GUI works without it" in message
 
     def test_importing_the_module_does_not_require_pyside6(self):
@@ -1930,7 +1935,7 @@ class TestOpeningASavedBoundary:
 
 
 class TestGarbageCollectionStaysOnTheGuiThread:
-    """See gratinglab.gui.qt.gc_guard: a collection on a worker thread can
+    """See endstation.qt.gc_guard: a collection on a worker thread can
     destroy Qt objects there, which segfaulted the macOS CI leg."""
 
     def test_solves_never_collect_on_the_worker(self, qtbot, win):
@@ -1962,7 +1967,7 @@ class TestGarbageCollectionStaysOnTheGuiThread:
     def test_automatic_collection_is_off_while_a_window_exists(self, win):
         import gc
 
-        from gratinglab.gui.qt import gc_guard
+        from endstation.qt import gc_guard
 
         assert gc_guard.is_active()
         assert not gc.isenabled()
@@ -1972,7 +1977,7 @@ class TestGarbageCollectionStaysOnTheGuiThread:
 
         from PySide6.QtWidgets import QApplication
 
-        from gratinglab.gui.qt import gc_guard
+        from endstation.qt import gc_guard
         from gratinglab.gui.qt.main_window import MainWindow
 
         from PySide6.QtCore import QCoreApplication, QEvent
@@ -2001,7 +2006,7 @@ def test_exit_restores_collection_even_with_a_window_still_open(qtbot, win):
     after Qt is gone (the py3.11 bool_dealloc abort)."""
     import gc
 
-    from gratinglab.gui.qt import gc_guard
+    from endstation.qt import gc_guard
 
     assert gc_guard.is_active() and not gc.isenabled()
     try:

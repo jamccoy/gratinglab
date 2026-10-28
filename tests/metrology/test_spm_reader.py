@@ -345,8 +345,6 @@ class TestTheSlowAxisSize:
         from scans import scan_dir
 
         directory = scan_dir()
-        if directory is None:
-            pytest.skip("AFM scans not found; set GRATINGLAB_AFM_DIR")
 
         checked = []
         for spm in sorted(directory.rglob('*.spm')):
