@@ -50,7 +50,7 @@ class MainWindow(QMainWindow):
         self.resize(1280, 760)
         # The analysis runs on a worker thread, and a cycle collection there
         # once destroyed Qt objects off the GUI thread: a segfault on macOS.
-        from gratinglab.gui.qt.gc_guard import guard
+        from endstation.qt.gc_guard import guard
 
         guard(self)
 

@@ -38,6 +38,9 @@ entries under "Unreleased" into a section named for the new version;
     cancel checked on every call, and it raises `Cancelled`.
   - Both windows tell a stale result from a current one with
     `endstation.qt.tokens.StaleGuard`.
+  - The guard that keeps Python's cycle collector on the GUI thread is
+    `endstation.qt.gc_guard`, which this package's copy moved into;
+    `gratinglab.gui.qt.gc_guard` is removed.
 
 ## 0.2.1 (2026-10-28)
 

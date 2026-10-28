@@ -132,7 +132,7 @@ class MainWindow(QMainWindow):
 
         self._themes = theming.install(QApplication.instance())
         # Solves run on a worker thread; keep the cycle collector off it.
-        from .gc_guard import guard
+        from endstation.qt.gc_guard import guard
 
         guard(self)
 
