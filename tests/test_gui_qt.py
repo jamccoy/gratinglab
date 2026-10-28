@@ -1856,25 +1856,30 @@ class TestEntryPoint:
     an install of `[dev]` without `[gui]` hits exactly this.
     """
 
-    def test_gives_an_explanation_not_a_traceback(self, monkeypatch):
-        import builtins
+    @pytest.mark.parametrize("module", ["app", "launcher"])
+    def test_gives_an_explanation_not_a_traceback(self, monkeypatch, module):
+        """The check is endstation's `require_extra`, which asks `find_spec`
+        rather than importing, so that is what a missing PySide6 is faked
+        through."""
+        import importlib
 
-        from gratinglab.gui import app as app_module
+        import endstation.optional
 
-        real_import = builtins.__import__
+        entry = importlib.import_module(f"gratinglab.gui.{module}")
+        real_find_spec = endstation.optional.find_spec
 
-        def refuse(name, *args, **kwargs):
-            if name == "PySide6.QtWidgets" or name.startswith("PySide6"):
-                raise ImportError("No module named 'PySide6'")
-            return real_import(name, *args, **kwargs)
+        def absent(name, *args, **kwargs):
+            if name == "PySide6" or name.startswith("PySide6."):
+                return None
+            return real_find_spec(name, *args, **kwargs)
 
-        monkeypatch.setattr(builtins, "__import__", refuse)
+        monkeypatch.setattr(endstation.optional, "find_spec", absent)
 
         with pytest.raises(SystemExit) as excinfo:
-            app_module._require_qt()
+            entry._require_qt()
 
         message = str(excinfo.value)
-        assert 'pip install -e ".[gui]"' in message
+        assert "pip install -e '.[gui]'" in message
         assert "Everything except the GUI works without it" in message
 
     def test_importing_the_module_does_not_require_pyside6(self):
