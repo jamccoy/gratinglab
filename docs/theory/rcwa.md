@@ -172,21 +172,29 @@ an order passes off (`κ = 0`, a Rayleigh anomaly). At that measure-zero point
 `κ` is moved off zero by `10⁻¹²`, and any row with an order inside
 `|cos β| < 10⁻³` is flagged in provenance, the guard the integral solver uses.
 
-### Absorption, and what `R + A = 1` does and does not show
+### Transmission, absorption, and what `R + T + A = 1` does and does not show
 
-The scan's `absorption` is the power crossing into the structure through the
-plane just below the vacuum, evaluated from the field inside the stack: the
-amplitudes at that plane come from the partial S-matrices above and below it,
-not from the reflected amplitudes. For a lossless substrate it is the
-transmitted power; for an absorbing one, the power absorbed in the ridges plus
-the power entering the substrate. `check_energy_balance(lossless=True)` then
-checks `R + A = 1`.
+Into a lossless substrate the transmitted orders are recorded per order as the
+scan's `transmission` (`result.Transmission`), on an order axis of their own,
+since the substrate admits more orders than the vacuum. They are formed like
+the reflected ones, from `kz |E|²` of the transmitted amplitudes, and every
+order the substrate admits must fit inside the harmonic window or the solve is
+refused. An absorbing substrate has no transmitted orders: every wave in it
+decays, so there is no far field to call an order.
+
+The scan's `absorption` is what is *absorbed*. It starts from the power
+crossing into the structure through the plane just below the vacuum,
+evaluated from the field inside the stack (the amplitudes at that plane come
+from the partial S-matrices above and below it, not from the reflected
+amplitudes), and subtracts the transmitted orders. So it is the power absorbed
+in the ridges, plus, for an absorbing substrate, the power entering the
+substrate. `check_energy_balance(lossless=True)` then checks `R + T + A = 1`.
 
 That check is weaker here than for the integral solver, and the difference
-matters. There, the absorption is an independent boundary integral and `R + A`
+matters. There, the absorption is an independent boundary integral and the sum
 deviates from 1 by the discretisation error. In RCWA the truncated system
 conserves flux by construction, because tangential `E` and `H` are continuous
-across every interface the S-matrix joins, so `R + A = 1` holds to rounding at
+across every interface the S-matrix joins, so the sum is 1 to rounding at
 *every* truncation, converged or not. It is a test of the implementation: of
 signs, normalisation and the S-matrix composition. It is not an error estimate.
 Convergence is shown by the truncation sweep alone, and the provenance notes say
@@ -303,6 +311,6 @@ Decisions for the project rather than for this backend:
 2. **Whether a staircase is acceptable by default**, with a warning, or should
    need `slices` passed explicitly. The default here follows the integral
    solver's convention of one knob refining everything.
-3. **Whether transmitted orders belong in `EfficiencyScan`.** A transmission
-   grating's diffracted orders are the result a user wants; today their total
-   appears only as `absorption` (§4).
+3. ~~**Whether transmitted orders belong in `EfficiencyScan`.**~~ Decided
+   2026-10-27: yes, as `EfficiencyScan.transmission`, filled by this backend
+   and the integral solver (§4).

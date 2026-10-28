@@ -238,6 +238,9 @@ def check_energy_balance(
 
     Notes
     -----
+    Transmitted orders, when the scan records them, are added to the sum: the
+    power a lossless substrate carries away is accounted for, not lost.
+
     When the scan records an absorbed fraction (``scan.absorption``, from a
     solver that computes one independently), the conserved quantity is the
     sum plus the absorption, and that is what is checked. ``R + A = 1`` is a
@@ -253,6 +256,8 @@ def check_energy_balance(
     reached 3.6.
     """
     total = np.asarray(scan.total, dtype=np.float64)
+    if scan.transmission is not None:
+        total = total + scan.transmission.total
     if scan.absorption is not None:
         total = total + scan.absorption
     return EnergyReport(

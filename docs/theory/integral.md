@@ -19,7 +19,7 @@ facet. Two boundary conditions are offered through the `conductivity` option:
 | Mode | Physics | Normalisation |
 |---|---|---|
 | `"perfect"` (default) | The grating is a perfect conductor: the field does not penetrate, there is no absorption, and the sum over propagating orders is exactly 1, which is a theorem (§5). A named `coating` is ignored, with a provenance warning. | Relative to a perfect reflector, matching the PC PCGrate reference tables. |
-| `"tabulated"` | One interface into a semi-infinite material whose complex index is read per wavelength from the named `coating` (falling back to `substrate`) via `materials.lookup`, using the coupled conical system of Goray & Schmidt (2010) described in §8 below. Absorption is computed and recorded, and `R + A = 1` is the theorem (§5). | **Absolute.** |
+| `"tabulated"` | One interface into a semi-infinite material whose complex index is read per wavelength from the named `coating` (falling back to `substrate`) via `materials.lookup`, using the coupled conical system of Goray & Schmidt (2010) described in §8 below. Absorption is computed and recorded, and `R + A = 1` is the theorem (§5). Into a lossless material the transmitted orders are recorded as the scan's `transmission` (since 2026-10-27), and the recorded absorption is the boundary integral minus their total, so the scan's conserved sum is `R + T + A`. | **Absolute.** |
 
 Both modes assume one boundary, one period and classical periodicity; multilayer
 stacks and crossed gratings are out of scope. A request for anything else (an
