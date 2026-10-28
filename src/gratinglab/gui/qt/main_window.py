@@ -42,6 +42,7 @@ from . import theming
 from .geometry_panel import GeometryPanel
 from .geometry_tab import GeometryTab
 from .integral_tab import IntegralTab
+from .rcwa_tab import RcwaTab
 from .scalar_tab import ScalarTab
 from .setup_tab import SetupTab
 from .sizing import fit_width_to_contents
@@ -64,8 +65,9 @@ _PROGRESS_DELAY_MS = 150
 #: picture feels attached to the field you are editing.
 _REDRAW_DEBOUNCE_MS = 120
 
-#: How a registered solver name finds a tab class. A future RCWA backend adds
-#: its own entry here and nothing else about this dispatch changes -- tabs are
+#: How a registered solver name finds a tab class. A new backend adds its own
+#: entry here and nothing else about this dispatch changes (RCWA did, as the
+#: third) -- tabs are
 #: generated from `available_solvers()`, not hardcoded, so a second solver
 #: needs no change to `_build_tabs` itself.
 #:
@@ -80,7 +82,7 @@ _REDRAW_DEBOUNCE_MS = 120
 #: `show_field_errors(errors)`. Optionally a `convergence_requested` signal and
 #: `show_convergence(scan, energy, lambda_over_period, report)` -- optional
 #: because a backend with no `accuracy_knob` has nothing to sweep.
-_TAB_FACTORIES = {"scalar": ScalarTab, "integral": IntegralTab}
+_TAB_FACTORIES = {"scalar": ScalarTab, "integral": IntegralTab, "rcwa": RcwaTab}
 
 
 class MainWindow(QMainWindow):

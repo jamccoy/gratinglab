@@ -281,6 +281,77 @@ class TestTheIntegralTab:
         assert "field(s) need attention" in shown
 
 
+class TestTheRcwaTab:
+    """The third solver's tab. The wiring only: `test_gui_rcwa_options.py`
+    owns the guards and `test_rcwa.py` the physics."""
+
+    #: Soft X-ray, off-plane, lamellar, two wavelengths, Au: the bundled table,
+    #: and small enough to solve twice in a test.
+    FORM = dict(
+        profile_kind="Lamellar", coating="Au",
+        wavelength_start="4.0", wavelength_stop="4.5", wavelength_count="2",
+    )
+    TRUNCATION = "10"
+
+    def set_geometry(self, win, form):
+        for field, value in form.items():
+            widget = win.geometry._fields[field]
+            if hasattr(widget, "setCurrentIndex"):
+                index = widget.findData(value)
+                widget.setCurrentIndex(index if index >= 0 else widget.findText(value))
+            else:
+                widget.setText(value)
+
+    def test_it_is_a_tab_with_its_short_title(self, win):
+        from gratinglab.gui.docs import short_title
+
+        tab = win.tabs["rcwa"]
+        index = win._tab_widget.indexOf(tab)
+        assert index >= 0
+        assert win._tab_widget.tabText(index) == short_title("rcwa")
+
+    def test_a_solve_equals_a_direct_one(self, qtbot, win):
+        """`TestNotASecondSourceOfTruth`, for RCWA: the tab must not compute,
+        reshape or rescale anything on the way to the plot."""
+        from gratinglab.gui.rcwa_options import RcwaOptionsState
+        from gratinglab.gui.rcwa_options import build_options as build_rcwa_options
+        from gratinglab.solvers import rcwa
+
+        self.set_geometry(win, self.FORM)
+        tab = win.tabs["rcwa"]
+        tab._fields["truncation"].setText(self.TRUNCATION)
+        resolve(qtbot, win, "rcwa")
+
+        parsed = build(FormState(**self.FORM))
+        options = build_rcwa_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths,
+            RcwaOptionsState(truncation=self.TRUNCATION),
+        )
+        expected = rcwa.solve(
+            parsed.problem, parsed.illumination, parsed.wavelengths, **options
+        )
+        assert np.array_equal(tab._scan.efficiency, expected.efficiency)
+        assert np.array_equal(tab._scan.absorption, expected.absorption)
+        shown = tab._provenance.toPlainText()
+        assert "absolute (Au)" in shown
+        assert "exact" in tab._profile_note.text()
+
+    def test_the_profile_note_follows_the_geometry(self, qtbot, win):
+        self.set_geometry(win, {**self.FORM, "profile_kind": "Blazed"})
+        tab = win.tabs["rcwa"]
+        tab._fields["truncation"].setText(self.TRUNCATION)
+        tab._fields["slices"].setText("6")
+        resolve(qtbot, win, "rcwa")
+        assert "6 slabs" in tab._profile_note.text()
+
+    def test_without_a_coating_it_is_refused_on_the_form(self, win):
+        tab = win.tabs["rcwa"]
+        win.solve("rcwa")
+        shown = tab._provenance.toPlainText()
+        assert "coating" in shown
+        assert "field(s) need attention" in shown
+
+
 class TestBehaviour:
     def test_solves_on_construction(self, win):
         """Opening the app shows something, not an empty window."""
