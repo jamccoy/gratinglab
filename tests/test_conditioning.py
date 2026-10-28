@@ -141,8 +141,12 @@ class TestTheyWarnWhereItIsUnusual:
     ``_WARN_KAPPA`` comment and the theory pages)."""
 
     def test_rcwa_exactly_at_grazing(self, library):
+        """TM, because in-plane TE no longer meets the singularity: since the
+        in-plane TE and TM systems were decoupled, TE's external ``V`` is
+        ``(kx^2 - eps) / kz = -kz``, which goes to zero at grazing, while TM's
+        is ``eps / kz``. The coupled system divided by ``kz`` for both."""
         scan = get_solver("rcwa").solve(
-            problem(), Illumination.classical(alpha=ALPHA, polarization="TE"),
+            problem(), Illumination.classical(alpha=ALPHA, polarization="TM"),
             [GRAZING - 1.0, GRAZING], truncation=20,
         )
         assert scan.provenance.notes["condition"]["smatrix"] > RCWA_WARN
