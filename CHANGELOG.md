@@ -14,6 +14,17 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- Coated gratings: `Problem.layers`, a tuple of `ConformalLayer(material,
+  thickness)`, innermost first, each following the surface beneath it as its
+  true offset, so convex corners are rounded and concave ones sharp
+  (conventions §3). The RCWA models them; every other solver refuses them,
+  through a new `Capabilities.handles_layers`, rather than solving the bare
+  grating. Checked: a vacuum layer reproduces the bare grating to 1e-12; a
+  layer of the grating's own material matches the integral solver on the
+  hand-written offset groove to 2e-5 (dielectric) and 2e-4 (metal, TE); a film
+  on a vanishing groove is the Airy film. Metal in TM converges, slowly, as
+  staircases do on rounded metal corners.
+
 - Transmitted orders. `EfficiencyScan.transmission` is a new optional
   `Transmission` record (its own orders, efficiency and propagating flags,
   under the same zero-means-evanescent rules), filled by the RCWA and by the

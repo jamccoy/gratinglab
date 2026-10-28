@@ -18,11 +18,17 @@ from gratinglab.convergence import check_convergence
 from gratinglab.illumination import Illumination
 from gratinglab.materials import fresnel
 from gratinglab.materials.optical import OpticalConstants, write_ari
-from gratinglab.problem import Problem
+from gratinglab.problem import ConformalLayer, Problem
 from gratinglab.profiles import Blazed, FromProfileData, Lamellar, Sinusoidal
 from gratinglab.solvers import UnsupportedConfiguration, get_solver
 from gratinglab.solvers.rcwa._core import incident_field, solve_stack
-from gratinglab.solvers.rcwa._stack import Slab, Stack, groove_geometry
+from gratinglab.solvers.rcwa._stack import (
+    Slab,
+    Stack,
+    _offset_height,
+    _surface,
+    groove_geometry,
+)
 
 GLASS = 1.5 + 0.0j
 #: A visible-light metal, of the size of gold or silver in the red: |eps| ~ 9,
@@ -447,7 +453,7 @@ class TestGrooveGeometry:
     def test_lamellar_is_one_exact_slab(self):
         groove = groove_geometry(Lamellar(depth_fraction=0.25, duty_cycle=0.3), 800.0, 50)
         assert groove.exact
-        assert groove.slabs == ((200.0, ((0.7, 1.0),)),)
+        assert groove.slabs == ((200.0, ((0.7, 1.0, 0),)),)
 
     def test_blazed_walls_are_the_profiles_own_crossings(self):
         """Each slab's wall sits where the facet crosses the slab's mid-height,
@@ -459,7 +465,8 @@ class TestGrooveGeometry:
         for k, (slab_thickness, intervals) in enumerate(groove.slabs):
             assert slab_thickness == pytest.approx(thickness)
             level = profile.depth * (1.0 - (k + 0.5) / 7)  # top slab first
-            ((start, end),) = intervals
+            ((start, end, key),) = intervals
+            assert key == 0
             # xi = 1 - t, so the interval's ends are 1 - (the two crossings)
             for xi in (start, end):
                 assert profile.height(1.0 - xi) == pytest.approx(level, abs=1e-12)
@@ -467,7 +474,7 @@ class TestGrooveGeometry:
     def test_the_staircase_area_converges_to_the_profiles(self):
         profile = Sinusoidal(depth_fraction=0.3)
         groove = groove_geometry(profile, 1.0, 64)
-        area = sum(t * sum(b - a for a, b in iv) for t, iv in groove.slabs)
+        area = sum(t * sum(b - a for a, b, _ in iv) for t, iv in groove.slabs)
         # The mean height of a raised cosine is half its depth.
         assert area == pytest.approx(0.15, rel=1e-3)
 
@@ -606,3 +613,195 @@ class TestAnAsymmetricGroove:
         agreement = np.abs(ours - reference).max()
         assert agreement < 1e-3
         assert np.abs(mirror - reference).max() > 10 * agreement
+
+
+# ---------------------------------------------------------------------------
+# Conformal layers (Problem.layers)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def layer_library(library):
+    for name, index in (("vacuum", 1.0 + 0.0j), ("film", 1.38 + 0.0j)):
+        write_ari(_table(name, index), library / f"{name}.ari")
+    return library
+
+
+def coated_lamellar(depth, duty, tau, arc=200):
+    """The exact true offset of a lamellar groove by ``tau``, all in periods.
+
+    Written out by hand, not through the backend's envelope: ridge top raised
+    by ``tau``, walls moved out by ``tau`` and kept vertical, the two convex
+    corners rounded into quarter circles of radius ``tau``, the two concave
+    ones at the floor left sharp. ``t`` repeats at a vertical wall, which
+    ``FromProfileData`` allows.
+    """
+    theta = np.linspace(0.0, np.pi / 2, arc)
+    t = [0.0, duty]
+    y = [depth + tau, depth + tau]
+    t += list(duty + tau * np.sin(theta[1:]))
+    y += list(depth + tau * np.cos(theta[1:]))
+    t += [duty + tau, 1.0 - tau, 1.0 - tau]
+    y += [tau, tau, depth]
+    t += list(1.0 - tau * np.cos(theta[1:]))
+    y += list(depth + tau * np.sin(theta[1:]))
+    return FromProfileData(t=tuple(t), y=tuple(np.array(y) - tau))
+
+
+def coated(material, layers, depth=0.3, duty=0.4):
+    return Problem(
+        period=600.0,
+        profile=Lamellar(depth_fraction=depth, duty_cycle=duty),
+        coating=material,
+        layers=tuple(ConformalLayer(material=m, thickness=t) for m, t in layers),
+    )
+
+
+class TestConformalLayers:
+    """``Problem.layers``: a layer following the groove, its outer surface
+    the true offset of the one beneath (``ConformalLayer``)."""
+
+    def test_the_offset_is_the_rounded_one(self):
+        """On a lamellar ridge: the top raised by T, the floor raised by T,
+        and a convex corner rounded into a circle of radius T about it."""
+        period, depth, duty, thickness = 600.0, 0.3, 0.4, 40.0
+        x, y = _surface(Lamellar(depth_fraction=depth, duty_cycle=duty), period)
+        height = _offset_height(x, y, period, thickness)
+        # The ridge spans xi = 0.6..1.0 (xi = 1 - t), its corners at 0.6 and 1.
+        assert height([0.8]) == pytest.approx([depth * period + thickness])
+        assert height([0.3]) == pytest.approx([thickness])
+        for dx in (5.0, 20.0, 35.0):
+            xi = 0.6 - dx / period
+            expected = depth * period + np.sqrt(thickness**2 - dx**2)
+            assert height([xi]) == pytest.approx([expected], abs=1e-9)
+        # The wall's face moved out by T and kept vertical: a nanometre
+        # beyond it the floor's offset, a nanometre inside it the arc.
+        face = 0.6 - thickness / period
+        assert height([face - 1.0 / period]) == pytest.approx([thickness])
+        assert height([face + 1.0 / period]) == pytest.approx(
+            [depth * period + np.sqrt(thickness**2 - (thickness - 1.0) ** 2)]
+        )
+
+    @pytest.mark.parametrize("polarization", ["TE", "TM"])
+    def test_a_vacuum_layer_changes_nothing(self, layer_library, polarization):
+        """The bookkeeping test: a layer of the superstrate's own index must
+        reproduce the bare grating, through a geometry of many more slabs.
+        Measured 7e-14."""
+        illumination = Illumination.classical(alpha=20.0, polarization=polarization)
+        bare = rcwa.solve(lamellar("metal"), illumination, [500.0], truncation=20)
+        vacuum = rcwa.solve(
+            coated("metal", [("vacuum", 40.0)]), illumination, [500.0], truncation=20
+        )
+        assert vacuum.provenance.notes["slices"] > 1
+        assert np.abs(bare.efficiency - vacuum.efficiency).max() < 1e-12
+
+    def test_a_film_on_a_vanishing_groove_is_the_airy_film(self, layer_library):
+        scan = rcwa.solve(
+            coated("glass", [("film", 100.0)], depth=1e-4),
+            Illumination.classical(alpha=20.0, polarization="TE"),
+            [500.0],
+            truncation=10,
+        )
+        rs, _ = airy(1.38, 100.0, GLASS, graze_of(20.0, 90.0), 500.0)
+        assert scan.efficiency[0, scan.orders == 0][0] == pytest.approx(rs, abs=1e-4)
+
+    @pytest.mark.parametrize(
+        "material, polarization, tolerance",
+        [("glass", "TE", 2e-4), ("glass", "TM", 2e-4), ("metal", "TE", 5e-4)],
+    )
+    def test_a_layer_of_the_gratings_own_material_is_the_offset_groove(
+        self, layer_library, material, polarization, tolerance
+    ):
+        """Coat a grating in its own material and it is a bare grating of the
+        offset shape, which the integral solver can solve exactly as a curve.
+        Independent of the envelope code: the offset groove is written out by
+        hand above.
+
+        Measured 2026-10-27 against the integral solver at 1024 points, 40 nm
+        layer, at (truncation, slices) = (20, 40): 2.1e-5 glass TE, 3.1e-5
+        glass TM, 1.6e-4 metal TE, against the integral solver's own change
+        from 512 to 1024 points of 3e-5 (glass) and 7e-5 (metal TE). So the
+        agreement is at the reference's accuracy. Metal TM is the test below.
+        """
+        illumination = Illumination.classical(alpha=20.0, polarization=polarization)
+        ours = rcwa.solve(
+            coated(material, [(material, 40.0)]),
+            illumination,
+            [500.0],
+            truncation=20,
+            slices=40,
+        )
+        theirs = integral.solve(
+            Problem(period=600.0, profile=coated_lamellar(0.3, 0.4, 40.0 / 600.0),
+                    coating=material),
+            illumination,
+            [500.0],
+            boundary_points=512,
+            conductivity="tabulated",
+            corner_grading=4,
+        )
+        assert np.abs(ours.efficiency - theirs.efficiency).max() < tolerance
+
+    def test_metallic_tm_on_rounded_corners_converges_slowly(self, layer_library):
+        """The staircase weakness (``rcwa.md`` section 5), met where it is
+        worst: a metal in TM with rounded corners. Measured 2026-10-27 against
+        the integral solver at 1024 points (specular 0.74848): 4.2e-2 at
+        (10, 20), 3.3e-2 at (20, 40), 2.8e-2 at (20, 80), 1.1e-2 at (40, 160).
+        Recorded so the weakness is visible, and so that it moves the right
+        way; this is not a validation of the case."""
+        illumination = Illumination.classical(alpha=20.0, polarization="TM")
+        reference = 0.74848
+
+        def specular(truncation, slices):
+            scan = rcwa.solve(
+                coated("metal", [("metal", 40.0)]), illumination, [500.0],
+                truncation=truncation, slices=slices,
+            )
+            return float(scan.efficiency[0, scan.orders == 0][0])
+
+        coarse, finer = abs(specular(10, 20) - reference), abs(specular(20, 80) - reference)
+        assert 1e-2 < finer < coarse
+        assert any("staircase" in w for w in rcwa.solve(
+            coated("metal", [("metal", 40.0)]), illumination, [500.0], truncation=4
+        ).provenance.warnings)
+
+    @pytest.mark.parametrize("gamma", [90.0, 50.0])
+    def test_lossless_layers_conserve_energy(self, layer_library, gamma):
+        scan = rcwa.solve(
+            coated("glass", [("film", 30.0), ("glass", 20.0)]),
+            Illumination(alpha_deg=20.0, gamma_deg=gamma, polarization="unpolarized"),
+            [450.0, 600.0],
+            truncation=8,
+        )
+        assert check_energy_balance(scan, lossless=True, tolerance=1e-10).passed
+        assert np.abs(scan.absorption).max() < 1e-12
+        assert scan.provenance.notes["layers"] == ["film 30 nm", "glass 20 nm"]
+
+    def test_a_metal_layer_on_glass_absorbs_and_transmits(self, layer_library):
+        scan = rcwa.solve(
+            coated("glass", [("metal", 10.0)]),
+            Illumination.classical(alpha=20.0),
+            [500.0],
+            truncation=8,
+        )
+        assert check_energy_balance(scan, lossless=True, tolerance=1e-10).passed
+        assert scan.absorption[0] > 1e-3
+        assert scan.transmission.total[0] > 1e-3
+
+    def test_a_layer_with_gain_is_refused(self, layer_library):
+        with pytest.raises(ValueError, match="'gain'"):
+            rcwa.solve(coated("glass", [("gain", 10.0)]), Illumination.classical(10.0),
+                       [500.0], truncation=4)
+
+    @pytest.mark.parametrize("name", ["integral", "scalar"])
+    def test_solvers_that_cannot_model_layers_refuse_them(self, layer_library, name):
+        solver = get_solver(name)
+        assert not solver.capabilities.handles_layers
+        with pytest.raises(UnsupportedConfiguration, match="conformal layers"):
+            solver.capabilities.check(
+                coated("metal", [("film", 10.0)]), Illumination.classical(10.0)
+            )
+
+    def test_a_problem_with_layers_round_trips_through_json(self):
+        problem = coated("metal", [("film", 10.0), ("glass", 2.5)])
+        assert Problem.model_validate_json(problem.model_dump_json()) == problem

@@ -19,8 +19,9 @@ Four requirements from ``docs/roadmap.md`` section 1 shape it, each argued in
 * **Vectorial and conical** (section 2): the full ``2N`` eigenproblem in
   ``(Ex, Ey)``, so off-plane incidence and TE-TM conversion are exact.
 * **Layer stacks** (section 6): the core solves a :class:`Stack` with
-  homogeneous layers above and below the grating region. ``Problem`` has no
-  field for a layer yet, so ``solve`` builds vacuum / grating / substrate.
+  homogeneous layers above and below the grating region, and every slab may
+  hold several materials, so ``Problem.layers``, conformal layers following
+  the groove, become slabs like any other.
 
 A ``Problem`` means here what it means to the integral solver's tabulated
 mode: ridges of ``coating`` (or ``substrate``) in vacuum, on a semi-infinite
@@ -29,9 +30,10 @@ substrate the transmitted orders are recorded as the scan's ``transmission``;
 ``absorption`` is what is absorbed, in the ridges or, for an absorbing
 substrate, in the substrate itself.
 
-A lamellar groove is one exact slab. Any other single-valued profile is a
-staircase of ``slices`` slabs, which by default follow ``truncation`` so the
-one knob refines both; an undercut profile is refused.
+A bare lamellar groove is one exact slab. Any other single-valued profile,
+and any grating carrying layers, is a staircase of ``slices`` slabs, which by
+default follow ``truncation`` so the one knob refines both; an undercut
+profile is refused.
 """
 
 from __future__ import annotations
@@ -91,6 +93,7 @@ class RcwaSolver:
         rigorous=True,
         handles_undercut=False,
         reports_progress=True,
+        handles_layers=True,
     )
 
     def solve(
@@ -171,11 +174,25 @@ class RcwaSolver:
 
         material, constants = _resolve_index(problem)
         indices = np.asarray(constants.n(wavelengths), dtype=np.complex128)
-        if (indices.imag < 0.0).any():
-            raise ValueError(
-                f"material {material!r} tabulates a negative absorption (gain); "
-                "a passive grating cannot be built from it"
-            )
+        # One column per key of the groove geometry: the grating's material,
+        # then each conformal layer, innermost first.
+        from ...materials import lookup
+
+        names = [material] + [layer.material for layer in problem.layers]
+        table = np.stack(
+            [indices]
+            + [
+                np.asarray(lookup(layer.material).n(wavelengths), dtype=np.complex128)
+                for layer in problem.layers
+            ],
+            axis=1,
+        )
+        for name, column in zip(names, table.T):
+            if (column.imag < 0.0).any():
+                raise ValueError(
+                    f"material {name!r} tabulates a negative absorption (gain); "
+                    "a passive grating cannot be built from it"
+                )
 
         # Orders transmitted into the substrate, wherever it is lossless: the
         # substrate admits more than the vacuum does, and every one of them
@@ -199,7 +216,12 @@ class RcwaSolver:
                     )
         transmitted_columns = np.flatnonzero(cone.any(axis=0))
 
-        groove = groove_geometry(problem.profile, problem.period, slice_count)
+        groove = groove_geometry(
+            problem.profile,
+            problem.period,
+            slice_count,
+            [layer.thickness for layer in problem.layers],
+        )
 
         polarizations = (
             ("TE", "TM")
@@ -229,7 +251,7 @@ class RcwaSolver:
                 anomalous.append(float(wavelength))
 
             solution = solve_stack(
-                groove.stack(complex(indices[row])),
+                groove.stack(table[row]),
                 wavelength=float(wavelength),
                 period=problem.period,
                 kx0=kx0,
@@ -268,13 +290,14 @@ class RcwaSolver:
         ):
             warnings.append(
                 f"substrate {problem.substrate!r} is not consulted: the grating "
-                f"is modelled as {problem.coating!r} throughout, since Problem "
-                "carries no coating thickness (docs/theory/rcwa.md section 6)"
+                f"is cut into {problem.coating!r} throughout. A coating of given "
+                "thickness on the grating is Problem.layers "
+                "(docs/theory/rcwa.md section 6)"
             )
         if (
             not groove.exact
             and "TM" in polarizations
-            and bool((indices.imag > 0.0).any())
+            and bool((table.imag > 0.0).any())
         ):
             warnings.append(
                 f"the profile is a staircase of {len(groove.slabs)} slabs; for an "
@@ -295,6 +318,9 @@ class RcwaSolver:
             "propagation": "S-matrix (Rumpf 2011)",
             "normalization": "absolute",
             "material": material,
+            "layers": [
+                f"{layer.material} {layer.thickness:g} nm" for layer in problem.layers
+            ],
             "energy_balance": (
                 "R + T + A = 1 holds to rounding at every truncation (flux "
                 "continuity is built into the S-matrix); it checks the "
