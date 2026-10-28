@@ -69,6 +69,28 @@ class TestTheLadder:
         ladder = default_ladder(scalar)
         assert ladder[0] < declared < ladder[-1]
 
+    def test_a_declared_ceiling_cuts_the_default_ladder(self):
+        """A rung above the solver's ceiling would be refused after rungs
+        below it had solved, which the harness rightly treats as a failure,
+        so the default ladder never offers one."""
+
+        class Ceilinged:
+            capabilities = Capabilities(
+                name="ceilinged", accuracy_knob="grid", accuracy_ceiling=100
+            )
+
+            def solve(self, problem, illumination, wavelengths, *, grid=32):
+                raise AssertionError("not called")
+
+        assert default_ladder(Ceilinged()) == (4, 8, 16, 32, 64)
+
+    def test_the_c_methods_ladder_stops_at_its_ceiling(self):
+        from gratinglab.solvers.cmethod import _MAX_TRUNCATION, cmethod
+
+        ladder = default_ladder(cmethod)
+        assert ladder[-1] == _MAX_TRUNCATION
+        assert cmethod.capabilities.accuracy_ceiling == _MAX_TRUNCATION
+
 
 class TestARealSweepOfARealSolver:
     def test_the_blazed_case_converges(self):
