@@ -39,6 +39,7 @@ from PySide6.QtWidgets import (
 from .. import provenance
 from ..state import FormErrors, build, validate
 from . import theming
+from .cmethod_tab import CMethodTab
 from .geometry_panel import GeometryPanel
 from .geometry_tab import GeometryTab
 from .integral_tab import IntegralTab
@@ -81,6 +82,7 @@ _REDRAW_DEBOUNCE_MS = 120
 #: `show_convergence(scan, energy, lambda_over_period, report)` -- optional
 #: because a backend with no `accuracy_knob` has nothing to sweep.
 _TAB_FACTORIES = {"scalar": ScalarTab, "integral": IntegralTab}
+_TAB_FACTORIES["cmethod"] = CMethodTab
 
 
 class MainWindow(QMainWindow):

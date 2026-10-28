@@ -10,6 +10,20 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- A "C-method (Chandezon)" tab in the GUI: `truncation` (1 to 256, default
+  32), the same `conductivity` selector as the integral tab, progress and a
+  working Cancel, and the convergence sweep. The solver's warnings (corners,
+  condition number, energy balance) print in the provenance panel. A too-small
+  truncation is refused on its field before a solve starts, by
+  `cmethod.truncation_floor`, the function the solver itself now applies.
+  Solvers may declare `Capabilities.accuracy_ceiling`, and the default
+  convergence ladder stops there: the C-method's ran on to 2048, so a sweep
+  that had not settled by 256 failed on a refused rung instead of reporting.
+
 ## 0.2.0 (2026-10-27)
 
 A minor release, for two reasons the versioning policy names: the in-house

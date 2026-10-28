@@ -112,6 +112,12 @@ class Capabilities:
         A solver declaring ``False`` cannot be cancelled. This is a property
         of the backend, and a UI should state it instead of offering a Cancel
         button that does nothing.
+    accuracy_ceiling
+        Largest value of ``accuracy_knob`` the backend accepts, or ``None``
+        for no limit. The convergence harness's default ladder stops here,
+        because a rung above it would be refused after rungs below it had
+        solved, and the harness treats that as a real failure rather than a
+        coarse-grid floor.
     """
 
     name: str
@@ -122,6 +128,7 @@ class Capabilities:
     handles_undercut: bool = False
     reports_progress: bool = False
     handles_layers: bool = False
+    accuracy_ceiling: int | None = None
 
     def check(self, problem: Problem, illumination: Illumination) -> None:
         """Raise :class:`UnsupportedConfiguration` if this case is out of scope."""

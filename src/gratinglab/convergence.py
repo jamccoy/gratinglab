@@ -201,7 +201,10 @@ def default_ladder(solver) -> tuple[int, ...]:
     """A ladder straddling the solver's own default for its accuracy knob.
 
     The default is read from the signature and is not hardcoded, so a backend
-    that changes its default does not leave this sweeping the wrong range.
+    that changes its default does not leave this sweeping the wrong range. A
+    backend declaring an ``accuracy_ceiling`` has the ladder cut there: a sweep
+    that has not plateaued by the ceiling reports that, instead of failing on
+    a rung the solver refuses.
     """
     knob = _knob_of(solver)
     default = inspect.signature(solver.solve).parameters[knob].default
@@ -211,7 +214,11 @@ def default_ladder(solver) -> tuple[int, ...]:
             f"{knob!r} ({default!r}), so a ladder cannot be inferred -- pass "
             "`values` explicitly"
         )
-    return doubling_ladder(max(1, default // 2**_RUNGS_BELOW_DEFAULT), _DEFAULT_RUNGS)
+    ladder = doubling_ladder(max(1, default // 2**_RUNGS_BELOW_DEFAULT), _DEFAULT_RUNGS)
+    ceiling = solver.capabilities.accuracy_ceiling
+    if ceiling is not None:
+        ladder = tuple(value for value in ladder if value <= ceiling)
+    return ladder
 
 
 def check_convergence(
