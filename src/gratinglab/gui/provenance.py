@@ -147,6 +147,16 @@ def provenance_lines(
         lines.append(Line("normalization: ", "dim"))
         lines.append(Line(f"{normalization} ({detail})\n", "dim"))
 
+    if scan.transmission is not None:
+        lines.append(Line("transmission: ", "dim"))
+        lines.append(
+            Line(
+                f"T ∈ [{scan.transmission.total.min():.4f}, "
+                f"{scan.transmission.total.max():.4f}]\n",
+                "dim",
+            )
+        )
+
     if scan.absorption is not None:
         # A physical result, not a problem: `dim`, never an alarm tag. It also
         # explains the deficit in Σ below, which would otherwise read as a
@@ -163,7 +173,9 @@ def provenance_lines(
     # `check_energy_balance` folds absorption into the total when a scan
     # carries one, so the conserved quantity is R + A there. Naming it Σ
     # anyway would collide with the Σ curve on the plot, which is R alone.
-    conserved = "Σ + A" if scan.absorption is not None else "Σ"
+    conserved = "Σ" + (" + T" if scan.transmission is not None else "") + (
+        " + A" if scan.absorption is not None else ""
+    )
     lines.append(Line("energy balance: ", "dim"))
     lines.append(
         Line(

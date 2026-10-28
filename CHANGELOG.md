@@ -12,8 +12,135 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+### Added
+
+- Coated gratings: `Problem.layers`, a tuple of `ConformalLayer(material,
+  thickness)`, innermost first, each following the surface beneath it as its
+  true offset, so convex corners are rounded and concave ones sharp
+  (conventions §3). The RCWA models them; every other solver refuses them,
+  through a new `Capabilities.handles_layers`, rather than solving the bare
+  grating. Checked: a vacuum layer reproduces the bare grating to 1e-12; a
+  layer of the grating's own material matches the integral solver on the
+  hand-written offset groove to 2e-5 (dielectric) and 2e-4 (metal, TE); a film
+  on a vanishing groove is the Airy film. Metal in TM converges, slowly, as
+  staircases do on rounded metal corners.
+
+- Transmitted orders. `EfficiencyScan.transmission` is a new optional
+  `Transmission` record (its own orders, efficiency and propagating flags,
+  under the same zero-means-evanescent rules), filled by the RCWA and by the
+  integral solver's tabulated mode whenever the material is lossless. A
+  substrate admits more orders than the vacuum, so it has its own order axis.
+  `check_energy_balance` adds its total, and the window's plot and provenance
+  show `T` and `Σ + T + A`.
+
+- RCWA against published lamellar benchmarks (`tests/test_rcwa_benchmarks.py`),
+  each value read in a free primary text and cited with its page: Granet's
+  metallic TM `R0 = 0.8484781` (as printed by Lalanne & Hugonin 2000 and in
+  Popov's *Gratings*, 2014) to 6.3e-4 at M = 80, run through
+  `check_convergence` so the one-call converged path is exercised on it;
+  Lalanne & Hugonin's dielectric TM `T-1 = 51.062%` to 5.4e-5 at M = 60; and
+  Gralak's silicon rods, p, `R0 = 0.9487` to 6.6e-5 at M = 80. Tolerances come
+  from truncation sweeps recorded in the tests. Moharam et al. 1995, Lalanne &
+  Morris 1996, Li 1996 and Granet & Guizal 1996 are closed access and no value
+  from them is used. Two published values are not reproduced and are recorded
+  in `docs/theory/rcwa.md` section 9: Granet's TE `R0`, which this code's
+  Littrow order matches instead (and the integral solver agrees with RCWA),
+  and Gralak's s `R0`, 0.0100 off.
+- Condition estimates for the rigorous solvers' dense systems. Every solve
+  and inverse in RCWA's core and the integral method's Nystrom systems goes
+  through `solvers/_conditioning.py`, which takes LAPACK's `gecon` 1-norm
+  estimate from the same LU factorisation for `O(n^2)` extra; the solutions
+  are numpy's to rounding. The worst value per group lands in
+  `Provenance.notes["condition"]` (`modes` and `smatrix` for RCWA, `nystrom`
+  for the integral method), and each solver warns past its own threshold,
+  placed by measurement above everything it reaches on ordinary problems:
+  `1e10` for RCWA (ordinary at most 4.4e7) and `1e14` for the integral method
+  (ordinary up to 4.5e12 on a corner-graded mesh at 3200 points). Measured at
+  a Rayleigh anomaly, both stay accurate far past those values, so the warning
+  says a problem is unusual, not that its answer is wrong.
+- A Rayleigh-anomaly sweep for both rigorous solvers
+  (`tests/test_rayleigh_anomaly.py`): RCWA and the integral method under both
+  boundary conditions, approaching an order passing off to 1e-8 nm from each
+  side and landing on it. Every efficiency stays finite, energy balance holds
+  at the solver's usual accuracy, and the gap either side is a square-root
+  branch point, `C sqrt(d / lambda*)` with `C` constant to 4% over six
+  decades of `d`, which is what tells continuity from a step.
+- The rigorous solvers, `integral` and `rcwa`, cap BLAS at one thread for
+  the length of a solve and restore the process's setting on the way out,
+  however the solve ends. OpenBLAS's thread-per-core default is slower at
+  these matrix sizes, and on a busy machine much slower: RCWA paid 20 to 135x
+  and the integral solver 1.1 to 3.7x. `blas_threads=None` opts out. The cap
+  is process-wide, as a BLAS pool is, and reference-counted so overlapping
+  solves on different threads share it. New dependency: `threadpoolctl`
+  (pure Python, BSD-3), the maintained way to reach NumPy's and SciPy's
+  separate OpenBLAS copies.
+- `workers=N` on both rigorous solvers solves wavelengths on `N` threads.
+  The default, 1, is the serial loop. The scan is identical to the serial
+  one, and the progress contract holds: every call on the caller's thread,
+  `(0, n)` first, `done` stepping by one, and `SolveCancelled` re-raised
+  unchanged once the rows already running finish, with nothing left running.
+  The integral solver gives each thread its own kernel memo over the scan's
+  shared geometry (`OperatorAssembler.fork`).
+- RCWA solves an in-plane mount as two decoupled `N`-square systems, TE and
+  TM, instead of one coupled `2N` system, and skips a polarization nothing
+  excites. The backend also forms the flux at the top plane only, which is
+  all `absorption` needs; `solve_stack(planes="all")`, still the core's
+  default, gives every plane. Both agree with the paths they skip to 1e-12
+  (`tests/test_solver_execution.py`).
+- `benchmarks/solver_speed.py` times each case in a fresh interpreter under
+  inherited and single-thread BLAS. Before and after, on MC1 (16 cores) with
+  another session's solver running alongside, best of 3, one wavelength
+  unless noted:
+
+  | case | before, default BLAS | before, 1 thread | after |
+  |---|---|---|---|
+  | integral, 512 points | 2.94 s | 1.43 s | 1.07 s |
+  | integral, 1024 points | 10.93 s | 7.80 s | 9.63 s |
+  | integral, tabulated conical, 512 | 3.12 s | 2.66 s | 2.65 s |
+  | rcwa lamellar in-plane, M=30 | 4.93 s | 0.057 s | 0.024 s |
+  | rcwa lamellar in-plane, M=80 | 15.01 s | 0.733 s | 0.232 s |
+  | rcwa lamellar conical, M=30 | 3.16 s | 0.046 s | 0.059 s |
+  | rcwa lamellar conical, M=80 | 14.18 s | 0.761 s | 0.947 s |
+  | rcwa sinusoid in-plane, M=30, 16 slabs | 64.00 s | 0.470 s | 0.322 s |
+  | integral, 8 wavelengths, 512 | 13.10 s | 3.55 s | 5.49 s; 1.87 s at `workers=8` |
+  | rcwa conical sinusoid, 8 wavelengths | 324.3 s | 4.99 s | 5.18 s; 0.66 s at `workers=8` |
+
+  "After" is with the inherited environment, so it is what a caller now
+  gets without setting anything. The conical and integral rows run the same
+  arithmetic as the single-thread column before and differ from it by the
+  machine's load, which moved between runs (12% to 25% at the start of each,
+  and higher while they ran); read differences under about 30% there as
+  noise. The in-plane RCWA gain over the single-thread column, 2 to 3x, is
+  the decoupling.
+
+- An RCWA backend, `rcwa`, written in-house: the first working slice of
+  roadmap item 2. It is the Fourier modal method with Li's factorization
+  rules (the inverse rule for the field component normal to the ridge walls),
+  Rumpf's symmetric S-matrix rather than a transmittance matrix, and the full
+  vectorial conical formulation, so off-plane incidence and TE-TM conversion
+  are exact. `truncation` is the accuracy knob. A lamellar groove is one exact
+  slab; any other single-valued profile is a staircase whose `slices` follow
+  the truncation by default, and an undercut is refused. A `Problem` means
+  what it means to the integral solver's tabulated mode, so efficiencies are
+  absolute and `absorption` is the power that enters the structure. The core
+  solves a layer stack with films above and below the grating region;
+  `Problem` cannot describe one yet, so that is tested at the core only.
+  Validated without the corpus: Fresnel on a flat interface to 1e-13, the
+  Airy formula for a film to 1e-12, reciprocity falling with truncation, Li's
+  rule converging on metallic TM where Laurent's is off by a fifth, and the
+  integral solver agreeing order by order (to 5e-7 on a dielectric and 8e-4 in
+  metallic TM, the gap shrinking as both refine). It registers, so it appears
+  in the conformance suite and the Help menu; it has no GUI tab yet. The
+  design note and what is not yet validated are in `docs/theory/rcwa.md`.
+
 ### Changed
 
+- `absorption` on a scan is now power absorbed, not power that entered the
+  material. For the integral solver's tabulated mode on a lossless material it
+  used to equal the transmitted power; that is now `transmission`, and the
+  absorption is the small remainder, which is the discretisation error. The
+  conserved sum, and so `check_energy_balance`, is unchanged in value. On an
+  absorbing material nothing changes.
 - Solver tabs carry a short label ("Integral" rather than "Integral
   (boundary integral equation)"), with the full name as the tab's tooltip and
   still in the Help menu. The full names overflowed the tab bar.

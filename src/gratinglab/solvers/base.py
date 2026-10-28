@@ -97,6 +97,10 @@ class Capabilities:
         True only for methods that parametrise the boundary instead of
         assuming a height function, which in practice means the integral
         method.
+    handles_layers
+        Whether the backend models ``Problem.layers``, the conformal layers
+        on a coated grating. A backend that cannot must refuse a problem with
+        any, rather than solve the bare grating beneath them.
     reports_progress
         Whether the backend accepts a ``progress`` keyword and honours the
         contract in :class:`Solver`. This is declared instead of assumed
@@ -117,6 +121,7 @@ class Capabilities:
     rigorous: bool = True
     handles_undercut: bool = False
     reports_progress: bool = False
+    handles_layers: bool = False
 
     def check(self, problem: Problem, illumination: Illumination) -> None:
         """Raise :class:`UnsupportedConfiguration` if this case is out of scope."""
@@ -130,6 +135,13 @@ class Capabilities:
             raise UnsupportedConfiguration(
                 f"{self.name} does not resolve {illumination.polarization} "
                 f"polarization; it supports {', '.join(self.polarizations)}"
+            )
+        if not self.handles_layers and problem.layers:
+            raise UnsupportedConfiguration(
+                f"{self.name} cannot model conformal layers, and this problem "
+                f"has {len(problem.layers)}. Solving the bare grating instead "
+                "would answer a different question; use a backend that "
+                "declares handles_layers (rcwa)."
             )
         if not self.handles_undercut and not problem.profile.is_single_valued():
             raise UnsupportedConfiguration(

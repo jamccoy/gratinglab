@@ -19,7 +19,7 @@ facet. Two boundary conditions are offered through the `conductivity` option:
 | Mode | Physics | Normalisation |
 |---|---|---|
 | `"perfect"` (default) | The grating is a perfect conductor: the field does not penetrate, there is no absorption, and the sum over propagating orders is exactly 1, which is a theorem (§5). A named `coating` is ignored, with a provenance warning. | Relative to a perfect reflector, matching the PC PCGrate reference tables. |
-| `"tabulated"` | One interface into a semi-infinite material whose complex index is read per wavelength from the named `coating` (falling back to `substrate`) via `materials.lookup`, using the coupled conical system of Goray & Schmidt (2010) described in §8 below. Absorption is computed and recorded, and `R + A = 1` is the theorem (§5). | **Absolute.** |
+| `"tabulated"` | One interface into a semi-infinite material whose complex index is read per wavelength from the named `coating` (falling back to `substrate`) via `materials.lookup`, using the coupled conical system of Goray & Schmidt (2010) described in §8 below. Absorption is computed and recorded, and `R + A = 1` is the theorem (§5). Into a lossless material the transmitted orders are recorded as the scan's `transmission` (since 2026-10-27), and the recorded absorption is the boundary integral minus their total, so the scan's conserved sum is `R + T + A`. | **Absolute.** |
 
 Both modes assume one boundary, one period and classical periodicity; multilayer
 stacks and crossed gratings are out of scope. A request for anything else (an
@@ -414,6 +414,63 @@ boundary integral of G&S eq. 26 mapped to this project's operators. On a flat
 interface it reduces exactly to `1 − |r|²` in both polarizations, and that
 reduction is how its sign and normalisation were pinned analytically before any
 test ran.
+
+## 9. Conditioning, and Rayleigh anomalies
+
+Every dense solve, perfectly conducting and finite, goes through
+`solvers/_conditioning.py`: one LU factorisation gives the solution, which is
+numpy's to rounding, and LAPACK's `gecon` estimate of the 1-norm condition
+number for `O(n^2)` more. The worst estimate in a scan is
+`Provenance.notes["condition"]["nystrom"]`. Measured 2026-10-27 (period 600,
+500 nm, 20°; conical is `gamma = 60`, unpolarized):
+
+| profile, boundary condition | mesh | P | TE | TM | conical |
+|---|---|---|---|---|---|
+| sinusoid, perfect | either | 800 | 6.8e2 | 3.5 | 7.0e2 |
+| lamellar, tabulated | equal arc | 800 | 6.0e2 | 6.0e2 | 4.0e3 |
+| lamellar, tabulated | graded, 4 | 200 | 1.1e7 | 1.1e7 | 3.3e7 |
+| | | 800 | 2.5e9 | 2.5e9 | 8.0e9 |
+| blazed, perfect | graded, 4 | 200 | 6.7e7 | 2.3e1 | 7.6e7 |
+| | | 800 | 1.7e10 | 2.3e1 | 2.0e10 |
+| | | 1600 | 2.8e11 | | |
+| | | 3200 | 4.5e12 | | |
+| blazed, tabulated | graded, 4 | 800 | 1.1e10 | 1.1e10 | 3.7e10 |
+| | | 1600 | 1.8e11 | | |
+| lamellar, perfect | graded, 4 | 1600 | 7.0e10 | | |
+
+TM's second-kind equation stays small. TE's first-kind single layer grows with
+the mesh, and a graded mesh, which crowds nodes into the corners, makes it grow
+as `P^4`; the tabulated system carries both, so its TE and TM entries are one
+number. None of this costs accuracy: the energy-balance deviation of the blazed TE
+solve is 1e-13 at 1600 points and 7e-15 at 3200. The warning threshold is
+therefore `1e14`, more than a decade above the largest ordinary value
+measured, 4.5e12 at 3200 points, which is the `P^4` growth to within 1%.
+Extrapolating it, a graded TE mesh would reach the threshold near 7000 points,
+beyond any convergence ladder here; that figure is an extrapolation, not a
+measurement.
+
+A Rayleigh anomaly is what crosses it. The kernel's `1/gamma_m` grows as
+`|lambda - lambda*|^-1/2`, and so does the estimate: on a metallic lamellar at
+400 graded points, TE, it reads 1.1e10, 1.1e11, 3.4e12 and 1.1e14 at
+`d = 1e-1, 1e-3, 1e-6, 1e-9` nm from grazing, and 9.2e15 exactly on it
+(perfect; the tabulated system is within a factor of two of that). The
+answer stays right throughout: energy balance is unchanged at every row, and
+the efficiencies are continuous, a square-root branch point with coefficient
+constant to 4% from `d = 1e-2` to `1e-8` nm, 0.96 (TE) and 0.95 (TM) tabulated,
+agreeing with RCWA's 0.96 and 0.86 on the same grating (`rcwa.md` §8). The
+perfect conductor in TM has a much stronger anomaly, coefficient 12.6, which is
+Wood's anomaly and not a fault. `tests/test_rayleigh_anomaly.py` holds both
+boundary conditions to this, and `tests/test_conditioning.py` that the warning
+fires within `1e-12` nm of grazing and not 1 nm away.
+
+So a large estimate here means the problem is unusual, not that the answer is
+wrong: the near-singular direction is the grazing order's own amplitude, which
+the other efficiencies do not lean on.
+
+One more cross-check against RCWA came out of its benchmarks: on Granet's
+metallic lamellar (`rcwa.md` §9), this solver's TE `R0` is 0.13070 at 400
+graded nodes against RCWA's 0.13170, and both differ from the published
+0.7342789, which their Littrow order matches instead.
 
 - D. Maystre and E. Popov, "Integral Method for Gratings", ch. 4 of
   E. Popov (ed.), *Gratings: Theory and Numeric Applications*, AMU (2012).

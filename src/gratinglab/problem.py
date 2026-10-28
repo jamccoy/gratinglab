@@ -17,11 +17,30 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .profiles import Blazed, FromProfileData, Lamellar, Sinusoidal
 
-__all__ = ["Problem", "AnyProfile"]
+__all__ = ["Problem", "ConformalLayer", "AnyProfile"]
 
 #: Profiles that can round-trip through JSON. A ``Profile`` structurally typed
 #: duck can be passed to a solver directly, but only these serialise.
 AnyProfile = Union[Blazed, Lamellar, Sinusoidal, FromProfileData]
+
+
+class ConformalLayer(BaseModel):
+    """A layer deposited on the grating, following its groove.
+
+    Its outer surface is the true offset of the surface beneath it, by
+    ``thickness`` along the normal (decided 2026-10-27): every point within
+    ``thickness`` of the surface below is in the layer. A convex corner is
+    therefore rounded into an arc of radius ``thickness``, which is what an
+    evaporated or sputtered film does, and a concave corner stays sharp.
+
+    >>> ConformalLayer(material="Au", thickness=20.0).thickness
+    20.0
+    """
+
+    model_config = ConfigDict(frozen=True, extra="forbid")
+
+    material: str
+    thickness: float = Field(gt=0.0, description="Along the surface normal, nm")
 
 
 class Problem(BaseModel):
@@ -49,6 +68,12 @@ class Problem(BaseModel):
         Illuminated groove count, for the finite-N interference factor of
         ISSI eq. (8). ``None`` means the infinite-grating limit, where orders
         become delta functions.
+    layers
+        Conformal layers on the grating, innermost first: the first follows
+        the profile cut into ``coating`` (or ``substrate``), and each one
+        after it follows the one before. Empty means a bare grating. A solver
+        that cannot model layers refuses a problem that has any
+        (:attr:`~gratinglab.solvers.base.Capabilities.handles_layers`).
     """
 
     model_config = ConfigDict(frozen=True, extra="forbid")
@@ -59,6 +84,7 @@ class Problem(BaseModel):
     substrate: str | None = None
     roughness: float = Field(default=0.0, ge=0.0, description="RMS roughness, nm")
     n_grooves: int | None = Field(default=None, gt=0)
+    layers: tuple[ConformalLayer, ...] = ()
 
     @property
     def depth(self) -> float:

@@ -40,6 +40,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ...geometry import order_range
+from .._conditioning import solve as _solve
 from ._boundary import PhysicalBoundary
 from ._greens import wavenumbers
 from ._nystrom import OperatorAssembler, dirichlet_matrix, neumann_matrix
@@ -54,6 +55,8 @@ class TransverseSolution:
     orders: NDArray[np.int64]
     amplitudes: NDArray[np.complex128]
     efficiencies: NDArray[np.float64]
+    #: 1-norm condition estimate of the Nystrom system (``_conditioning``).
+    condition: float = float("nan")
 
     @property
     def total(self) -> float:
@@ -100,7 +103,7 @@ def solve_transverse(
             boundary, k=k, alpha0=alpha0, period=period, terms=terms,
             assembler=assembler,
         )
-        density = np.linalg.solve(system, -incident)
+        density, condition = _solve(system, -incident)
         amplitudes = (
             (outgoing @ (weights * density)) / (2j * period * gamma_m)
         )
@@ -109,7 +112,7 @@ def solve_transverse(
             boundary, k=k, alpha0=alpha0, period=period, terms=terms,
             assembler=assembler,
         )
-        field = np.linalg.solve(system, incident)
+        field, condition = _solve(system, incident)
         direction = (
             (alpha_m[:, None] / gamma_m[:, None]) * boundary.nx[None, :]
             + boundary.ny[None, :]
@@ -125,4 +128,5 @@ def solve_transverse(
         orders=orders,
         amplitudes=amplitudes,
         efficiencies=flux * np.abs(amplitudes) ** 2,
+        condition=condition,
     )

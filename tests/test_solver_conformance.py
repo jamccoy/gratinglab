@@ -4,8 +4,8 @@
 file states it once and runs it against whatever `available_solvers()` returns,
 so a contributed backend -- registered directly or arriving through the
 ``gratinglab.solvers`` entry point -- is examined the moment it registers,
-without anyone writing a test for it. Today that is one solver; the file exists
-because the roadmap's RCWA integration makes it two.
+without anyone writing a test for it. It was written for one solver, ahead of
+the roadmap's RCWA; that backend has since registered and is the third.
 
 Each backend gets a configuration small enough to finish in milliseconds,
 chosen per method: the accuracy knob is turned *down*, because conformance is
@@ -20,8 +20,9 @@ import numpy as np
 import pytest
 
 from gratinglab.illumination import Illumination
-from gratinglab.problem import Problem
-from gratinglab.profiles import Blazed, FromProfileData, Sinusoidal
+from gratinglab.problem import ConformalLayer, Problem
+from gratinglab.materials.optical import OpticalConstants, write_ari
+from gratinglab.profiles import Blazed, FromProfileData, Lamellar, Sinusoidal
 from gratinglab.result import EfficiencyScan
 from gratinglab.solvers import (
     Capabilities,
@@ -37,6 +38,16 @@ ALL_POLARIZATIONS = ("TE", "TM", "unpolarized")
 #: A boundary that doubles back in ``t`` -- representable only by a method that
 #: parametrises the curve. Everything else must refuse it.
 UNDERCUT = FromProfileData(t=(0.0, 0.55, 0.45, 1.0), y=(0.0, 0.4, 0.1, 0.0))
+
+#: A lossless glass, n = 1.5, for a backend that cannot run without a material.
+#: Written into a library of the test's own (conftest keeps the user's out).
+GLASS = OpticalConstants(
+    name="conformance-glass",
+    wavelength_nm=(300.0, 700.0),
+    decrement=(-0.5, -0.5),
+    absorption=(0.0, 0.0),
+    source="test_solver_conformance",
+)
 
 
 @dataclass(frozen=True)
@@ -67,6 +78,19 @@ def small_case(name: str, capabilities: Capabilities) -> Case:
             illumination=Illumination.classical(alpha=10.0, polarization="TE"),
             wavelengths=np.array([350.0, 500.0, 650.0]),
             options={"boundary_points": 64},
+        )
+    elif name == "rcwa":
+        # RCWA has no perfect conductor, so the grating is glass; a lamellar
+        # groove is one exact slab, so truncation 3 is legal and fast.
+        case = Case(
+            problem=Problem(
+                period=500.0,
+                profile=Lamellar(depth_fraction=0.2),
+                coating=GLASS.name,
+            ),
+            illumination=Illumination.classical(alpha=10.0, polarization="TE"),
+            wavelengths=np.array([350.0, 500.0, 650.0]),
+            options={"truncation": 3},
         )
     else:
         # The scalar row, and the default: the off-plane blazed case the rest
@@ -104,7 +128,10 @@ def solver(name):
 
 
 @pytest.fixture
-def case(name, solver):
+def case(name, solver, tmp_path, monkeypatch):
+    if name == "rcwa":
+        write_ari(GLASS, tmp_path / f"{GLASS.name}.ari")
+        monkeypatch.setenv("GRATINGLAB_MATERIALS", str(tmp_path))
     return small_case(name, solver.capabilities)
 
 
@@ -160,6 +187,17 @@ class TestRefusingWhatItCannotDo:
         else:
             with pytest.raises(UnsupportedConfiguration):
                 caps.check(undercut, case.illumination)
+
+    def test_conformal_layers_are_refused_unless_handled(self, solver, case):
+        caps = solver.capabilities
+        coated = case.problem.model_copy(
+            update={"layers": (ConformalLayer(material="any", thickness=5.0),)}
+        )
+        if caps.handles_layers:
+            caps.check(coated, case.illumination)
+        else:
+            with pytest.raises(UnsupportedConfiguration):
+                caps.check(coated, case.illumination)
 
     def test_an_off_plane_mount_is_refused_unless_conical(self, solver, case):
         caps = solver.capabilities
