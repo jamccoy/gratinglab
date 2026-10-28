@@ -433,16 +433,21 @@ number for `O(n^2)` more. The worst estimate in a scan is
 | blazed, perfect | graded, 4 | 200 | 6.7e7 | 2.3e1 | 7.6e7 |
 | | | 800 | 1.7e10 | 2.3e1 | 2.0e10 |
 | | | 1600 | 2.8e11 | | |
+| | | 3200 | 4.5e12 | | |
 | blazed, tabulated | graded, 4 | 800 | 1.1e10 | 1.1e10 | 3.7e10 |
+| | | 1600 | 1.8e11 | | |
+| lamellar, perfect | graded, 4 | 1600 | 7.0e10 | | |
 
 TM's second-kind equation stays small. TE's first-kind single layer grows with
 the mesh, and a graded mesh, which crowds nodes into the corners, makes it grow
 as `P^4`; the tabulated system carries both, so its TE and TM entries are one
-number. None of this costs accuracy: the energy-balance deviation at the
-1600-point blazed TE solve is 1e-13. The warning threshold is therefore `1e14`,
-2.5 decades above the largest ordinary value measured. Extrapolating the `P^4`
-growth, a graded TE mesh would reach it near 7000 points, which no
-convergence ladder here asks for; that is an extrapolation, not a measurement.
+number. None of this costs accuracy: the energy-balance deviation of the blazed TE
+solve is 1e-13 at 1600 points and 7e-15 at 3200. The warning threshold is
+therefore `1e14`, more than a decade above the largest ordinary value
+measured, 4.5e12 at 3200 points, which is the `P^4` growth to within 1%.
+Extrapolating it, a graded TE mesh would reach the threshold near 7000 points,
+beyond any convergence ladder here; that figure is an extrapolation, not a
+measurement.
 
 A Rayleigh anomaly is what crosses it. The kernel's `1/gamma_m` grows as
 `|lambda - lambda*|^-1/2`, and so does the estimate: on a metallic lamellar at
