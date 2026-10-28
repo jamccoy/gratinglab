@@ -280,6 +280,8 @@ Everything here runs without the private corpus: `tests/test_rcwa.py`,
 | **published**: Granet's metallic lamellar, TM, `R0 = 0.8484781` | metallic TM through `Problem` and the convergence harness | yes |
 | **published**: Lalanne & Hugonin's dielectric lamellar on glass, TM, `T-1 = 51.062%` | transmitted orders, a substrate unlike the ridges | yes |
 | **published**: Gralak's free-standing silicon rods, p, `R0 = 0.9487` | a high-index dielectric with vacuum on both sides | yes |
+| **published**: Goray & Schmidt's dielectric lamellar, conical, circularly polarized, all eight orders | conical incidence, an arbitrary polarization state, transmitted orders | yes |
+| **published**: Goray & Schmidt's metallic lamellar, conical, linear at 45° | a conical metal; agrees to 1.1e-3, with the gap traced to the table (§9) | yes |
 | a sweep through a Rayleigh anomaly, to 1e-8 nm either side and on it | the external `kz -> 0`: finite, balanced, continuous | yes |
 
 The measured numbers are in the test docstrings, beside the assertions they
@@ -296,6 +298,8 @@ by truncation:
 | metal `n = 0.22 + 6.71i`, period = wavelength = depth, fill 0.5, 30°, TM `R0` | Granet 1999, as printed by Lalanne & Hugonin, JOSA A 17, 1033 (2000), Fig. 3, and by Popov (ed.) 2014, Tab. 5.1 | -4.2e-3 | -1.7e-3 | -6.3e-4 | 1e-3 at M = 80 |
 | ridges of 2.3 on 1.5, period two wavelengths, fill 0.234, 30°, TM `T-1` | Lalanne & Hugonin 2000, Fig. 6 | +1.2e-3 | +2.0e-4 | +1.4e-5 | 1e-4 at M = 60 |
 | silicon rods `eps = 12.96`, width 0.28 d, height `d/(2 sqrt 2)`, 45°, p `R0` | Gralak, ch. 10 of Popov (ed.) 2014, §10.6 | -2.2e-3 | -3.2e-4 | -6.6e-5 | 1e-4 at M = 80 |
+| `eps = 2.25` lamellar, `2H = d/2`, fill 0.5, `lambda = d/2`, `theta = 35.264°`, `phi = 30°`, `delta = 45°`, `psi = 90°`, `R-2` (the slowest of eight orders) | Goray & Schmidt, ch. 12 of Popov (ed.) 2014, Table 12.2 | +3.3e-6 | +8.1e-7 | +4.1e-7 | every order to half its last printed digit at M = 80 |
+| `eps = -24.99 + 1i` lamellar, `2H = d`, fill 0.5, `lambda = d/2`, `theta = 22.208°`, `phi = 20.705°`, `delta = 45°`, `psi = 0`, `R0` | the same, Table 12.1 | +5.0e-3 | -4.3e-4 | -1.1e-3 | 1.5e-3 at M = 80 (§9) |
 
 The metallic TM case converges from below and slowly (-2.1e-4 still at
 M = 200), as §3 leads one to expect. Lalanne & Hugonin's own RCWA column reads
@@ -304,6 +308,28 @@ orders. The dielectric case fixed two conventions its paper leaves to a figure
 that could not be read: the fill is the ridge's, and the order is this code's
 `-1`. The other three readings miss by more than 0.4, so the match identifies
 the convention rather than being tuned to it.
+
+Goray & Schmidt's two conical tables are the first published check of a
+conical mount and of a polarization that is neither TE nor TM. Their chapter
+defines everything needed, and nothing was guessed: the frame (§12.2.1,
+Fig. 12.2) is conventions §3's, with `y` the normal into the cover and `z`
+along the grooves; the incident wave vector is
+`k (sin θ cos φ, −cos θ cos φ, sin φ)`, so `Kx0 = sin θ cos φ` and
+`Ky = sin φ` here; the time factor is `e^{−iωt}`; orders are
+`α_n = α + 2πn/d` (§12.2.2), this code's `m`; and the polarization basis
+(§12.8.1) is `s = k × ŷ/|k × ŷ|`, `p = s × k/|k|`, with
+`δ = arctan|E_s/E_p|` and `ψ = −arg(E_s/E_p)`. The incident field is built
+from those and passed to `solve_stack` as it stands, since `Illumination`
+carries only TE and TM. Each grating is one profile between the cover and the
+substrate, so its ridges are the substrate's material, and with fill 0.5 which
+of ridge or groove `c` measures moves only the orders' phases.
+
+The dielectric table (12.2) is matched in all eight orders, three reflected and
+five transmitted, to half a unit of the last printed digit from M = 80, with
+the residuals no longer moving: what is left is the table's rounding. The
+opposite handedness misses every order by more than a hundred such units, so
+the match identifies the polarization convention. The metallic table (12.1) is
+matched only to 1.1e-3, which §9 explains.
 
 The canonical papers are **not** used. Moharam, Grann, Pommet & Gaylord, JOSA A
 12, 1068 (1995); Lalanne & Morris, JOSA A 13, 779 (1996); Li, JOSA A 13, 1870
@@ -365,12 +391,11 @@ Not yet validated:
 - the soft-X-ray grazing regime. It is not refused, and it is expensive: a
   groove hundreds of wavelengths deep needs very many slices and harmonics,
   which is why the integral method is the method of record there;
-- conical incidence against a published value. Goray & Schmidt's lamellar
-  Tables 12.1 and 12.2 (ch. 12 of Popov (ed.) 2014) are the candidates, and
-  want that chapter's angle and polarization conventions read first.
+- the polarization angles `δ` and `ψ` of the diffracted orders, which Goray &
+  Schmidt also tabulate; `solve_stack` returns powers, not order amplitudes.
 
-Two published values this backend does **not** reproduce, recorded rather than
-dropped:
+Three published values this backend does **not** reproduce, recorded rather
+than dropped:
 
 - **Granet's metallic lamellar in TE** (`R0 = 0.7342789`, the same table as the
   TM benchmark in §8). This backend converges cleanly to `R0 = 0.13170` (M = 80
@@ -387,6 +412,19 @@ dropped:
   and no other order is near the printed value. With vacuum on both sides the
   integral solver cannot check it. Possibly a one-digit misprint; not
   established.
+- **Goray & Schmidt's metallic conical lamellar** (Table 12.1, ch. 12 of
+  Popov (ed.) 2014; §8). This backend converges to `R-2, R-1, R0, R1 =
+  7.5551, 13.2648, 44.1572, 31.1065%` at M = 240 against the printed
+  `7.52, 13.25, 44.27, 31.05`: `R0` 1.1e-3 low, `R1` 5.7e-4 and `R-2` 3.5e-4
+  high. The same state fed to the integral solver as `(E_z, B_z)`, corner
+  grading 4, agrees with RCWA instead: `R0` is 44.249 at 400 points, 44.185
+  at 600, 44.170 at 800 and 44.163 at 1200, and at 1200 every order is
+  within 6e-5 of RCWA. At 400 points, the paper's count, it is within 2.2e-4 of the table in
+  every order. So the printed values look like an integral solution not yet
+  converged in its discretization, which a 1e-6 energy balance would not show
+  (§4). That is an inference from this project's two solvers, not a statement
+  of the chapter's; the dielectric companion table (12.2) is matched to its
+  printed digits, which rules out a convention fault common to both.
 
 Decisions for the project rather than for this backend:
 
