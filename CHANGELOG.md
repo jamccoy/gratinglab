@@ -10,7 +10,7 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
-## Unreleased
+## 0.2.3 (2026-10-28)
 
 ### Changed
 
