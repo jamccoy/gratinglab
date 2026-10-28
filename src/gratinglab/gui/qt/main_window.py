@@ -188,7 +188,7 @@ class MainWindow(QMainWindow):
         self.resizeDocks([dock], [300], Qt.Orientation.Horizontal)
 
     def _build_tabs(self) -> QWidget:
-        from ..docs import display_title
+        from ..docs import display_title, short_title
         from ...solvers import available_solvers
 
         self.tabs: dict[str, QWidget] = {}
@@ -219,7 +219,8 @@ class MainWindow(QMainWindow):
                 # has nothing to sweep and should not carry the button.
                 converge.connect(lambda _checked=False, n=name: self.solve(n, sweep=True))
             self.tabs[name] = tab
-            self._tab_widget.addTab(tab, display_title(name))
+            index = self._tab_widget.addTab(tab, short_title(name))
+            self._tab_widget.setTabToolTip(index, display_title(name))
 
         # Setup is leftmost so it is easy to find, but a solver tab -- not
         # the explanatory stub -- is what should be showing, and solving,

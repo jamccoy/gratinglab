@@ -975,14 +975,18 @@ class TestGeometryTab:
     tested in `tests/test_gui_diagram.py`, without a window."""
 
     def test_it_sits_between_setup_and_the_solver_tabs(self, win):
-        from gratinglab.gui.docs import display_title
+        from gratinglab.gui.docs import display_title, short_title
 
         titles = [win._tab_widget.tabText(i) for i in range(win._tab_widget.count())]
         assert titles[0] == "Setup"
         assert titles[1] == "Grating Geometry"
         # Everything after the boundary is a solver tab -- however many
         # solvers are registered, and in whatever order.
-        assert titles[2:] == [display_title(name) for name in win.tabs]
+        # Short labels on the tabs, so the bar does not overflow as solvers
+        # are added; the full name is the tooltip, and the Help menu's.
+        assert titles[2:] == [short_title(name) for name in win.tabs]
+        tips = [win._tab_widget.tabToolTip(i) for i in range(2, win._tab_widget.count())]
+        assert tips == [display_title(name) for name in win.tabs]
 
     def test_it_is_not_in_the_solver_tab_registry(self, win):
         """It implements none of the solve/cancel contract, so it must never

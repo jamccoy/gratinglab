@@ -105,6 +105,17 @@ def display_title(name: str) -> str:
     return _TITLES.get(name, name)
 
 
+def short_title(name: str) -> str:
+    """A solver's tab label: its display title without the bracketed gloss.
+
+    ``"Integral (boundary integral equation)"`` becomes ``"Integral"``. The
+    full title was the tab label until 2026-10-27, and with four tabs plus the
+    geometry dock it already overflowed the bar, so every new solver made it
+    worse. The full title stays in the Help menu and the tab's tooltip.
+    """
+    return display_title(name).split(" (", 1)[0]
+
+
 def find_theory_root(start: Path | None = None) -> Path | None:
     """Search upward from ``start`` for a ``docs/theory`` directory.
 

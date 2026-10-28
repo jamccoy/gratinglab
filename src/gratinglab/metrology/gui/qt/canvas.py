@@ -7,7 +7,6 @@ nothing here is ever called from another thread.
 from __future__ import annotations
 
 import functools
-import os
 
 import numpy as np
 
@@ -72,8 +71,7 @@ class PlotCanvas(FigureCanvas):
         ax.plot(disp_um, profile_nm, color='steelblue', linewidth=1.0)
         ax.set_xlabel("Position (µm)", fontsize=11)
         ax.set_ylabel("Height (nm)", fontsize=11)
-        ax.set_title(f"Raw AFM Profile: {os.path.basename(filename)}\n"
-                     f"Scan width: {scan_size_um:.3f} µm", fontsize=11)
+        ax.set_title(f"Raw profile, scan width {scan_size_um:.3f} µm", fontsize=11)
         ax.grid(True, alpha=0.3)
         self.draw()
 
@@ -86,7 +84,7 @@ class PlotCanvas(FigureCanvas):
         self.fig.colorbar(im, ax=ax, label='Height (nm)')
         ax.set_xlabel("X (µm)", fontsize=11)
         ax.set_ylabel("Scan line", fontsize=11)
-        ax.set_title(f"2D AFM Topography: {os.path.basename(filename)}", fontsize=11)
+        ax.set_title("Topography", fontsize=11)
         self.draw()
 
     @_remembered
@@ -104,7 +102,7 @@ class PlotCanvas(FigureCanvas):
                 linewidth=1.8, label=f'Mean (n={n_groups})', zorder=5)
         ax.set_xlabel("Position (µm)", fontsize=11)
         ax.set_ylabel("Height (nm)", fontsize=11)
-        ax.set_title(f"Row-Group Profiles: {os.path.basename(filename)}\n"
+        ax.set_title("Row-group profiles\n"
                      f"{n_groups} groups × {group_info['rows_per_group']} rows each  |  "
                      f"Scan width: {scan_size_um:.3f} µm", fontsize=10)
         ax.legend(fontsize=10)
@@ -142,7 +140,7 @@ class PlotCanvas(FigureCanvas):
 
         ax.set_xlabel("Position (µm)", fontsize=11)
         ax.set_ylabel("Height (nm)", fontsize=11)
-        ax.set_title(f"Groove Detection: {os.path.basename(filename)}", fontsize=11)
+        ax.set_title("Groove detection", fontsize=11)
         ax.legend(fontsize=9)
         ax.grid(True, alpha=0.3)
         self.draw()
@@ -182,6 +180,5 @@ class PlotCanvas(FigureCanvas):
                       fontsize=10)
         ax3.grid(True, alpha=0.3)
 
-        self.fig.suptitle(f"{os.path.basename(filename)}: "
-                          f"{mean:.2f}° ± {sem:.3f}° (SEM)", fontsize=11)
+        self.fig.suptitle(f"Blaze angle {mean:.2f}° ± {sem:.3f}° (SEM)", fontsize=11)
         self.draw()

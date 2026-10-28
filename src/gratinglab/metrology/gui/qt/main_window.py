@@ -41,9 +41,11 @@ class MainWindow(QMainWindow):
 
     _request_analysis = Signal(str, object, int)
 
+    TITLE = "AFM Blaze Angle Analysis"
+
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("AFM Blaze Angle Analysis")
+        self.setWindowTitle(self.TITLE)
         self.resize(1280, 760)
         # The analysis runs on a worker thread, and a cycle collection there
         # once destroyed Qt objects off the GUI thread: a segfault on macOS.
@@ -492,6 +494,10 @@ class MainWindow(QMainWindow):
         self._scan_size = self.importer.scan_size
         self._filename = self.importer.filename
         self._result = self._settings = None
+        # The file is named here, once, rather than in every plot's title.
+        self.setWindowTitle(
+            f"{os.path.basename(self._filename)} - {self.TITLE}"
+            if self._filename else self.TITLE)
 
         if self._data is None:
             for button in self._file_buttons + self._result_buttons:
