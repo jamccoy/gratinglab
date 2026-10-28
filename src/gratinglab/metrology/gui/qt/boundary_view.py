@@ -21,14 +21,16 @@ import os
 from . import *  # noqa: F401,F403 - sets QT_API before matplotlib's shim loads
 
 from PySide6.QtWidgets import (
-    QCheckBox, QFileDialog, QFrame, QGroupBox, QHBoxLayout, QLabel,
-    QMessageBox, QPushButton, QScrollArea, QSpinBox, QVBoxLayout, QWidget,
+    QCheckBox, QFileDialog, QGroupBox, QHBoxLayout, QLabel,
+    QMessageBox, QPushButton, QSpinBox, QVBoxLayout, QWidget,
 )
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 from gratinglab.gui.qt import theming
-from gratinglab.gui.theme import style_figure
+from gratinglab.gui.theme import set_titles, style_figure
+
+from .layout import controls_beside
 
 from ...boundary import build_boundary_profile
 from ...core.tip import format_angles
@@ -65,7 +67,6 @@ class BoundaryView(QWidget):
         root.setSpacing(8)
 
         left = QWidget()
-        left.setFixedWidth(272)
         column = QVBoxLayout(left)
         column.setContentsMargins(0, 0, 0, 0)
         column.setSpacing(8)
@@ -73,23 +74,12 @@ class BoundaryView(QWidget):
         column.addWidget(self._build_metrics_group())
         column.addStretch()
 
-        scroll = QScrollArea()
-        scroll.setWidget(left)
-        scroll.setWidgetResizable(True)
-        scroll.setFixedWidth(292)
-        scroll.setFrameShape(QFrame.NoFrame)
-
         self.figure = Figure(figsize=(8, 6), tight_layout=True)
         self.canvas = FigureCanvas(self.figure)
         self._show_placeholder()
         theming.subscribe(self._on_theme)
 
-        root.addWidget(scroll)
-        divider = QFrame()
-        divider.setFrameShape(QFrame.VLine)
-        divider.setFrameShadow(QFrame.Sunken)
-        root.addWidget(divider)
-        root.addWidget(self.canvas, stretch=1)
+        root.addWidget(controls_beside(left, self.canvas), stretch=1)
 
     def _build_export_group(self):
         group = QGroupBox("Boundary profile")
@@ -327,7 +317,8 @@ class BoundaryView(QWidget):
                         alpha=0.8 if dark else 0.6)
         avg_ax.set_xlabel("Position (nm)", fontsize=10)
         avg_ax.set_ylabel("Height (nm)", fontsize=10)
-        avg_ax.set_title("Averaged groove", fontsize=10)
+        set_titles(avg_ax, "Averaged groove", f"{p.n_used} grooves",
+                   theming.current())
         avg_ax.legend(fontsize=8)
         avg_ax.grid(True, alpha=0.3)
 
@@ -336,9 +327,9 @@ class BoundaryView(QWidget):
         norm_ax.axhline(0, color=theming.current().ink, linestyle='--', linewidth=0.5)
         norm_ax.set_xlabel("Normalised position (0 to 1 = one period)", fontsize=10)
         norm_ax.set_ylabel("Height (fraction of period)", fontsize=10)
-        norm_ax.set_title(
-            f"Exported profile: {len(p.x_norm)} points, "
-            f"depth {p.metrics['groove_depth']:.4f} of period", fontsize=10)
+        set_titles(norm_ax, "Exported profile",
+                   f"{len(p.x_norm)} points, depth {p.metrics['groove_depth']:.4f} "
+                   "of period", theming.current())
         norm_ax.grid(True, alpha=0.3)
 
         self.canvas.draw()

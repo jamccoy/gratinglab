@@ -18,9 +18,7 @@ from endstation.qt.tokens import StaleGuard
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QFont
 from PySide6.QtWidgets import (
-    QCheckBox, QComboBox, QDoubleSpinBox, QFrame,
-    QGroupBox, QHBoxLayout, QLabel, QMainWindow, QPushButton, QScrollArea,
-    QSpinBox, QStatusBar, QTabWidget, QVBoxLayout, QWidget,
+    QCheckBox, QComboBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QLabel, QMainWindow, QPushButton, QSpinBox, QStatusBar, QTabWidget, QVBoxLayout, QWidget,
 )
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 
@@ -28,6 +26,7 @@ from ...core.processing import raw_data, raw_data_multi_group
 from ...core.tip import TIP_PRESETS, VALID_TIP_CORRECTIONS, format_angles
 from ...settings import (AnalysisSettings, MAX_FACET_TRIM, VALID_BLAZE_SIDES)
 from ..state import FormState, build, summarize_result
+from .layout import controls_beside
 from .canvas import PlotCanvas
 from .boundary_view import BoundaryView
 from .import_view import ImportView
@@ -107,19 +106,12 @@ class MainWindow(QMainWindow):
         root.setSpacing(8)
 
         left = QWidget()
-        left.setFixedWidth(272)
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
         left_layout.setSpacing(8)
         left_layout.addWidget(self._build_analysis_group())
         left_layout.addWidget(self._build_view_group())
         left_layout.addStretch()
-
-        scroll = QScrollArea()
-        scroll.setWidget(left)
-        scroll.setWidgetResizable(True)
-        scroll.setFixedWidth(292)
-        scroll.setFrameShape(QFrame.NoFrame)
 
         right = QWidget()
         right_layout = QVBoxLayout(right)
@@ -129,12 +121,7 @@ class MainWindow(QMainWindow):
         right_layout.addWidget(self.canvas, stretch=1)
         right_layout.addWidget(self._build_results_panel())
 
-        root.addWidget(scroll)
-        divider = QFrame()
-        divider.setFrameShape(QFrame.VLine)
-        divider.setFrameShadow(QFrame.Sunken)
-        root.addWidget(divider)
-        root.addWidget(right, stretch=1)
+        root.addWidget(controls_beside(left, right), stretch=1)
 
         self.tabs.addTab(central, "Analysis")
 

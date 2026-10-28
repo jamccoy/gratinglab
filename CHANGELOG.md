@@ -10,6 +10,20 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- The AFM window's controls column is a splitter, not a fixed 272 px strip:
+  it starts wide enough for its controls, drags wider or narrower down to a
+  floor at which labels still fit, and gives the plot the rest. The same
+  layout serves the Import, Analysis and Boundary tabs
+  (`metrology.gui.qt.layout.controls_beside`).
+- One title style for every AFM plot (`gui.theme.set_titles`): what the
+  panel is, left-aligned and semibold, and the figures it reports (scan
+  width, groove count, method, depth) on the right in the theme's muted
+  colour. Titles no longer run to a second line or carry explanations.
+
 ## 0.2.2 (2026-10-28)
 
 ### Changed

@@ -37,6 +37,7 @@ __all__ = [
     "order_colors",
     "provenance_colors",
     "rc_params",
+    "set_titles",
     "style_axes",
     "style_figure",
 ]
@@ -306,6 +307,27 @@ def style_axes(axes, theme: Theme) -> None:
         for axis in (axes.xaxis, axes.yaxis, zaxis):
             axis.set_pane_color(_pane(theme))
             axis.line.set_color(theme.ink)
+
+
+#: Plot titles: what the panel is, at this size and weight, left-aligned.
+TITLE_SIZE = 11
+TITLE_WEIGHT = "semibold"
+#: The figures a panel reports beside its title, smaller and in ``muted``.
+DETAIL_SIZE = 9
+
+
+def set_titles(axes, title: str, detail: str | None = None, theme: Theme | None = None) -> None:
+    """Title a panel: its name on the left, the numbers it reports on the right.
+
+    One style for every plot, so a title says what the panel is and never has
+    to carry a measurement, a setting or an explanation on a second line. The
+    detail is where those go, quieter than the title. Pass ``theme`` from a
+    caller that has one; otherwise the plain ``LIGHT`` colours are used.
+    """
+    theme = theme or LIGHT
+    axes.set_title(title, loc="left", fontsize=TITLE_SIZE, fontweight=TITLE_WEIGHT,
+                   color=theme.ink)
+    axes.set_title(detail or "", loc="right", fontsize=DETAIL_SIZE, color=theme.muted)
 
 
 def style_figure(figure, theme: Theme) -> None:
