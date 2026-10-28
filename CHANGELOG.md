@@ -41,6 +41,11 @@ entries under "Unreleased" into a section named for the new version;
   - The guard that keeps Python's cycle collector on the GUI thread is
     `endstation.qt.gc_guard`, which this package's copy moved into;
     `gratinglab.gui.qt.gc_guard` is removed.
+  - `gratinglab.gui.state.FormErrors` is `endstation.forms.FormErrors`. This
+    is the one interface change here: it is no longer a `ValueError` (nothing
+    in this package caught it as one), and its `str()` puts each field error
+    on its own line instead of joining them with `"; "`. `.errors` is
+    unchanged.
 
 ## 0.2.1 (2026-10-28)
 
