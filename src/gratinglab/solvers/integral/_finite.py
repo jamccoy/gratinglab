@@ -84,6 +84,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ...geometry import order_range
+from .._conditioning import solve as _solve
 from ._boundary import PhysicalBoundary
 from ._greens import wavenumbers
 from ._nystrom import (
@@ -118,6 +119,9 @@ class FiniteSolution:
     absorption: float
     transmitted_orders: NDArray[np.int64]
     transmitted_efficiencies: NDArray[np.float64]
+    #: Worst 1-norm condition estimate of the coupled system(s) solved for
+    #: this state (``_conditioning``); the states of one call share it.
+    condition: float = float("nan")
 
     @property
     def total(self) -> float:
@@ -308,7 +312,7 @@ def solve_finite_states(
         for column, (p_z, q_z) in enumerate(states):
             rhs[:points, column] = p_z * incident_trace
             rhs[points:, column] = q_z * incident_trace
-        stacked = np.linalg.solve(system, rhs)
+        stacked, condition = _solve(system, rhs)
         densities = [
             (stacked[:points, column], stacked[points:, column])
             for column in range(len(states))
@@ -316,8 +320,9 @@ def solve_finite_states(
     else:
         rhs_e = np.stack([p_z * incident_trace for p_z, _ in states], axis=-1)
         rhs_b = np.stack([q_z * incident_trace for _, q_z in states], axis=-1)
-        w_all = np.linalg.solve(trace_block - c_e * derivative_block, rhs_e)
-        tau_all = np.linalg.solve(trace_block - c_b * derivative_block, rhs_b)
+        w_all, condition_e = _solve(trace_block - c_e * derivative_block, rhs_e)
+        tau_all, condition_b = _solve(trace_block - c_b * derivative_block, rhs_b)
+        condition = max(condition_e, condition_b)
         densities = [
             (w_all[:, column], tau_all[:, column])
             for column in range(len(states))
@@ -415,6 +420,7 @@ def solve_finite_states(
                 absorption=absorption,
                 transmitted_orders=transmitted_orders,
                 transmitted_efficiencies=transmitted,
+                condition=condition,
             )
         )
     return solutions

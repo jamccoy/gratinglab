@@ -43,6 +43,7 @@ from ...geometry import cos_beta, is_propagating, order_range, sin_beta
 from ...illumination import Illumination
 from ...problem import Problem
 from ...result import EfficiencyScan, Provenance
+from .._conditioning import ESTIMATOR, ConditionLog
 from ..base import Capabilities, Progress, UnsupportedConfiguration, register
 from ._core import incident_field, solve_stack
 from ._stack import groove_geometry
@@ -53,6 +54,15 @@ __all__ = ["RcwaSolver", "rcwa"]
 #: region's ``V = Q kz^-1`` is nearly singular there (a Rayleigh anomaly).
 #: The integral solver's threshold, so the two flag the same rows.
 _ANOMALY_COS = 1e-3
+
+#: Condition estimate above which the solve warns. Measured 2026-10-27
+#: (``docs/theory/rcwa.md`` section 9): ordinary problems reach at most
+#: ``4.4e7`` (a metal at truncation 200; it grows about as ``M^2`` to
+#: ``M^3``), and the one measured case past ``1e10`` is an order exactly at
+#: grazing, ``5e11``, where the external region's ``kz`` sits on its floor.
+#: The answer was still right there, so the warning says "unusual", not
+#: "wrong".
+_WARN_KAPPA = 1e10
 
 #: Fewest slabs a staircase gets by default, however low the truncation.
 _MIN_SLICES = 8
@@ -184,6 +194,8 @@ class RcwaSolver:
         absorption = np.zeros(len(wavelengths))
         propagating = np.zeros_like(efficiency, dtype=bool)
         anomalous: list[float] = []
+        conditioning = ConditionLog()
+        ill_conditioned: list[float] = []
         columns = all_orders + truncation  # harmonic m sits at index m + M
 
         for row, wavelength in enumerate(wavelengths):
@@ -208,6 +220,9 @@ class RcwaSolver:
                 incidents=incidents,
                 truncation=truncation,
             )
+            conditioning.merge(solution.condition)
+            if max(solution.condition.values(), default=0.0) > _WARN_KAPPA:
+                ill_conditioned.append(float(wavelength))
             reflected = solution.reflected[:, columns].mean(axis=0)
             efficiency[row, live] = reflected[live]
             propagating[row, live] = True
@@ -225,6 +240,9 @@ class RcwaSolver:
                 "the external region's kz is nearly zero there and those rows "
                 "are numerically delicate"
             )
+        conditioning_warning = conditioning.warning("rcwa", ill_conditioned, _WARN_KAPPA)
+        if conditioning_warning is not None:
+            warnings.append(conditioning_warning)
         if (
             problem.coating is not None
             and problem.substrate is not None
@@ -264,6 +282,11 @@ class RcwaSolver:
                 "continuity is built into the S-matrix); it checks the "
                 "implementation, not convergence"
             ),
+            "condition": {
+                "estimator": ESTIMATOR,
+                "warn_above": _WARN_KAPPA,
+                **conditioning.worst,
+            },
         }
 
         return EfficiencyScan(
