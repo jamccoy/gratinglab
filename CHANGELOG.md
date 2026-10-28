@@ -10,6 +10,13 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- Requires endstation 0.2.6, and uses its copies of components this package
+  had carried its own versions of. Nothing a user sees changes.
+
 ## 0.2.1 (2026-10-28)
 
 ### Added

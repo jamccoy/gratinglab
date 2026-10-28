@@ -51,7 +51,7 @@ dependencies = [
     # `dependencies = []` and has a test that fails if that stops being true,
     # so this line adds no transitive weight -- the Qt and matplotlib parts sit
     # behind its own extras, which our `gui` extra asks for by name.
-    "endstation>=0.2.2",
+    "endstation>=0.2.6",
     # The rigorous solvers cap BLAS threads for the length of a solve
     # (solvers/_execution.py): OpenBLAS's thread-per-core default made RCWA
     # up to 135x slower on a busy machine, measured in benchmarks/
@@ -85,7 +85,7 @@ gui = [
     "matplotlib>=3.8",
     "PySide6-Essentials>=6.7,!=6.12.0; python_version < '3.12'",
     "PySide6-Essentials>=6.7; python_version >= '3.12'",
-    "endstation[qt]>=0.2.2",
+    "endstation[qt]>=0.2.6",
 ]
 # Groove metrology: reading AFM scans and averaging them into a boundary
 # profile. An extra for the same reason the GUI is one -- `pip install
