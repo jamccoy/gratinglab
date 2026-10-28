@@ -27,6 +27,9 @@ from PySide6.QtWidgets import (
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from gratinglab.gui.qt import theming
+from gratinglab.gui.theme import style_figure
+
 from ...boundary import build_boundary_profile
 from ...core.tip import format_angles
 from ...config import RESULTS_DIR
@@ -79,6 +82,7 @@ class BoundaryView(QWidget):
         self.figure = Figure(figsize=(8, 6), tight_layout=True)
         self.canvas = FigureCanvas(self.figure)
         self._show_placeholder()
+        theming.subscribe(self._on_theme)
 
         root.addWidget(scroll)
         divider = QFrame()
@@ -291,10 +295,11 @@ class BoundaryView(QWidget):
             f"Max curvature   : {m['max_curvature']:.4f}{rotation}{tip}")
 
     def _show_placeholder(self, message="Load an AFM file in the Import tab"):
+        self._placeholder = message
         self.figure.clear()
         axes = self.figure.add_subplot(111)
         axes.text(0.5, 0.5, message, ha='center', va='center', fontsize=12,
-                  color='gray', transform=axes.transAxes)
+                  color=theming.current().muted, transform=axes.transAxes)
         axes.set_axis_off()
         self.canvas.draw()
 
@@ -322,7 +327,7 @@ class BoundaryView(QWidget):
 
         # What lands in the file.
         norm_ax.plot(p.x_norm, p.y_norm, color='steelblue', linewidth=1.6)
-        norm_ax.axhline(0, color='k', linestyle='--', linewidth=0.5)
+        norm_ax.axhline(0, color=theming.current().ink, linestyle='--', linewidth=0.5)
         norm_ax.set_xlabel("Normalised position (0 to 1 = one period)", fontsize=10)
         norm_ax.set_ylabel("Height (fraction of period)", fontsize=10)
         norm_ax.set_title(
@@ -331,6 +336,19 @@ class BoundaryView(QWidget):
         norm_ax.grid(True, alpha=0.3)
 
         self.canvas.draw()
+
+    def _on_theme(self, theme):
+        """Draw the figure again in the new theme.
+
+        Each draw clears the figure and builds fresh axes, which take their
+        colours from matplotlib's settings, so redrawing is the restyle. The
+        figure predates the change and needs its own background set first.
+        """
+        style_figure(self.figure, theme)
+        if self._profile is not None:
+            self._draw()
+        else:
+            self._show_placeholder(self._placeholder)
 
     def _set_actions_enabled(self, enabled: bool) -> None:
         """All four actions need only a profile, so they are enabled together."""

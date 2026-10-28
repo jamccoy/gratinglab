@@ -27,6 +27,9 @@ from PySide6.QtWidgets import (
 )
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+
+from gratinglab.gui.qt import theming
+from gratinglab.gui.theme import style_figure
 from matplotlib.patches import Rectangle
 from matplotlib.widgets import RectangleSelector
 
@@ -112,6 +115,7 @@ class ImportView(QWidget):
         self.figure = Figure(figsize=(8, 6), tight_layout=True)
         self.canvas = FigureCanvas(self.figure)
         self._show_placeholder()
+        theming.subscribe(self._on_theme)
 
         root.addWidget(scroll)
         divider = QFrame()
@@ -528,9 +532,19 @@ class ImportView(QWidget):
         self.figure.clear()
         axes = self.figure.add_subplot(111)
         axes.text(0.5, 0.5, message, ha='center', va='center', fontsize=12,
-                  color='gray', transform=axes.transAxes)
+                  color=theming.current().muted, transform=axes.transAxes)
         axes.set_axis_off()
         self.canvas.draw()
+
+    def _on_theme(self, theme):
+        """Draw the figure again in the new theme.
+
+        Each draw clears the figure and builds fresh axes, which take their
+        colours from matplotlib's settings, so redrawing is the restyle. The
+        figure predates the change and needs its own background set first.
+        """
+        style_figure(self.figure, theme)
+        self._redraw()
 
     def _redraw(self):
         if self._flat is None:

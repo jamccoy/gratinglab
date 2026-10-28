@@ -10,6 +10,17 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Fixed
+
+- The theme choice is now in every window. The AFM window had no menu bar
+  and so no View > Theme at all, and its plots ignored the theme: in Dark the
+  controls went dark and every figure stayed white. Both windows now carry the
+  same Theme menu (`theming.ThemeMenu`), checked in step whichever one it was
+  used in, and the AFM window's five figures redraw in the new theme, with
+  their black lines and grey captions taken from it.
+
 ## 0.1.13 (2026-10-27)
 
 ### Added

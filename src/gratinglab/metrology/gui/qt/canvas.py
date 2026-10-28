@@ -6,6 +6,7 @@ nothing here is ever called from another thread.
 """
 from __future__ import annotations
 
+import functools
 import os
 
 import numpy as np
@@ -16,7 +17,19 @@ import matplotlib
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
+from gratinglab.gui.qt import theming
+from gratinglab.gui.theme import style_figure
+
 __all__ = ["PlotCanvas"]
+
+
+def _remembered(method):
+    """Record the call, so a theme change can draw the same plot again."""
+    @functools.wraps(method)
+    def wrapper(self, *args, **kwargs):
+        self._last = (method, args, kwargs)
+        return method(self, *args, **kwargs)
+    return wrapper
 
 
 class PlotCanvas(FigureCanvas):
@@ -24,16 +37,35 @@ class PlotCanvas(FigureCanvas):
         self.fig = Figure(figsize=(8, 5), tight_layout=True)
         super().__init__(self.fig)
         self.setParent(parent)
+        self._last = None
+        theming.subscribe(self._on_theme)
         self.show_placeholder("Load an AFM file to see the raw profile")
 
+    def _on_theme(self, theme):
+        """Redraw the last plot in the new theme.
+
+        Every plot clears the figure and builds fresh axes, which take their
+        colours from matplotlib's settings at that moment, so drawing it again
+        is the whole restyle. The figure itself predates the change and needs
+        its own background set first.
+        """
+        style_figure(self.fig, theme)
+        if self._last is not None:
+            method, args, kwargs = self._last
+            method(self, *args, **kwargs)
+        else:
+            self.draw_idle()
+
+    @_remembered
     def show_placeholder(self, message):
         self.fig.clear()
         ax = self.fig.add_subplot(111)
         ax.text(0.5, 0.5, message, ha='center', va='center', fontsize=12,
-                color='gray', transform=ax.transAxes)
+                color=theming.current().muted, transform=ax.transAxes)
         ax.set_axis_off()
         self.draw()
 
+    @_remembered
     def plot_raw(self, disp_um, profile_nm, filename, scan_size_um):
         self.fig.clear()
         ax = self.fig.add_subplot(111)
@@ -45,6 +77,7 @@ class PlotCanvas(FigureCanvas):
         ax.grid(True, alpha=0.3)
         self.draw()
 
+    @_remembered
     def plot_2d(self, data, scan_size_um, filename):
         self.fig.clear()
         ax = self.fig.add_subplot(111)
@@ -56,6 +89,7 @@ class PlotCanvas(FigureCanvas):
         ax.set_title(f"2D AFM Topography: {os.path.basename(filename)}", fontsize=11)
         self.draw()
 
+    @_remembered
     def plot_row_groups(self, disp_um, profiles_nm, group_info, filename, scan_size_um):
         self.fig.clear()
         ax = self.fig.add_subplot(111)
@@ -66,7 +100,7 @@ class PlotCanvas(FigureCanvas):
             ax.plot(disp_um, profile, color=cmap(i / max(n_groups - 1, 1)),
                     linewidth=0.8, alpha=0.6)
 
-        ax.plot(disp_um, np.mean(np.array(profiles_nm), axis=0), color='black',
+        ax.plot(disp_um, np.mean(np.array(profiles_nm), axis=0), color=theming.current().ink,
                 linewidth=1.8, label=f'Mean (n={n_groups})', zorder=5)
         ax.set_xlabel("Position (µm)", fontsize=11)
         ax.set_ylabel("Height (nm)", fontsize=11)
@@ -84,6 +118,7 @@ class PlotCanvas(FigureCanvas):
             "Image row (top → bottom)", fontsize=9)
         self.draw()
 
+    @_remembered
     def plot_groove_detection(self, result, filename, settings):
         """Flattened profile with the grooves the analysis used"""
         self.fig.clear()
@@ -91,7 +126,7 @@ class PlotCanvas(FigureCanvas):
         x, y = result['raw_x'], result['flat_y']
         centers = result['groove_centers']
 
-        ax.plot(x, y, 'k-', linewidth=0.7, label='Flattened profile')
+        ax.plot(x, y, '-', color=theming.current().ink, linewidth=0.7, label='Flattened profile')
         ax.plot(x[centers], y[centers], 'ro', markersize=9,
                 label=f'Detected grooves (N={len(centers)})')
 
@@ -112,6 +147,7 @@ class PlotCanvas(FigureCanvas):
         ax.grid(True, alpha=0.3)
         self.draw()
 
+    @_remembered
     def plot_blaze_angles(self, result, filename):
         """Angle distribution, fit quality, and angle against facet width"""
         self.fig.clear()
@@ -121,7 +157,7 @@ class PlotCanvas(FigureCanvas):
         quality = result['quality']
         mean, sem = result['mean_angle'], result.get('sem', 0.0)
 
-        ax1.hist(angles, bins=20, edgecolor='black', alpha=0.75, color='steelblue')
+        ax1.hist(angles, bins=20, edgecolor=theming.current().ink, alpha=0.75, color='steelblue')
         ax1.axvline(mean, color='r', linestyle='--', linewidth=2,
                     label=f'Mean {mean:.2f}°')
         ax1.set_xlabel("Blaze angle (°)", fontsize=10)
@@ -132,7 +168,7 @@ class PlotCanvas(FigureCanvas):
         ax1.grid(True, alpha=0.3)
 
         r2 = np.array([q.get('blaze_r2', np.nan) for q in quality])
-        ax2.hist(r2, bins=20, edgecolor='black', alpha=0.75, color='seagreen')
+        ax2.hist(r2, bins=20, edgecolor=theming.current().ink, alpha=0.75, color='seagreen')
         ax2.set_xlabel("Fit R²", fontsize=10)
         ax2.set_ylabel("Count", fontsize=10)
         ax2.set_title(f"Fit quality\nworst R² = {np.nanmin(r2):.4f}", fontsize=10)

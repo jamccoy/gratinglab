@@ -5,6 +5,8 @@ The contrast thresholds are WCAG 2.1's: 4.5:1 for anything read as text and
 that makes a colour unreadable fails here rather than on somebody's screen.
 """
 
+from pathlib import Path
+
 import pytest
 
 from gratinglab.gui import diagram, provenance
@@ -19,6 +21,9 @@ from gratinglab.gui.theme import (
 )
 
 ALL = list(THEMES.values())
+
+#: The committed synthetic scan, for the AFM window.
+SAMPLE = str(Path(__file__).parent / "metrology" / "fixtures" / "synthetic_blazed_scan.txt")
 
 
 class TestPalettes:
@@ -163,6 +168,25 @@ class TestSwitching:
         assert QSettings(str(ini), QSettings.Format.IniFormat).value(
             "appearance/theme"
         ) == "solarized-dark"
+
+    def test_both_windows_offer_the_theme_and_stay_in_step(self, win, qtbot):
+        """The AFM window had no theme menu; now both do, kept in step."""
+        from matplotlib.colors import to_hex
+
+        from gratinglab.metrology.gui.qt.main_window import MainWindow as AfmWindow
+
+        afm = AfmWindow()
+        qtbot.addWidget(afm)
+        afm.load(SAMPLE)
+        dark = THEMES["dark"]
+
+        afm._theme_menu.actions_by_key()["dark"].trigger()
+
+        assert [a.data() for a in win._theme_actions.actions() if a.isChecked()] == ["dark"]
+        for figure in (afm.canvas.fig, afm.importer.figure, afm.boundary.figure):
+            assert to_hex(figure.get_facecolor()) == dark.figure
+            assert all(to_hex(ax.get_facecolor()) == dark.axes for ax in figure.axes)
+        afm.close()
 
     def test_system_resolves_to_light_or_dark(self, win):
         from gratinglab.gui.qt import theming
