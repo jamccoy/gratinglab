@@ -10,10 +10,8 @@ points through :meth:`~gratinglab.profiles.FromProfileData.along_dispersion`
 and its inverse. The PCGrate corpus is what fixes the file's direction: the
 TASTE run matches only with ``x`` along ``+d-hat``.
 
-Canonical form::
+Default form, points only::
 
-    3 0 - Polygonal type
-    Period: 1 PSC: 1
     0.000000 0.000000
     0.012346 0.000808
     ...
@@ -22,19 +20,26 @@ The shared convention allows a scalar calculation and a PCGrate run to be
 driven from identical geometry, which isolates the method difference from any
 difference in assumed groove shape.
 
-Three header variants exist on disk, and only the first is accepted by PCGrate:
+Four header variants exist on disk:
 
-===================================  ================  ==============
-Header                               PCGrate accepts   Seen in
-===================================  ================  ==============
-``3 0 - Polygonal type`` + ``Period`` yes              most files
-``# 3 0 - Polygonal type`` (hashed)   **no**           ``*_fix6/7.ggp``
-``# X(normalized...)`` only           **no**           ``*_fix{,2,3,4}.ggp``
-===================================  ================  ==============
+===================================  ==============================
+Header                               Seen in
+===================================  ==============================
+none, points only                    Aditi's files, and the default
+``3 0 - Polygonal type`` + ``Period`` most legacy files
+``# 3 0 - Polygonal type`` (hashed)   ``*_fix6/7.ggp``
+``# X(normalized...)`` only           ``*_fix{,2,3,4}.ggp``
+===================================  ==============================
 
-This module reads all three, since they are real files that need to be loaded,
-and writes only the canonical form. ``np.savetxt(header=...)`` is what produces
-the hashed variants, so it must not be used here.
+Which of these PCGrate takes was never tested here. Until 2026-10-29 this
+docstring said only the ``3 0 - Polygonal type`` form loads, but that was
+inferred from which legacy files sat beside PCGrate runs. Aditi, who loads
+these into PCGrate through its border-profile import, reports that it does not
+want a header and that she used to delete it by hand, so the writer leaves it
+out unless asked. ``write_ggp(header=True)`` still writes the two-line form.
+
+This module reads all four. ``np.savetxt(header=...)`` is what produces the
+hashed variants, so it must not be used here.
 
 This is now the only ``.ggp`` writer in the project. The metrology package
 previously shipped a second copy, and the two were kept in agreement by a
@@ -70,7 +75,8 @@ __all__ = [
     "to_profile",
 ]
 
-#: The only header PCGrate accepts. Never prefix these lines with ``#``.
+#: The legacy two-line header, written only on request. Never prefix these
+#: lines with ``#``.
 GGP_HEADER = "3 0 - Polygonal type\nPeriod: 1 PSC: 1"
 
 _CANONICAL_FIRST = "3 0 - Polygonal type"
@@ -80,9 +86,10 @@ _CANONICAL_FIRST = "3 0 - Polygonal type"
 class GgpFile:
     """A parsed ``.ggp``, with the header provenance kept.
 
-    ``format_valid`` records whether the file as written would
-    load in PCGrate. This is surfaced because a hashed header fails there
-    while parsing without error here.
+    ``format_valid`` is False for the two hashed variants, which
+    ``np.savetxt(header=...)`` produces by accident, and True for a file with
+    no header or the uncommented two-line one. It records which form a file
+    is in, not a test against PCGrate; see the module docstring.
     """
 
     t: np.ndarray
@@ -187,9 +194,9 @@ def _numeric_pair(line: str) -> tuple[float, float] | None:
 
 
 def _classify(header_lines: list[str]) -> tuple[str, bool]:
-    """Name the header variant and say whether PCGrate would accept it."""
+    """Name the header variant and say whether it is one we write."""
     if not header_lines:
-        return "none", False
+        return "none", True
     if header_lines[0] == _CANONICAL_FIRST:
         return "canonical", True
     if header_lines[0].lstrip("# ").startswith("3 0"):
@@ -219,9 +226,9 @@ def write_ggp(
     t: ArrayLike | None = None,
     y: ArrayLike | None = None,
     fmt: str = "%f",
-    header: bool = True,
+    header: bool = False,
 ) -> Path:
-    """Write a profile in the canonical, PCGrate-loadable form.
+    """Write a profile as ``x y`` points for PCGrate.
 
     Pass either a ``profile`` or explicit ``t``/``y`` arrays. A profile is
     reflected onto the file's ``+d-hat`` axis, the inverse of
@@ -233,12 +240,11 @@ def write_ggp(
     that ends in one, as ``np.savetxt`` output does. The format is pinned by
     ``tests/test_ggp.py``; PCGrate rejects variations on it.
 
-    ``header=False`` leaves out the two :data:`GGP_HEADER` lines and writes
-    the points alone, as ``np.savetxt`` with no ``header`` does. It exists to
-    test the claim in the module docstring that PCGrate needs the header:
-    that claim comes from the files found on disk, not from PCGrate's
-    documentation, and Aditi's script writes headerless files (2026-10-27).
-    Reading such a file back reports ``header_variant == "none"``.
+    The points are written alone by default, with no header: Aditi reports
+    that PCGrate's border-profile import does not want one (2026-10-29).
+    ``header=True`` starts the file with the two legacy :data:`GGP_HEADER`
+    lines instead. Reading a headerless file back reports
+    ``header_variant == "none"``.
     """
     if (profile is None) == (t is None):
         raise ValueError("pass either a profile or both t and y, not both or neither")

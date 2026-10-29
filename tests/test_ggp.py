@@ -1,7 +1,7 @@
 """PCGrate .ggp boundary profiles.
 
-Read liberally (three header variants exist on disk), write strictly (only one
-of them loads in PCGrate).
+Read liberally (four header variants exist on disk), write one form: the points
+alone by default, the legacy two-line header on request.
 """
 
 import numpy as np
@@ -46,9 +46,10 @@ class TestHeaderVariants:
         assert not ggp.format_valid
 
     def test_no_header_at_all(self, tmp_path):
+        """The form the writer produces by default."""
         ggp = read_ggp(write_variant(tmp_path, ""))
         assert ggp.header_variant == "none"
-        assert not ggp.format_valid
+        assert ggp.format_valid
 
     def test_all_variants_give_identical_data(self, tmp_path):
         datasets = [
@@ -113,8 +114,15 @@ class TestRejection:
 
 
 class TestWriting:
-    def test_writes_the_canonical_header(self, tmp_path):
+    def test_writes_no_header_by_default(self, tmp_path):
+        """Aditi: PCGrate's border-profile import does not want one (2026-10-29)."""
         path = write_ggp(tmp_path / "out.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.3, 0.0])
+        assert path.read_text(encoding="utf-8").startswith("0.000000 0.000000\n")
+        assert read_ggp(path).header_variant == "none"
+
+    def test_writes_the_legacy_header_on_request(self, tmp_path):
+        path = write_ggp(tmp_path / "out.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.3, 0.0],
+                         header=True)
         assert path.read_text(encoding="utf-8").startswith(GGP_HEADER + "\n")
         assert not path.read_text(encoding="utf-8").startswith("#")
 
@@ -166,11 +174,10 @@ class TestWriting:
         is still a fact about PCGrate, and still worth pinning.
         """
         path = write_ggp(tmp_path / "fmt.ggp", t=[0.0, 0.5], y=[0.0, 0.25])
-        assert path.read_text(encoding="utf-8") == GGP_HEADER + "\n0.000000 0.000000\n0.500000 0.250000"
+        assert path.read_text(encoding="utf-8") == "0.000000 0.000000\n0.500000 0.250000"
         assert not path.read_bytes().endswith((b"\n", b"\r"))
 
-    def test_header_can_be_left_out(self, tmp_path):
-        """The option exists to test whether PCGrate needs the header at all."""
+    def test_header_can_be_left_out_explicitly(self, tmp_path):
         path = write_ggp(tmp_path / "bare.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.25, 0.0],
                          header=False)
         assert path.read_text(encoding="utf-8") == \

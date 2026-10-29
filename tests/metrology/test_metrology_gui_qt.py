@@ -213,7 +213,7 @@ class TestBoundaryTab:
         assert len(window.boundary.profile.x_norm) == 500
 
     def test_export_writes_a_valid_ggp(self, qtbot, window, tmp_path, monkeypatch):
-        """The header must be the uncommented two-line form PCGrate accepts"""
+        """Points only by default, the form PCGrate's border-profile import takes"""
         from PySide6.QtWidgets import QFileDialog
         window.load(SAMPLE)
         target = str(tmp_path / "out.ggp")
@@ -226,20 +226,19 @@ class TestBoundaryTab:
 
         with open(target, encoding="utf-8") as handle:
             lines = handle.read().splitlines()
-        assert lines[0] == "3 0 - Polygonal type"
-        assert lines[1] == "Period: 1 PSC: 1"
+        assert len(lines[0].split()) == 2 and not lines[0].startswith("3 0")
         assert os.path.exists(str(tmp_path / "out_metrics.txt"))
 
-    def test_unticking_the_header_writes_the_points_alone(self, qtbot, window, tmp_path):
+    def test_ticking_the_header_writes_the_legacy_lines(self, qtbot, window, tmp_path):
         from gratinglab.io.ggp import read_ggp
         window.load(SAMPLE)
-        assert window.boundary.header_check.isChecked(), "on by default"
-        window.boundary.header_check.setChecked(False)
-        path, _ = window.boundary.write_profile(str(tmp_path / "bare.ggp"))
+        assert not window.boundary.header_check.isChecked(), "off by default"
+        window.boundary.header_check.setChecked(True)
+        path, _ = window.boundary.write_profile(str(tmp_path / "head.ggp"))
         ggp = read_ggp(path)
-        assert ggp.header_variant == "none"
+        assert ggp.header_variant == "canonical"
         assert len(ggp.t) == len(window.boundary.profile.x_norm)
-        assert window.boundary.settings_overrides()["ggp_write_header"] is False
+        assert window.boundary.settings_overrides()["ggp_write_header"] is True
 
     def test_the_file_is_named_once_in_the_window_title(self, qtbot, window):
         """Not repeated in the title of every plot on every tab."""

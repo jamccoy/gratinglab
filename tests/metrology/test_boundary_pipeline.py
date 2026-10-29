@@ -190,15 +190,16 @@ def test_the_panel_and_the_cli_compute_the_same_profile():
 
 # ── The written file ─────────────────────────────────────────────────────────
 
-def test_written_file_has_the_uncommented_two_line_header():
+def test_a_requested_header_is_the_uncommented_two_line_form():
     """
-    PCGrate rejects a commented header. Three different header variants were
-    found among the hand-made files before this was automated.
+    A hashed header is what np.savetxt(header=...) writes by accident. Three
+    different header variants were found among the hand-made files before
+    this was automated.
     """
     p = _profile(ggp_n_points=100)
     with tempfile.TemporaryDirectory() as scratch:
         path = os.path.join(scratch, 'out.ggp')
-        write_ggp(path, t=p.x_norm, y=p.y_norm)
+        write_ggp(path, t=p.x_norm, y=p.y_norm, header=True)
         with open(path, encoding="utf-8") as handle:
             lines = handle.read().splitlines()
 
@@ -208,18 +209,34 @@ def test_written_file_has_the_uncommented_two_line_header():
     assert len(lines) == 102, "two header lines plus one per point"
 
 
-def test_the_cli_export_honours_the_header_setting(tmp_path, monkeypatch):
-    """GGP_WRITE_HEADER = False in config reaches the file the CLI writes."""
+def test_the_cli_export_writes_no_header_by_default(tmp_path, monkeypatch):
+    """Aditi: PCGrate's border-profile import does not want one (2026-10-29)."""
     import gratinglab.metrology.workflows as workflows
     from gratinglab.io.ggp import read_ggp
 
     monkeypatch.setattr(workflows, 'RESULTS_DIR', str(tmp_path))
-    settings = AnalysisSettings.from_config().with_(ggp_write_header=False)
+    settings = AnalysisSettings.from_config()
+    assert settings.ggp_write_header is False
     with contextlib.redirect_stdout(io.StringIO()):
         out = workflows.run_boundary_profile_export(settings, filename=SOURCE)
 
     ggp = read_ggp(out['ggp_path'])
     assert ggp.header_variant == "none"
+    assert len(ggp.t) == len(out['x'])
+
+
+def test_the_cli_export_honours_the_header_setting(tmp_path, monkeypatch):
+    """GGP_WRITE_HEADER = True in config reaches the file the CLI writes."""
+    import gratinglab.metrology.workflows as workflows
+    from gratinglab.io.ggp import read_ggp
+
+    monkeypatch.setattr(workflows, 'RESULTS_DIR', str(tmp_path))
+    settings = AnalysisSettings.from_config().with_(ggp_write_header=True)
+    with contextlib.redirect_stdout(io.StringIO()):
+        out = workflows.run_boundary_profile_export(settings, filename=SOURCE)
+
+    ggp = read_ggp(out['ggp_path'])
+    assert ggp.header_variant == "canonical"
     assert len(ggp.t) == len(out['x'])
 
 

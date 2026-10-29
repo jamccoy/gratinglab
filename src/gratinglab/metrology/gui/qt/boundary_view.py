@@ -138,7 +138,8 @@ class BoundaryView(QWidget):
             "Start the .ggp with the two lines\n"
             "    3 0 - Polygonal type\n"
             "    Period: 1 PSC: 1\n"
-            "Untick to write the points alone.")
+            "Off by default: PCGrate's border-profile import\n"
+            "takes the points alone.")
         layout.addWidget(self.header_check)
 
         self.export_btn = QPushButton("Export…")

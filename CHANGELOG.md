@@ -71,6 +71,16 @@ entries under "Unreleased" into a section named for the new version;
   fixed here. `tests/test_trapezoidal_solvers.py` keeps the cheap cases;
   `docs/findings.md`, "Trapezoidal through the four solvers", has the map.
 
+### Changed
+
+- **`.ggp` files are written with no header by default.** Aditi reports that
+  PCGrate's border-profile import does not want the `3 0 - Polygonal type` /
+  `Period: 1 PSC: 1` lines and that she had to delete them by hand. The claim
+  that PCGrate needs them was inferred from legacy files, never tested, and is
+  corrected in `docs/findings.md`. `write_ggp(header=True)`,
+  `GGP_WRITE_HEADER = True` and the Boundary tab's checkbox still write them.
+  A headerless file now reads back with `format_valid` true.
+
 ### Fixed
 
 - `tests/test_ggp.py::TestRealFiles::test_panter1_profile` expected the

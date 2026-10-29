@@ -905,17 +905,24 @@ every platform and does not depend on rounding.
 Both rejections are correct behaviour, and both are encoded as tests so that
 they are not mistaken for parser bugs.
 
-### Three `.ggp` header variants, two of which the vendor does not load
+### Three `.ggp` header variants on disk, and PCGrate wants none of them
 
-| Header | Vendor accepts | Seen in |
-|---|---|---|
-| `3 0 - Polygonal type` + `Period:` | yes | most files |
-| `# 3 0 - Polygonal type` (hashed) | **no** | `*_fix6/7.ggp` |
-| `# X(normalized...)` only | **no** | `*_fix{,2,3,4}.ggp` |
+| Header | Seen in |
+|---|---|
+| `3 0 - Polygonal type` + `Period:` | most files |
+| `# 3 0 - Polygonal type` (hashed) | `*_fix6/7.ggp` |
+| `# X(normalized...)` only | `*_fix{,2,3,4}.ggp` |
 
-`np.savetxt(header=...)` is what produces the hashed variants. This project
-reads all three, since they are real files that need to be loaded, and writes
-only the first, flagging the others via `GgpFile.format_valid`.
+`np.savetxt(header=...)` is what produces the hashed variants.
+
+**Corrected 2026-10-29.** This table had a "vendor accepts" column reading yes
+for the first row and no for the other two, and the writer emitted the first
+form on that basis. Nobody had tested it in PCGrate: it was inferred from which
+files sat beside PCGrate runs. Aditi, who loads these into PCGrate through its
+border-profile import, reports that it does not want a header and that she had
+to delete it by hand. So the writer now emits the points alone by default, and
+the legacy header only on request. This project still reads all three, and
+`GgpFile.format_valid` flags only the hashed two, which are accidents.
 
 ---
 

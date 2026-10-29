@@ -347,20 +347,20 @@ GGP_SMOOTHING_WINDOW = 5
 - `results/groove_analysis_metrics_<sample>.txt`: depth, RMS slope, maximum
   sidewall angle and curvature of the normalised profile
 
-The `.ggp` format consists of two header lines followed by one `x y` pair per
-line. Both coordinates are normalised: x runs from 0 to 1 across exactly one
-period, and y is the height as a fraction of that period.
+The `.ggp` format is one `x y` pair per line, with no header and no line
+break after the last point. Both coordinates are normalised: x runs from 0 to 1
+across exactly one period, and y is the height as a fraction of that period.
 
 ```
-3 0 - Polygonal type
-Period: 1 PSC: 1
 0.000000 0.000000
 0.000500 0.000001
 ```
 
-The header must not be commented. Writing these files with
-`np.savetxt(header=...)` prepends `# `, which PCGrate rejects; the writer in
-`afm_analysis/io/ggp.py` always emits the correct form.
+PCGrate's border-profile import takes the points alone (Aditi, 2026-10-29).
+`GGP_WRITE_HEADER = True`, or the Boundary tab's "Write the PCGrate header"
+box, starts the file with the legacy `3 0 - Polygonal type` /
+`Period: 1 PSC: 1` lines instead. Never write these files with
+`np.savetxt(header=...)`, which prepends `# `.
 
 ---
 
