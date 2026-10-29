@@ -2541,7 +2541,11 @@ recorded in `docs/roadmap.md` as an open question with the diagnosis above.
 
 ### The verdict on 0.3, from the TASTE campaign
 
-**The criterion is met, and the solvers can lose their experimental status.**
+**The comparison the criterion asks for is met. The solvers keep their
+experimental status until the two defects this comparison found are fixed**:
+the integral solver's absorption with tabulated metals
+([#6](https://github.com/jamccoy/gratinglab/issues/6)) and the C-method on
+near-vertical walls ([#7](https://github.com/jamccoy/gratinglab/issues/7)), both recorded below.
 
 The gate asks for "use on a real problem, with the integral solver compared
 against measured efficiencies ... and not only against published benchmarks and
@@ -2609,8 +2613,7 @@ programme where the same question arises, and where the efficiency data answer
 it: the apex is unpointed, and flat rather than rounded.
 
 The remaining work for 0.3 is therefore not more solving. It is the release
-mechanics, and the two open questions this entry opened: the integral solver's
-absorption at large (1 − \|n\|), and the 4.6% in `period · sin γ`. The README's
+mechanics, the two defects above, and the 4.6% in `period · sin γ`. The README's
 "experimental" wording and the solver table that repeats it still say what they
 said; they change at that release and not in this entry, which only records that
 the criterion they point at has been satisfied.
