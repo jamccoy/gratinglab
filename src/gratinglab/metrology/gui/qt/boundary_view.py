@@ -275,6 +275,11 @@ class BoundaryView(QWidget):
                             f"+/- {m['groove_rotation_stderr_deg']:.3f} deg"
                             + (", corrected" if m.get('groove_rotation_corrected')
                                else ", not corrected"))
+        rms = m.get('groove_residual_rms_nm')
+        # Labelled as a residual, not a roughness: it is not what to_problem
+        # applies, and the panel should not suggest otherwise.
+        residual = ("not measured, one groove" if rms is None
+                    else f"{rms:.3f} nm, not applied")
         self.metrics_label.setText(
             f"Period          : {p.period_nm:.2f} nm\n"
             f"Grooves averaged: {p.n_used} of {p.n_grooves}{edge}\n"
@@ -282,7 +287,8 @@ class BoundaryView(QWidget):
             f"Peak-to-valley  : {m['peak_to_valley']:.4f} of period\n"
             f"RMS slope       : {m['rms_slope']:.4f}\n"
             f"Max sidewall    : {m['max_angle_deg']:.2f} deg\n"
-            f"Max curvature   : {m['max_curvature']:.4f}{rotation}{tip}")
+            f"Max curvature   : {m['max_curvature']:.4f}\n"
+            f"Groove residual : {residual}{rotation}{tip}")
 
     def _show_placeholder(self, message="Load an AFM file in the Import tab"):
         self._placeholder = message

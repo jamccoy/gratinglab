@@ -204,7 +204,7 @@ class TestBoundaryTab:
         window.load(SAMPLE)
         text = window.boundary.metrics_label.text()
         for field in ("Period", "Grooves averaged", "Groove depth",
-                      "Max sidewall"):
+                      "Max sidewall", "Groove residual"):
             assert field in text, f"{field} missing from the metrics panel"
 
     def test_point_count_control_reaches_the_profile(self, qtbot, window):
