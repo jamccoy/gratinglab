@@ -30,15 +30,20 @@ doing so remains the error catalogued in ``docs/conventions.md`` section 10
 item 5.
 
 Profile corners make the TM solve (and, with finite conductivity, both
-polarizations) converge at first order on the default equal-arc mesh,
+polarizations) converge at first order on an equal-arc mesh,
 because the Meixner edge singularity of the densities is sampled by evenly
 spaced nodes. Energy balance on cornered profiles then carries a
 percent-level deficit at moderate ``boundary_points``. ``corner_grading=p``
 clusters the nodes at the corners with Kress's sigmoidal transformation of
 order ``p`` (M&P section 4.6.6) and restores fast convergence there; see
-``docs/theory/integral.md`` section 5 for the measured ladders. It is opt-in
-until it has been used on real problems, and on a profile with no corner it
-changes nothing. It serves both boundary conditions. The finite-conductivity
+``docs/theory/integral.md`` section 5 for the measured ladders. It is the
+default, at order 4, since 0.2.7: it was opt-in until then, and the default
+equal-arc mesh returned a summed efficiency plus absorption of 2.95 on the
+GUI's own default blaze in soft X-rays (3.5 nm, Au, 400 points), with order +2
+15% below the C-method, where order 4 closes to unity and matches it to
+2e-4. On a profile with no corner it changes nothing, bit for bit, so
+``corner_grading=0`` is needed only to reproduce an equal-arc result. It
+serves both boundary conditions. The finite-conductivity
 system needs two corrections on it that the perfectly conducting one does
 not: a singularity subtraction of ``K+`` at the corners
 (``_nystrom.corner_subtraction``), without which TM on a visible-light metal
@@ -181,7 +186,7 @@ class IntegralSolver:
         boundary_points: int = 400,
         spectral_terms: int | None = None,
         conductivity: Literal["perfect", "tabulated"] = "perfect",
-        corner_grading: int = 0,
+        corner_grading: int = 4,
         workers: int = 1,
         blas_threads: int | None = 1,
         progress: "Progress | None" = None,
@@ -215,11 +220,13 @@ class IntegralSolver:
             absorption is recorded on the scan. Any other value raises
             :class:`UnsupportedConfiguration`.
         corner_grading
-            ``0`` (the default) places the nodes at equal arc length.
-            ``p`` from 2 to 6 grades them towards the profile's corners with
-            Kress's sigmoidal transformation of order ``p``, which is what a
-            cornered profile needs for TM to converge faster than first
-            order. ``4`` is the recommended order. A profile with no corner
+            ``p`` from 2 to 6 grades the nodes towards the profile's corners
+            with Kress's sigmoidal transformation of order ``p``, which is
+            what a cornered profile needs for TM (and, with finite
+            conductivity, both polarizations) to converge faster than first
+            order. ``4``, the default since 0.2.7, is the recommended order.
+            ``0`` places the nodes at equal arc length, the default before
+            0.2.7. A profile with no corner
             (a vertex turning by more than
             :data:`gratinglab.profiles.CORNER_TURN_DEGREES`) keeps the
             equal-arc mesh whatever is passed. Both boundary conditions.

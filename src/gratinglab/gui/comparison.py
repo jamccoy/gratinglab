@@ -343,6 +343,12 @@ def _solved_line(name: str, outcome: ComparisonOutcome) -> list[Line]:
         else:
             parts.append(Line(f"EXCEEDS UNITY by {energy.max_excess:.2g}", "bad"))
     parts.append(Line("\n"))
+    # The solver's own warnings, word for word and in the solver tabs' form.
+    # A verdict alone says that something is wrong; the warning is where the
+    # solver says why and what to change. Without it, the integral solver on
+    # an equal-arc mesh read "EXCEEDS UNITY by 2.3" here while its own tab
+    # said "pass corner_grading=4".
+    parts.extend(Line(f"    ⚠ {warning}\n", "warn") for warning in provenance.warnings)
     return parts
 
 

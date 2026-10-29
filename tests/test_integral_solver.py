@@ -331,6 +331,9 @@ class TestProvenance:
             Illumination.offplane(graze=1.5, azimuth=-25.0, polarization="TM"),
             [2.5],
             boundary_points=96,
+            # The equal-arc mesh, named since 0.2.7 made the graded one the
+            # default: the deficit this reports is the equal-arc mesh's.
+            corner_grading=0,
         )
         deviation = scan.provenance.notes["energy_balance_deviation"]
         assert deviation > 0.001  # the corner deficit is real at this P

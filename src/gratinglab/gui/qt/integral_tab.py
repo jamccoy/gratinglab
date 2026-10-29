@@ -165,15 +165,17 @@ class IntegralTab(QWidget):
 
         grading = QComboBox()
         grading.addItems(GRADING_CHOICES)
+        grading.setCurrentText(defaults.corner_grading)
         grading.setToolTip(
             "How the boundary nodes are placed.\n"
-            "off: equal arc length, the default.\n"
+            "off: equal arc length. On a profile with corners it converges\n"
+            "  only at first order, and can be far from right.\n"
             "2-6: graded towards the profile's corners at that order, where\n"
             "  the field is singular. Cornered profiles converge far faster\n"
             "  (TM, and both polarizations when tabulated); a smooth profile\n"
-            "  is unaffected. 4 is recommended; 6 can put nodes closer than\n"
-            "  double precision separates at high point counts, and is refused\n"
-            "  there."
+            "  is unaffected. 4 is the default and recommended; 6 can put\n"
+            "  nodes closer than double precision separates at high point\n"
+            "  counts, and is refused there."
         )
         grading.currentTextChanged.connect(self._show_grading_note)
         self._fields["corner_grading"] = grading

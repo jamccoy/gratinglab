@@ -167,7 +167,13 @@ class TestTheBackendsRecordIt:
         )
         condition = scan.provenance.notes["condition"]
         assert condition["warn_above"] == INTEGRAL_WARN
-        assert 1.0 <= condition["nystrom"] < 1e6
+        # On the default graded mesh (0.2.7 on) this reads 1.1e7 to 1.8e7,
+        # where the equal-arc mesh this bound was set on stayed under 1e6:
+        # crowding nodes into the
+        # corners grows the estimate as P^4, as docs/theory/integral.md
+        # records, and costs no accuracy. Still seven decades under the
+        # warning, which is what this asserts.
+        assert 1.0 <= condition["nystrom"] < 1e8
         assert not any("condition estimate" in w for w in scan.provenance.warnings)
 
 

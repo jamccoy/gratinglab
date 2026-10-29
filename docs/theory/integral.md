@@ -95,7 +95,8 @@ numbers refer to M&P §4.6.
   this reason `Profile.boundary()` resamples every profile at equal arc length,
   and `Blazed`/`Lamellar` supply exact vertex polygons, vertical segments
   included.
-- **Corner-graded mesh (`corner_grading=p`, opt-in).** At a corner the densities
+- **Corner-graded mesh (`corner_grading=p`, the default at p = 4 since 0.2.7).**
+  At a corner the densities
   are singular (the Meixner edge condition), and on an equal-arc mesh that
   singularity caps convergence at first order. `Profile.boundary(n, grading=p)`
   instead splits a mesh parameter τ equally, gives each side between two
@@ -105,7 +106,12 @@ numbers refer to M&P §4.6.
   `ds/dτ` is then smooth in τ and the rectangular rule recovers high order. A
   corner is a polygon vertex turning by more than `CORNER_TURN_DEGREES` (10°),
   no node sits on one, and every node lies on a straight piece with its exact
-  normal. A profile with no corner keeps the equal-arc mesh.
+  normal. A profile with no corner keeps the equal-arc mesh, so on one the
+  result is bit-identical whatever is passed. It was opt-in until 0.2.7: on
+  the GUI's default blaze (Au, off-plane at 1.5° graze, 3.5 nm, 400 points)
+  the equal-arc mesh gave a summed efficiency plus absorption of 2.95 and
+  order +2 at 0.4948, where p = 4 closes to unity and gives 0.5854, the
+  C-method's value. `corner_grading=0` reproduces the equal-arc mesh.
 
   Every quadrature is written in τ, with node weights `w_j = s'(τ_j)/P`, and
   reduces term by term to the equal-arc formulas when `s' = L`. Three places
