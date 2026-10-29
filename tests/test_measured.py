@@ -364,6 +364,34 @@ class TestOgreLaminarCampaign:
                            zip(res.order, res.wavelength, res.propagating) if not p})
         assert not stranded, f"measured but evanescent here (order, nm): {stranded[:8]}"
 
+    def test_als_eff_meas_recovers_alpha_in_this_projects_sign_convention(
+        self, ogre_measured
+    ):
+        """The roadmap's open question, settled by the data.
+
+        ``als_eff_meas`` recovers alpha in its own detector frame, and whether
+        that frame's positive azimuth is :attr:`Illumination.alpha_deg`'s was
+        never established. It is: the sign as recovered propagates every
+        measured point, and the flip strands 107 of the 251. The margin is the
+        whole point -- this is not a tolerance question, so a future change to
+        either convention fails here loudly rather than quietly biasing every
+        residual. See ``findings.md``, "The measured comparison ran".
+        """
+        grid = ogre_measured.wavelength_grid()
+        as_recovered = ogre_measured.illumination("unpolarized")
+        assert as_recovered.alpha_deg > 0.0
+
+        def stranded(illumination):
+            scan = sweep(PROBLEM, illumination, grid, ["scalar"])[0]
+            res = align([ogre_measured, scan]).residuals("measured", "scalar")
+            return int(np.count_nonzero(~res.propagating))
+
+        flipped = as_recovered.model_copy(
+            update={"alpha_deg": -as_recovered.alpha_deg}
+        )
+        assert stranded(as_recovered) == 0
+        assert stranded(flipped) == 107
+
 
 def _nominal(value) -> float:
     return float(getattr(value, "nominal_value", value))
