@@ -12,6 +12,18 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+## 0.3.0 (2026-10-29)
+
+The integral method, RCWA and the C-method are no longer experimental. The
+roadmap's criterion was use on a real problem against measurement; the TASTE
+campaign below meets it, and the two solver defects it found are dealt with in
+this release: the C-method refuses a wall too steep for its truncation (#7),
+and `profile_smoothing="auto"` fixes the integral solver's absorption on a
+measured polygon (#6), opt-in, with the energy-balance warning naming it. The
+scalar solver is an approximation and is described as one. Still open: the
+4.6% in `period · sin γ` on the TASTE campaign, and the absorption on a
+tightly rounded valley, which is warned about.
+
 ### Added
 
 - **The measured comparison the 0.3 gate asks for, with the grating's
@@ -26,8 +38,8 @@ entries under "Unreleased" into a section named for the new version;
   fit. The integral method, the C-method and RCWA agree with one another to
   2e-4 RMS while all three sit 0.038 from the grating, so the residual is
   measured not to be the solver, which is the separation the gate existed to
-  make. The solvers stay experimental, and 0.3 waits, until the two defects
-  this comparison found are fixed: integral absorption with tabulated metals
+  make. The solvers waited for 0.3 until the two defects this comparison
+  found were dealt with: integral absorption with tabulated metals
   (https://github.com/jamccoy/gratinglab/issues/6) and the C-method on
   near-vertical walls (https://github.com/jamccoy/gratinglab/issues/7), both
   below. See `docs/findings.md`, "The verdict on 0.3, from the TASTE
