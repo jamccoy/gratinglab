@@ -15,7 +15,7 @@ from gratinglab.compare import Residuals, align, records, sweep
 from gratinglab.illumination import Illumination
 from gratinglab.materials.optical import HC_EV_NM
 from gratinglab.problem import Problem
-from gratinglab.profiles import Lamellar
+from gratinglab.profiles import FromProfileData, Lamellar
 from gratinglab.result import EfficiencyScan, Provenance
 
 PROBLEM = Problem(period=158.0, profile=Lamellar(depth_fraction=0.05))
@@ -413,3 +413,278 @@ def _oriented(measured: MeasuredEfficiency) -> Illumination:
         if align([measured, scan]).residuals("measured", "scalar").propagating.all():
             return candidate
     return base
+
+
+# -- the TASTE campaign, where the grating's groove is known -----------------
+
+
+#: The groove the paper itself fitted: "an acute trapezoid with a near-vertical
+#: lateral side opposite a slope that emulates the active blaze facet", plus a
+#: flat bottom for the cleared resist, with the best-matching member at blaze
+#: 27 deg, depth 120 nm, flat-top width 77 nm and bottom width 85 nm
+#: (McCoy, McEntaffer & Miles 2020, section 4). Published geometry, so a test
+#: can use it where the AFM scan it agrees with is not in this repository.
+TASTE_PERIOD_NM = 400.0
+
+
+def _taste_trapezoid(
+    blaze_deg: float = 27.0, depth_nm: float = 120.0,
+    top_nm: float = 77.0, bottom_nm: float = 85.0,
+) -> FromProfileData:
+    """Valley, bottom land, steep side, apex land, blaze facet, valley.
+
+    That order -- steep side rising, blaze facet descending -- is the one
+    ``metrology.boundary`` exports for this grating, i.e. the ``+d-hat`` axis,
+    so a constructed groove and a measured one are the same way round. It
+    crosses into ``t``, which runs against ``+d-hat``, through
+    ``along_dispersion``: build the same points with ``t=`` instead and the
+    groove is solved as its mirror image, with the blaze order on the wrong
+    side of zero. See ``docs/conventions.md``, "Direction of the profile
+    parameter", and ``docs/findings.md``, "A measured groove has no handedness
+    of its own".
+    """
+    facet_nm = depth_nm / np.tan(np.radians(blaze_deg))
+    steep_nm = TASTE_PERIOD_NM - bottom_nm - facet_nm - top_nm
+    assert steep_nm > 0, f"only {steep_nm:.1f} nm left for the steep side"
+    x = np.array([0.0, bottom_nm, bottom_nm + steep_nm,
+                  bottom_nm + steep_nm + top_nm, TASTE_PERIOD_NM])
+    y = np.array([0.0, 0.0, depth_nm, depth_nm, 0.0])
+    grid = np.linspace(0.0, TASTE_PERIOD_NM, 801)
+    return FromProfileData.along_dispersion(
+        grid / TASTE_PERIOD_NM,
+        np.interp(grid, x, y) / TASTE_PERIOD_NM,
+        blaze_angle=blaze_deg,
+    )
+
+
+def _taste_problem() -> Problem:
+    """The paper's groove at the lithographic period, with no coating.
+
+    No coating on purpose. The campaign reaches 80 eV, i.e. 15.5 nm, and the
+    only optical-constant table this repository carries starts at 200 eV, so
+    asking for absolute efficiency across this band would raise rather than
+    extrapolate -- correctly (``materials/optical.py``). Every assertion in
+    this class is about which orders exist and whether the records line up, and
+    none of them needs the absolute level. The absolute comparison, which does,
+    is in ``docs/findings.md`` and was run against a wider CXRO export supplied
+    through ``GRATINGLAB_MATERIALS``.
+    """
+    return Problem(period=TASTE_PERIOD_NM, profile=_taste_trapezoid())
+
+
+#: Table 1 of the paper, measured at the beamline: the cone half-angle and the
+#: azimuthal incidence angle, with their uncertainties.
+TASTE_GAMMA_DEG, TASTE_GAMMA_SIGMA = 1.73, 0.03
+TASTE_ALPHA_DEG, TASTE_ALPHA_SIGMA = 23.4, 0.6
+
+TASTE_ROUNDS = ("taste_dec18_round3a", "taste_dec18_round3b")
+
+
+@pytest.fixture(scope="module")
+def taste():
+    """The two halves of the December 2018 TASTE campaign, reduced and joined.
+
+    Needs ``als_eff_meas`` with both TASTE campaigns registered and its private
+    beamline tree at ``$ALS_DATA_ROOT``, and skips without either. The two
+    halves share no (order, wavelength) pair -- 3a runs 440-800 eV and 3b runs
+    80-420 eV -- so joining them cannot collide.
+
+    Returns ``(MeasuredEfficiency, {round: recovered angles})``. The angles come
+    back because the two rounds disagree about the mount and that disagreement
+    is the subject of a test below.
+    """
+    als = pytest.importorskip("als_eff_meas")
+    available = set(als.list_campaigns())
+    missing = [name for name in TASTE_ROUNDS if name not in available]
+    if missing:
+        pytest.skip(
+            f"als_eff_meas has no campaign {missing}; available: "
+            f"{sorted(available)}"
+        )
+    import warnings
+
+    order, energy, value, sigma = [], [], [], []
+    angles = {}
+    for name in TASTE_ROUNDS:
+        campaign = als.load_campaign(name)
+        if not campaign.data.is_dir():
+            pytest.skip(f"beamline data not available at {campaign.data}; "
+                        "set ALS_DATA_ROOT")
+        with warnings.catch_warnings():
+            # ODR probes outside the arc while converging; harmless, as
+            # als_eff_meas's own conftest notes.
+            warnings.simplefilter("ignore", RuntimeWarning)
+            geometry = als.fit_geometry(campaign)
+        table = als.measure_efficiency(campaign, geometry)
+        for n in table.orders:
+            for e, eff in zip(table.energy[n], table.efficiency[n], strict=True):
+                order.append(n)
+                energy.append(float(e))
+                value.append(eff.nominal_value)
+                sigma.append(eff.std_dev)
+        angles[name] = {k: _nominal(v) for k, v in geometry.angles.degrees.items()}
+
+    measured = MeasuredEfficiency.from_energies(
+        order, energy, value, sigma,
+        provenance=MeasurementProvenance(
+            facility="ALS",
+            campaign="taste_dec18",
+            polarization=None,
+            # Table 1, not either round's own fit: the paper reports one mount
+            # for the whole campaign and this is it.
+            geometry={"gamma_deg": TASTE_GAMMA_DEG, "alpha_deg": TASTE_ALPHA_DEG},
+            source="McCoy, McEntaffer & Miles 2020, ApJ 891, 114",
+            notes={"rounds": list(TASTE_ROUNDS), "reduction": "als_eff_meas"},
+        ),
+    )
+    return measured, angles
+
+
+class TestTasteCampaign:
+    """The TASTE blazed grating, ALS December 2018, against its own geometry.
+
+    The campaign the OGRE one could not be: this grating's groove was measured
+    by AFM, so the comparison is a prediction rather than a two-parameter fit.
+    The AFM scans are not in this repository, so the profile used here is the
+    paper's own published trapezoid, which anyone can rebuild from the paper.
+
+    Agreement is not asserted; ``docs/findings.md`` records what it is. What is
+    asserted is everything that does not depend on the groove.
+    """
+
+    def test_every_reduced_point_arrives_with_its_sigma(self, taste):
+        measured, _ = taste
+        # 208 from round 3a (orders -4 to 8) plus 88 from round 3b (-2 to 5)
+        assert len(measured) == 296
+        assert (measured.sigma > 0).all()
+        assert measured.orders.tolist() == list(range(-4, 9))
+        assert measured.energy_ev.min() == pytest.approx(80.0)
+        assert measured.energy_ev.max() == pytest.approx(800.0)
+
+    def test_round_3a_recovers_the_published_table_1(self, taste):
+        """The paper's Table 1 is round 3a's arc fit, and this proves it.
+
+        The paper says the arc was mapped "using data gathered at 450 and
+        500 eV", which are exactly round 3a's two yaw-scan energies. Both
+        angles land inside the published uncertainties, which also pins the
+        sign convention: als_eff_meas returns the magnitude the original
+        printed with a leading minus.
+        """
+        _, angles = taste
+        a = angles["taste_dec18_round3a"]
+        assert a["gamma"] == pytest.approx(TASTE_GAMMA_DEG, abs=TASTE_GAMMA_SIGMA)
+        assert a["alpha"] == pytest.approx(TASTE_ALPHA_DEG, abs=TASTE_ALPHA_SIGMA)
+        assert a["alpha"] > 0.0
+
+    def test_round_3b_is_a_different_mount_and_says_so(self, taste):
+        """The order sorter moved the beam, and the low-energy half knows it.
+
+        The paper allows for this -- the sorter "is expected to slightly shift
+        the position of the beam on the grating, and hence the measured
+        parameters listed in Table 1" -- and calls the effect small. On gamma it
+        is not small: 2.21 deg against 1.73, sixteen times the published sigma.
+        Any model of the 80-420 eV half at Table 1's mount carries that.
+        """
+        _, angles = taste
+        b = angles["taste_dec18_round3b"]
+        assert b["gamma"] > TASTE_GAMMA_DEG + 10 * TASTE_GAMMA_SIGMA
+        assert abs(b["alpha"] - TASTE_ALPHA_DEG) > 4 * TASTE_ALPHA_SIGMA
+
+    def test_measured_and_modelled_on_one_comparison(self, taste):
+        measured, _ = taste
+        problem = _taste_problem()
+        illumination = measured.illumination("TE")
+        scan = sweep(problem, illumination, measured.wavelength_grid(),
+                     ["scalar"])[0]
+        comparison = align([measured, scan])
+        res = comparison.residuals("measured", "scalar")
+        assert len(res) == len(measured)
+        assert np.isfinite(res.residual).all()
+        assert comparison.measurements == ("measured",)
+
+    def test_two_measured_points_are_evanescent_at_the_published_mount(self, taste):
+        """Named, because they are evidence and not noise.
+
+        At Table 1's mount the grating equation makes order -4 at 680 eV and
+        order -2 at 340 eV evanescent, and the campaign has a measured point
+        for each. Both are the most negative order their energy recorded, at
+        the edge of the arc, and order -2 at 340 eV is the one point of round 3b
+        whose reduction is sensitive to the radius correction. The model is not
+        wrong to call them evanescent and the reduction is not wrong to have
+        found something there -- but one of the two is mistaken, and this test
+        fails loudly if their number ever grows.
+        """
+        measured, _ = taste
+        problem = _taste_problem()
+        scan = sweep(problem, measured.illumination("TE"),
+                     measured.wavelength_grid(), ["scalar"])[0]
+        res = align([measured, scan]).residuals("measured", "scalar")
+        stranded = sorted(
+            (int(m), round(float(HC_EV_NM / w)))
+            for m, w, p in zip(res.order, res.wavelength, res.propagating)
+            if not p
+        )
+        assert stranded == [(-4, 680), (-2, 340)]
+
+
+class TestTheMeasuredGroovesHandedness:
+    """Which way the groove faces the beam, and why it is not the file's to say.
+
+    An AFM scan fixes a shape, not an orientation: nothing in the scan records
+    which way the sample was mounted at the beamline, or the sign of the fast
+    scan axis against the dispersion direction. The convention does fix it --
+    a ``.ggp`` and the metrology pipeline's ``x_norm`` run along ``+d-hat``,
+    ``t`` runs against it, and ``FromProfileData.along_dispersion`` is the one
+    place the two meet (``docs/conventions.md``). Skipping that handover is not
+    a cosmetic slip: it sends the blaze order to the wrong side of the arc.
+
+    Needs no measurement and no optical constants, so unlike the campaign tests
+    above this one always runs.
+    """
+
+    GRID = [2.8178]   # 440 eV, where the campaign's blaze order is n = +4
+
+    def _orders(self, profile):
+        problem = Problem(period=TASTE_PERIOD_NM, profile=profile)
+        illumination = Illumination(
+            gamma_deg=TASTE_GAMMA_DEG, alpha_deg=TASTE_ALPHA_DEG, polarization="TE"
+        )
+        scan = sweep(problem, illumination, self.GRID, ["integral"],
+                     {"integral": {"boundary_points": 256}})[0]
+        return {int(m): float(v)
+                for m, v, p in zip(scan.orders, scan.efficiency[0],
+                                   scan.propagating[0]) if p}
+
+    def _mirrored(self) -> FromProfileData:
+        """The same points put straight into ``t``, which is the mistake."""
+        correct = _taste_trapezoid()
+        x, y = correct.dispersion_axis()
+        return FromProfileData(t=tuple(x), y=tuple(y), blaze_angle=27.0)
+
+    def test_the_blaze_order_is_where_the_campaign_found_it(self):
+        orders = self._orders(_taste_trapezoid())
+        assert max(orders, key=orders.get) == 4
+        assert orders[4] > 0.4
+
+    def test_the_mirror_image_moves_the_power_off_the_blaze_order(self):
+        """The failure this pins: a plausible curve with the wrong shape.
+
+        Mirrored, order +4 keeps 17% of what it had and order -2 grows sixfold,
+        so the model still looks like a blazed grating -- it just blazes
+        somewhere the grating does not. A comparison against measured data
+        would read as a profile error, and would be a convention error.
+        """
+        def negative(orders):
+            return sum(v for m, v in orders.items() if m < 0)
+
+        right, wrong = self._orders(_taste_trapezoid()), self._orders(self._mirrored())
+        assert wrong[4] < 0.25 * right[4]
+        assert negative(wrong) > 2.5 * negative(right)
+
+    def test_along_dispersion_round_trips(self):
+        """The handover is invertible, so neither direction is special-cased."""
+        profile = _taste_trapezoid()
+        x, y = profile.dispersion_axis()
+        again = FromProfileData.along_dispersion(x, y, blaze_angle=profile.blaze_angle)
+        assert np.allclose(again.t, profile.t)
+        assert np.allclose(again.y, profile.y)

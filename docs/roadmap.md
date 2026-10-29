@@ -666,17 +666,28 @@ The intended milestones are as follows.
   experimental status. The criterion is the one stated in the README: use on a
   real problem, with the integral solver compared against measured
   efficiencies, such as the ALS data reduced by `als_eff_meas`, and not only
-  against published benchmarks and its own physics checks. **Attempted
-  2026-10-28 and not met.** The comparison against the ported ALS campaign now
-  runs, which satisfies the sentence literally and not its purpose: the
-  campaign does not record the grating's groove, so the comparison is a
-  two-parameter fit, and that fit leaves an RMS of 0.0706 in absolute
-  efficiency that no recorded uncertainty explains. A fit cannot separate a
-  profile error from a solver error, so the gate needs a measured groove for
-  the grating that was measured — an AFM scan through `FromProfileData`, or a
-  campaign that records its profile. See [`findings.md`](findings.md), "The
-  measured comparison ran". Integrating the in-house RCWA backend is a further
-  minor release.
+  against published benchmarks and its own physics checks. **Met 2026-10-29.**
+
+  Attempted 2026-10-28 against the ALS October 2021 OGRE campaign and not met:
+  that campaign records no groove, so the comparison was a two-parameter fit
+  leaving an RMS of 0.0706 that no recorded uncertainty explained, and a fit
+  cannot separate a profile error from a solver error. The gate therefore
+  needed a measured groove for the grating that was measured.
+
+  The December 2018 TASTE campaign has one. 296 absolute per-order efficiencies
+  from 80 to 800 eV over orders −4 to 8, against the grating's own AFM scan
+  through `metrology.boundary`, with every input measured and none fitted:
+  RMS 0.0383, or 0.0363 with the roughness factor the paper applies. The
+  separation the gate was for is now measured rather than argued — the integral
+  method, the C-method and RCWA agree with one another to 2e-4 RMS while all
+  three sit 0.038 from the grating, so the residual is not the solver. The
+  absolute level is accounted for exactly by gold's reflectivity and the AFM's
+  own 1.5 nm roughness. What remains is one scalar, `period · sin γ`, which the
+  measurement wants 4.6% smaller than the published numbers allow; that is a
+  question for the mount, and it is an open question below. See
+  [`findings.md`](findings.md), "The verdict on 0.3, from the TASTE campaign".
+
+  Integrating the in-house RCWA backend is a further minor release.
 - **1.0**: the public interface is declared stable. That covers `Problem`,
   `BoundaryProfile`, `AnalysisSettings`, the boundary JSON format and the solver
   plugin protocol. The preconditions are that the solvers have been validated
@@ -712,6 +723,12 @@ denotes something else in that script, and knowing what it denotes would help in
 reading the other legacy scripts.
 
 ### Which `.ggp` goes with which run
+
+This question is about the *reference* TASTE grating, the 315 nm one the PCGrate
+corpus computes. It is not the 400 nm TASTE grating of the ALS December 2018
+campaign, whose groove and whose measured efficiency are both now in hand; see
+`findings.md`, "The TASTE campaign". Two gratings from the same programme share
+the name, and only one of them is still unidentified.
 
 `AFM_TASTE_test.ggp` and `TASTE_a205_TiPt.ggp` are both candidates for the TASTE
 efficiency run, and neither is present in the corpus directory, which holds
@@ -776,20 +793,94 @@ should be gated with `check_energy_balance` before it is admitted to
 groove-resolved reflectivity model, which still rests on internal consistency
 plus, more recently, cross-checks against the rigorous absolute mode.
 
+### The integral solver's absorption at large (1 − |n|)
+
+`conductivity="tabulated"` returns an absorbed fraction that is too large when
+the coating's complex index departs from unity, and the error reaches 8% of the
+incident power. Measured at the TASTE geometry (Au, 400 nm period, conical,
+γ = 1.73°), against the C-method and RCWA, which both satisfy `R + A = 1` to
+1e-5 there:
+
+| eV | \|n\| | A, integral | A, C-method | R + A, integral |
+|---:|---:|---:|---:|---:|
+| 800 | 0.9971 | 0.34891 | 0.34883 | 1.00007 |
+| 200 | 0.9888 | 0.22232 | 0.22012 | 1.00220 |
+| 120 | 0.9445 | 0.06810 | 0.05627 | 1.01182 |
+| 80 | 0.8880 | 0.16107 | 0.07875 | 1.08266 |
+
+The reflected orders are not affected: they match the C-method to 2e-5 RMS over
+all 296 points of that campaign. The error also *grows* with mesh refinement —
+3.9% at 512 boundary points, 8.3% at 1024, 8.1% at 2048 — so it is in the
+absorption integral's formulation and not in its discretisation, and it is what
+stops that configuration reaching a convergence plateau at 1e-5. Dropping the
+80 eV point from the probe moves the last two differences from 2.7e-4, 3.4e-4
+to 1.3e-4, 1.9e-5.
+
+What would settle it: a derivation check of the absorbed-power integral against
+the two-sided theorem in the limit of a flat boundary, where the answer is
+Fresnel and `1 − R` is exact, swept over |n| rather than over mesh. The flat
+limit is already a test in the suite; it is run at |n| near unity.
+`findings.md`, "The TASTE campaign", has the full table.
+
+### The C-method answers confidently on a wall it cannot represent
+
+The C-method solves a boundary through a coordinate transformation, which needs
+a single-valued surface of bounded slope. Given the paper's TASTE trapezoid,
+whose anti-blaze side is 88.8° from the surface, it returns RMS between 1.6 and
+3.3 against the measurement with individual efficiencies up to 31, where the
+integral method returns 0.033 to 0.048 on the same grooves.
+
+It does not refuse, and the reason is that its guard is an equality test.
+`cmethod/_series.py` raises when a profile has two heights at one position
+(`steps == 0.0`), and refuses `Lamellar` and `Blazed(antiblaze_angle=90)` by
+type; a wall at 88.8° has a finite step and passes. So the README's "refuses
+vertical facets" is true as written and does not cover the case that matters.
+
+`check_energy_balance` catches it at once, and is currently the only thing that
+does. What would fix it: a slope ceiling on that profile check rather than an
+equality, raising the same way, with a message naming the integral method as
+the backend that can do it. The ceiling's value needs measuring — the grooves
+that fail here are at 88.8° and the ones that work are at 67° and 82.8°.
+
+### The 4.6% in `period · sin γ` for the TASTE campaign
+
+Every feature of the TASTE residual is reproduced by shrinking
+`period · sin γ` 4.6% below 400 nm × sin 1.73°: the RMS falls from 0.0383 to
+0.014, and the modelled blaze order agrees with the measured one at all 37
+energies instead of 31. No candidate survives its own measurement — the period
+would have to be 382 nm against an AFM reading 396–412 and a dispersion
+re-derivation of 401 ± 8, γ would have to be 1.65° against 1.73 ± 0.03, and the
+beamline's energy scale cannot be tested because the scan files' fourth column
+is a constant 500.3 rather than the energy readback its name suggests.
+
+What would settle it: a re-derivation of the mount angles from the arc fit
+without the small-angle assumptions, or a dispersion measurement on this grating
+with a grating of known period beside it. Note the shape of this question is the
+same as "The panter1 grating period" above — `period × sin γ` recovered without
+being separable — and a fact that separates them for one grating may separate
+them for both.
+
 ### Smaller ones
 
 - Is the vendor console solver runnable (Windows VM)? The ability to generate
   fresh reference cases on demand, instead of only reusing exported tables,
   would justify an afternoon of effort.
 - Is there any synchrotron or Panter measured efficiency beyond the current
-  corpus that could seed the benchmark suite? This is partially answered:
-  `als_eff_meas` holds one fully ported ALS campaign (ogre laminar, Oct 2021)
-  with absolute per-order efficiencies and uncertainties, plus ~15 legacy
-  per-experiment scripts in its archive that could be ported in the same way.
-  That campaign has now been reached from the comparison harness and run; what
-  it cannot do on its own is validate a solver, for want of the groove. The
-  ~15 unported scripts are worth more than they were, because a campaign among
-  them that does record its profile would close the 0.3 gate directly.
+  corpus that could seed the benchmark suite? This is now answered twice over.
+  `als_eff_meas` holds three fully ported ALS campaigns with absolute per-order
+  efficiencies and uncertainties -- ogre laminar (Oct 2021) and the two halves
+  of the TASTE run (Dec 2018) -- with ~13 legacy per-experiment scripts left in
+  its archive. Both campaigns are reached from the comparison harness in
+  `tests/test_measured.py`. OGRE could not validate a solver for want of the
+  groove; TASTE has one, and `findings.md`, "The TASTE campaign", records what
+  that bought.
+
+  The lesson from porting the second campaign is worth carrying to the third:
+  the surviving driver script is not the record of the published run. For TASTE
+  it disagrees with the saved output in three independent ways -- a different
+  number of excluded points, a radius correction that cannot complete the
+  reduction, and a throw that is neither the published nor the assumed one --
+  and in each case the saved output is the record.
 
 ### The groove of OGRE laminar grating I
 
