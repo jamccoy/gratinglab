@@ -36,6 +36,7 @@ __all__ = [
     "current",
     "install",
     "manager",
+    "settings",
     "subscribe",
     "swatch",
 ]
@@ -47,11 +48,19 @@ _KEY = "appearance/theme"
 _PROPERTY = "_gratinglab_theme_manager"
 
 
-def _settings() -> QSettings:
+def settings() -> QSettings:
+    """The application's settings store, or the INI file ``GRATINGLAB_SETTINGS`` names.
+
+    Shared by everything the windows remember (the theme, the AFM column
+    width), so the test suite's redirect covers all of it at once.
+    """
     path = os.environ.get(SETTINGS_ENV)
     if path:
         return QSettings(path, QSettings.Format.IniFormat)
     return QSettings("gratinglab", "gratinglab")
+
+
+_settings = settings
 
 
 def palette(theme: Theme) -> QPalette:

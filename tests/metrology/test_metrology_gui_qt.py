@@ -270,6 +270,39 @@ class TestBoundaryTab:
             assert column.maximumWidth() > 10_000, "the column must not be fixed"
             assert not splitter.childrenCollapsible()
 
+    def test_the_column_width_is_shared_and_remembered(self, qtbot, window, tmp_path, monkeypatch):
+        """Dragging in one tab moves the others and survives a new window."""
+        from PySide6.QtWidgets import QSplitter
+
+        from gratinglab.gui.qt import theming
+        from gratinglab.metrology.gui.qt.layout import WIDTH_KEY
+        from gratinglab.metrology.gui.qt.main_window import MainWindow
+
+        monkeypatch.setenv(theming.SETTINGS_ENV, str(tmp_path / "settings.ini"))
+        window.resize(1400, 860)
+        window.show()
+        splitters = [tab.findChild(QSplitter)
+                     for tab in (window.importer, window.tabs.widget(1), window.boundary)]
+
+        first = splitters[0]
+        first.moveSplitter(450, 1)          # what a drag does; emits splitterMoved
+        width = first.sizes()[0]
+        assert width >= 440
+        assert int(theming.settings().value(WIDTH_KEY)) == width
+        # A hidden tab lays out when shown, and no tab goes below the width
+        # its own controls need, which offscreen fonts can make wider than this.
+        for index, splitter in zip((0, 1, 2), splitters):
+            window.tabs.setCurrentIndex(index)
+            qtbot.wait(50)
+            assert splitter.sizes()[0] == max(width, splitter.widget(0).minimumWidth())
+
+        again = MainWindow()
+        qtbot.addWidget(again)
+        again.resize(1400, 860)
+        again.show()
+        assert again.importer.findChild(QSplitter).sizes()[0] == width
+        again.close()
+
     def test_efficiency_button_tracks_the_export_button(self, qtbot, window):
         """All three need one thing -- a profile -- so they must not drift apart."""
         assert not window.boundary.export_btn.isEnabled()

@@ -10,6 +10,16 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- The AFM window remembers its controls column width, and the Import,
+  Analysis and Boundary tabs share it: dragging the column in one tab moves
+  it in the others, and the window reopens at it. Stored with the theme
+  choice (`theming.settings`, now public), so `GRATINGLAB_SETTINGS` redirects
+  both. A tab never goes below the width its own controls need.
+
 ## 0.2.4 (2026-10-28)
 
 ### Fixed
