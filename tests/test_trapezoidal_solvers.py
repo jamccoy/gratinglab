@@ -203,16 +203,19 @@ class TestTheCmethodOnSteepWalls:
     Sharp corners, gold, against integral 800. Truncation 128 is 1.7e-4 off
     at 85 deg, 6.8e-4 at 87 deg and 6.8e-2 at 89 deg, where 64 to 128 still
     moves it by 0.15. RCWA is indifferent to the angle: 1.2e-4 at 89 deg and
-    truncation 40. The energy balance is what tells you, and it is reported.
+    truncation 40.
+
+    Until #7 the energy balance was the only thing that told you: truncation
+    32 answered 0.34 from RCWA with R + A off by 1.14. The C-method now reads
+    the wall's slope before solving and refuses a truncation below the
+    harmonics it needs (``solvers.cmethod.wall_floor``).
     """
 
-    def test_at_89_deg_it_is_wrong_and_says_so(self):
+    def test_at_89_deg_it_refuses_too_few_harmonics(self):
         problem = gold(Trapezoidal(**GROOVE, sidewall_angle=89.0))
-        cmethod = solve("cmethod", problem, truncation=32)
+        with pytest.raises(ValueError, match="too few.*89 deg"):
+            solve("cmethod", problem, truncation=32)
         rcwa = solve("rcwa", problem, truncation=10)
-        assert gap(cmethod, rcwa) > 0.1  # measured 0.34; RCWA 10 is 6e-3 from integral 800
-        assert balance(cmethod) > 0.1  # measured 1.14
-        assert any("strays from unity" in w for w in cmethod.provenance.warnings)
         assert balance(rcwa) < 1e-10
 
 
