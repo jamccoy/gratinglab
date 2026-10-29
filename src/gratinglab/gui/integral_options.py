@@ -28,6 +28,7 @@ solver's own check for nodes too close to separate is applied here too.
 from __future__ import annotations
 
 from dataclasses import dataclass, replace
+from collections.abc import Callable
 from typing import Any
 
 import numpy as np
@@ -158,10 +159,55 @@ def build_options(
     arc_length = (
         problem.profile.boundary(_ARC_SAMPLES).arc_length * problem.period
     )
-    # The floor is set by the coarsest spacing. On the equal-arc mesh that is
-    # the mean, arc_length / P; a graded mesh is built here exactly as the
-    # solver will build it, since its coarsest spacing depends on P.
-    resolution_length = arc_length
+    material = None
+    if form.conductivity == "tabulated":
+        # Sequential prerequisites, not parallel checks: there is no index to
+        # range-check without a material, and no metal-side floor without an
+        # index. So these short-circuit rather than accumulating.
+        name, indices, error = _tabulated_index(problem, wavelengths)
+        if error is not None:
+            raise FormErrors((error,))
+        assert name is not None and indices is not None
+        material = (name, indices)
+
+    def floor_at(count: int) -> tuple[int, Callable[[int], str]]:
+        """The floor a mesh of ``count`` nodes imposes, and its message.
+
+        The floor is set by the coarsest spacing. On the equal-arc mesh that
+        is the mean, arc_length / P, so the floor does not depend on ``count``;
+        a graded mesh is built here exactly as the solver will build it, since
+        its coarsest spacing depends on P. The message takes the count to
+        quote, which `_first_passing` may raise above this floor.
+        """
+        resolution_length = arc_length
+        if grading:
+            mesh = physical_boundary(problem, count, grading=grading)
+            if mesh.graded:
+                resolution_length = mesh.resolution_length
+        reduced = float(wavelengths.min()) / illumination.sin_gamma
+        needed = int(np.ceil(_POINTS_PER_WAVELENGTH * resolution_length / reduced))
+
+        def message(quote: int) -> str:
+            return (
+                f"needs at least {quote} to give "
+                f"{_POINTS_PER_WAVELENGTH:g} nodes per transverse "
+                f"wavelength ({reduced:.4g} nm) along the "
+                f"{arc_length:.4g} nm boundary"
+                + (", where the graded mesh's coarsest spacing sets the floor"
+                   if resolution_length != arc_length else "")
+            )
+
+        if material is not None:
+            metal_needed, metal_message = _metal_floor(
+                *material, illumination, wavelengths, resolution_length
+            )
+            # One error on one field: whichever side of the boundary binds
+            # harder. Reporting both would put two messages on
+            # `boundary_points` that a single number answers.
+            if metal_needed > needed:
+                return metal_needed, metal_message
+        return needed, message
+
     if grading:
         try:
             mesh = physical_boundary(problem, int(points), grading=grading)
@@ -176,38 +222,11 @@ def build_options(
                 "can separate on this groove; choose a lower order (4 is "
                 "recommended) or fewer points.",
             ),))
-        if mesh.graded:
-            resolution_length = mesh.resolution_length
-    reduced = float(wavelengths.min()) / illumination.sin_gamma
-    needed = int(np.ceil(_POINTS_PER_WAVELENGTH * resolution_length / reduced))
-    message = (
-        f"needs at least {needed} to give "
-        f"{_POINTS_PER_WAVELENGTH:g} nodes per transverse "
-        f"wavelength ({reduced:.4g} nm) along the "
-        f"{arc_length:.4g} nm boundary"
-        + (", where the graded mesh's coarsest spacing sets the floor"
-           if resolution_length != arc_length else "")
-    )
 
-    if form.conductivity == "tabulated":
-        # Sequential prerequisites, not parallel checks: there is no index to
-        # range-check without a material, and no metal-side floor without an
-        # index. So these short-circuit rather than accumulating.
-        name, indices, error = _tabulated_index(problem, wavelengths)
-        if error is not None:
-            raise FormErrors((error,))
-        assert name is not None and indices is not None
-        metal_needed, metal_message = _metal_floor(
-            name, indices, illumination, wavelengths, resolution_length
-        )
-        # One error on one field: whichever side of the boundary binds harder.
-        # Reporting both would put two messages on `boundary_points` that a
-        # single number answers.
-        if metal_needed > needed:
-            needed, message = metal_needed, metal_message
-
+    needed, message = floor_at(int(points))
     if points < needed:
-        raise FormErrors((FieldError("boundary_points", message),))
+        quote = _first_passing(floor_at, needed) if grading else needed
+        raise FormErrors((FieldError("boundary_points", message(quote)),))
 
     return {
         "boundary_points": int(points),
@@ -270,7 +289,7 @@ def _metal_floor(
     illumination: Illumination,
     wavelengths: NDArray[np.float64],
     arc_length: float,
-) -> tuple[int, str]:
+) -> tuple[int, Callable[[int], str]]:
     """The mesh floor the material side imposes, and what to say about it.
 
     It uses the same formula as the solver's own guard, so the two numbers
@@ -283,9 +302,39 @@ def _metal_floor(
     factors = np.abs(np.sqrt(indices**2 - cos_gamma**2))
     reduced = float((wavelengths / factors).min())
     needed = int(np.ceil(_POINTS_PER_WAVELENGTH * arc_length / reduced))
-    return needed, (
-        f"needs at least {needed} with coating {name}: the field inside a "
-        f"conductive material oscillates and decays on the scale lambda/|n| "
-        f"({reduced:.4g} nm here), and the mesh must resolve it along the "
-        f'{arc_length:.4g} nm boundary. Raise it, or use conductivity="perfect".'
-    )
+
+    def message(quote: int) -> str:
+        return (
+            f"needs at least {quote} with coating {name}: the field inside a "
+            f"conductive material oscillates and decays on the scale lambda/|n| "
+            f"({reduced:.4g} nm here), and the mesh must resolve it along the "
+            f'{arc_length:.4g} nm boundary. Raise it, or use conductivity="perfect".'
+        )
+
+    return needed, message
+
+
+#: How far above the first estimate `_first_passing` looks. The graded floor
+#: moves by a node or two between neighbouring counts, so this is generous.
+_FLOOR_SEARCH = 64
+
+
+def _first_passing(floor_at: Callable, estimate: int) -> int:
+    """The smallest count from ``estimate`` up that clears its own floor.
+
+    On a graded mesh the floor depends on the count, because the coarsest
+    spacing moves with it, so the floor computed at the count typed is not the
+    floor at the count it names. Quoting it as it stood was one short at the
+    floor: at 32 points the default blaze said "at least 208", and 208 then
+    said 209. Searching upward makes the quoted number one the form accepts.
+    A count whose mesh cannot be built is skipped. If none clears within
+    ``_FLOOR_SEARCH``, the estimate is returned, which is no worse than before.
+    """
+    for count in range(estimate, estimate + _FLOOR_SEARCH):
+        try:
+            needed, _ = floor_at(count)
+        except ValueError:
+            continue
+        if needed <= count:
+            return count
+    return estimate

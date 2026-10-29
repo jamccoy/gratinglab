@@ -10,6 +10,18 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Fixed
+
+- The Integral tab's refusal of too few boundary points named a count it
+  would then refuse, on a graded mesh (the default since 0.2.7): on the soft
+  X-ray Au scan, 32 points said "needs at least 208" and 208 said 209. The
+  floor there depends on the count, because the coarsest spacing moves with
+  it, and it was computed at the count typed. The refusal now names the
+  smallest count that clears its own floor, which the form accepts and one
+  fewer it does not.
+
 ## 0.2.7 (2026-10-28)
 
 ### Added
