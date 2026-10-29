@@ -10,6 +10,15 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## 0.2.4 (2026-10-28)
+
+### Fixed
+
+- The README, which is also the PyPI page, still called RCWA and the
+  C-method "planned". Both shipped in 0.2.0, with GUI tabs in 0.2.1; its
+  Status and Scope sections and the method table now say so, with what
+  each has and has not been checked against. No code changes.
+
 ## 0.2.3 (2026-10-28)
 
 ### Changed
