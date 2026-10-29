@@ -1571,3 +1571,237 @@ it helps the lamellar and hurts the ideal sawtooth by up to 25 times.
 
 Pinned by `tests/test_integral_graded.py`; the ladders are in
 `theory/integral.md` §5.
+
+---
+
+## The measured comparison ran, and the rigorous solver does not reproduce the ALS campaign
+
+The comparison the roadmap deferred on 2026-10-24 for want of data has now
+run. It does not validate the solvers, and the reason is not the solvers.
+
+The beamline tree was found on a third machine (neither MC1 nor MAC1), at
+`$ALS_DATA_ROOT`, together with the PCGrate corpus. `als_eff_meas` reduces
+`ogre_laminar_I_oct21` to 251 absolute per-order efficiencies with
+uncertainties, across orders −2 to 7 and 39 wavelengths from 1.0332 to
+2.8178 nm (1200 down to 440 eV). `tests/test_measured.py::TestOgreLaminarCampaign`
+passes for the first time anywhere, including its 251-point baseline, so the
+`to_measured()` conversion written out in that fixture is confirmed against
+real data.
+
+**Two of the roadmap's open questions are closed in passing.**
+
+1. *The alpha sign convention.* `als_eff_meas`'s recovered `alpha` is already
+   in `Illumination.alpha_deg`'s convention, with no flip. At α = +27.22°
+   every one of the 251 measured points propagates under gratinglab's grating
+   equation; at α = −27.22°, 107 of them are evanescent. The two-candidate
+   search in the fixture's `_oriented()` is therefore no longer a guess, and
+   the sign is pinned by a test.
+2. *Convergence at this geometry.* All three configurations plateau, against a
+   tolerance of 1e-5 chosen from the measurement rather than from habit: the
+   campaign's median σ is 4e-5, so 1e-5 is below the error bar of every point
+   the model is compared against.
+
+| configuration | knob | ladder | last two differences | converged at |
+|---|---|---|---|---:|
+| integral, `conductivity="tabulated"` | `boundary_points` | 128–2048 | 9.1e-6, 1.3e-6 | **512** |
+| integral, `conductivity="perfect"` | `boundary_points` | 128–4096 | 5.5e-6, 8.1e-7 | **1024** |
+| scalar | `quadrature_points` | 1024–1048576 | 1.5e-5, 7.7e-6, 3.9e-6 | **262144** |
+
+The scalar ladder's differences halve exactly on each doubling, which is clean
+first-order convergence and the reason it needs 2.6e5 points to reach a
+tolerance the integral method reaches at 512 boundary nodes.
+
+### The comparison cannot be a prediction, because the groove is not recorded
+
+The campaign records the period (158.0 ± 0.5 nm, and the reduction re-derives
+157.8 ± 2.7 nm from the measured dispersion, which agrees) and recovers the
+angles (γ = 1.857° ± 0.025, α = 27.215° ± 0.487). It does not record the
+groove depth or the duty cycle, and the original analysis never modelled the
+groove at all: its legacy script plots the measurement against bare Au
+reflectivity at 1.7°.
+
+So the best available comparison is a fit, and it is reported as one. Depth was
+scanned from 6 to 44 nm in 2 nm steps against duty cycle 0.30 to 0.93, 280
+rigorous sweeps of 39 wavelengths each, with `conductivity="tabulated"` and
+`coating="Au"` so that the efficiencies are absolute. Two free parameters
+against 251 points is heavily over-constrained, and the order-to-order ratios
+at fixed wavelength are what carry the constraint.
+
+**The surface is shallow and multi-modal, and no groove fits.** Over the whole
+grid the RMS residual moves only between 0.0706 and 0.1841. The best is
+16 nm / 0.70 at 0.0706; a second, essentially equal basin sits at 34 nm / 0.60
+at 0.0712. Duty cycles above 0.72 are monotonically worse, so 0.70 is a real
+ridge and not a truncated search.
+
+### Residuals at the best fit
+
+Each solver at its own converged setting, 16 nm deep, duty 0.70:
+
+| method | RMS | max abs | where | mean | χ² / 251 pts |
+|---|---:|---:|---|---:|---:|
+| integral, tabulated | 0.0706 | 0.2909 | order 0, 2.583 nm | −0.0148 | 1.36e9 |
+| integral, perfect | 0.1313 | 0.5162 | order 0, 1.107 nm | −0.0703 | 3.74e9 |
+| scalar | 0.0852 | 0.4142 | order 0, 1.127 nm | −0.0071 | 1.05e9 |
+
+The χ² column is recorded only to be dismissed. Every one of the 251 points
+carries a σ, so the number has its full denominator, and a reduced χ² of 5.4
+million is not a goodness-of-fit: the campaign's uncertainties are
+counting-statistics propagated through the reduction, with no term for the
+systematics that dominate here. They bound the measurement's repeatability,
+not its accuracy.
+
+Per order, integral with tabulated conductivity:
+
+| order | n | RMS | mean | ⟨measured⟩ | ⟨model⟩ |
+|---:|---:|---:|---:|---:|---:|
+| −2 | 14 | 0.0158 | −0.0137 | 0.0189 | 0.0326 |
+| −1 | 37 | 0.0405 | −0.0023 | 0.0947 | 0.0970 |
+| 0 | 39 | 0.1417 | −0.0504 | 0.2036 | 0.2540 |
+| 1 | 39 | 0.0850 | −0.0017 | 0.1263 | 0.1279 |
+| 2 | 39 | 0.0422 | −0.0147 | 0.0488 | 0.0635 |
+| 3 | 34 | 0.0297 | −0.0018 | 0.0303 | 0.0321 |
+| 4 | 25 | 0.0242 | −0.0148 | 0.0249 | 0.0398 |
+| 5 | 15 | 0.0228 | −0.0197 | 0.0217 | 0.0413 |
+| 6 | 7 | 0.0146 | −0.0142 | 0.0149 | 0.0291 |
+| 7 | 2 | 0.0050 | −0.0047 | 0.0062 | 0.0109 |
+
+Per wavelength, binned, with the ratio of the measured to the modelled sum over
+the orders that wavelength measured:
+
+| eV band | λ (nm) | pts | RMS | measured/model total |
+|---|---|---:|---:|---:|
+| 1120–1200 | 1.033–1.107 | 47 | 0.0518 | 0.911 |
+| 1020–1100 | 1.127–1.216 | 42 | 0.0641 | 0.904 |
+| 920–1000 | 1.240–1.348 | 39 | 0.0516 | 0.896 |
+| 820–900 | 1.378–1.512 | 30 | 0.0619 | 0.906 |
+| 720–800 | 1.550–1.722 | 30 | 0.0784 | 0.815 |
+| 620–700 | 1.771–2.000 | 25 | 0.0606 | 0.760 |
+| 520–600 | 2.066–2.384 | 24 | 0.0865 | 0.758 |
+| 440–500 | 2.480–2.818 | 14 | 0.1412 | 0.829 |
+
+That ratio is a genuine energy statement and not a partial sum: at this
+geometry the campaign measured **every order the model says propagates**, at
+all 39 wavelengths. The real grating diffracts 15% less than the model does,
+averaging 0.848 ± 0.071 and reaching 0.70 at 620 eV.
+
+### What dominates the residuals
+
+**Zero order, and then order 1.** Order 0 carries RMS 0.1417 against a mean
+measured value of 0.2036, and holds the largest single residual at every
+method's maximum. Orders 0 and 1 together are 85% of the total squared
+residual while being 31% of the points.
+
+**Not the recorded inputs.** Each input uncertainty was propagated through the
+converged solver at the best-fit groove, and none of them is large enough to
+matter:
+
+| perturbation | RMS | max shift in the model |
+|---|---:|---:|
+| baseline | 0.07064 | — |
+| γ ∓ 0.025° | 0.07112 / 0.07044 | 0.0170 |
+| α ∓ 0.487° | 0.07069 / 0.07065 | 0.0090 |
+| polarization TE / TM | 0.07056 / 0.07071 | 0.0009 |
+| period ∓ 0.5 nm | 0.07066 / 0.07061 | 0.0022 |
+
+The unrecorded polarization, which the roadmap flagged as something the
+comparison would have to settle, turns out not to matter at all: TE and TM
+differ by at most 9.1e-4 across all 251 points at this graze, which is
+consistent with the s/p degeneracy already recorded in this file and makes the
+fixture's `"unpolarized"` default harmless here. α's ±0.487° looks alarming and
+is not: it moves the model by 0.009, an eighth of the residual.
+
+**Not the absolute level alone.** The obvious reading of a 15% energy deficit is
+that the diffraction is right and the reflectivity is wrong, which is the
+division this file has drawn before under "the corpus can test the diffraction
+but not the reflectivity". That reading is wrong here. Normalising both
+measurement and model at each wavelength by their own sum over the measured
+orders leaves an RMS of 0.1200 in normalised units, against 0.0706/0.6 ≈ 0.118
+for the raw residual carried into the same units. Removing the level removes
+none of the disagreement. The pattern itself disagrees.
+
+**The pattern disagreement alternates with the parity of the order.** In
+normalised fractions, measured minus modelled runs −0.019, +0.024, −0.020,
++0.034, −0.008, +0.006 for orders −2 through 3: every even order over-modelled,
+every odd order under-modelled. For a lamellar groove that is the duty-cycle
+signature — the even orders vanish at duty 0.5 and grow as the duty leaves it —
+so the data wants a duty closer to 0.5 than 0.70, while the envelope and the
+absolute level want 0.70. No single rectangle satisfies both, which is why the
+RMS surface is shallow in the first place.
+
+**Not sidewall slope.** A real etched groove has finite sidewalls, and the
+over-modelling of orders 4 to 6 by 40–50% is the signature of corners sharper
+than the real ones. `FromProfileData` carries a trapezoid, so this is testable,
+and it fails as an explanation. Sweeping the sidewall run at the best fit:
+
+| sidewall run | RMS, all orders | RMS, orders ≥ 4 | mean, orders ≥ 4 |
+|---:|---:|---:|---:|
+| 0 nm | 0.0706 | 0.0222 | −0.0158 |
+| 8 nm | 0.0728 | 0.0247 | −0.0212 |
+| 18 nm | 0.0901 | 0.0192 | −0.0152 |
+| 25 nm | 0.1047 | 0.0096 | −0.0007 |
+
+A 25 nm sidewall fixes the high orders almost exactly, cutting their RMS by 2.3
+times and their bias to nothing, and in doing so pushes the overall RMS up by
+half. The high orders and the low orders make incompatible demands, in this
+profile family as in the rectangular one.
+
+**Not the solver's own consistency.** At the same settings the finite-conductivity
+energy theorem holds to 1.4e-6 (R + A = 1 at `boundary_points` 1024; 7.0e-6 at
+512), four to five orders of magnitude tighter than the disagreement with the
+measurement. Worth noting in passing: `check_energy_balance` returns FAIL on
+this scan, because 16 of the 39 points exceed unity — by 7e-6. The report is
+correct and the tolerance is doing its job, but a reader seeing FAIL should
+read the magnitude before concluding anything.
+
+**Scalar fails differently, and as predicted.** Its RMS (0.0852) is not much
+worse than the rigorous solver's, which flatters it. Per order it is
+structurally wrong: it under-models order 3 by seventeen times (0.0018 against
+0.0303 measured) and orders 4 to 6 by an order of magnitude, while
+over-modelling orders −2 and −1. This is the regime its own guard already
+refuses — λ/(p·sin γ) runs 0.20 at 1.033 nm to 0.55 at 2.818 nm, against the
+0.32 this file already records as the point where scalar theory departs.
+Perfect conductivity is worse still (0.1313) and for a plainer reason: it
+returns efficiency relative to a perfect reflector, so comparing it to absolute
+measured data charges it the whole 35–39% the model absorbs. It is kept in the
+table as a diagnostic of the diffraction pattern, not as a candidate.
+
+### The verdict on 0.3
+
+**The criterion is not met.** The roadmap's gate for the solvers to lose their
+experimental status is "use on a real problem, with the integral solver
+compared against measured efficiencies ... and not only against published
+benchmarks and its own physics checks". The comparison has now been performed,
+which satisfies the sentence read literally, and that is the weaker half of
+what the gate was for. The gate exists to establish that the solver is right
+about a real grating, and this comparison does not establish it.
+
+What stands in the way is not the solver and not the measurement, but the
+absence of the grating's geometry. The best fit over a two-parameter family
+lands at an RMS of 0.0706, which is 18% of the largest measured efficiency in
+the campaign, 1700 times the median σ, and four orders of magnitude above the
+solver's own numerical self-consistency. The disagreement survives every
+recorded uncertainty, both profile families tried, and the removal of the
+absolute level. The weight of this project's other evidence — orderwise
+agreement with an independent commercial integral code, Goray & Schmidt's
+Table 3 to 6e-5, two-sided energy theorems, reciprocity — says the solver is
+unlikely to be the error, but this comparison cannot say so, because a fitted
+profile can absorb a solver error and a solver can be blamed for a profile
+error, and nothing here separates them.
+
+This is the same wall the TASTE run hit, recorded above under "the measured
+groove is rounded rather than faceted": an absolute efficiency computed from an
+assumed groove is not defensible, and the project has now met that conclusion
+twice from opposite directions, once with a measured profile and no reference
+and once with a reference and no profile.
+
+What would close it is metrology on this grating, not more solving: an AFM scan
+of OGRE laminar I, fed through `FromProfileData` with the tip correction the
+metrology side already has, turning the fit into a prediction. Failing that, a
+campaign that records its groove. Until one of those exists the solvers stay
+experimental, and the honest statement of their status is unchanged by this
+work: validated against another implementation of the same method and against
+published tables, not yet against a measured grating.
+
+Reproduced by `tests/test_measured.py::TestOgreLaminarCampaign`, which skips
+without `als_eff_meas` and `$ALS_DATA_ROOT`. The measurement itself is not in
+this repository and must not be committed.
