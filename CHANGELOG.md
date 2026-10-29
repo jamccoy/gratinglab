@@ -58,6 +58,18 @@ entries under "Unreleased" into a section named for the new version;
   C-method's guard against a vertical facet is an equality test on the step,
   so a wall at 88.8° passes it and the solver then returns efficiencies up to
   31.
+- `Trapezoidal` checked against every solver, across sidewall angle (90 to 30
+  deg) and corner radius (0 to the largest that fits) on an OGRE-like gold
+  groove in an extreme off-plane mount, with a convergence ladder per solver.
+  On sharp corners from 58 to 85 deg the three rigorous solvers converge to
+  one answer, the C-method within 2e-4 of the integral solver and RCWA closing
+  at about 5.5 times per doubling of truncation. The C-method's practical limit
+  there is about 85 deg (6.8e-2 wrong at 89 deg, and its energy balance shows
+  it). With rounded corners the C-method is the reference, and the integral
+  solver's absorption fails on the fillets (R + A - 1 up to 2), which is the
+  polyline fault of issue #6 met on an analytic profile; it warns, and is not
+  fixed here. `tests/test_trapezoidal_solvers.py` keeps the cheap cases;
+  `docs/findings.md`, "Trapezoidal through the four solvers", has the map.
 
 ### Fixed
 
@@ -68,6 +80,23 @@ entries under "Unreleased" into a section named for the new version;
   summing to one is the whole of the difference. The test now also checks the
   reflection's inverse, so the file's own apex is still asserted where the file
   puts it.
+
+- The C-method solved a `Trapezoidal` wrongly. The profile took the FFT path
+  meant for smooth profiles, and the FFT of a slope that jumps at four corners
+  converges only at first order in the sample count, so the answer sat on a
+  floor that raising `truncation` could not move: 3.9e-4 per order on a
+  72 deg, 0.425-period gold groove in an extreme off-plane mount, and 1.9e-5
+  at 45 deg, while the integral solver agreed with the corrected answer to
+  3.5e-7. Nothing warned, because the corner warning read only polygons. A
+  sharp trapezoid is now the polygon of its corners, integrated exactly and
+  warned about as a corner; a rounded one integrates its straight runs exactly
+  and each fillet by Gauss-Legendre in its own angle, converged to rounding.
+  A vertical sidewall is still refused, now by the C-method's own message.
+- `Trapezoidal.boundary` at `max_corner_radius` carried a phantom corner: the
+  crest's zero-width straight run added a second copy of the previous arc's
+  end, and the segment between them (about 1e-17 long, pointing anywhere) read
+  as a corner, so the graded mesh put two nodes on one point and the integral
+  solver refused every `boundary_points`. The zero-width run is skipped now.
 
 ## 0.2.8 (2026-10-29)
 
