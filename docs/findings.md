@@ -2626,3 +2626,171 @@ and always runs. The measurement is not in this repository and must not be
 committed; nor are the AFM scans, which live in the group's own tree, so the
 profile the committed tests use is the paper's published trapezoid rather than
 the measured groove.
+
+---
+
+## Trapezoidal through the four solvers
+
+`Trapezoidal` arrived with all four profile representations and no solver
+having been run on it. Mapping it found one solver giving a wrong answer, one
+profile defect, and one known fault in a new place. All three are recorded
+here with the map itself.
+
+The case is OGRE-like: period 160 nm, depth 68 nm (0.425 of the period), a
+crest 0.30 of the period wide, CXRO gold (the vendored `Au.txt`), extreme
+off-plane at graze 1.5° and azimuth 0, at 1.5, 3.0 and 4.5 nm. The sidewall
+ran from 90° to 58°; below about 50.5° that groove has no floor left. A second, 24 nm deep groove (0.15 of the period)
+reached 30°, which is 60° off vertical. Corner radius ran from 0 to the
+largest that fits. Each solver climbed its own ladder: the integral solver at
+400, 800 and 1600 boundary points (default `corner_grading=4`), the C-method at
+truncation 16 to 128, and RCWA at truncation 10, 20 and 40, with its staircase
+slices following at twice the truncation. 44 cases and 470 solves, measured
+2026-10-29 on MC1 with `OPENBLAS_NUM_THREADS=1`. A perfect-conductor variant
+ran wherever it applies, and RCWA refuses it, as it must.
+
+### The C-method solved a sharp trapezoid wrongly
+
+Before the fix, `cmethod/_series.py` sent only `Blazed` and `FromProfileData`
+down its exact polygon path. A `Trapezoidal` took the FFT path meant for smooth
+profiles. The FFT of a slope that jumps at four corners converges at first
+order in the sample count: the slope coefficients were off by 8.5e-4 at 4096
+samples and 1.9e-4 at 16384. So the answer sat on a floor that truncation could
+not move. Against the same trapezoid given as `FromProfileData`:
+
+| sidewall, depth | N = 16 | N = 32 | N = 64 |
+|---|---:|---:|---:|
+| 72°, 0.425 | 3.60e-4 | 3.81e-4 | 3.86e-4 |
+| 45°, 0.20 | 1.99e-5 | 1.96e-5 | 1.94e-5 |
+
+The integral solver sided with the polygon path. At 45° it was 3.5e-7 from it
+at 1600 points against 1.9e-5 from the sampled answer, and at 72° 1.8e-5
+against 3.4e-4 at 800 points. The corner warning never fired, because it read
+polygons only, and the sampled path's energy balance stalled at 1.3e-3. A
+reader had nothing to go on.
+
+**Fixed.** A sharp trapezoid is now the polygon of its corners, with the
+answer identical to `FromProfileData`'s and the warning given. A rounded one is
+a new kind of series: the straight runs are integrated in closed form and each
+fillet by Gauss-Legendre in the angle round its centre, where the integrands
+are entire however steep the wall. A rule in position instead was still moving
+by 7e-5 at four times its nodes on an 89° wall, because the slope has a
+square-root singularity just past the arc's end there. In angle, quadrupling
+the nodes changes the coefficients by under 3e-14 from 10° to 89.9°. A
+2^22-sample FFT agrees to its own second-order error, 1e-10 at 72° with a
+0.005-period fillet. `tests/test_cmethod.py::TestTrapezoidalSeries`.
+
+### The map
+
+Each entry is the largest |Δ efficiency| over orders and wavelengths, against
+the integral solver at 800 points. That solver's own 400-to-800 change is the
+first column, and on sharp corners it is 7e-7 to 9e-5. Its 1600-point rungs,
+run on the gold sharp cases, move it a further 5e-6 to 1e-5.
+
+| case (gold, TE) | int 400→800 | C 64 | C 128 | RCWA 10 | RCWA 20 | RCWA 40 | RCWA 40 − C 128 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 90°, sharp | 9.0e-5 | refused | refused | 6.4e-3 | 8.8e-4 | 1.2e-4 | |
+| 89°, sharp | 8.8e-5 | 2.1e-1 | 6.8e-2 | 6.3e-3 | 8.8e-4 | 1.2e-4 | 6.8e-2 |
+| 87°, sharp | 8.3e-5 | 1.9e-2 | 6.8e-4 | 5.9e-3 | 8.7e-4 | 1.3e-4 | 6.7e-4 |
+| 85°, sharp | 8.0e-5 | 1.3e-3 | 1.7e-4 | 5.7e-3 | 9.0e-4 | 1.3e-4 | 1.7e-4 |
+| 80°, sharp | 7.1e-5 | 1.5e-4 | 2.5e-5 | 6.2e-3 | 9.8e-4 | 1.5e-4 | 1.5e-4 |
+| 76°, sharp | 6.3e-5 | 7.0e-5 | 1.4e-5 | 6.4e-3 | 1.0e-3 | 1.6e-4 | 1.5e-4 |
+| 72°, sharp | 6.3e-5 | 5.0e-5 | 9.5e-6 | 7.2e-3 | 1.3e-3 | 2.4e-4 | 2.4e-4 |
+| 65°, sharp | 4.6e-5 | 1.8e-5 | 5.6e-6 | 7.4e-3 | 1.3e-3 | 2.2e-4 | 2.1e-4 |
+| 58°, sharp | 4.2e-5 | 5.4e-6 | 5.4e-6 | 7.2e-3 | 1.4e-3 | 2.7e-4 | 2.6e-4 |
+| 24 nm deep, 45°, sharp | 8.2e-6 | 3.5e-6 | 2.9e-6 | 1.4e-3 | 2.3e-4 | 3.5e-5 | 3.3e-5 |
+| 24 nm deep, 30°, sharp | 7.8e-6 | 5.0e-7 | 7.9e-7 | 1.4e-3 | 2.5e-4 | 4.9e-5 | 5.0e-5 |
+
+TM, run at 90°, 85° and 72°, is within 10% of TE in every column. Each solver costs, for
+three wavelengths: integral 800 points about 16 s, RCWA truncation 40 about
+20 s, C-method truncation 128 about 3 s. The integral solver at 1600 points
+took 30 to 55 minutes under load, which is why the ladder stops at 800.
+
+**Where all three converge, they agree.** On every sharp case from 58° to 85°
+the integral solver is converged to about 1e-5 at 800 points, the C-method at
+128 is within 2e-4 of it, and RCWA closes on it at about 5.5 times per
+doubling of truncation. RCWA 40's gap to the C-method equals RCWA's own
+remaining error, so nothing is left over that would be a disagreement about
+the physics.
+
+**RCWA does not care about the sidewall.** Its error at a given truncation is
+the same within a factor of two from 58° to 90°: the staircase steps are
+vertical whatever the true wall does. What it pays for is the staircase
+itself, which converges roughly at first order. A vertical, sharp
+`Trapezoidal` is also solved as a staircase, at about twelve times the cost of
+`Lamellar`'s single exact slab. Every slab is identical, so the answer still
+agrees to rounding.
+
+**The C-method's practical limit on this groove is about 85°.** There it needs
+truncation 128 for 1.7e-4. At 87° it reaches only 6.8e-4 at 128, and at 89°
+it is wrong by 6.8e-2 at 128 and still moving by 0.15 between 64 and 128.
+Its energy balance shows each of those failures: 4e-4 at 85°, 2e-3 at 87° and
+4e-2 at 89°, all at truncation 128. Below 80° it is the fastest of the three
+by an order of magnitude and the best converged. Branch `cmethod-steep-walls`
+(issue #7) derives a truncation floor that refuses the hopeless cases; it
+measures the same knee independently on the TASTE groove.
+
+**Perfect conductor:** the integral solver at 800 points against the C-method
+at 128 gives 5.5e-5 at 58° and 1.3e-4 at 72°. The C-method converges more
+slowly without absorption, at 1.4e-4 for 72° in TM and 4.8e-4 at 85°. The
+integral solver balances to 1e-11 in TE.
+
+### Rounded corners, where the integral solver's absorption fails
+
+| case (gold, TE, 72°) | radius | int bal 800 | C 64→128 | C bal 128 | RCWA 40 − C 128 | int 800 − C 128 |
+|---|---:|---:|---:|---:|---:|---:|
+| sharp | 0 | 9e-7 | 5.0e-5 | 1e-5 | 2.4e-4 | 9.5e-6 |
+| 0.3 nm | 0.002 | 2 | | 9e-6 | 2.7e-4 | 1.0e-2 |
+| 0.8 nm | 0.005 | 0.2 | | 5e-6 | 4.0e-4 | 3.5e-3 |
+| 1.6 nm | 0.01 | 0.04 | 1.6e-5 | 4e-6 | 4.7e-4 | 1.4e-3 |
+| 3.2 nm | 0.02 | 0.01 | | 2e-6 | 6.0e-4 | 6.0e-4 |
+| 8 nm | 0.05 | 2e-3 | 3.4e-6 | 6e-7 | 9.3e-4 | 1.2e-4 |
+
+With the corners rounded the C-method becomes the reference. The slope is
+continuous, so it converges quickly and balances to a few 1e-6. RCWA agrees
+with it to within RCWA's own staircase error, which is 1.5e-3 between
+truncation 20 and 40 at 1.6 nm.
+
+The integral solver's R + A − 1 reads 2 at 0.3 nm and 0.2 at 0.8 nm. It falls
+with the mesh far too slowly to be convergence, and its reflected orders are
+off by up to 1e-2. A fillet reaches it as a polyline of one vertex per degree,
+every vertex turning by less than `CORNER_TURN_DEGREES`. No corner is detected
+and the mesh is equal-arc and ungraded, while each vertex is still a real,
+weak corner of the metal interface. That is exactly the fault diagnosed on
+measured AFM grooves (issue #6, branch `integral-absorption`), met here on an
+analytic profile. A perfect conductor has no absorption to get wrong, and on
+the same 1.6 nm fillet the integral solver and the C-method agree to 2.8e-5.
+The solver does warn that the summed efficiency strays from unity. Issue #6
+needs a design decision, so it was not fixed here.
+`tests/test_trapezoidal_solvers.py::TestRoundedCorners` pins that the failure
+is reported; it is written to fail once the fault is fixed.
+
+### The largest fillet had a phantom corner
+
+At `max_corner_radius` on the 72° groove, the crest's straight run has zero
+width. `Trapezoidal.boundary` appended its end point anyway, a second copy of
+the previous arc's end to within rounding. The segment between them, about
+1e-17 long and pointing anywhere, read as a corner of more than 10°. The graded
+mesh then clustered two nodes onto it, and the integral solver refused every
+`boundary_points` with "puts two nodes 0 nm apart". Fixed by skipping the
+zero-width run. The integral solver now solves that groove, though its
+absorption still fails as in the section above, and its reflected orders are
+within 6e-4 of the C-method. The C-method itself loses digits on that profile
+from truncation 32 (condition number 3e12, 1.5e20 at 128) and says so.
+`tests/test_trapezoidal_solvers.py::TestTheLargestFillet`.
+
+### The reduction to Lamellar
+
+With `sidewall_angle=90` and `corner_radius=0`, against `Lamellar` of the same
+depth and duty:
+
+| solver | gold | perfect conductor |
+|---|---|---|
+| RCWA, truncation 10 / 20 | 2.0e-13 / 1.2e-12 (TE), 6.1e-13 / 9.5e-13 (TM) | refused |
+| integral, 400 / 800 points | 6.0e-6 / 1.1e-7, against Lamellar's own 400-to-800 change of 9.0e-5 | 4.4e-16 (TE), 2.5e-13 (TM) |
+| C-method | refused: a vertical wall has no finite slope | refused |
+
+The integral solver's gold residual is mesh error, not a disagreement. The two
+polygons are the same shape translated by half a period, so their graded meshes
+meet the period boundary in different places. The perfect-conductor case shows
+the same geometry to rounding.
+`tests/test_trapezoidal_solvers.py::TestVerticalAndSharpIsLamellar`.

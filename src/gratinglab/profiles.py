@@ -922,8 +922,15 @@ class Trapezoidal(_BaseProfile):
         ys: list[float] = [0.0]
         for piece in self._pieces():
             if not piece.is_arc:
-                xs.append(piece.x1)
-                ys.append(float(piece.height(np.array([piece.x1]))[0]))
+                # A run the fillets consume entirely (at max_corner_radius)
+                # has zero width, and its end is the previous arc's end again
+                # to within rounding. Appending it leaves a segment of ~1e-17
+                # pointing anywhere, which the graded mesh took for a corner
+                # and clustered two nodes onto (measured 2026-10-29: the
+                # integral solver refused every boundary_points at 72 deg).
+                if piece.x1 > piece.x0:
+                    xs.append(piece.x1)
+                    ys.append(float(piece.height(np.array([piece.x1]))[0]))
                 continue
             # One point per degree of sweep, and never fewer than eight: the
             # chord sagitta is then below 1e-5 of the radius, well under the
