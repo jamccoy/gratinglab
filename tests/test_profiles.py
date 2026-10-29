@@ -17,6 +17,7 @@ from gratinglab.profiles import (
     Profile,
     ProfileRepresentationError,
     Sinusoidal,
+    Trapezoidal,
 )
 
 ALL = [
@@ -24,9 +25,21 @@ ALL = [
     Blazed(blaze_angle=30.0, antiblaze_angle=80.0),
     Lamellar(depth_fraction=0.3),
     Sinusoidal(depth_fraction=0.2),
+    Trapezoidal(depth_fraction=0.3),
+    Trapezoidal(depth_fraction=0.3, duty_cycle=0.4, sidewall_angle=74.0),
+    Trapezoidal(
+        depth_fraction=0.3, duty_cycle=0.4, sidewall_angle=74.0, corner_radius=0.04
+    ),
     FromProfileData(t=(0.0, 0.4, 1.0), y=(0.0, 0.25, 0.0)),
 ]
-SMOOTH = [Sinusoidal(depth_fraction=0.2), Blazed(blaze_angle=30.0, antiblaze_angle=80.0)]
+SMOOTH = [
+    Sinusoidal(depth_fraction=0.2),
+    Blazed(blaze_angle=30.0, antiblaze_angle=80.0),
+    Trapezoidal(depth_fraction=0.3, duty_cycle=0.4, sidewall_angle=74.0),
+    Trapezoidal(
+        depth_fraction=0.3, duty_cycle=0.4, sidewall_angle=74.0, corner_radius=0.04
+    ),
+]
 
 
 @pytest.mark.parametrize("profile", ALL, ids=lambda p: type(p).__name__)
@@ -104,6 +117,16 @@ class TestRefusals:
     def test_lamellar_refuses_to_report_a_slope(self):
         with pytest.raises(ProfileRepresentationError, match="vertical sidewalls"):
             Lamellar(depth_fraction=0.3).slope(0.5)
+
+    def test_vertical_trapezoid_refuses_to_report_a_slope(self):
+        with pytest.raises(ProfileRepresentationError, match="vertical sidewalls"):
+            Trapezoidal(depth_fraction=0.3).slope(0.5)
+
+    def test_rounding_does_not_rescue_a_vertical_sidewall(self):
+        """The wall between the two fillets is still vertical."""
+        rounded = Trapezoidal(depth_fraction=0.3, corner_radius=0.05)
+        with pytest.raises(ProfileRepresentationError, match="vertical sidewalls"):
+            rounded.slope(0.5)
 
     def test_undercut_profile_refuses_to_slice(self):
         undercut = FromProfileData(t=(0.0, 0.5, 0.3, 1.0), y=(0.0, 0.2, 0.4, 0.0))
@@ -360,3 +383,124 @@ class TestSerialization:
     def test_rejects_unknown_field(self):
         with pytest.raises(ValidationError):
             Blazed(blaze_angle=30.0, depth=0.5)
+
+
+class TestTrapezoidal:
+    """The shape a cross-section shows, as against the rectangle Lamellar assumes.
+
+    The measurements quoted here are from the three cleaved cross-sections
+    recorded in ``docs/findings.md`` ("What a cross-section shows that a scan
+    cannot"): the etched trenches of a 160 nm grating narrow with depth, which
+    is a sidewall some 10-16 degrees off vertical.
+    """
+
+    TAPERED = Trapezoidal(depth_fraction=0.43, duty_cycle=0.36, sidewall_angle=76.0)
+
+    # ── The Lamellar limit ───────────────────────────────────────────────────
+
+    @pytest.mark.parametrize("duty", [0.2, 0.36, 0.5, 0.8])
+    def test_vertical_unrounded_is_lamellar_translated(self, duty):
+        """Point for point, not merely close.
+
+        Trapezoidal centres its ridge on t = 0.5 and Lamellar puts it at the
+        left, so the two differ by a translation and by nothing else.
+        """
+        lamellar = Lamellar(depth_fraction=0.4, duty_cycle=duty)
+        trapezoid = Trapezoidal(depth_fraction=0.4, duty_cycle=duty)
+        t = np.linspace(0.0, 1.0, 20001, endpoint=False)
+        shifted = trapezoid.height(t + 0.5 - duty / 2.0)
+        assert np.array_equal(shifted, lamellar.height(t))
+
+    def test_vertical_unrounded_has_the_lamellar_arc_length(self):
+        trapezoid = Trapezoidal(depth_fraction=0.3, duty_cycle=0.4)
+        assert trapezoid.boundary(512).arc_length == pytest.approx(1.6, rel=1e-3)
+
+    # ── Geometry ─────────────────────────────────────────────────────────────
+
+    def test_sidewalls_widen_the_ridge_towards_the_floor(self):
+        """A trench that narrows with depth, which is what an etch leaves."""
+        groove = self.TAPERED
+        assert groove.ridge_base_width > groove.ridge_top_width
+        assert groove.ridge_top_width == groove.duty_cycle
+        assert groove.ridge_base_width == pytest.approx(0.36 + 2 * groove.wall_run)
+        assert groove.floor_width == pytest.approx(1.0 - groove.ridge_base_width)
+
+    def test_wall_run_is_the_depth_over_the_tangent(self):
+        groove = self.TAPERED
+        assert groove.wall_run == pytest.approx(0.43 / np.tan(np.radians(76.0)))
+        assert groove.wall_length == pytest.approx(0.43 / np.sin(np.radians(76.0)))
+
+    def test_crest_sits_at_the_declared_depth(self):
+        assert self.TAPERED.height(0.5) == pytest.approx(0.43)
+        assert self.TAPERED.height(0.0) == pytest.approx(0.0)
+
+    def test_sidewall_slope_is_the_declared_angle(self):
+        groove = self.TAPERED
+        midwall = 0.5 - 0.36 / 2.0 - groove.wall_run / 2.0
+        assert groove.slope(midwall) == pytest.approx(np.tan(np.radians(76.0)))
+        assert groove.slope(1.0 - midwall) == pytest.approx(-np.tan(np.radians(76.0)))
+
+    def test_analytic_slope_matches_a_numerical_derivative(self):
+        """Including across the fillets, which is where an error would hide."""
+        groove = Trapezoidal(
+            depth_fraction=0.43, duty_cycle=0.36, sidewall_angle=76.0,
+            corner_radius=0.05,
+        )
+        t = np.linspace(0.0, 1.0, 4001, endpoint=False)
+        h = 1e-6
+        numerical = (groove.height(t + h) - groove.height(t - h)) / (2 * h)
+        assert np.allclose(groove.slope(t), numerical, atol=1e-3)
+
+    # ── Rounding ─────────────────────────────────────────────────────────────
+
+    def test_rounding_shortens_the_boundary_without_changing_the_depth(self):
+        sharp = self.TAPERED
+        rounded = sharp.model_copy(update={"corner_radius": 0.05})
+        assert rounded.depth == sharp.depth
+        t = np.linspace(0.0, 1.0, 20001, endpoint=False)
+        assert np.ptp(rounded.height(t)) == pytest.approx(sharp.depth, rel=1e-6)
+        assert rounded.boundary(600).arc_length < sharp.boundary(600).arc_length
+
+    def test_a_rounded_groove_has_no_corners_to_grade(self):
+        """So a graded mesh is neither given nor needed: there is no
+        singularity at a fillet, and the equal-arc mesh comes back."""
+        rounded = self.TAPERED.model_copy(update={"corner_radius": 0.05})
+        assert not rounded.boundary(400, grading=4).graded
+        assert self.TAPERED.boundary(400, grading=4).graded
+
+    def test_rounding_is_tangent_to_both_sides(self):
+        """A fillet that met its sides at an angle would show as a kink in
+        the slope; sampling finely across each corner catches one."""
+        rounded = self.TAPERED.model_copy(update={"corner_radius": 0.05})
+        t = np.linspace(0.0, 1.0, 200001, endpoint=False)
+        slope = rounded.slope(t)
+        assert np.abs(np.diff(slope)).max() < 0.05
+
+    # ── Refusals ─────────────────────────────────────────────────────────────
+
+    def test_sidewalls_that_consume_the_period_are_refused(self):
+        with pytest.raises(ValidationError, match="no floor"):
+            Trapezoidal(depth_fraction=0.9, duty_cycle=0.5, sidewall_angle=40.0)
+
+    def test_a_fillet_that_would_not_fit_is_refused(self):
+        with pytest.raises(ValidationError, match="too large"):
+            Trapezoidal(
+                depth_fraction=0.3, duty_cycle=0.4, sidewall_angle=74.0,
+                corner_radius=0.5,
+            )
+
+    def test_the_largest_fillet_that_fits_is_accepted(self):
+        groove = self.TAPERED
+        largest = groove.max_corner_radius
+        accepted = groove.model_copy(update={"corner_radius": largest})
+        assert accepted.height(0.5) == pytest.approx(groove.depth, rel=1e-9)
+        with pytest.raises(ValidationError, match="too large"):
+            Trapezoidal(
+                depth_fraction=0.43, duty_cycle=0.36, sidewall_angle=76.0,
+                corner_radius=largest * 1.02,
+            )
+
+    def test_an_undercut_sidewall_is_out_of_range(self):
+        """Past vertical is a measured shape, not a designed one."""
+        with pytest.raises(ValidationError):
+            Trapezoidal(depth_fraction=0.3, sidewall_angle=100.0)
