@@ -107,6 +107,26 @@ entries under "Unreleased" into a section named for the new version;
   end, and the segment between them (about 1e-17 long, pointing anywhere) read
   as a corner, so the graded mesh put two nodes on one point and the integral
   solver refused every `boundary_points`. The zero-width run is skipped now.
+- The C-method refuses walls too steep for it instead of returning
+  efficiencies that are confidently wrong
+  ([#7](https://github.com/jamccoy/gratinglab/issues/7)). Only an exactly
+  vertical wall was refused before, so the TASTE groove's 88.8 degree wall
+  at 1.55 nm off-plane came back with efficiencies of 11 at truncation 128,
+  where the integral solver gives 0.26. The harmonics a wall needs grow
+  with its slope times `P sin(gamma) / lambda`; the new
+  `solvers.cmethod.wall_floor` reads that from the profile's own Fourier
+  series before anything is solved, so it covers every profile type,
+  `Trapezoidal`'s fillets included. A floor beyond the 256 harmonics the
+  solver accepts raises `UnsupportedConfiguration`, which the C-method and
+  Compare tabs name; a truncation below the floor raises `ValueError` with
+  the number needed, and the C-method form puts it on the truncation field;
+  between the floor and twice it a provenance warning says the energy
+  balance can understate the error tenfold there. The floor is set from 140
+  truncations across 24 configurations measured against the integral
+  solver: below it every answer was off by 3.5e-3 or more, beyond twice it
+  by 4e-3 or less (`docs/theory/cmethod.md` section 6). The GUI's default
+  scan is unaffected: its 70.5 degree facet needs 29 at 1 nm, under the
+  default 32.
 
 ## 0.2.8 (2026-10-29)
 

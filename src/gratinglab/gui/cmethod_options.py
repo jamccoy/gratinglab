@@ -14,9 +14,10 @@ harmonics either side of the centre of the propagating orders.
 
 The guards mirror the solver's refusals so an error lands on the field that
 caused it instead of arriving as a ValueError from the worker thread. The
-truncation floor is not re-derived here: it is
-:func:`gratinglab.solvers.cmethod.truncation_floor`, the function the solver
-itself applies, so the form and the solver cannot disagree about it.
+truncation floors are not re-derived here: they are
+:func:`gratinglab.solvers.cmethod.truncation_floor` (the orders) and
+:func:`~gratinglab.solvers.cmethod.wall_floor` (a steep wall), the functions
+the solver itself applies, so the form and the solver cannot disagree.
 """
 
 from __future__ import annotations
@@ -29,7 +30,8 @@ from numpy.typing import NDArray
 
 from ..illumination import Illumination
 from ..problem import Problem
-from ..solvers.cmethod import _MAX_TRUNCATION, truncation_floor
+from ..solvers.base import UnsupportedConfiguration
+from ..solvers.cmethod import _MAX_TRUNCATION, truncation_floor, wall_floor
 from .integral_options import _tabulated_index
 from .state import FieldError, FormErrors, _number
 
@@ -119,5 +121,15 @@ def build_options(
     floor = truncation_floor(problem, illumination, wavelengths, indices)
     if truncation < floor.needed:
         raise FormErrors((FieldError("truncation", floor.message),))
+    # A steep wall's floor goes on the field too, but only while a truncation
+    # the field accepts can meet it. Past the ceiling, or on a profile the
+    # method cannot describe at all, the solver refuses the geometry with
+    # UnsupportedConfiguration, and the tab names that refusal instead.
+    try:
+        wall = wall_floor(problem, illumination, wavelengths, indices)
+    except UnsupportedConfiguration:
+        wall = None
+    if wall is not None and truncation < wall.needed <= _MAX_TRUNCATION:
+        raise FormErrors((FieldError("truncation", wall.message),))
 
     return {"truncation": int(truncation), "conductivity": form.conductivity}

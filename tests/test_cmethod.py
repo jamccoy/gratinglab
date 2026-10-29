@@ -22,6 +22,7 @@ from gratinglab.materials.optical import OpticalConstants, write_ari
 from gratinglab.problem import Problem
 from gratinglab.profiles import Blazed, FromProfileData, Lamellar, Sinusoidal, Trapezoidal
 from gratinglab.solvers import UnsupportedConfiguration, cmethod, get_solver, integral
+from gratinglab.solvers.cmethod import _MAX_TRUNCATION, wall_floor
 from gratinglab.solvers.cmethod._core import Harmonics, solve_finite, solve_perfect
 from gratinglab.solvers.cmethod._series import ProfileSeries, profile_series
 from gratinglab.solvers.integral._boundary import physical_boundary
@@ -621,3 +622,160 @@ class TestRefusals:
         scan = cmethod.solve(problem, Illumination.classical(alpha=10.0), [450.0], truncation=8)
         assert any("not consulted" in w for w in scan.provenance.warnings)
         assert scan.absorption is None
+
+
+def asymmetric_groove(steep: float, *, depth=0.3, facet=27.0, land=77 / 400) -> FromProfileData:
+    """A 27 deg facet up to a flat land, then a steep wall down to the floor:
+    the shape of issue #7's TASTE grooves, whose wall is at 88.8 deg."""
+    up = depth / np.tan(np.radians(facet))
+    down = depth / np.tan(np.radians(steep))
+    floor = 1.0 - up - land - down
+    return FromProfileData(
+        t=(0.0, floor, floor + up, floor + up + land, 1.0),
+        y=(0.0, 0.0, depth, depth, 0.0),
+    )
+
+
+#: Issue #7's mount: X-ray gold, 1.73 deg off-plane.
+OFF_PLANE = Illumination.offplane(graze=1.73, azimuth=0.0, polarization="TE")
+
+#: The integral solver on ``asymmetric_groove(80)`` at 1.55 nm, OFF_PLANE,
+#: CXRO gold, corner_grading=4: each propagating order, ascending. 1600
+#: points; 1200 agree to 6e-6. Pinned because the 1600-point solve took
+#: ten minutes (measured 2026-10-29).
+STEEP_80_REFERENCE = (
+    0.007437, 0.006005, 0.007763, 0.026137, 0.003908, 0.060704, 0.021511,
+    0.021711, 0.068545, 0.064224, 0.035783, 0.008218, 0.002726, 0.262197,
+    0.049879,
+)
+
+
+class TestSteepWalls:
+    """Issue #7. A wall the C-method cannot resolve is refused before any
+    solve, rather than answered with efficiencies of 31. The floor and the
+    measurements behind it are in ``docs/theory/cmethod.md`` section 6."""
+
+    @pytest.mark.parametrize(
+        "profile",
+        [
+            asymmetric_groove(88.8),
+            Trapezoidal(depth_fraction=0.3, duty_cycle=0.3, sidewall_angle=88.8),
+            Trapezoidal(
+                depth_fraction=0.3, duty_cycle=0.3, sidewall_angle=88.8, corner_radius=0.02
+            ),
+        ],
+        ids=["asymmetric-polygon", "trapezoidal", "trapezoidal-filleted"],
+    )
+    def test_the_issue_7_wall_is_refused(self, profile):
+        """Unrefused, the asymmetric groove returned efficiencies of 1.9e4 at
+        N = 16 and 11 at N = 128, where the integral solver gives 0.26."""
+        problem = Problem(period=400.0, profile=profile, coating="Au")
+        with pytest.raises(UnsupportedConfiguration, match="too steep") as caught:
+            cmethod.solve(problem, OFF_PLANE, [1.55, 3.1], truncation=64, conductivity="tabulated")
+        assert "88.8 deg" in str(caught.value)
+        assert f"beyond the {_MAX_TRUNCATION}" in str(caught.value)
+
+    def test_a_steep_enough_wall_is_refused_at_any_wavelength(self):
+        """89.5 deg needs about 3 harmonics per unit of slope however long the
+        wavelength; in-plane at 500 nm N = 192 was still 1e-2 off."""
+        problem = Problem(
+            period=400.0,
+            profile=Trapezoidal(depth_fraction=0.3, duty_cycle=0.3, sidewall_angle=89.5),
+        )
+        with pytest.raises(UnsupportedConfiguration, match="too steep"):
+            cmethod.solve(problem, Illumination.classical(alpha=20.0), [500.0])
+
+    def test_too_few_harmonics_names_how_many(self):
+        """85 deg at 1.55 nm off-plane: 64 harmonics were 5e-2 off and 32 were
+        6.7 off, so both are refused with the number needed."""
+        problem = Problem(period=400.0, profile=asymmetric_groove(85.0), coating="Au")
+        floor = wall_floor(problem, OFF_PLANE, [1.55])
+        assert 64 < floor.needed <= 128
+        with pytest.raises(ValueError, match=f"needs about {floor.needed} harmonics"):
+            cmethod.solve(problem, OFF_PLANE, [1.55], truncation=64, conductivity="tabulated")
+
+    def test_the_floor_reads_the_boundary_not_the_profile_type(self):
+        """A Trapezoidal (sampled) and the same trapezoid as a polygon get the
+        same floor, and rounding its corners does not lower it: the fillets
+        are tangent to the wall, so the wall's slope is still on the curve."""
+        sharp = Trapezoidal(depth_fraction=0.3, duty_cycle=0.3, sidewall_angle=85.0)
+        corners = sharp._corners()
+        polygon = FromProfileData(
+            t=(0.0, *[c[0] for c in corners], 1.0), y=(0.0, *[c[1] for c in corners], 0.0)
+        )
+        rounded = sharp.model_copy(update={"corner_radius": 0.02})
+        floors = [
+            wall_floor(Problem(period=400.0, profile=p), OFF_PLANE, [1.55]).needed
+            for p in (sharp, polygon, rounded)
+        ]
+        assert floors[0] == pytest.approx(floors[1], rel=0.05)
+        assert floors[2] == pytest.approx(floors[0], rel=0.1)
+
+    def test_the_floor_falls_with_the_reduced_wavelength(self):
+        """The same wall at 6 nm off-plane, or in visible light, needs fewer."""
+        problem = Problem(period=400.0, profile=asymmetric_groove(85.0))
+        short = wall_floor(problem, OFF_PLANE, [1.55]).needed
+        longer = wall_floor(problem, OFF_PLANE, [6.0]).needed
+        visible = wall_floor(problem, Illumination.classical(alpha=20.0), [500.0]).needed
+        assert short > longer > visible
+
+    def test_gentle_profiles_are_untouched(self):
+        """Every geometry the rest of this file solves sits far below it."""
+        cases = [
+            (SINE, Illumination.classical(alpha=10.0), [450.0], 8),
+            (Problem(period=500.0, profile=Sinusoidal(depth_fraction=1.0)),
+             Illumination.classical(alpha=10.0), [450.0], 16),
+            (Problem(period=1000.0, profile=Blazed(blaze_angle=20.0, antiblaze_angle=70.0)),
+             Illumination.classical(alpha=15.0), [600.0], 40),
+            (Problem(period=600.0, profile=Sinusoidal(depth_fraction=0.05)),
+             Illumination.offplane(graze=1.5, azimuth=25.0), [2.0, 5.0], 24),
+        ]
+        for problem, illumination, wavelengths, truncation in cases:
+            assert wall_floor(problem, illumination, wavelengths).needed <= truncation / 2
+
+    def test_inside_the_limit_it_agrees_with_the_integral_solver(self):
+        """An 85 deg trapezoid, perfect conductor, TM at 500 nm: the floor is
+        26, and at 64 harmonics the C-method was 1.2e-4 from the integral
+        solver's graded-mesh answer at 1200 points; asserted at 512. Given
+        as a polygon: a sharp Trapezoidal goes down the sampled series,
+        whose FFT of the slope's jumps carries an error of its own (3e-3
+        here) that is not this test's subject."""
+        corners = Trapezoidal(
+            depth_fraction=0.3, duty_cycle=0.3, sidewall_angle=85.0
+        )._corners()
+        problem = Problem(
+            period=400.0,
+            profile=FromProfileData(
+                t=(0.0, *[c[0] for c in corners], 1.0),
+                y=(0.0, *[c[1] for c in corners], 0.0),
+            ),
+        )
+        illumination = Illumination.classical(alpha=20.0, polarization="TM")
+        assert wall_floor(problem, illumination, [500.0]).needed <= 32
+        ours = cmethod.solve(problem, illumination, [500.0], truncation=64)
+        theirs = integral.solve(
+            problem, illumination, [500.0], boundary_points=512, corner_grading=4
+        )
+        assert np.abs(ours.efficiency - theirs.efficiency).max() < 5e-4
+
+    def test_off_plane_gold_inside_the_limit(self):
+        """The issue's mount and groove with an 80 deg wall, which the method
+        can resolve: the floor is 44, and at 128 harmonics every order is
+        within 1.3e-4 of the pinned integral answer (measured)."""
+        problem = Problem(period=400.0, profile=asymmetric_groove(80.0), coating="Au")
+        assert wall_floor(problem, OFF_PLANE, [1.55]).needed <= 64
+        scan = cmethod.solve(problem, OFF_PLANE, [1.55], truncation=128, conductivity="tabulated")
+        ours = scan.efficiency[0][scan.propagating[0]]
+        assert np.abs(ours - np.array(STEEP_80_REFERENCE)).max() < 3e-4
+
+    def test_between_the_floor_and_twice_it_the_solver_warns(self):
+        """There the balance under-reports: at 87 deg and N = 128 the integral
+        solver was 2.5e-2 away while the balance read 2e-3."""
+        problem = Problem(period=400.0, profile=asymmetric_groove(80.0), coating="Au")
+        floor = wall_floor(problem, OFF_PLANE, [1.55]).needed
+        near = cmethod.solve(problem, OFF_PLANE, [1.55], truncation=floor, conductivity="tabulated")
+        assert any("steep wall" in w for w in near.provenance.warnings)
+        far = cmethod.solve(
+            problem, OFF_PLANE, [1.55], truncation=2 * floor, conductivity="tabulated"
+        )
+        assert not any("steep wall" in w for w in far.provenance.warnings)

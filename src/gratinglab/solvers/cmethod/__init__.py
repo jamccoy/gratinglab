@@ -30,9 +30,13 @@ the centre of the propagating orders, ``2N + 1`` in all.
 What the method cannot describe it refuses, with
 :class:`~gratinglab.solvers.base.UnsupportedConfiguration`: an undercut, a
 vertical facet or sidewall (``Lamellar``, ``Blazed(antiblaze_angle=90)``, a
-measured profile with two heights at one position). A profile with corners (a sawtooth) is solved, and a
-provenance warning says that it converges slowly and that its energy balance
-overstates its accuracy there (measured; see the method note, section 6).
+measured profile with two heights at one position), and a wall so steep, at
+the scan's shortest reduced wavelength, that it needs more harmonics than the
+solver accepts (:func:`wall_floor`). A truncation below a steep wall's floor
+is refused with ``ValueError`` naming the floor. A profile with corners (a
+sawtooth) is solved, and a provenance warning says that it converges slowly
+and that its energy balance overstates its accuracy there (measured; see the
+method note, section 6).
 """
 
 from __future__ import annotations
@@ -51,7 +55,9 @@ from ..base import Capabilities, Progress, UnsupportedConfiguration, register
 from ._core import Harmonics, solve_finite, solve_perfect
 from ._series import profile_series
 
-__all__ = ["CMethodSolver", "TruncationFloor", "cmethod", "truncation_floor"]
+__all__ = [
+    "CMethodSolver", "TruncationFloor", "cmethod", "truncation_floor", "wall_floor",
+]
 
 #: Largest ``truncation`` accepted. The eigenproblem is ``2(2N+1)`` square
 #: per medium per wavelength, dense, so its cost grows as ``N^3``; at 256 a
@@ -85,6 +91,33 @@ _GRAZING_COS = 1e-6
 #: Slope discontinuity, in degrees of turn, above which a polygon vertex is a
 #: corner. The same figure as ``profiles.CORNER_TURN_DEGREES``.
 _CORNER_DEGREES = 10.0
+
+#: Steep walls (issue #7). A plane wave written on the boundary,
+#: ``exp(i kappa a(x))``, oscillates ``P kappa |a'| / 2 pi`` times per period
+#: along a wall of slope ``a'``, and the modes on either side must be resolved
+#: as finely, so the harmonics a wall needs grow with its slope times
+#: ``P sin(gamma) / lambda``. ``_WALL_TAIL`` is the power that bandwidth may
+#: leave outside the retained harmonics; by Parseval the whole series holds
+#: exactly 1, so the tail is read without summing it.
+_WALL_TAIL = 1e-3
+
+#: At long reduced wavelength the bandwidth above shrinks while a very steep
+#: wall still needs its own harmonics: about this many per unit of slope.
+_WALL_SLOPE_HARMONICS = 3.0
+
+#: The floor is this fraction of the larger of the two. Measured against the
+#: integral solver (``docs/theory/cmethod.md`` section 6), 24 configurations
+#: and 140 truncations: trapezoids and an asymmetric trapezoid with walls from
+#: 45 to 89.5 degrees, perfect conductor and CXRO gold, in-plane and at
+#: gamma = 1.73 degrees. Below the floor every answer was off by 3.5e-3 or
+#: more, and by 1e-2 to 6e2 in all but four, each of those one harmonic
+#: under it; from it to twice it, by 1.2e-4 to 5.4e-2, while the energy
+#: balance could read a tenth of the error; beyond twice it, by 4e-3 or less.
+_WALL_FLOOR_FRACTION = 0.75
+
+#: Harmonics searched for the bandwidth. Far past ``_MAX_TRUNCATION`` divided
+#: by the fraction, so a wall needing more is known to need more.
+_WALL_SEARCH = 1024
 
 
 class TruncationFloor(NamedTuple):
@@ -138,6 +171,68 @@ def truncation_floor(
         needed,
         f"cannot represent {where} {lo_need} to {hi_need} with an evanescent "
         f"harmonic beyond each end; need at least {needed}",
+    )
+
+
+def wall_floor(
+    problem: Problem,
+    illumination: Illumination,
+    wavelengths: ArrayLike,
+    indices: "np.ndarray | None" = None,
+) -> TruncationFloor:
+    """The truncation below which a steep wall makes the C-method's answer wrong.
+
+    Read off the profile's own Fourier series before anything is solved, so
+    it applies to any profile, fillets and measured polylines included: the
+    steepest slope ``s`` of the boundary, and the bandwidth ``B`` of
+    ``exp(i kappa a(x))`` at the largest transverse wavenumber in the scan
+    (the vacuum's ``k sin(gamma)``, or a lossless material's where it is
+    larger). The floor is ``_WALL_FLOOR_FRACTION * max(B, 3 s)``; the
+    constants and the measurements behind them are in the comments above and
+    in ``docs/theory/cmethod.md`` section 6.
+
+    :meth:`CMethodSolver.solve` refuses a truncation below it with
+    ``ValueError``, and a floor beyond the largest truncation it accepts with
+    :class:`UnsupportedConfiguration`: no setting would answer that profile.
+    Public, as :func:`truncation_floor` is, so a form can apply the same
+    rule. Raises :class:`UnsupportedConfiguration` for a profile the method
+    cannot describe at all (a vertical wall, an undercut).
+    """
+    wavelengths = np.atleast_1d(np.asarray(wavelengths, dtype=np.float64))
+    series = profile_series(problem, samples=8 * _WALL_SEARCH)
+    slope = series.max_slope
+    sin_gamma = illumination.sin_gamma
+    cos_gamma = float(np.sqrt(1.0 - sin_gamma**2))
+    transverse = np.full(len(wavelengths), sin_gamma)
+    if indices is not None:
+        # A lossless material carries propagating orders along the wall as
+        # the vacuum does; in an absorbing one the field dies off the
+        # boundary, and gold's X-ray answers needed no more than a perfect
+        # conductor's (measured, section 6).
+        indices = np.asarray(indices, dtype=np.complex128)
+        inside = np.sqrt(indices**2 - cos_gamma**2).real
+        transverse = np.where(indices.imag == 0.0, np.maximum(transverse, inside), transverse)
+    kappa = float((2.0 * np.pi / wavelengths * transverse).max())
+    where = float(wavelengths[np.argmax(transverse / wavelengths)])
+
+    lags = np.arange(-_WALL_SEARCH, _WALL_SEARCH + 1)
+    power = np.abs(series.plane_wave(kappa, lags)) ** 2
+    by_reach = power[_WALL_SEARCH:].copy()
+    by_reach[1:] += power[_WALL_SEARCH - 1 :: -1]
+    reached = np.flatnonzero(np.cumsum(by_reach) >= 1.0 - _WALL_TAIL)
+    bandwidth = int(reached[0]) if reached.size else _WALL_SEARCH + 1
+
+    needed = max(1, int(np.ceil(
+        _WALL_FLOOR_FRACTION * max(bandwidth, _WALL_SLOPE_HARMONICS * slope)
+    )))
+    angle = float(np.degrees(np.arctan(slope)))
+    return TruncationFloor(
+        needed,
+        f"the profile's steepest wall rises at {angle:.3g} deg (slope "
+        f"{slope:.3g}), and at {where:.6g} nm the field along it needs about "
+        f"{needed} harmonics each side; with fewer, the C-method's "
+        "efficiencies were wrong by 1e-2 to 1e3 against the integral solver "
+        "(docs/theory/cmethod.md section 6)",
     )
 
 
@@ -258,9 +353,20 @@ class CMethodSolver:
                 )
             lossless = indices.imag == 0.0
 
+        wall = wall_floor(problem, illumination, wavelengths, indices)
+        if wall.needed > _MAX_TRUNCATION:
+            raise UnsupportedConfiguration(
+                f"{wall.message}. That is beyond the {_MAX_TRUNCATION} this "
+                "solver accepts, so no truncation would answer it; the wall "
+                "is too steep for the C-method at this wavelength. Use the "
+                "integral method, which parametrises the curve, with "
+                "corner_grading"
+            )
         floor = truncation_floor(problem, illumination, wavelengths, indices)
         if truncation < floor.needed:
             raise ValueError(f"truncation={truncation} {floor.message}")
+        if truncation < wall.needed:
+            raise ValueError(f"truncation={truncation} is too few: {wall.message}")
         harmonics = Harmonics.build(series, center, truncation)
 
         polarizations = (
@@ -360,6 +466,14 @@ class CMethodSolver:
                 "this point a higher truncation can make the answer worse "
                 "rather than better. Read the energy balance, sweep truncation, "
                 "and prefer a lower one that agrees"
+            )
+        if truncation < 2 * wall.needed and wall.needed > 8:
+            warnings.append(
+                f"truncation {truncation} is less than twice the {wall.needed} "
+                "a steep wall needs here. Between the two, measured errors "
+                "reached 5e-2 while the energy balance read as little as a "
+                "tenth of that, so the balance is not an error estimate: "
+                "sweep truncation, or compare with the integral solver"
             )
         corners = _has_corners(series)
         if corners:

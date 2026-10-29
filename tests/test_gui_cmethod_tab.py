@@ -158,15 +158,17 @@ class TestItSolves:
         assert "Σ + A" in shown
 
     def test_the_solvers_warnings_reach_the_panel(self, qtbot, win, tab):
-        """The default blazed profile has corners, and at a low truncation its
-        balance strays: both of the solver's warnings are printed as warnings,
-        word for word."""
+        """The default blazed profile has corners, and at 32 harmonics its
+        70.5 deg facet is within a factor of two of the 29 it needs at 1 nm:
+        both of the solver's warnings are printed as warnings, word for
+        word."""
         set_geometry(win, wavelength_count="3")
-        tab._fields["truncation"].setText("12")
+        tab._fields["truncation"].setText("32")
         resolve(qtbot, win)
 
         warnings = tab._scan.provenance.warnings
         assert any("corners" in w for w in warnings)
+        assert any("steep wall" in w for w in warnings)
         shown = tab._provenance.toPlainText()
         for warning in warnings:
             assert f"⚠ {warning}" in shown
@@ -188,6 +190,18 @@ class TestRefusedOnTheForm:
         shown = tab._provenance.toPlainText()
         assert "field(s) need attention" in shown
         assert "truncation" in shown
+
+    def test_a_wall_too_steep_is_refused_by_name(self, qtbot, win, tab):
+        """Issue #7: an 89 deg anti-blaze facet at 1 nm needs more harmonics
+        than the solver accepts. The form cannot fix that, so the solver's
+        refusal reaches the panel with its reason."""
+        set_geometry(win, antiblaze_angle="89.0", wavelength_count="2")
+        win.solve("cmethod")
+        qtbot.waitUntil(lambda: not win._running, timeout=SOLVE_TIMEOUT_MS)
+        shown = tab._provenance.toPlainText()
+        assert "UnsupportedConfiguration" in shown
+        assert "too steep" in shown
+        assert "89 deg" in shown
 
     def test_tabulated_without_a_coating_names_the_coating(self, win, tab):
         tab._fields["conductivity"].setCurrentText("tabulated")
