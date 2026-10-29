@@ -117,10 +117,15 @@ class TestGeneralPages:
         assert page.path is not None and page.path.name == "metrology.md"
 
     def test_metrology_page_states_that_roughness_is_not_measured(self):
-        """The assumption most likely to be silently assumed away."""
+        """The assumption most likely to be silently assumed away.
+
+        The groove residual is measured now, so the page has to say that it is
+        not the roughness sigma and is not applied by default.
+        """
         page = self._page("metrology")
         assert "RMS surface roughness" in page.text
-        assert "not yet computed" in page.text
+        assert "package measures that σ" in page.text
+        assert "not passed as the Névot–Croce σ by default" in page.text
 
     def test_general_pages_are_never_banner_flagged(self):
         """These are geometry references, not a solver's approximation --

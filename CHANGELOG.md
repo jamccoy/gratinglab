@@ -10,6 +10,25 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- The AFM boundary pipeline measures the groove residual: the RMS of each
+  averaged groove about the average, after registering it by a sub-pixel
+  shift and a height offset, per groove and overall
+  (`metrology.boundary.groove_residuals`,
+  `BoundaryProfile.groove_residual_rms_nm`). It is in the metrics, the
+  metrics sidecar, the boundary `.json` and the Boundary tab. Without the
+  registration the half-pixel misalignment of the grooves reads 2.1 nm on a
+  noiseless synthetic scan; with it, 0.22 nm, and surface noise of known RMS
+  reads back at 0.93 of it. It is **not** passed as `Problem.roughness`:
+  `to_problem` still defaults to 0.0, and a caller who wants it passes
+  `roughness=profile.groove_residual_rms_nm`. The reasons, chiefly that the
+  profile is the mean of the scan lines and that its band is not the
+  Névot–Croce sigma's, are in `docs/theory/metrology.md` section 4. The
+  exported profile is unchanged.
+
 ## 0.2.4 (2026-10-28)
 
 ### Fixed

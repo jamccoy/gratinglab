@@ -430,3 +430,139 @@ def test_saved_csv_carries_the_measured_period(tmp_path):
     profile = _profile()
     text = write_boundary_csv(tmp_path / "groove.csv", profile).read_text(encoding="utf-8")
     assert f"# period_nm: {float(profile.period_nm)!r}" in text
+
+
+# -- the groove residual -----------------------------------------------------------
+#
+# Scans built here rather than read from the fixture, because each test needs a
+# noise it knows: the fixture's 0.15 nm per pixel is averaged over 64 lines to
+# 0.02 nm, under the sampling floor. Same sawtooth as
+# tools/metrology/make_synthetic_scan.py.
+
+def _sawtooth_nm(x_nm, period_nm=315.0, blaze_deg=30.0, antiblaze_deg=70.0):
+    cot_b = 1.0 / np.tan(np.radians(blaze_deg))
+    cot_a = 1.0 / np.tan(np.radians(antiblaze_deg))
+    apex, depth = cot_b / (cot_b + cot_a), 1.0 / (cot_b + cot_a)
+    t = np.mod(-x_nm / period_nm, 1.0)
+    return period_nm * np.where(t <= apex, t / apex * depth,
+                                (1.0 - t) / (1.0 - apex) * depth)
+
+
+def _residual_scan(line_nm=0.0, pixel_nm=0.0, n_cols=384, n_rows=64, seed=1):
+    """A 2 um scan of the sawtooth, with two kinds of noise.
+
+    line_nm is the same on every scan line, so it is structure on the surface
+    that the line average keeps; pixel_nm is fresh on every pixel, like AFM
+    noise, and the line average divides it by sqrt(n_rows).
+    """
+    rng = np.random.default_rng(seed)
+    x_nm = np.linspace(0.0, 2000.0, n_cols, endpoint=False)
+    rows = np.tile(_sawtooth_nm(x_nm) + 4.0 * x_nm / 1000.0, (n_rows, 1))
+    rows = rows + rng.normal(0.0, line_nm, size=n_cols)
+    rows = rows + rng.normal(0.0, pixel_nm, size=rows.shape)
+    settings = AnalysisSettings.from_config()
+    data = flatten_image(rows * 1e-9, settings.image_flatten_method)
+    return build_boundary_profile(data, 2.0, settings)
+
+
+def _floor():
+    """What a noiseless scan at the fixture's pitch reads, from sampling
+    alone: 0.2167 nm when this was written."""
+    if 'floor' not in _cache:
+        _cache['floor'] = _residual_scan().groove_residual_rms_nm
+    return _cache['floor']
+
+
+def test_the_residual_is_reported_in_the_metrics():
+    p = _profile()
+    m = p.metrics
+    assert m['groove_residual_rms_nm'] == p.groove_residual_rms_nm > 0
+    assert len(m['groove_residual_per_groove_nm']) == p.n_used
+    assert m['groove_residual_max_shift_px'] <= 1.0
+
+
+def test_a_noiseless_scan_reads_near_zero():
+    """Only the sampling floor: corners sharper than a pixel."""
+    assert _floor() < 0.3
+
+
+def test_registration_is_what_makes_it_near_zero():
+    """Without it the half-pixel misregistration of the grooves is the answer.
+
+    sqrt(mean(y_std**2)) is the plain residual about the unregistered average.
+    """
+    p = _residual_scan()
+    plain = float(np.sqrt(np.mean(p.y_std_nm ** 2)))
+    assert plain > 1.5
+    assert p.groove_residual_rms_nm < 0.15 * plain
+
+
+def test_the_floor_falls_with_finer_sampling():
+    """It is the sharp corners, so twice the pixels should cut it hard."""
+    fine = _residual_scan(n_cols=768).groove_residual_rms_nm
+    assert fine < 0.1 < _floor()
+
+
+@pytest.mark.parametrize('sigma', [0.3, 0.5, 0.8])
+def test_surface_noise_on_every_line_reads_back_as_its_rms(sigma):
+    """Known structure that repeats on every line is recovered at its RMS.
+
+    Measured at 0.93 to 0.94 of sigma with the floor removed; the bound is
+    15%, averaged over three seeds so one unlucky draw does not decide it.
+    """
+    got = np.mean([_residual_scan(line_nm=sigma, seed=s).groove_residual_rms_nm
+                   for s in (1, 2, 3)])
+    recovered = np.sqrt(got ** 2 - _floor() ** 2)
+    assert recovered == pytest.approx(sigma, rel=0.15)
+
+
+def test_per_pixel_noise_is_divided_by_the_line_count():
+    """The documented limit: the profile is the mean of the scan lines, so
+    noise or roughness that differs from line to line mostly averages away.
+    4 nm per pixel on 64 lines is 0.5 nm on the profile."""
+    got = np.mean([_residual_scan(pixel_nm=4.0, seed=s).groove_residual_rms_nm
+                   for s in (1, 2, 3)])
+    recovered = np.sqrt(got ** 2 - _floor() ** 2)
+    assert recovered == pytest.approx(4.0 / 8.0, rel=0.15)
+
+
+def test_one_groove_has_no_residual():
+    from gratinglab.metrology.boundary import groove_residuals
+    x = np.linspace(-0.1, 0.1, 41)
+    out = groove_residuals([(x, x ** 2)], x, x ** 2)
+    assert out['rms_nm'] is None and len(out['per_groove_nm']) == 0
+
+
+def test_the_residual_does_not_change_the_average():
+    """y_avg is what is exported, and it stays the unregistered mean."""
+    from gratinglab.metrology.boundary import average_grooves
+    p = _profile()
+    x_avg, y_avg, y_std, n_used = average_grooves(
+        p.profile_x_um, p.profile_y_nm, p.groove_centers, p.period_nm,
+        n_points=len(p.x_avg_um))
+    assert np.array_equal(y_avg, p.y_avg_nm) and np.array_equal(y_std, p.y_std_nm)
+
+
+def test_to_problem_still_defaults_to_no_roughness_and_takes_it_on_request():
+    """Not a Nevot-Croce sigma; see the to_problem docstring. A caller who
+    wants it names it."""
+    p = _profile()
+    assert p.to_problem().roughness == 0.0
+    asked = p.to_problem(roughness=p.groove_residual_rms_nm)
+    assert asked.roughness == pytest.approx(p.groove_residual_rms_nm)
+
+
+def test_the_sidecar_and_the_json_carry_the_residual(tmp_path):
+    from gratinglab.io.boundary import read_boundary_json, write_boundary_json
+    from gratinglab.metrology.io.metrics import write_profile_metrics
+
+    p = _profile()
+    text = write_profile_metrics(tmp_path / "m.txt", p.metrics).read_text(
+        encoding="utf-8")
+    assert f"Groove residual RMS: {p.groove_residual_rms_nm:.3f} nm" in text
+    assert "not applied as roughness" in text
+
+    saved = read_boundary_json(write_boundary_json(tmp_path / "g.json", p))
+    assert saved.metrics['groove_residual_rms_nm'] == pytest.approx(
+        p.groove_residual_rms_nm)
+    assert saved.to_problem().roughness == 0.0
