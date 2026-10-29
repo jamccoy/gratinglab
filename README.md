@@ -90,9 +90,17 @@ groove varies between horizontal swaths of the scan. It can also undo the broade
 introduced by the AFM tip where the tip reached the surface, and it marks the regions
 the tip could not reach instead of estimating them.
 
-The efficiency side comprises the problem specification, the solvers, the comparison
-and convergence harnesses, the materials layer, and a calculation of the resolving
-power implied by the number of grooves measured.
+It also reads Zeiss SmartSEM electron micrographs (`metrology.io.sem`), with the
+instrument's own pixel size, stage tilt and foreshortening. A cross-section is the
+one groove measurement with no tip to correct for, and the only one that can see an
+undercut or measure the width of a crest. Tracing a groove off a micrograph into a
+profile is not written yet.
+
+The efficiency side comprises the problem specification, the groove profiles
+(blazed, lamellar, sinusoidal, trapezoidal with a sidewall angle and corner radius,
+and any measured profile), the solvers, the comparison and convergence harnesses,
+the materials layer, and a calculation of the resolving power implied by the number
+of grooves measured.
 
 The aim is gratings in general: reflection and transmission, metallic and
 dielectric, bare and coated, from X-rays to the infrared. Every mount between the
