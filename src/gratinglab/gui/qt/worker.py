@@ -101,6 +101,10 @@ class SolveWorker(QObject):
     #: separately from the study so a tab can reuse its ordinary result path
     #: and show the evidence through the provenance panel it already has.
     converged = Signal(int, str, object, object)
+    #: token, ComparisonOutcome. One signal for the whole run: a solver that
+    #: refused or failed is named inside the outcome, rather than reported
+    #: through `failed`, which would end the comparison for the others too.
+    compared = Signal(int, object)
 
     @Slot(int, str, object, dict, object)
     def run(
@@ -180,6 +184,86 @@ class SolveWorker(QObject):
             self.cancelled.emit(token, method)
         except Exception as exc:  # noqa: BLE001 - see `run`
             self.failed.emit(token, method, f"{type(exc).__name__}: {exc}")
+
+    @Slot(int, object, object, dict, dict, object)
+    def run_comparison(
+        self,
+        token: int,
+        geometry: "Parsed",
+        requested: tuple,
+        options: dict,
+        refused: dict,
+        cancel: threading.Event,
+    ) -> None:
+        """Solve one geometry with each solver in ``options``, then line them up.
+
+        ``requested`` is every ticked solver in run order. ``options`` maps
+        the ones still to run to their keyword arguments; ``refused`` holds
+        any the window already turned away (a form error on that solver's
+        own tab) with the reason, and those are never started.
+
+        Each solver goes through :func:`~gratinglab.compare.sweep` on its own
+        rather than all of them in one call, because one solver declining the
+        problem must not cost the others their answer: an
+        ``UnsupportedConfiguration`` from the C-method on a vertical facet is
+        recorded against the C-method and the next solver starts. The scans
+        that came back are put on one order set by
+        :func:`~gratinglab.compare.align`.
+
+        Progress is one bar over the whole run, in wavelengths, as ``sweep``
+        reports it, and a solver that refuses steps the bar past its block so
+        it never stalls there. Cancel stops the run and nothing partial is
+        shown: half a comparison would read as the solvers that happened to
+        come first being the only ones that apply.
+        """
+        from ...compare import align, sweep
+        from ...solvers.base import UnsupportedConfiguration
+        from ..comparison import ComparisonOutcome
+
+        refused = dict(refused)
+        try:
+            reporter = self._reporter(token, cancel)
+            per_method = len(geometry.wavelengths)
+            total = max(1, len(options) * per_method)
+            scans, energies, failed = [], {}, {}
+            for index, (method, method_options) in enumerate(options.items()):
+                offset = index * per_method
+
+                def step(done: int, _total: int, offset=offset) -> None:
+                    reporter(offset + done, total)
+
+                try:
+                    scan = sweep(
+                        geometry.problem,
+                        geometry.illumination,
+                        geometry.wavelengths,
+                        [method],
+                        options={method: method_options},
+                        progress=step,
+                    )[0]
+                except Cancelled:
+                    raise
+                except UnsupportedConfiguration as exc:
+                    refused[method] = str(exc)
+                except Exception as exc:  # noqa: BLE001 - see `run`
+                    failed[method] = f"{type(exc).__name__}: {exc}"
+                else:
+                    scans.append(scan)
+                    energies[method] = _energy(scan)
+                    continue
+                reporter(offset + per_method, total)
+            outcome = ComparisonOutcome(
+                requested=tuple(requested),
+                comparison=align(scans) if scans else None,
+                energies=energies,
+                refused=refused,
+                failed=failed,
+            )
+            self.compared.emit(token, outcome)
+        except Cancelled:
+            self.cancelled.emit(token, "compare")
+        except Exception as exc:  # noqa: BLE001 - see `run`
+            self.failed.emit(token, "compare", f"{type(exc).__name__}: {exc}")
 
     def _reporter(self, token: int, cancel: threading.Event):
         """The callback handed to the solver, which emits progress and stops if asked.

@@ -16,7 +16,9 @@ width. The tabs alone form the central widget.
 Each tab holds whatever differs by method. A solver tab owns its options, its
 result and its own provenance. The geometry tab owns every picture of the
 grating itself, since the shape of a groove and the directions in which light
-leaves it do not depend on a solver. Only one solve runs in the whole window
+leaves it do not depend on a solver. The Compare tab, last, owns no solver:
+it runs several in turn, each with its own tab's options, and shows them
+together (`compare`). Only one solve runs in the whole window
 at a time (see `solve`/`_set_running`), because there is not yet a second,
 slow solver to justify concurrent workers per tab.
 """
@@ -41,6 +43,7 @@ from .. import provenance
 from ..state import FieldError, FormErrors, build, validate
 from . import theming
 from .cmethod_tab import CMethodTab
+from .compare_tab import CompareTab
 from .geometry_panel import GeometryPanel
 from .geometry_tab import GeometryTab
 from .integral_tab import IntegralTab
@@ -122,6 +125,9 @@ class MainWindow(QMainWindow):
     #: signal rather than a mode flag: `moveToThread` dispatches per slot, and
     #: a flag would put the branch on the worker thread instead of here.
     _convergence_requested = Signal(int, str, object, dict, object)
+    #: A comparison: token, geometry, the ticked solvers in run order, their
+    #: options, the ones the window already refused, and the cancel event.
+    _comparison_requested = Signal(int, object, object, dict, dict, object)
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -245,6 +251,17 @@ class MainWindow(QMainWindow):
             index = self._tab_widget.addTab(tab, short_title(name))
             self._tab_widget.setTabToolTip(index, display_title(name))
 
+        # Last, after every solver it draws on. Not in `self.tabs`: it has no
+        # solver of its own, and everything that loops over `self.tabs`
+        # (the solve contract, `_set_running`'s Solve buttons) is about one.
+        self.compare_tab = CompareTab(tuple(self.tabs))
+        self.compare_tab.compare_requested.connect(self.compare)
+        self.compare_tab.cancel_requested.connect(self.cancel)
+        index = self._tab_widget.addTab(self.compare_tab, "Compare")
+        self._tab_widget.setTabToolTip(
+            index, "Solve the geometry with several solvers and show them together"
+        )
+
         # Setup is leftmost so it is easy to find, but a solver tab -- not
         # the explanatory stub -- is what should be showing, and solving,
         # when the window opens: a user wants a result, not a "nothing here
@@ -358,6 +375,8 @@ class MainWindow(QMainWindow):
         self._worker.progress.connect(self._on_progress)
         self._worker.converged.connect(self._on_converged)
         self._convergence_requested.connect(self._worker.run_convergence)
+        self._comparison_requested.connect(self._worker.run_comparison)
+        self._worker.compared.connect(self._on_compared)
         self._thread.start()
 
     # -- actions ---------------------------------------------------------
@@ -408,7 +427,11 @@ class MainWindow(QMainWindow):
         something changed. A tab with no `name` (Setup, once it exists) is
         silently skipped, because there is nothing to solve there.
         """
-        name = getattr(self._tab_widget.currentWidget(), "name", None)
+        current = self._tab_widget.currentWidget()
+        if current is self.compare_tab:
+            self.compare()
+            return
+        name = getattr(current, "name", None)
         if name is not None:
             self.solve(name)
 
@@ -458,6 +481,76 @@ class MainWindow(QMainWindow):
         signal = self._convergence_requested if sweep else self._requested
         signal.emit(token, name, geometry, options, self._cancel)
 
+    def compare(self) -> None:
+        """Solve the geometry with every solver ticked on the Compare tab.
+
+        Validated here, as a single solve is: a geometry error stops the
+        whole comparison and lands on the Compare tab's panel. A solver whose
+        *own* tab rejects its settings, or that cannot model the layers, is
+        different. That is one solver declining, so it is named among the
+        refusals with the reason, its tab shows the error on the field, and
+        the others still run. A refusal only the solver itself can detect
+        (the C-method on a vertical facet) is caught the same way on the
+        worker; see `SolveWorker.run_comparison`.
+
+        It is one operation to the rest of the window: one token, one cancel
+        event, every Solve button disabled until it ends.
+        """
+        if self._running:
+            return
+        tab = self.compare_tab
+        names = tab.selected()
+        if not names:
+            return
+        try:
+            geometry = build(self.geometry.read_form())
+        except FormErrors as exc:
+            tab.show_field_errors(exc.errors)
+            return
+
+        from ..docs import short_title
+
+        options: dict[str, dict] = {}
+        refused: dict[str, str] = {}
+        for name in names:
+            try:
+                _refuse_layers_unless_handled(name, geometry.problem)
+                options[name] = self.tabs[name].build_options(
+                    geometry.problem, geometry.illumination, geometry.wavelengths
+                )
+            except FormErrors as exc:
+                self.tabs[name].show_field_errors(exc.errors)
+                refused[name] = "; ".join(
+                    f"{e.field}: {e.message}" for e in exc.errors
+                ) + f" (on the {short_title(name)} tab)"
+
+        self._active_name = tab.name
+        self._parsed = geometry
+        token = self._tokens.issue()
+        self._cancel = threading.Event()
+        self._set_running(True)
+        tab.show_solving(tuple(options), len(geometry.wavelengths))
+        QTimer.singleShot(
+            _PROGRESS_DELAY_MS, tab, lambda: self._show_progress_if_still_running(tab)
+        )
+        self._comparison_requested.emit(
+            token, geometry, names, options, refused, self._cancel
+        )
+
+    def _on_compared(self, token: int, outcome) -> None:
+        if self._tokens.is_stale(token):
+            return
+        self._set_running(False)
+        self.geometry_tab.show_geometry(self._parsed)
+        self.compare_tab.show_outcome(outcome)
+        self.solved.emit()
+
+    def _tab_for(self, name: str):
+        """The tab a reply belongs to: a solver's, or the Compare tab."""
+        if name == self.compare_tab.name:
+            return self.compare_tab
+        return self.tabs[name]
+
     def cancel(self) -> None:
         """Stop the running solve.
 
@@ -479,7 +572,7 @@ class MainWindow(QMainWindow):
         self._tokens.invalidate()
         self._set_running(False)
         if self._active_name is not None:
-            self.tabs[self._active_name].show_cancelled()
+            self._tab_for(self._active_name).show_cancelled()
 
     def _on_solved(self, token: int, method: str, result) -> None:
         if self._tokens.is_stale(token):
@@ -504,7 +597,7 @@ class MainWindow(QMainWindow):
         """
         if self._tokens.is_stale(token) or self._active_name is None:
             return
-        self.tabs[self._active_name].show_progress_value(done, total)
+        self._tab_for(self._active_name).show_progress_value(done, total)
 
     def _on_cancelled(self, token: int, method: str) -> None:
         """Acknowledge that the solve has stopped.
@@ -529,7 +622,7 @@ class MainWindow(QMainWindow):
         if self._tokens.is_stale(token):
             return
         self._set_running(False)
-        self.tabs[method].show_error(message)
+        self._tab_for(method).show_error(message)
 
     def _set_running(self, running: bool) -> None:
         """Enable or disable every tab's Solve button together.
@@ -539,6 +632,7 @@ class MainWindow(QMainWindow):
         self._running = running
         for tab in self.tabs.values():
             tab.set_running(running)
+        self.compare_tab.set_running(running)
 
     def _show_progress_if_still_running(self, tab) -> None:
         """Show progress, but only on the tab that started the solve.

@@ -10,6 +10,41 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- A Compare tab in the efficiency window. Tick any of the solvers and it
+  solves the shared geometry with each, using the settings on that solver's
+  own tab, then draws them on one plot (order by the theme's order colour,
+  solver by line style) above a second panel of each solver's difference
+  from a chosen reference, with a log |Δ| option so a 1e-7 agreement
+  between rigorous methods is visible beside the scalar one's. A solver
+  that refuses the problem, such as the C-method on a lamellar sidewall, or
+  whose own tab rejects its settings, is named in the panel with its reason
+  and the others still run. The panel ends every comparison by saying that
+  agreement between solvers is not verification: all four methods are
+  experimental. Each solver's own provenance warnings are listed under its
+  line, word for word, so a verdict such as "EXCEEDS UNITY" arrives with
+  the solver's reason and fix. One progress bar covers the whole run, and
+  Cancel stops it. Built on `compare.sweep` and `compare.align`; the
+  drawing and the panel text are in `gui/comparison.py`, without Qt.
+
+### Changed
+
+- The integral solver grades its mesh towards the profile's corners by
+  default: `corner_grading` is 4, in the solver and on the Integral tab,
+  where it was 0 (equal arc length). On the GUI's own default blaze (Au,
+  off-plane at 1.5° graze, 3.5 nm, 400 points) the equal-arc mesh gave a
+  summed efficiency plus absorption of 2.95 and order +2 at 0.4948; the
+  graded mesh closes to unity and gives 0.5854, the C-method's value to
+  2e-4. A profile with no corner is unaffected, bit for bit. Pass
+  `corner_grading=0` to reproduce an earlier equal-arc result. The
+  condition estimate the solver records grows on the graded mesh (1.1e7 to
+  1.8e7 in `test_conditioning.py`'s 200-point solve, where the equal-arc one
+  stayed under 1e6), which is the documented growth, seven decades under
+  the warning, and costs no accuracy.
+
 ## 0.2.6 (2026-10-28)
 
 ### Added
