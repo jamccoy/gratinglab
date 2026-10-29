@@ -121,9 +121,22 @@ evanescent modes kept are those with `Im ρ > 0` above the boundary and
 `Im ρ < 0` below it.
 
 The Fourier coefficients are computed in closed form, segment by segment, for
-a polygon (`Blazed`, `FromProfileData`), so a corner carries no sampling
-error; and by FFT for a smooth profile (`Sinusoidal`), where the trapezoidal
-rule converges exponentially.
+a polygon (`Blazed`, `FromProfileData`, a `Trapezoidal` with sharp corners),
+so a corner carries no sampling error; and by FFT for a smooth profile
+(`Sinusoidal`), where the trapezoidal rule converges exponentially. A
+`Trapezoidal` with rounded corners is neither: its straight runs integrate in
+closed form, and each fillet by Gauss-Legendre in the angle round its centre,
+where both integrands are entire however steep the wall. Its slope is
+continuous but its curvature is not, so an FFT over the period would converge
+only at second order.
+
+**An FFT is the wrong tool for any profile whose slope jumps**, and the
+trapezoid shows why. Until 2026-10-29 it took the sampled path, and on a
+72°, 0.425-period groove the answer sat 3.9e-4 from the polygon's at every
+truncation from 16 to 64, while the integral solver closed on the polygon's
+as its mesh refined. Raising the truncation does not reach a sampling floor,
+and the corner warning, which reads only a polygon, never fired. `findings.md`,
+"Trapezoidal through the four solvers", has the numbers.
 
 ## 4. The boundary conditions
 

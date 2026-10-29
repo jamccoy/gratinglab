@@ -69,6 +69,18 @@ entries under "Unreleased" into a section named for the new version;
   reflection's inverse, so the file's own apex is still asserted where the file
   puts it.
 
+- The C-method solved a `Trapezoidal` wrongly. The profile took the FFT path
+  meant for smooth profiles, and the FFT of a slope that jumps at four corners
+  converges only at first order in the sample count, so the answer sat on a
+  floor that raising `truncation` could not move: 3.9e-4 per order on a
+  72 deg, 0.425-period gold groove in an extreme off-plane mount, and 1.9e-5
+  at 45 deg, while the integral solver agreed with the corrected answer to
+  3.5e-7. Nothing warned, because the corner warning read only polygons. A
+  sharp trapezoid is now the polygon of its corners, integrated exactly and
+  warned about as a corner; a rounded one integrates its straight runs exactly
+  and each fillet by Gauss-Legendre in its own angle, converged to rounding.
+  A vertical sidewall is still refused, now by the C-method's own message.
+
 ## 0.2.8 (2026-10-29)
 
 ### Added

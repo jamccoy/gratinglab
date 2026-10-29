@@ -20,10 +20,10 @@ from gratinglab.illumination import Illumination
 from gratinglab.materials import fresnel
 from gratinglab.materials.optical import OpticalConstants, write_ari
 from gratinglab.problem import Problem
-from gratinglab.profiles import Blazed, FromProfileData, Lamellar, Sinusoidal
+from gratinglab.profiles import Blazed, FromProfileData, Lamellar, Sinusoidal, Trapezoidal
 from gratinglab.solvers import UnsupportedConfiguration, cmethod, get_solver, integral
 from gratinglab.solvers.cmethod._core import Harmonics, solve_finite, solve_perfect
-from gratinglab.solvers.cmethod._series import profile_series
+from gratinglab.solvers.cmethod._series import ProfileSeries, profile_series
 from gratinglab.solvers.integral._boundary import physical_boundary
 from gratinglab.solvers.integral._finite import solve_finite_states
 from gratinglab.solvers.integral._nystrom import OperatorAssembler
@@ -105,6 +105,98 @@ class TestProfileSeries:
             round(-np.tan(np.radians(20.0)), 12),
             round(np.tan(np.radians(50.0)), 12),
         }
+
+
+class TestTrapezoidalSeries:
+    """A trapezoid takes an exact path, never the FFT.
+
+    Until 2026-10-29 it was sampled, and the FFT of a slope that jumps at four
+    corners converges at first order in the sample count: on the 72 deg,
+    0.425-period groove below the C-method then sat 3.9e-4 from the right
+    answer at every truncation, with no corner warning. ``docs/findings.md``,
+    "Trapezoidal through the four solvers".
+    """
+
+    GROOVE = dict(depth_fraction=0.425, duty_cycle=0.30, sidewall_angle=72.0)
+
+    @staticmethod
+    def as_polygon(profile):
+        corners = profile._corners()
+        return FromProfileData(
+            t=(0.0, *(x for x, _ in corners), 1.0), y=(0.0, *(y for _, y in corners), 0.0)
+        )
+
+    @staticmethod
+    def finely_sampled(profile, samples=1 << 20):
+        s = np.arange(samples) / samples
+        t = np.mod(1.0 - s, 1.0)
+        return ProfileSeries(
+            160.0, "sampled", s, profile.height(t) * 160.0, -profile.slope(t)
+        )
+
+    def test_a_sharp_trapezoid_is_the_polygon_of_its_corners(self):
+        trapezoid = Trapezoidal(**self.GROOVE)
+        series = profile_series(Problem(period=160.0, profile=trapezoid))
+        polygon = profile_series(Problem(period=160.0, profile=self.as_polygon(trapezoid)))
+        assert series.kind == "polygon"
+        assert np.array_equal(series.s, polygon.s) and np.array_equal(series.a, polygon.a)
+
+    def test_the_solver_answers_as_for_the_polygon_and_warns_of_corners(self):
+        trapezoid = Trapezoidal(**self.GROOVE)
+        illumination = Illumination.offplane(graze=1.5, azimuth=0.0, polarization="TE")
+        scans = [
+            cmethod.solve(
+                Problem(period=160.0, profile=profile, coating="Au"),
+                illumination, [3.0], conductivity="tabulated", truncation=16,
+            )
+            for profile in (trapezoid, self.as_polygon(trapezoid))
+        ]
+        assert np.array_equal(scans[0].efficiency, scans[1].efficiency)
+        assert any("corners" in w for w in scans[0].provenance.warnings)
+
+    @pytest.mark.parametrize(
+        "sidewall, depth, radius",
+        [(72.0, 0.425, 0.005), (72.0, 0.425, 0.02), (45.0, 0.2, 0.01), (30.0, 0.1, 0.05)],
+    )
+    def test_fillets_match_a_fine_fft(self, sidewall, depth, radius):
+        """The fillets are integrated in their own angle, where the integrand
+        is entire; a million-sample FFT of the same profile is the reference,
+        and its own error (second order, the slope being continuous) is what
+        the tolerance allows for: 1e-9 measured at 72 deg, 0.005."""
+        trapezoid = Trapezoidal(
+            depth_fraction=depth, duty_cycle=0.30, sidewall_angle=sidewall, corner_radius=radius
+        )
+        series = profile_series(Problem(period=160.0, profile=trapezoid))
+        reference = self.finely_sampled(trapezoid)
+        j = np.arange(-128, 129)
+        assert series.kind == "pieces" and len(series.arcs) == 4
+        assert series.max_slope == pytest.approx(reference.max_slope, rel=1e-6)
+        assert series.depth == pytest.approx(depth * 160.0, rel=1e-12)
+        assert np.abs(series.slope(j) - reference.slope(j)).max() < 1e-8
+        for beta in (0.5, 4.0):
+            assert np.abs(series.plane_wave(beta, j) - reference.plane_wave(beta, j)).max() < 1e-10
+
+    def test_the_largest_fillet_leaves_no_straight_wall(self):
+        """At ``max_corner_radius`` a run is consumed and drops out, and the
+        series still closes: the slope's mean over the period is zero."""
+        base = Trapezoidal(**self.GROOVE)
+        trapezoid = Trapezoidal(**self.GROOVE, corner_radius=base.max_corner_radius)
+        series = profile_series(Problem(period=160.0, profile=trapezoid))
+        assert len(series.s) < 9 and len(series.arcs) == 4
+        assert abs(series.slope(np.array([0]))[0]) < 1e-12
+        reference = self.finely_sampled(trapezoid)
+        j = np.arange(-64, 65)
+        assert np.abs(series.slope(j) - reference.slope(j)).max() < 1e-8
+
+    def test_a_rounded_trapezoid_does_not_warn_of_corners(self):
+        trapezoid = Trapezoidal(**self.GROOVE, corner_radius=0.01)
+        scan = cmethod.solve(
+            Problem(period=160.0, profile=trapezoid, coating="Au"),
+            Illumination.offplane(graze=1.5, azimuth=0.0), [3.0],
+            conductivity="tabulated", truncation=16,
+        )
+        assert not any("corners" in w for w in scan.provenance.warnings)
+        assert "Gauss-Legendre" in scan.provenance.notes["profile_series"]
 
 
 class TestFlatInterfaceIsFresnel:
@@ -483,11 +575,13 @@ class TestRefusals:
         "profile",
         [
             Lamellar(depth_fraction=0.2),
+            Trapezoidal(depth_fraction=0.2),
+            Trapezoidal(depth_fraction=0.2, corner_radius=0.05),
             Blazed(blaze_angle=30.0),  # vertical anti-blaze facet
             FromProfileData(t=(0.0, 0.5, 0.5, 1.0), y=(0.0, 0.0, 0.2, 0.0)),
             FromProfileData(t=(0.0, 0.5, 1.0), y=(0.0, 0.2, 0.1)),  # step at the wrap
         ],
-        ids=["lamellar", "vertical-facet", "vertical-segment", "step-at-the-ends"],
+        ids=["lamellar", "vertical-trapezoid", "vertical-rounded-trapezoid", "vertical-facet", "vertical-segment", "step-at-the-ends"],
     )
     def test_infinite_slopes(self, profile):
         with pytest.raises(UnsupportedConfiguration):

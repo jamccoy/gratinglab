@@ -412,6 +412,8 @@ class CMethodSolver:
             "condition": condition,
             "profile_series": (
                 "exact polygon integrals" if series.kind == "polygon"
+                else "exact straight runs, Gauss-Legendre on each fillet"
+                if series.kind == "pieces"
                 else f"FFT of {len(series.s)} samples"
             ),
             "factorization": "Laurent throughout, on continuous unknowns (Li)",
