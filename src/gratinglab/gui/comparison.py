@@ -50,13 +50,13 @@ _STYLES = ("-", "--", "-.", ":")
 
 #: Closes every comparison the panel reports. Two solvers agreeing is evidence
 #: that neither has a bug the other lacks, not that either is right: they can
-#: share an assumption, a material table or a geometry convention. Every
-#: method here is experimental, so the panel says so where agreement is shown,
-#: dimmed because it is a fact about the methods, not a fault in this run.
+#: share an assumption, a material table or a geometry convention. So the
+#: panel says so where agreement is shown, dimmed because it is a fact about
+#: the methods, not a fault in this run.
 VERIFICATION_NOTE = (
-    "\nagreement between solvers is not verification: every method here is "
-    "experimental and needs checking against measurement or a published "
-    "benchmark\n"
+    "\nagreement between solvers is not verification: they share the problem, "
+    "the optical constants and the conventions, so check against measurement "
+    "or a published benchmark\n"
 )
 
 #: More legend entries than this and the order legend takes a second column,

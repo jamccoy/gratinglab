@@ -14,9 +14,12 @@ efficiency of a grating from such a profile.
 The AFM metrology is the part of the package in regular use. It measures blaze angles
 from a scan, averages the grooves into a single profile, reports how much that profile
 varies down the scan, corrects for the shape of the AFM tip where the data allow it,
-and exports the averaged groove as a boundary profile. The efficiency solvers are
-**experimental**: they pass their test suite but have not yet been used for real
-analysis, and their results should be treated as provisional.
+and exports the averaged groove as a boundary profile. The three rigorous
+efficiency solvers left experimental status in 0.3, after agreeing with one
+another and with a measured campaign whose groove was measured too (the TASTE
+comparison in `docs/findings.md`). Their known limits are stated in the table
+under Status, and a number from any of them is still evidence to check rather
+than a result to rely on.
 
 Rigorous methods for computing grating efficiency are well established, and open codes
 exist for several of them, although each carries its own conventions and
@@ -63,12 +66,20 @@ The project is at a pre-alpha stage. The AFM metrology is the more mature of its
 parts. On the efficiency side, the scalar and integral solvers, the comparison and
 convergence harnesses and the materials layer work end to end. They are checked
 against closed-form results, published benchmark tables, energy balance and
-reciprocity, but remain experimental until they have been used on real problems.
-Efficiencies are absolute when a coating is named, using an optical constant table
-supplied by the user (see Install). Since 0.2.0 two more rigorous backends sit
-beside them, both written in-house and both experimental: a rigorous coupled-wave
-analysis (RCWA), which also models coated gratings through conformal layers, and
-the C-method (Chandezon). Each has a tab in the efficiency window since 0.2.1.
+reciprocity. Efficiencies are absolute when a coating is named, using an optical
+constant table supplied by the user (see Install). Since 0.2.0 two more rigorous
+backends sit beside them, both written in-house: a rigorous coupled-wave analysis
+(RCWA), which also models coated gratings through conformal layers, and the
+C-method (Chandezon). Each has a tab in the efficiency window since 0.2.1.
+
+**Since 0.3 the three rigorous solvers are no longer experimental.** The
+criterion was use on a real problem: on the December 2018 TASTE campaign, 296
+measured efficiencies against the grating's own AFM groove, the integral method,
+the C-method and RCWA agree with one another to 2e-4 RMS and with the
+measurement to 0.038, so the residual is measured not to be the solver. The two
+defects that comparison found, the integral solver's absorption on measured
+polygons and the C-method on near-vertical walls, are fixed. The scalar solver
+is an approximation and is described as one.
 
 **Every modelling method here still needs verification**, the rigorous ones
 included. The checks in the table below show that each method reproduces the
@@ -118,10 +129,10 @@ The method backends, in order of development:
 
 | Method | Status |
 |---|---|
-| Scalar (Kirchhoff, x-ray blaze form) | experimental; checked against closed-form results |
-| Integral method (boundary integral, conical, undercut-capable) | experimental; perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with the absorbed fraction recorded; a corner-graded mesh for profiles with corners (`corner_grading=4`, the default since 0.2.7; `0` is the equal-arc mesh), under either boundary condition; checked against published benchmark tables (Maystre & Popov; Goray & Schmidt), energy balance and reciprocity |
-| RCWA (in-plane, conical, off-plane; Li factorization, S-matrix, layer stacks) | experimental, since 0.2.0; lamellar gratings exact and other profiles staircased, transmitted orders, and coatings through conformal layers (`Problem.layers`); checked against Fresnel, the Airy film formula, reciprocity, the integral solver, and published lamellar values (Granet; Lalanne & Hugonin; Gralak; Goray & Schmidt's conical tables). Not yet checked: staircase accuracy in metallic TM, and layers of a second material against an independent code |
-| C-method (Chandezon) | experimental, since 0.2.0; perfect conductor in any mount, and one interface into an absorbing or lossless material, conical and coupled; checked against Goray & Schmidt's Table 3, Fresnel and the integral solver. Refuses vertical facets, undercuts, and walls too steep for the scan (the harmonics a wall needs grow with its slope times P sin γ / λ; measured against the integral solver, see the method note); converges slowly on sawtooth corners, and loses precision at high truncation on profiles deeper than about half the period, both reported in provenance. No coatings |
+| Scalar (Kirchhoff, x-ray blaze form) | an approximation; checked against closed-form results |
+| Integral method (boundary integral, conical, undercut-capable) | since 0.3 not experimental; perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with the absorbed fraction recorded; a corner-graded mesh for profiles with corners (`corner_grading=4`, the default since 0.2.7; `0` is the equal-arc mesh), under either boundary condition; checked against published benchmark tables (Maystre & Popov; Goray & Schmidt), energy balance and reciprocity |
+| RCWA (in-plane, conical, off-plane; Li factorization, S-matrix, layer stacks) | since 0.2.0, not experimental since 0.3; lamellar gratings exact and other profiles staircased, transmitted orders, and coatings through conformal layers (`Problem.layers`); checked against Fresnel, the Airy film formula, reciprocity, the integral solver, and published lamellar values (Granet; Lalanne & Hugonin; Gralak; Goray & Schmidt's conical tables). Not yet checked: staircase accuracy in metallic TM, and layers of a second material against an independent code |
+| C-method (Chandezon) | since 0.2.0, not experimental since 0.3; perfect conductor in any mount, and one interface into an absorbing or lossless material, conical and coupled; checked against Goray & Schmidt's Table 3, Fresnel and the integral solver. Refuses vertical facets, undercuts, and walls too steep for the scan (the harmonics a wall needs grow with its slope times P sin γ / λ; measured against the integral solver, see the method note); converges slowly on sawtooth corners, and loses precision at high truncation on profiles deeper than about half the period, both reported in provenance. No coatings |
 
 The comparison harness also accepts an efficiency table already computed by an
 external program as one of its methods, so that comparison plots can be made without
@@ -413,9 +424,10 @@ derived product without prior written permission.
 
 **What you do not get.** The software is provided as is, without warranty of any kind,
 and the author is not liable for any use of it. That disclaimer carries more weight
-here than it does for most packages, because the efficiency solvers are experimental
-(see Status): a number this software produces is evidence to be checked against
-another method, not a result to be relied on because a computer printed it.
+here than it does for most packages, because the efficiency solvers are young and
+validated on few gratings (see Status): a number this software produces is evidence
+to be checked against another method, not a result to be relied on because a
+computer printed it.
 
 Contributions are accepted under the same licence. A pull request is taken as agreement
 that the contribution may be distributed under BSD-3-Clause.
