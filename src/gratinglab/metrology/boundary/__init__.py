@@ -14,8 +14,10 @@ from .swaths import SwathStatistics, swath_statistics
 from .average import (
     flatten_endpoints,
     average_grooves,
+    groove_residuals,
     normalize_profile,
     profile_metrics,
+    select_grooves,
 )
 
 __all__ = [
@@ -25,6 +27,8 @@ __all__ = [
     'swath_statistics',
     'flatten_endpoints',
     'average_grooves',
+    'groove_residuals',
     'normalize_profile',
     'profile_metrics',
+    'select_grooves',
 ]

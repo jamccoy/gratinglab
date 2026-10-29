@@ -25,8 +25,8 @@ from ..core.region_mask import (GROOVE_REACH_PERIODS, bridge_nan,
                                 describe_mask, groove_spacings_px, has_mask,
                                 reject_grooves_near_nan,
                                 tip_correct_around_nan)
-from .average import (average_grooves, flatten_endpoints, normalize_profile,
-                      profile_metrics)
+from .average import (average_grooves, flatten_endpoints, groove_residuals,
+                      normalize_profile, profile_metrics, select_grooves)
 
 __all__ = ["BoundaryProfile", "build_boundary_profile"]
 
@@ -66,6 +66,16 @@ class BoundaryProfile:
                 f"period {self.period_nm:.2f} nm, "
                 f"depth {self.metrics['groove_depth']:.4f} of period")
 
+    @property
+    def groove_residual_rms_nm(self):
+        """RMS residual of the grooves about their average, in nm.
+
+        None when fewer than two grooves were averaged. What it measures, and
+        why `to_problem` does not use it unless asked to, is in that method's
+        docstring and in docs/theory/metrology.md section 4.
+        """
+        return self.metrics.get('groove_residual_rms_nm')
+
     def to_problem(self, *, coating=None, substrate=None, roughness=0.0,
                    blaze_angle=None):
         """This measured groove as an efficiency problem.
@@ -87,9 +97,11 @@ class BoundaryProfile:
         Parameters:
             coating, substrate: material names, resolved by
                 `gratinglab.materials` at solve time.
-            roughness: RMS surface roughness in nm. As the note below
-                explains, this class does not measure it, and 0.0 means "not
-                supplied", not "smooth".
+            roughness: RMS surface roughness in nm, the Nevot-Croce sigma.
+                0.0 means "not supplied", not "smooth". It stays 0.0 unless
+                the caller passes a number, including the groove residual
+                this class measures; the note below says why that is not
+                the default.
             blaze_angle: fitted facet angle in degrees, if the same scan was
                 also run through `core.analysis.extract_blaze_angle`. Without
                 it the scalar solver evaluates reflection on the mean surface,
@@ -98,13 +110,39 @@ class BoundaryProfile:
 
         A note on roughness: `Problem.roughness` means high-spatial-frequency
         surface roughness, the quantity with which Nevot-Croce damps a Fresnel
-        coefficient. This class computes no such number. `y_std_nm` is the
-        groove-to-groove form spread and `metrics['rms_slope']` is a slope
-        statistic; neither is surface microroughness, and passing either one
-        in here would produce an efficiency that appears valid but is wrong,
-        where an omitted value would at least be visibly missing. The
-        appropriate quantity, the RMS residual of each groove about this
-        average, is not computed yet.
+        coefficient. `y_std_nm` is the groove-to-groove form spread and
+        `metrics['rms_slope']` is a slope statistic, and neither is that.
+
+        `groove_residual_rms_nm` is the nearest thing this class measures: the
+        RMS of each groove about the average once registered to it, which is
+        the part of the profile that does not repeat with the period. It is
+        still not passed by default, for four reasons, each of which makes it
+        a different number from the sigma Nevot-Croce wants:
+
+        - It is measured on the row-averaged profile. Structure that varies
+          along a groove averages away over the scan lines, and for isotropic
+          roughness with a correlation length well under the scan height that
+          is nearly all of it. The number keeps only what is coherent along
+          the groove for the height of the scan, so it is a lower bound on the
+          surface's roughness in its band.
+        - Its band is not the sigma's band. It sees nothing finer than the
+          pixel pitch or the tip, a few nanometres, while the structure that
+          damps a soft X-ray reflection extends down to wavelengths near the
+          X-ray wavelength itself. At the other end it includes groove-scale
+          form error, whose correlation length is about a period, where
+          Nevot-Croce assumes a short one.
+        - Groove-to-groove form error removes light from the orders by
+          scattering it between them, a Debye-Waller factor on each order's
+          own momentum transfer, not a damping of the Fresnel coefficient at
+          the facet. Folding it into the facet reflectivity applies the wrong
+          factor to the right effect.
+        - It carries instrument terms: AFM noise divided by the square root of
+          the number of scan lines, and a floor where the surface has corners
+          sharper than a pixel (0.21 nm on the synthetic sawtooth).
+
+        A caller who accepts those can pass it, and the name then appears in
+        their own code, which is the point:
+        `profile.to_problem(roughness=profile.groove_residual_rms_nm)`.
         """
         # Imported here rather than at module scope: `boundary` is reachable
         # from the GUI preview, which has no reason to pull the solver stack in
@@ -217,6 +255,16 @@ def build_boundary_profile(data, scan_x_size, settings, orientation=None) -> Bou
         smoothing_window=settings.ggp_smoothing_window)
 
     metrics = profile_metrics(x_norm, y_norm, period_nm, n_used)
+    # The same grooves average_grooves used, chosen by the same rules.
+    residual = groove_residuals(
+        select_grooves(raw_x, flat_y, groove_centers, period_nm, margin=0.0,
+                       min_half_width=settings.ggp_min_half_width),
+        x_avg, y_avg)
+    metrics['groove_residual_rms_nm'] = residual['rms_nm']
+    metrics['groove_residual_per_groove_nm'] = residual['per_groove_nm'].tolist()
+    metrics['groove_residual_max_shift_px'] = (
+        float(np.max(np.abs(residual['shift_px'])))
+        if residual['rms_nm'] is not None else None)
     if orientation is not None:
         metrics.update(orientation.as_metrics())
     metrics['tip_correction'] = settings.tip_correction

@@ -25,6 +25,16 @@ def write_profile_metrics(path, metrics):
         f.write(f"RMS slope: {metrics['rms_slope']:.4f} (normalized units)\n")
         f.write(f"Max slope magnitude: {metrics['max_slope']:.4f}\n")
         f.write(f"Max curvature: {metrics['max_curvature']:.6f} (normalized units)\n")
+        # Written only by a pipeline that measures it, so a metrics dict from
+        # before it existed still writes. Not applied as roughness: see
+        # BoundaryProfile.to_problem.
+        if 'groove_residual_rms_nm' in metrics:
+            rms = metrics['groove_residual_rms_nm']
+            if rms is None:
+                f.write("Groove residual RMS: not measured (one groove)\n")
+            else:
+                f.write(f"Groove residual RMS: {rms:.3f} nm (about the average, "
+                        f"not applied as roughness)\n")
         # Present only when the pipeline ran a tip correction. Stated even so:
         # a corrected depth and an uncorrected one are different measurements,
         # and this sidecar is where a reader learns which this file holds.

@@ -126,13 +126,15 @@ route requires the period to be supplied again from another source, and
 | Groove-to-groove form spread | **yes** | `y_std_nm`, the ±1σ band |
 | Max sidewall angle | derived, not fitted | `metrics['max_angle_deg']`, the steepest local slope of the normalised profile |
 | Apex angle | **no** | not computed anywhere |
-| **RMS surface roughness** | **no** | (none) |
+| Groove residual about the average | **yes**, after sub-pixel registration | `metrics['groove_residual_rms_nm']`, per groove in `metrics['groove_residual_per_groove_nm']` |
+| **RMS surface roughness** (the Névot–Croce σ) | **no** | (none; the residual above is related, and is not it) |
 
 ### Roughness is not computed, and related quantities are not substitutes
 
 `Problem.roughness` denotes high-spatial-frequency surface roughness in nm, the
 quantity with which Névot–Croce damps a Fresnel coefficient. Nothing in this
-package computes it.
+package measures that σ, and `to_problem` passes 0.0, meaning "not supplied",
+unless the caller passes a number.
 
 Two quantities appear related but do not measure it:
 
@@ -143,11 +145,76 @@ Two quantities appear related but do not measure it:
 
 Passing either into `Problem.roughness` would produce a confidently wrong
 efficiency where an obviously missing one is expected, so `to_problem` refuses
-to do so, and a test pins the refusal. The appropriate quantity, the RMS residual
-of each groove about the average, is computable from data the pipeline already
-holds but is not yet computed. Until it is, an absolute efficiency from a
-measured profile has no roughness damping at all, and is therefore an
-overestimate.
+to do so, and a test pins the refusal.
+
+### The groove residual: what it is
+
+`average.groove_residuals` takes the grooves that went into the average and
+measures how far each departs from it: the part of the profile that does not
+repeat with the period. It is in the metrics, the metrics sidecar, the
+boundary `.json` and the Boundary tab, as `groove_residual_rms_nm`.
+
+A plain difference against the average does not measure that. Each groove is
+centred on the sample nearest its minimum, so the set is misregistered by up
+to half a pixel, and on a 70° facet half a pixel of shift is several
+nanometres of height. On the synthetic sawtooth, with no noise in it at all,
+the plain difference reads 2.1 nm. So each groove is first registered to the
+average by a sub-pixel shift and a height offset, the average is recomputed
+from the registered grooves, and the residual is taken at each groove's own
+samples, over the average's aligned window less one pixel at each end. It is
+scaled by √(N/(N−1)) because the average contains the groove it is compared
+with. The exported average is unchanged: it is still the unregistered mean.
+
+What the number contains, measured on synthetic scans of the fixture's sawtooth
+(`tools/metrology/make_synthetic_scan.py`), the floor removed in quadrature:
+
+| Term | How it enters | Measured |
+|---|---|---|
+| Non-periodic structure coherent along the groove | in full | 1-D noise of σ added identically to every scan line reads 0.93 to 0.94 σ, over eight seeds each at 0.3, 0.5 and 0.8 nm |
+| AFM noise, and anything that varies along the groove | divided by √(scan lines), because the profile is the mean of the lines | per-pixel noise of 4 nm on 64 lines reads about 0.46 nm |
+| Corners sharper than a pixel | a sampling floor | 0.21 nm on the sharp synthetic at 5.2 nm per pixel, 0.03 nm at 2.6 |
+
+The 6% shortfall on noise is most likely the shift and offset fitting a little
+of it away, which was not separately measured. The floor is the spline failing to place a corner it never sampled. A real,
+tip-rounded groove has no such corner, so its floor is lower, though the tip
+also hides whatever is finer than its radius.
+
+### Why it is not passed as the Névot–Croce σ by default
+
+It is passed only when the caller asks:
+`profile.to_problem(roughness=profile.groove_residual_rms_nm)`. Four reasons,
+each of which makes it a different number from the σ the model wants:
+
+1. **It is measured on the row-averaged profile.** Roughness that varies
+   along a groove averages away over the scan lines, and for isotropic
+   roughness with a correlation length well under the scan height that is
+   nearly all of it. What survives is the part coherent for the height
+   of the scan, so the number is a lower bound on the surface's roughness in
+   its band, not an estimate of it.
+2. **Its band is not the σ's band.** An AFM scan resolves nothing finer than
+   the pixel pitch or the tip, a few nanometres. The roughness that damps a
+   soft X-ray reflection extends down to wavelengths near the X-ray
+   wavelength itself. At the other end the residual includes groove-scale form
+   error, whose correlation length is about a period, while Névot–Croce
+   assumes a short correlation length.
+3. **Form error acts on the orders, not the facet.** Groove-to-groove
+   variation removes light from each order by scattering it into the space
+   between orders, a Debye–Waller factor on that order's own momentum
+   transfer. `Problem.roughness` damps the Fresnel coefficient of the facet.
+   Folding one into the other applies the wrong factor to a real effect.
+4. **It carries instrument terms**: the noise and sampling floor in the table
+   above.
+
+So an absolute efficiency from a measured profile still has no roughness
+damping by default, and is therefore an overestimate. Passing the residual
+gives a damping that is too small for reason 1 and 2 and of the wrong form for
+reason 3. Which error is worse depends on the grating and the energy, which is
+why the choice is left to the caller and written in their code rather than
+made silently here.
+
+A per-scan-line residual, taken before the lines are averaged, would recover
+reason 1 at the cost of carrying the AFM's full noise, which a single scan
+cannot separate from roughness. It is not computed.
 
 ---
 
