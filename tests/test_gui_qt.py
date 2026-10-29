@@ -1109,12 +1109,14 @@ class TestGeometryTab:
         titles = [win._tab_widget.tabText(i) for i in range(win._tab_widget.count())]
         assert titles[0] == "Setup"
         assert titles[1] == "Grating Geometry"
-        # Everything after the boundary is a solver tab -- however many
+        # Everything between the boundary and Compare is a solver tab -- however many
         # solvers are registered, and in whatever order.
         # Short labels on the tabs, so the bar does not overflow as solvers
         # are added; the full name is the tooltip, and the Help menu's.
-        assert titles[2:] == [short_title(name) for name in win.tabs]
-        tips = [win._tab_widget.tabToolTip(i) for i in range(2, win._tab_widget.count())]
+        # The Compare tab closes the bar, after every solver it draws on.
+        assert titles[2:-1] == [short_title(name) for name in win.tabs]
+        assert titles[-1] == "Compare"
+        tips = [win._tab_widget.tabToolTip(i) for i in range(2, win._tab_widget.count() - 1)]
         assert tips == [display_title(name) for name in win.tabs]
 
     def test_it_is_not_in_the_solver_tab_registry(self, win):
