@@ -34,6 +34,8 @@ What it refuses, with `UnsupportedConfiguration`, rather than approximating:
 |---|---|
 | an undercut profile | the coordinate `u = y − a(x)` needs `a` to be a function |
 | a vertical facet or sidewall: `Lamellar`, `Blazed(antiblaze_angle=90)`, a `FromProfileData` with two heights at one `t`, or ends that differ in height | `a'` is infinite there; any finite stand-in would be a smoothed facet, the failure `solvers/base.py` names |
+| a wall too steep for the scan: one whose floor (§6, "Steep walls") exceeds the largest truncation accepted, 256 | the answer is wrong at every truncation the solver takes. Issue #7: an 88.8° wall at 1.55 nm off-plane returned efficiencies of 11 at N = 128 |
+| a truncation below a steep wall's floor (`ValueError`, naming the floor) | measured wrong by 3.5e-3 to 6e2 there |
 | any `conductivity` other than the two above | as for the integral solver |
 
 A named `coating` is not a layer: as in the integral solver, it is the
@@ -206,6 +208,80 @@ dropping the fastest-decaying modes and solving the boundary conditions by
 least squares, was tried and made every case worse (errors of 0.1 to 0.9), so
 it is not here.
 
+**A steep wall needs harmonics in proportion to its slope and to
+`P sin γ / λ`, and below a floor the answer is wrong.** Issue #7: on a groove
+with an 88.8° wall, at 1.55 nm and γ = 1.73°, the C-method returned
+efficiencies of 1.9e4 at N = 16 and 11 at N = 128 where the integral solver
+gives 0.26. Before the fix only an exactly vertical wall was refused. The
+mechanism is resolution, not the deep-profile precision loss above: a plane
+wave written on the boundary, `exp(iκ a(x))`, oscillates
+`(P κ / 2π) |a'|` times per period along a wall of slope `a'`, the modes on
+either side must be resolved as finely, and every answer did converge to the
+integral solver's once the truncation passed that. In the off-plane X-ray
+mount `κ = k sin γ`, so 1.55 nm at γ = 1.73° on a 400 nm period acts like
+an in-plane wavelength of 0.13 P, and a wall that is easy in visible light
+is not easy there.
+
+`wall_floor` reads two numbers off the profile's own Fourier series, the
+same one the solve uses, so it applies to every profile type and to the
+fillets of a rounded `Trapezoidal` (which are tangent to the wall and so
+carry its slope): `B`, the harmonics that hold all but 1e-3 of the power of
+`exp(iκ a)` at the largest transverse wavenumber in the scan, and the
+steepest slope `s`. The floor is `0.75 max(B, 3 s)`. The `3 s` term is for
+long reduced wavelengths, where `B` shrinks while a very steep wall still
+needs its own harmonics. A lossless material's transverse wavenumber counts
+where it is larger than the vacuum's. An absorbing one's does not: gold's
+X-ray answers needed no more harmonics than a perfect conductor's, and
+counting it took the floor of the default blazed groove in gold at 4 to
+4.5 nm from 11 to 21, where N = 16 was already within 2e-3 of the integral
+solver and N = 8 within 1.2e-2.
+
+Measured against the integral solver (`corner_grading = 4`, 1200 points,
+which moved by under 3e-5 from 800) on 24 configurations and 140
+truncations: a symmetric trapezoid (depth 0.3 P, crest 0.3 P) and the
+issue's asymmetric shape (a 27° facet, a 77 nm land, the steep wall) on a
+400 nm period, walls from 45° to 89.5°, perfect conductor in-plane at 100,
+500 and 700 nm and CXRO gold at γ = 1.73° and 1.55 to 6 nm. Largest
+difference over the orders:
+
+| truncation | rungs | difference from the integral solver |
+|---|---|---|
+| below the floor | 62 | 3.5e-3 to 5.8e2; under 1e-2 only four times, each one harmonic below the floor |
+| floor to twice the floor | 25 | 1.2e-4 to 5.4e-2 |
+| beyond twice the floor | 53 | 4.0e-3 or less |
+
+The asymmetric groove in the issue's mount, gold, 1.55 to 6 nm:
+
+| wall | floor | N = 32 | 64 | 128 | 192 | 256 |
+|---|---|---|---|---|---|---|
+| 80° | 44 | 4.8e-2 | 1.7e-3 | 1.3e-4 | 3.3e-5 | 1.6e-5 |
+| 85° | 84 | 6.7 | 5.3e-2 | 2.1e-3 | 4.0e-4 | 1.6e-4 |
+| 87° | 135 | 1.1e2 | 2.2 | 2.5e-2 | 4.0e-3 | 1.0e-3 |
+| 88° | 195 | 5.8e2 | 28 | 0.35 | 2.3e-2 | 1.1e-2 |
+| 88.8° | 311, refused | | | | | |
+
+Swept without the floor, the C-method needed the same truncation on this
+groove as a perfect conductor as it did in gold (the step at which its
+energy balance fell below 1e-2 was the same at every wall from 65° to
+88.8°), which is the conical reduction to `λ / sin γ` at work. In visible light the same walls
+are cheap: the symmetric trapezoid at 500 and 700 nm has floors of 13, 26,
+65 and 108 at 80°, 85°, 88° and 88.8°, and 89.5° (floor 258) is refused at
+any wavelength, its error still 1e-2 at N = 192.
+
+So the solver refuses a floor beyond 256 as `UnsupportedConfiguration`
+(no truncation would answer it), refuses a truncation below the floor with
+`ValueError` naming the floor (as it does for too few orders), and warns
+between the floor and twice it. **There the energy balance is not an error
+estimate**: at 87° and N = 128 it read 2e-3 against a true 2.5e-2. The GUI's
+default scan sits just inside: its 70.5° facet needs 29 at 1 nm, and N = 24,
+29 and 32 were 2.5e-2, 7.6e-3 and 3.0e-3 from the integral solver.
+
+The floor depends on the wavelength, so it cannot sit in
+`Capabilities.check`, which sees no scan. It runs at the start of `solve`,
+beside the vertical-wall refusals, before any eigenproblem; the GUI's form
+puts a floor the field can meet on the truncation field, and a floor beyond
+256 reaches the C-method and Compare tabs as the solver's refusal.
+
 Not yet validated: a measured (AFM) profile with many short segments.
 
 ## 7. Choosing `truncation`
@@ -222,7 +298,10 @@ record. Cost is dominated by two dense eigenproblems of size
 
 On smooth profiles convergence is exponential: a sinusoid of depth 0.3 P
 converges to 1e-8 by N ≈ 10 to 20. On a sawtooth it is slow, and the default
-32 is a starting point for a sweep, not an answer.
+32 is a starting point for a sweep, not an answer. A steep wall sets a floor
+of its own, `wall_floor` (§6): a truncation below it is refused, and from it
+to twice it the solver warns that the energy balance can understate the
+error tenfold.
 
 Two things a sweep can walk into, both deliberate. A rung above 256 raises
 `ValueError`, and the convergence harness re-raises a refusal that follows a

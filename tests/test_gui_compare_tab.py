@@ -394,6 +394,18 @@ class TestRefusals:
         assert "sidewalls" in shown
         assert "Scalar: solved" in shown
 
+    def test_a_wall_too_steep_for_the_c_method_is_named(self, qtbot, win, tab):
+        """Issue #7: an 89 deg anti-blaze facet at 1 nm. The C-method refuses
+        it with the measured reason; the scalar answer still arrives."""
+        set_geometry(win, antiblaze_angle="89.0", wavelength_count="2")
+        compare(qtbot, win, "scalar", "cmethod")
+        outcome = tab._outcome
+        assert outcome.solved == ("scalar",)
+        assert "too steep" in outcome.refused["cmethod"]
+        shown = tab._panel.toPlainText()
+        assert "C-method: refused:" in shown
+        assert "too steep" in shown
+
     def test_a_form_its_own_tab_rejects_is_a_refusal_not_a_stop(self, qtbot, win, tab):
         """Too few harmonics on the C-method tab: the field shows the error
         there, the comparison names it, and the scalar solver still runs."""

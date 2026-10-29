@@ -16,7 +16,7 @@ from gratinglab.gui.cmethod_options import (
     build_options,
 )
 from gratinglab.gui.state import FormErrors, FormState, build
-from gratinglab.solvers.cmethod import _MAX_TRUNCATION, cmethod, truncation_floor
+from gratinglab.solvers.cmethod import _MAX_TRUNCATION, cmethod, truncation_floor, wall_floor
 
 #: A scan short enough to solve in a test, on a smooth profile.
 SMOOTH = dict(
@@ -93,9 +93,13 @@ class TestTruncationFloor:
         assert f"need at least {floor.needed}" in errors[0].message
 
     def test_the_floor_is_accepted(self):
+        """On the default scan the 70.5 deg facet binds, not the orders."""
         parsed = build(FormState())
-        floor = truncation_floor(parsed.problem, parsed.illumination, parsed.wavelengths)
-        assert _options(truncation=str(floor.needed))["truncation"] == floor.needed
+        floor = max(
+            truncation_floor(parsed.problem, parsed.illumination, parsed.wavelengths).needed,
+            wall_floor(parsed.problem, parsed.illumination, parsed.wavelengths).needed,
+        )
+        assert _options(truncation=str(floor))["truncation"] == floor
 
     def test_the_form_and_the_solver_agree_at_the_floor(self):
         """The form uses the solver's own function, so what the form accepts
@@ -121,6 +125,34 @@ class TestTruncationFloor:
         )
         assert into.needed > vacuum.needed
         assert "transmitted" in into.message
+
+
+class TestSteepWallFloor:
+    """Issue #7: the solver's wall floor, on the field while it can be met."""
+
+    def test_too_few_harmonics_for_a_steep_wall_lands_on_the_field(self):
+        """The default scan starts at 1 nm, where its 70.5 deg facet needs 29
+        harmonics; 24 was 2.5e-2 from the integral solver there."""
+        parsed = build(FormState())
+        wall = wall_floor(parsed.problem, parsed.illumination, parsed.wavelengths)
+        assert wall.needed == 29
+        errors = _field_errors(truncation=str(wall.needed - 1))
+        assert errors[0].field == "truncation"
+        assert f"needs about {wall.needed} harmonics" in errors[0].message
+
+    def test_a_wall_beyond_the_ceiling_is_left_to_the_solver(self):
+        """No value of the field could meet it, so the form does not ask for
+        one: the solver refuses the geometry, and the tab says why."""
+        form = FormState(antiblaze_angle="89.0", wavelength_count="2")
+        parsed = build(form)
+        assert wall_floor(
+            parsed.problem, parsed.illumination, parsed.wavelengths
+        ).needed > _MAX_TRUNCATION
+        options = _options(form, truncation="64")
+        from gratinglab.solvers import UnsupportedConfiguration
+
+        with pytest.raises(UnsupportedConfiguration, match="too steep"):
+            cmethod.solve(parsed.problem, parsed.illumination, parsed.wavelengths, **options)
 
 
 class TestTabulated:
