@@ -72,7 +72,7 @@ class TestOptions:
             IntegralOptionsState(boundary_points="400"),
         )
         assert options == {
-            "boundary_points": 400, "conductivity": "perfect", "corner_grading": 0,
+            "boundary_points": 400, "conductivity": "perfect", "corner_grading": 4,
         }
 
     def test_the_default_is_the_solvers_own(self):
@@ -210,17 +210,39 @@ class TestTabulatedConductivity:
         system: if build_options() accepts it, solve() must not reject it.
 
         Two wavelengths and the coarsest accepted mesh, because this is a
-        statement about the guards agreeing, not about the physics."""
+        statement about the guards agreeing, not about the physics. The
+        coarsest is read off the form's own refusal rather than written here,
+        so it follows the default mesh: graded since 0.2.7, whose floor is
+        about twice the equal-arc one's."""
         parsed = build(
             FormState(
                 coating="Au", wavelength_start="4.0", wavelength_stop="4.5",
                 wavelength_count="2",
             )
         )
-        options = build_options(
-            parsed.problem, parsed.illumination, parsed.wavelengths,
-            IntegralOptionsState(boundary_points="128", conductivity="tabulated"),
-        )
+        with pytest.raises(FormErrors) as refused:
+            build_options(
+                parsed.problem, parsed.illumination, parsed.wavelengths,
+                IntegralOptionsState(boundary_points="32", conductivity="tabulated"),
+            )
+        needed = int(re.search(r"at least (\d+)", refused.value.errors[0].message)[1])
+        # On a graded mesh the floor depends on the count itself (the
+        # coarsest spacing moves with it), so the figure quoted at 32 points
+        # can be a point short at the floor: asked at 32 it said 208, and 208
+        # then needed 209. Step to the first count the form accepts.
+        for points in range(needed, needed + 8):
+            try:
+                options = build_options(
+                    parsed.problem, parsed.illumination, parsed.wavelengths,
+                    IntegralOptionsState(
+                        boundary_points=str(points), conductivity="tabulated"
+                    ),
+                )
+                break
+            except FormErrors:
+                continue
+        else:
+            pytest.fail(f"no count from {needed} to {needed + 7} was accepted")
         scan = integral.solve(
             parsed.problem, parsed.illumination, parsed.wavelengths, **options
         )
@@ -243,13 +265,15 @@ class TestCornerGrading:
             IntegralOptionsState(**fields),
         )
 
-    def test_off_is_the_solvers_default(self):
+    def test_order_four_is_the_solvers_default_and_the_forms(self):
+        """Graded since 0.2.7: the equal-arc mesh gave 2.95 for R + A on the
+        GUI's own default blaze. The form and a bare solve must agree."""
         import inspect
 
         default = inspect.signature(integral.solve).parameters["corner_grading"].default
         _, options = self._options(FormState())
-        assert IntegralOptionsState().corner_grading == "off"
-        assert options["corner_grading"] == default == 0
+        assert IntegralOptionsState().corner_grading == "4"
+        assert options["corner_grading"] == default == 4
 
     def test_the_offered_orders_are_exactly_the_solvers(self):
         from gratinglab.solvers.integral import _MAX_GRADING
@@ -277,12 +301,12 @@ class TestCornerGrading:
         with pytest.raises(FormErrors) as excinfo:
             build_options(
                 parsed.problem, parsed.illumination, parsed.wavelengths,
-                IntegralOptionsState(boundary_points="32"),
+                IntegralOptionsState(boundary_points="32", corner_grading="off"),
             )
         needed = int(re.search(r"at least (\d+)", excinfo.value.errors[0].message)[1])
         build_options(
             parsed.problem, parsed.illumination, parsed.wavelengths,
-            IntegralOptionsState(boundary_points=str(needed)),
+            IntegralOptionsState(boundary_points=str(needed), corner_grading="off"),
         )
         with pytest.raises(FormErrors) as graded:
             build_options(
