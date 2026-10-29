@@ -65,8 +65,10 @@ convergence harnesses and the materials layer work end to end. They are checked
 against closed-form results, published benchmark tables, energy balance and
 reciprocity, but remain experimental until they have been used on real problems.
 Efficiencies are absolute when a coating is named, using an optical constant table
-supplied by the user (see Install). A rigorous coupled-wave analysis (RCWA) backend
-is planned, written in-house.
+supplied by the user (see Install). Since 0.2.0 two more rigorous backends sit
+beside them, both written in-house and both experimental: a rigorous coupled-wave
+analysis (RCWA), which also models coated gratings through conformal layers, and
+the C-method (Chandezon). Each has a tab in the efficiency window since 0.2.1.
 
 ## Scope
 
@@ -91,8 +93,8 @@ grazing incidence (γ of a degree or two), the soft X-ray spectroscopy regime th
 project began with, where the integral method is the established approach and
 general-purpose RCWA codes are least reliable. `Illumination.classical`,
 `Illumination.conical(theta, phi)` and `Illumination.offplane(graze, azimuth)` all
-build the same object, and both solvers accept any of them. Which method serves which regime, and what is not yet covered
-(coated and multilayer gratings, for one), is mapped in
+build the same object, and every solver accepts any of them. Which method serves which regime, and what is not yet covered
+(multilayer stacks checked against an independent code, for one), is mapped in
 [`docs/roadmap.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/roadmap.md#regimes-and-the-methods-that-serve-them).
 
 The method backends, in order of development:
@@ -101,8 +103,8 @@ The method backends, in order of development:
 |---|---|
 | Scalar (Kirchhoff, x-ray blaze form) | experimental; checked against closed-form results |
 | Integral method (boundary integral, conical, undercut-capable) | experimental; perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with the absorbed fraction recorded; a corner-graded mesh for profiles with corners (`corner_grading=4`), under either boundary condition; checked against published benchmark tables (Maystre & Popov; Goray & Schmidt), energy balance and reciprocity |
-| RCWA (in-plane, conical, off-plane; Li factorization, S-matrix, layer stacks) | planned, written in-house |
-| C-method (Chandezon) | planned |
+| RCWA (in-plane, conical, off-plane; Li factorization, S-matrix, layer stacks) | experimental, since 0.2.0; lamellar gratings exact and other profiles staircased, transmitted orders, and coatings through conformal layers (`Problem.layers`); checked against Fresnel, the Airy film formula, reciprocity, the integral solver, and published lamellar values (Granet; Lalanne & Hugonin; Gralak; Goray & Schmidt's conical tables). Not yet checked: staircase accuracy in metallic TM, and layers of a second material against an independent code |
+| C-method (Chandezon) | experimental, since 0.2.0; perfect conductor in any mount, and one interface into an absorbing or lossless material, conical and coupled; checked against Goray & Schmidt's Table 3, Fresnel and the integral solver. Refuses vertical facets and undercuts; converges slowly on sawtooth corners, and loses precision at high truncation on profiles deeper than about half the period, both reported in provenance. No coatings |
 
 The comparison harness also accepts an efficiency table already computed by an
 external program as one of its methods, so that comparison plots can be made without
