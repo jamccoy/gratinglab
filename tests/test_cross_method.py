@@ -49,9 +49,9 @@ def compare_methods(
     its discretisation-error estimate, which every test checks before trusting
     the integral answer as the reference.
     """
-    options = {"boundary_points": boundary_points}
-    if corner_grading:
-        options["corner_grading"] = corner_grading
+    # Always passed: 0 means the equal-arc mesh these tolerances were set on,
+    # not the solver's default, which is the graded mesh since 0.2.7.
+    options = {"boundary_points": boundary_points, "corner_grading": corner_grading}
     scans = sweep(
         problem,
         illumination,

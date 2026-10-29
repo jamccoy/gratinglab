@@ -158,6 +158,11 @@ class TestTheIntegralTab:
         wavelength_count="2",
     )
     BOUNDARY_POINTS = "128"
+    #: The equal-arc mesh, named since 0.2.7 made the graded one the default:
+    #: 128 points is this short scan's equal-arc floor, and the graded floor
+    #: is about twice it. These tests are about the tabulated panel, not the
+    #: mesh, so they keep the cheaper one.
+    GRADING = "off"
 
     def test_the_conductivity_selector_offers_the_solvers_modes(self, win):
         from gratinglab.gui.integral_options import CONDUCTIVITY_MODES
@@ -193,26 +198,27 @@ class TestTheIntegralTab:
 
         combo = win.tabs["integral"]._fields["corner_grading"]
         assert tuple(combo.itemText(i) for i in range(combo.count())) == GRADING_CHOICES
-        assert combo.currentText() == "off"
+        assert combo.currentText() == "4"  # the solver's default since 0.2.7
 
     def test_the_corner_mesh_note_follows_the_selector(self, win):
         tab = win.tabs["integral"]
-        assert "Equal-arc" in tab._grading_note.text()
-        tab._fields["corner_grading"].setCurrentText("4")
         assert "order 4" in tab._grading_note.text()
+        tab._fields["corner_grading"].setCurrentText("off")
+        assert "Equal-arc" in tab._grading_note.text()
 
     def test_the_corner_mesh_reaches_build_options(self, win):
         """Regression: the field and the state agreed on the name, so the
         consistency check passed while `build_options` never read it, and the
         selector did nothing."""
         tab = win.tabs["integral"]
-        tab._fields["corner_grading"].setCurrentText("4")
+        # Not the default (4), or this would pass with the selector unread.
+        tab._fields["corner_grading"].setCurrentText("2")
         tab._fields["boundary_points"].setText("1200")
         parsed = build(FormState())
         options = tab.build_options(
             parsed.problem, parsed.illumination, parsed.wavelengths
         )
-        assert options["corner_grading"] == 4
+        assert options["corner_grading"] == 2
 
     def test_a_tabulated_solve_equals_a_direct_one(self, qtbot, win):
         """`TestNotASecondSourceOfTruth`, for the coupled system: the tab must
@@ -231,6 +237,7 @@ class TestTheIntegralTab:
                 widget.setText(value)
         tab = win.tabs["integral"]
         tab._fields["boundary_points"].setText(self.BOUNDARY_POINTS)
+        tab._fields["corner_grading"].setCurrentText(self.GRADING)
         tab._fields["conductivity"].setCurrentText("tabulated")
         resolve(qtbot, win, "integral")
 
@@ -238,7 +245,8 @@ class TestTheIntegralTab:
         options = build_integral_options(
             parsed.problem, parsed.illumination, parsed.wavelengths,
             IntegralOptionsState(
-                boundary_points=self.BOUNDARY_POINTS, conductivity="tabulated"
+                boundary_points=self.BOUNDARY_POINTS, conductivity="tabulated",
+                corner_grading=self.GRADING,
             ),
         )
         expected = integral.solve(
@@ -261,6 +269,7 @@ class TestTheIntegralTab:
                 widget.setText(value)
         tab = win.tabs["integral"]
         tab._fields["boundary_points"].setText(self.BOUNDARY_POINTS)
+        tab._fields["corner_grading"].setCurrentText(self.GRADING)
         tab._fields["conductivity"].setCurrentText("tabulated")
         resolve(qtbot, win, "integral")
 

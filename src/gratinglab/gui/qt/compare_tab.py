@@ -63,7 +63,12 @@ _DIM_ROLE = Qt.ItemDataRole.UserRole + 1
 #: The reference the lower panel starts from. The integral method is the
 #: longest-standing rigorous solver here, and the only one that takes every
 #: profile, vertical facets and undercuts included, so it is the one most
-#: likely to have solved whatever else declined.
+#: likely to have solved whatever else declined. Reconsidered when its
+#: equal-arc default read 2.95 for R + A on the default blaze: that was the
+#: mesh, not the method, and with the graded mesh the default (0.2.7) it
+#: matches the C-method there to 2e-4. It is also the slowest, by far; the
+#: reference only chooses what is subtracted, and pick_reference falls back
+#: to another rigorous solver when it is not ticked.
 _DEFAULT_REFERENCE = "integral"
 
 

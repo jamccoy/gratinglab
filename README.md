@@ -111,7 +111,7 @@ The method backends, in order of development:
 | Method | Status |
 |---|---|
 | Scalar (Kirchhoff, x-ray blaze form) | experimental; checked against closed-form results |
-| Integral method (boundary integral, conical, undercut-capable) | experimental; perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with the absorbed fraction recorded; a corner-graded mesh for profiles with corners (`corner_grading=4`), under either boundary condition; checked against published benchmark tables (Maystre & Popov; Goray & Schmidt), energy balance and reciprocity |
+| Integral method (boundary integral, conical, undercut-capable) | experimental; perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with the absorbed fraction recorded; a corner-graded mesh for profiles with corners (`corner_grading=4`, the default since 0.2.7; `0` is the equal-arc mesh), under either boundary condition; checked against published benchmark tables (Maystre & Popov; Goray & Schmidt), energy balance and reciprocity |
 | RCWA (in-plane, conical, off-plane; Li factorization, S-matrix, layer stacks) | experimental, since 0.2.0; lamellar gratings exact and other profiles staircased, transmitted orders, and coatings through conformal layers (`Problem.layers`); checked against Fresnel, the Airy film formula, reciprocity, the integral solver, and published lamellar values (Granet; Lalanne & Hugonin; Gralak; Goray & Schmidt's conical tables). Not yet checked: staircase accuracy in metallic TM, and layers of a second material against an independent code |
 | C-method (Chandezon) | experimental, since 0.2.0; perfect conductor in any mount, and one interface into an absorbing or lossless material, conical and coupled; checked against Goray & Schmidt's Table 3, Fresnel and the integral solver. Refuses vertical facets and undercuts; converges slowly on sawtooth corners, and loses precision at high truncation on profiles deeper than about half the period, both reported in provenance. No coatings |
 
@@ -274,7 +274,7 @@ hides it), and the window has one tab for each task:
   own boundary-condition control (perfect conductivity or tabulated optical
   constants) and a **Corner mesh** control: off, or a grading order that clusters
   the boundary nodes at the profile's corners, which a cornered profile needs to
-  converge quickly (4 is recommended). It takes minutes where the scalar solver takes milliseconds, so the
+  converge quickly (4, the default). It takes minutes where the scalar solver takes milliseconds, so the
   window opens on the scalar solver and this tab computes only when asked to.
 - **Compare:** the geometry solved by several solvers at once, each with the
   settings on its own tab. Efficiency is drawn with order by colour and solver by

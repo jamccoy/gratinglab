@@ -81,7 +81,9 @@ CONDUCTIVITY_NOTES = {
 
 
 #: The corner-mesh choices as the form shows them: ``off`` is the equal-arc
-#: mesh, the solver's default, and a number is the grading order.
+#: mesh and a number is the grading order. The solver's default, ``4``, is
+#: the form's too (`IntegralOptionsState`), for the reason `CONDUCTIVITY_MODES`
+#: gives; ``off`` is listed first only because the list reads in order.
 GRADING_CHOICES = ("off",) + tuple(str(p) for p in range(2, _MAX_GRADING + 1))
 
 #: What the choice means, shown beneath the selector, for the reason
@@ -107,7 +109,7 @@ class IntegralOptionsState:
 
     boundary_points: str = "400"
     conductivity: str = CONDUCTIVITY_MODES[0]
-    corner_grading: str = GRADING_CHOICES[0]
+    corner_grading: str = "4"
 
     def with_field(self, name: str, value: Any) -> "IntegralOptionsState":
         """Return a copy with one field changed."""

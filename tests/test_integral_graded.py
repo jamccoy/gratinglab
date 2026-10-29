@@ -222,7 +222,9 @@ class TestSolver:
     TM = Illumination.classical(alpha=10.0, polarization="TM")
 
     def test_tm_on_a_lamellar_converges_where_equal_arc_stalls(self):
-        uniform = integral.solve(LAMELLAR, self.TM, [600.0], boundary_points=256)
+        uniform = integral.solve(
+            LAMELLAR, self.TM, [600.0], boundary_points=256, corner_grading=0
+        )
         graded = integral.solve(
             LAMELLAR, self.TM, [600.0], boundary_points=256, corner_grading=4
         )
@@ -247,13 +249,17 @@ class TestSolver:
         graded = integral.solve(
             LAMELLAR, self.TM, [600.0], boundary_points=96, corner_grading=4
         )
-        plain = integral.solve(LAMELLAR, self.TM, [600.0], boundary_points=96)
+        plain = integral.solve(
+            LAMELLAR, self.TM, [600.0], boundary_points=96, corner_grading=0
+        )
         assert graded.provenance.notes["mesh"] == "corner-graded, order 4"
         assert plain.provenance.notes["mesh"] == "equal arc length"
 
     def test_smooth_profile_is_unchanged(self):
         problem = Problem(period=1000.0, profile=Sinusoidal(depth_fraction=0.3))
-        plain = integral.solve(problem, self.TM, [600.0], boundary_points=96)
+        plain = integral.solve(
+            problem, self.TM, [600.0], boundary_points=96, corner_grading=0
+        )
         graded = integral.solve(
             problem, self.TM, [600.0], boundary_points=96, corner_grading=4
         )
@@ -277,7 +283,7 @@ class TestSolver:
         light = Illumination.offplane(graze=1.5, azimuth=25.0)
         kwargs = dict(boundary_points=256, conductivity="tabulated")
         graded = integral.solve(problem, light, [2.0], corner_grading=4, **kwargs)
-        plain = integral.solve(problem, light, [2.0], **kwargs)
+        plain = integral.solve(problem, light, [2.0], corner_grading=0, **kwargs)
         assert graded.provenance.notes["energy_balance_deviation"] < 3e-4
         assert plain.provenance.notes["energy_balance_deviation"] > 0.1
         assert graded.provenance.notes["mesh"] == "corner-graded, order 4"

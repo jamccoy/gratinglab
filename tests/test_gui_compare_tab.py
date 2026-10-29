@@ -119,11 +119,19 @@ class TestThePanel:
         assert "Integral did not solve" in text
         assert "differences are from C-method" in text
 
-    def test_a_clean_run_has_nothing_alarming(self):
+    def test_a_clean_run_raises_no_alarm_of_its_own(self):
         """Non-vacuity for the two tests above: an ordinary comparison where
-        every solver solved must not read as a problem."""
-        lines = comparison_lines(_outcome(), "cmethod")
-        assert alarming_text(lines) == ""
+        every solver solved must not read as a problem. The only alarming
+        text is what the solvers themselves warned about (scalar theory is
+        outside its validity range here and says so), never the panel's own."""
+        outcome = _outcome()
+        lines = comparison_lines(outcome, "cmethod")
+        own_warnings = "".join(
+            f"    ⚠ {warning}\n"
+            for scan in outcome.comparison.scans
+            for warning in scan.provenance.warnings
+        )
+        assert alarming_text(lines) == own_warnings
 
     def test_agreement_is_never_presented_as_verification(self):
         """However closely the solvers agree, the panel says that agreement
@@ -133,6 +141,40 @@ class TestThePanel:
         note = next(line for line in lines if line.text == VERIFICATION_NOTE)
         assert note.tag == "dim"
         assert "not verification" in note.text
+
+    def test_a_solvers_own_warnings_are_shown_word_for_word(self):
+        """The verdict says something is wrong; the solver's warning says why
+        and what to change. The integral solver on an equal-arc mesh read only
+        "EXCEEDS UNITY" here while its own tab said "pass corner_grading=4"."""
+        import dataclasses
+
+        outcome = _outcome()
+        warning = "summed efficiency strays from unity; pass corner_grading=4"
+        scans = list(outcome.comparison.scans)
+        index = outcome.comparison.methods.index("cmethod")
+        scans[index] = dataclasses.replace(
+            scans[index],
+            provenance=dataclasses.replace(
+                scans[index].provenance,
+                warnings=(*scans[index].provenance.warnings, warning),
+            ),
+        )
+        warned = dataclasses.replace(
+            outcome, comparison=dataclasses.replace(outcome.comparison, scans=tuple(scans))
+        )
+        lines = comparison_lines(warned, "cmethod")
+        shown = next(line for line in lines if warning in line.text)
+        assert shown.tag == "warn"
+        assert shown.text == f"    ⚠ {warning}\n"
+
+    def test_every_warning_of_a_real_solve_reaches_the_panel(self):
+        """Not only a contrived one: whatever the solvers actually said."""
+        outcome = _outcome()
+        text = "".join(line.text for line in comparison_lines(outcome, "cmethod"))
+        warnings = [w for scan in outcome.comparison.scans for w in scan.provenance.warnings]
+        assert warnings, "the scalar solver warns on this geometry; nothing was checked"
+        for warning in warnings:
+            assert f"⚠ {warning}" in text
 
     def test_nothing_solved_says_so(self):
         outcome = ComparisonOutcome(
