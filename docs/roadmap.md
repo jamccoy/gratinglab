@@ -666,7 +666,11 @@ The intended milestones are as follows.
   experimental status. The criterion is the one stated in the README: use on a
   real problem, with the integral solver compared against measured
   efficiencies, such as the ALS data reduced by `als_eff_meas`, and not only
-  against published benchmarks and its own physics checks. **Met 2026-10-29.**
+  against published benchmarks and its own physics checks. **The comparison is
+  met (2026-10-29); the release waits on two solver defects it found**,
+  integral absorption with tabulated metals
+  ([#6](https://github.com/jamccoy/gratinglab/issues/6)) and the C-method on
+  near-vertical walls ([#7](https://github.com/jamccoy/gratinglab/issues/7)).
 
   Attempted 2026-10-28 against the ALS October 2021 OGRE campaign and not met:
   that campaign records no groove, so the comparison was a two-parameter fit

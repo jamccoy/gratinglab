@@ -14,6 +14,65 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- **The measured comparison the 0.3 gate asks for, with the grating's
+  groove.** A second measured comparison, and this one has it: the December
+  2018 TASTE campaign published as McCoy, McEntaffer & Miles, *ApJ* **891**,
+  114 (2020), erratum *ApJ* **926**, 105 (2022). 296 absolute per-order
+  efficiencies from 80 to 800 eV over orders −4 to 8, reduced by
+  `als_eff_meas`, against the grating's own AFM scan through
+  `metrology.boundary` with tip correction. Every input measured and none
+  fitted: RMS 0.0383 in absolute efficiency, 0.0363 with the roughness factor
+  the paper applies, against 0.0706 for the OGRE campaign's best two-parameter
+  fit. The integral method, the C-method and RCWA agree with one another to
+  2e-4 RMS while all three sit 0.038 from the grating, so the residual is
+  measured not to be the solver, which is the separation the gate existed to
+  make. The solvers stay experimental, and 0.3 waits, until the two defects
+  this comparison found are fixed: integral absorption with tabulated metals
+  (https://github.com/jamccoy/gratinglab/issues/6) and the C-method on
+  near-vertical walls (https://github.com/jamccoy/gratinglab/issues/7), both
+  below. See `docs/findings.md`, "The verdict on 0.3, from the TASTE
+  campaign".
+- `tests/test_measured.py::TestTasteCampaign`, which reduces both halves of
+  that campaign and asserts what does not depend on the groove: 296 points
+  each with its sigma, round 3a's recovery of the paper's Table 1, round 3b's
+  disagreement with it (γ 2.21° against 1.73 ± 0.03 — the order sorter moved
+  the beam, as the paper allows for and calls small), and the two measured
+  points that the published mount makes evanescent. It needs `als_eff_meas`
+  with both TASTE campaigns registered and the private beamline tree, and
+  skips without either.
+- `tests/test_measured.py::TestTheMeasuredGroovesHandedness`: a `.ggp` and the
+  metrology pipeline's `x_norm` run along `+d̂` while `FromProfileData.t` runs
+  against it, so they cross through `along_dispersion`. Handing those points
+  straight to `FromProfileData(t=...)` solves the groove as its mirror image,
+  and the result still looks like a blazed grating — it blazes on the wrong
+  side of the arc, where a comparison against measured data reads it as a
+  profile error. The convention was already in `docs/conventions.md`; nothing
+  held a caller to it. Needs no data and no optical constants, so it always
+  runs.
+- Two open questions in `docs/roadmap.md`, both found by this comparison and
+  neither fixed here (issues #6 and #7, the 0.3 blockers): the integral
+  solver's `conductivity="tabulated"` absorption is too large when the
+  coating's |n| leaves unity, by 8% of the incident power at 80 eV on gold,
+  and it grows with mesh refinement, so it is in the formulation rather than
+  the discretisation (the reflected orders are sound to 2e-5); and the
+  C-method's guard against a vertical facet is an equality test on the step,
+  so a wall at 88.8° passes it and the solver then returns efficiencies up to
+  31.
+
+### Fixed
+
+- `tests/test_ggp.py::TestRealFiles::test_panter1_profile` expected the
+  panter1 apex at t = 0.383, which has been 0.617 since `to_profile` started
+  reflecting a `.ggp`'s `+d̂` axis into `t`. The expectation was written at M1,
+  before that reflection existed, and was never moved with it; the two numbers
+  summing to one is the whole of the difference. The test now also checks the
+  reflection's inverse, so the file's own apex is still asserted where the file
+  puts it.
+
+## 0.2.8 (2026-10-29)
+
+### Added
+
 - Reading Zeiss SmartSEM electron micrographs: `metrology.io.sem.read_sem`
   returns the image with the instrument's own pixel size attached, together
   with the magnification, accelerating voltage, working distance, detector,
@@ -54,54 +113,9 @@ entries under "Unreleased" into a section named for the new version;
   at this graze (TE and TM within 9.1e-4). The numbers were taken before
   `corner_grading` became 4 by default, with the integral solver converged
   at that time's equal-arc mesh. The measurement is not in this repository.
-- **The 0.3 gate is met.** A second measured comparison, and this one has the
-  grating's groove: the December 2018 TASTE campaign published as McCoy,
-  McEntaffer & Miles, *ApJ* **891**, 114 (2020), erratum *ApJ* **926**, 105
-  (2022). 296 absolute per-order efficiencies from 80 to 800 eV over orders
-  −4 to 8, reduced by `als_eff_meas`, against the grating's own AFM scan
-  through `metrology.boundary` with tip correction. Every input measured and
-  none fitted: RMS 0.0383 in absolute efficiency, 0.0363 with the roughness
-  factor the paper applies, against 0.0706 for the OGRE campaign's best
-  two-parameter fit. The integral method, the C-method and RCWA agree with one
-  another to 2e-4 RMS while all three sit 0.038 from the grating, so the
-  residual is measured not to be the solver — which is the separation the gate
-  existed to make. The release itself is a separate step. See
-  `docs/findings.md`, "The verdict on 0.3, from the TASTE campaign".
-- `tests/test_measured.py::TestTasteCampaign`, which reduces both halves of
-  that campaign and asserts what does not depend on the groove: 296 points
-  each with its sigma, round 3a's recovery of the paper's Table 1, round 3b's
-  disagreement with it (γ 2.21° against 1.73 ± 0.03 — the order sorter moved
-  the beam, as the paper allows for and calls small), and the two measured
-  points that the published mount makes evanescent. It needs `als_eff_meas`
-  with both TASTE campaigns registered and the private beamline tree, and
-  skips without either.
-- `tests/test_measured.py::TestTheMeasuredGroovesHandedness`: a `.ggp` and the
-  metrology pipeline's `x_norm` run along `+d̂` while `FromProfileData.t` runs
-  against it, so they cross through `along_dispersion`. Handing those points
-  straight to `FromProfileData(t=...)` solves the groove as its mirror image,
-  and the result still looks like a blazed grating — it blazes on the wrong
-  side of the arc, where a comparison against measured data reads it as a
-  profile error. The convention was already in `docs/conventions.md`; nothing
-  held a caller to it. Needs no data and no optical constants, so it always
-  runs.
-- Two open questions in `docs/roadmap.md`, both found by this comparison and
-  neither fixed here: the integral solver's `conductivity="tabulated"`
-  absorption is too large when the coating's |n| leaves unity, by 8% of the
-  incident power at 80 eV on gold, and it grows with mesh refinement, so it is
-  in the formulation rather than the discretisation (the reflected orders are
-  sound to 2e-5); and the C-method's guard against a vertical facet is an
-  equality test on the step, so a wall at 88.8° passes it and the solver then
-  returns efficiencies up to 31.
 
 ### Fixed
 
-- `tests/test_ggp.py::TestRealFiles::test_panter1_profile` expected the
-  panter1 apex at t = 0.383, which has been 0.617 since `to_profile` started
-  reflecting a `.ggp`'s `+d̂` axis into `t`. The expectation was written at M1,
-  before that reflection existed, and was never moved with it; the two numbers
-  summing to one is the whole of the difference. The test now also checks the
-  reflection's inverse, so the file's own apex is still asserted where the file
-  puts it.
 - The Integral tab's refusal of too few boundary points named a count it
   would then refuse, on a graded mesh (the default since 0.2.7): on the soft
   X-ray Au scan, 32 points said "needs at least 208" and 208 said 209. The
