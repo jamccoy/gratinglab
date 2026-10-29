@@ -114,13 +114,18 @@ work:
    analytic profiles in the native format (§5), the PyXFocus formulas (§3) and
    the JOSS submission (§6).
 
-**Deferred (2026-10-24): the comparison with the ported ALS campaign.** The
-machinery for it is in place (`MeasuredEfficiency`, `Comparison.residuals`, and
-a worked test in `tests/test_measured.py` that skips without the data), but the
-comparison itself is set aside for now. The cost of deferring it is stated
-rather than hidden: it is the gate the versioning policy sets for the solvers
-to lose their experimental status, so until a measured comparison runs they
-stay experimental, whatever else lands.
+**Run (2026-10-28): the comparison with the ported ALS campaign.** This was
+deferred on 2026-10-24 for want of the beamline tree, which has since been
+found on a third machine. The comparison runs, and it does not clear the gate.
+The rigorous solver reaches an RMS of 0.0706 in absolute efficiency over the
+251 measured points, and the discrepancy survives every recorded uncertainty,
+both profile families available and the removal of the absolute level. The
+obstacle is that the campaign does not record the grating's groove, so the only
+comparison available is a two-parameter fit, which cannot separate a profile
+error from a solver error. What would close it is metrology on this grating,
+not more solving. The solvers therefore stay experimental; see
+[`findings.md`](findings.md), "The measured comparison ran", and the
+versioning note under 0.3.
 
 ### 0. Integral method, moved ahead of RCWA
 
@@ -394,11 +399,22 @@ to check when one is.
 
 Still to do on the als_eff_meas side: its `to_measured()` export, whose
 conversion is written out in the worked-comparison fixture in
-`tests/test_measured.py`, and the deletion of its duplicated optics. That
-comparison skips until the beamline tree is reachable (not found on MC1 or MAC1,
-2026-10-24). When it runs, settle whether als_eff_meas's recovered `alpha`
-matches the sign convention of `Illumination.alpha_deg`, and replace the test's
-placeholder groove depth, which the campaign does not record.
+`tests/test_measured.py`, and the deletion of its duplicated optics. The
+conversion is now confirmed against real data: the beamline tree was found on a
+third machine (not MC1 or MAC1) and the fixture passes, 251 points across orders
+−2 to 7, so `to_measured()` has a specification that has been run rather than
+only written.
+
+Two of the three things that comparison was to settle are settled. The
+recovered `alpha` is already in `Illumination.alpha_deg`'s convention, with no
+flip, pinned by
+`test_als_eff_meas_recovers_alpha_in_this_projects_sign_convention`; and the
+unrecorded polarization turns out not to matter at this graze, TE and TM
+differing by at most 9.1e-4 over all 251 points. The placeholder groove depth
+remains, and is now the thing blocking the 0.3 gate rather than a detail of the
+test: the campaign does not record the groove, and no rectangle or trapezoid
+reproduces the measurement. See [`findings.md`](findings.md), "The measured
+comparison ran".
 
 The design it was built to, kept for the reasoning:
 
@@ -627,8 +643,17 @@ The intended milestones are as follows.
   experimental status. The criterion is the one stated in the README: use on a
   real problem, with the integral solver compared against measured
   efficiencies, such as the ALS data reduced by `als_eff_meas`, and not only
-  against published benchmarks and its own physics checks. Integrating the
-  in-house RCWA backend is a further minor release.
+  against published benchmarks and its own physics checks. **Attempted
+  2026-10-28 and not met.** The comparison against the ported ALS campaign now
+  runs, which satisfies the sentence literally and not its purpose: the
+  campaign does not record the grating's groove, so the comparison is a
+  two-parameter fit, and that fit leaves an RMS of 0.0706 in absolute
+  efficiency that no recorded uncertainty explains. A fit cannot separate a
+  profile error from a solver error, so the gate needs a measured groove for
+  the grating that was measured — an AFM scan through `FromProfileData`, or a
+  campaign that records its profile. See [`findings.md`](findings.md), "The
+  measured comparison ran". Integrating the in-house RCWA backend is a further
+  minor release.
 - **1.0**: the public interface is declared stable. That covers `Problem`,
   `BoundaryProfile`, `AnalysisSettings`, the boundary JSON format and the solver
   plugin protocol. The preconditions are that the solvers have been validated
@@ -730,8 +755,27 @@ plus, more recently, cross-checks against the rigorous absolute mode.
   `als_eff_meas` holds one fully ported ALS campaign (ogre laminar, Oct 2021)
   with absolute per-order efficiencies and uncertainties, plus ~15 legacy
   per-experiment scripts in its archive that could be ported in the same way.
-  Reaching that data from the comparison harness is the measured-efficiency split
-  under "Later".
+  That campaign has now been reached from the comparison harness and run; what
+  it cannot do on its own is validate a solver, for want of the groove. The
+  ~15 unported scripts are worth more than they were, because a campaign among
+  them that does record its profile would close the 0.3 gate directly.
+
+### The groove of OGRE laminar grating I
+
+This is now the 0.3 blocker, and it is metrology rather than software. The
+October 2021 ALS campaign gives 251 absolute per-order efficiencies with
+uncertainties and a period cross-checked two ways, but no groove depth and no
+duty cycle; the original analysis modelled no groove at all, plotting the
+measurement against bare Au reflectivity. Fitting the two numbers leaves an RMS
+of 0.0706, with even orders over-modelled and odd orders under-modelled, and
+sidewall slope trades the high orders against the low ones without improving
+either overall ([`findings.md`](findings.md), "The measured comparison ran").
+
+What settles it: an AFM scan of that grating through `FromProfileData`, with
+the erosion tip correction the metrology side already has, which turns the fit
+into a prediction and makes the residual attributable. The grating is a PSU
+part, so the scan is in reach in a way that the TASTE probe's condition at scan
+time is not.
 
 ---
 
