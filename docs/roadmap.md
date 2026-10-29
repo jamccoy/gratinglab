@@ -67,7 +67,7 @@ bench.
 | Conventions ([`conventions.md`](conventions.md)) | normative, settled |
 | Geometry: grating equation, orders, blaze relations | done |
 | Illumination: direction cosines, three mount constructors | done |
-| Profiles: 4 representations for 4 methods, undercut support | done |
+| Profiles: 4 representations for 4 methods, undercut support | done. `Trapezoidal` added for the shape an etched grating actually has: a sidewall angle and a corner radius, reducing to `Lamellar` exactly when vertical and sharp. `Lamellar` is untouched, being the idealisation the benchmark tables are computed for |
 | `Problem`, `Solver` protocol, registry | done |
 | **Scalar solver** ([theory](theory/scalar.md)) | done, validated. M19 added the reduced-wavelength validity guard, cast-shadow visibility (`visibility="horizon"`, opt-in, sub-cell boundaries) and the cost of the s/p degeneracy |
 | Efficiency-table importer (external codes) | done |
@@ -82,6 +82,7 @@ bench.
 | Materials: readers, user libraries, Fresnel, roughness, absolute efficiency | done. Three formats are read: CXRO/Henke exports (X-ray), refractiveindex.info YAML (ultraviolet to infrared, all nine dispersion formulas, read over the whole 3,720-file database) and PCGrate `.ari`. A coating comes from the user's own library, `~/.gratinglab/materials` or `GRATINGLAB_MATERIALS`. No tables ship with the package until CXRO's redistribution terms are settled ([`SOURCES.md`](../src/gratinglab/materials/data/SOURCES.md)) |
 | Resolving power ([`resolution.py`](../src/gratinglab/resolution.py)) | done: `R = |m|·N` together with the finite-N line profile from ISSI eq. (8), each of which tests the other; measured `N` arrives from metrology via `to_problem`. Groove-error-degraded R is the named successor |
 | **Tip deconvolution** ([`core/tip.py`](../src/gratinglab/metrology/core/tip.py), [theory §4b](theory/metrology.md)) | done at M22: Villarrubia erosion with the certainty map, opt-in via `tip_correction='erosion'`, validated pointwise on a committed dilated fixture. Applied to the real TASTE scan, it narrowed the rounded-groove open question by excluding a nominal tip ([`findings.md`](findings.md)) |
+| **SEM micrographs** ([`metrology/io/sem.py`](../src/gratinglab/metrology/io/sem.py)) | done: Zeiss SmartSEM TIFFs read in-house, with the instrument's own pixel size, stage tilt and foreshortening. A second metrology input beside the AFM, and the only one that can see an undercut or measure the width of a crest. Validated on 379 of the group's micrographs and by a synthetic fixture the suite builds for itself. What it feeds `FromProfileData` with — a boundary traced off a cleave edge — is not written yet |
 | GUI (Qt/PySide6): tabs, geometry dock, 3D conical view | done |
 | CI (Linux py3.11/3.12, macOS and Windows py3.12) | green. CI runs with `PYTHONWARNDEFAULTENCODING=1`, so a text `open()` that leaves its encoding to the platform fails on every platform, Windows included |
 | **RCWA** ([theory](theory/rcwa.md)) | **first slice done** (0.2.0, 2026-10-27): Li's rules, S-matrix, vectorial and conical, lamellar exact and other profiles staircased, transmitted orders, conformal layers (`Problem.layers`). Validated on lamellar gratings against Fresnel, Airy, reciprocity, the integral solver (to 8e-4 in metallic TM) and three published values (Granet's metallic TM, Lalanne & Hugonin's dielectric, Gralak's silicon rods); two published TE/s values are not reproduced and are recorded. A GUI tab (0.2.1): truncation, slices, and the form refusing what the solver would; conformal layers on the geometry panel. Not yet: staircase accuracy in metallic TM, layers of a second material against an independent code. **Experimental** |
@@ -702,6 +703,14 @@ not closed, to "grating, or a severely worn tip?", and what settles the remainde
 lies outside the software: the probe's condition at scan time, a re-scan with a
 fresh tip, or a cross-section. See `findings.md`, "A nominal tip does not explain
 the rounded groove".
+
+The software is now ready for the third of those: `metrology/io/sem.py` reads a
+cross-section with its scale attached. The measurement is not. The collection's
+cross-sections are of laminar gratings and date from 2021, the TASTE scans from
+2022, and the two have never been taken of one sample — so the experiment that
+would close this is a cleave and an afternoon on the microscope, not more code.
+What the cross-sections there do establish is recorded under "What a
+cross-section shows that a scan cannot".
 
 ### A finite-conductivity reference run
 

@@ -1571,3 +1571,81 @@ it helps the lamellar and hurts the ideal sawtooth by up to 25 times.
 
 Pinned by `tests/test_integral_graded.py`; the ladders are in
 `theory/integral.md` §5.
+
+---
+
+## What a cross-section shows that a scan cannot
+
+Three cleaved cross-sections of the 160 nm OGRE laminar gratings say that an
+etched trench narrows with depth by a third of its width, that a resist line
+before transfer does not, and that both the crest and the floor meet the
+sidewall on a radius. None of those three facts is available from an AFM scan
+of the same surface, and the first two are not representable at all by
+`Lamellar`, which was until now the only binary groove this package offered.
+
+The micrographs are Zeiss SmartSEM TIFFs read by
+[`metrology/io/sem.py`](../src/gratinglab/metrology/io/sem.py), which takes the
+scale from the instrument's own record rather than from a scale bar. Each row
+below is one image, measured by the same procedure: the period from the
+strongest spatial frequency along the rows, the depth from the extent of the
+rows that carry it, and the trench width at each depth from the dark fraction
+of that row.
+
+| image | nm/pixel | period | depth | trench width, mouth → floor | sidewall |
+|---|---|---|---|---|---|
+| `ogre_xsec/xsec_050` | 2.233 | 163.3 nm | 69.2 nm | 0.70 → 0.42 | 72° |
+| `FESEM_picks/xsec_058` | 5.582 | 158.8 nm | 67.0 nm | 0.63 → 0.32 | 70° |
+| `110_2ionmillKOH_xsec/xsec_04` | 2.484 | 169.5 nm | 223.5 nm | 0.54 → 0.48 | 89° |
+
+The third is the resist line grating used as an ion-mill mask, imaged before
+transfer: it holds its width over three times the depth of the other two. The
+taper is therefore introduced by the transfer etch and is not a property of the
+lithography, which is the sort of attribution a single measurement technique
+cannot make.
+
+The widths are read from a brightness threshold, so they carry the edge
+brightness of the micrograph and the plane of the cleave with them, and the
+sidewall angles are good to a degree or two rather than better. That is ample
+for the conclusion drawn, which is that the angle is not 90°.
+
+### What this changed
+
+[`Trapezoidal`](../src/gratinglab/profiles.py) was added: a binary groove with a
+sidewall angle and a corner radius, which reduces to `Lamellar` exactly when the
+sidewall is vertical and the corners are sharp. `Lamellar` itself was left
+alone, because it is the idealisation the published benchmark tables are
+computed for and the validation rests on it being exactly that.
+
+### What it does not establish
+
+These are not the grating whose efficiency the ALS campaign measured. They come
+from the same programme and have the same period, but no cross-section in the
+collection is of OGRE laminar I itself, and nothing here licenses using these
+numbers as that grating's geometry.
+The entry is evidence that the shape to assume for an etched grating is a
+tapered one, not a measurement of any particular grating in the corpus.
+
+Nor does it close "The measured groove is rounded rather than faceted". That
+finding names a cross-section as one of the three things that could settle
+whether the rounding belongs to the grating or to the probe, and a cross-section
+of *that* grating would indeed settle it. The collection holds none: its
+cross-sections are of laminar gratings and date from 2021, and the TASTE scans
+run from 2022. The two have never been taken of one sample, which is the
+experiment that would close the question.
+
+### A pixel size that is wrong by a factor of two
+
+SmartSEM records two pixel sizes and the full-precision one in the tag's leading
+block is the *display* pixel, not the image pixel. They agree at a store
+resolution of 1024 × 768 and differ by exactly two at 2048 × 1536, which is the
+resolution of the 2023 background scans. Taking the block as written doubles
+every length measured from those images while leaving the micrograph looking
+entirely correct — the same shape of trap as the `Sens. ZsensSens` key in the
+Nanoscope reader, and caught the same way, by cross-checking one recorded
+quantity against another. The reader anchors the scale on `AP_IMAGE_PIXEL_SIZE`
+and takes the block's extra digits only after confirming the whole-number ratio
+between them.
+
+Reproduced by `tests/metrology/test_sem_reader.py`, which builds its own
+SmartSEM files and needs none of the group's data. The micrographs themselves
+are the group's and are not in this repository.
