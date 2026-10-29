@@ -70,6 +70,15 @@ beside them, both written in-house and both experimental: a rigorous coupled-wav
 analysis (RCWA), which also models coated gratings through conformal layers, and
 the C-method (Chandezon). Each has a tab in the efficiency window since 0.2.1.
 
+**Every modelling method here still needs verification**, the rigorous ones
+included. The checks in the table below show that each method reproduces the
+cases it was checked on; they do not show that it is right on yours. Nor does
+agreement between the solvers: they share the problem specification, the optical
+constant tables and the angle conventions, so a mistake in any of those moves all
+of them together and no comparison between them can see it. A number from any
+solver is evidence to be checked against measurement or a published benchmark
+before it is relied on.
+
 ## Scope
 
 The metrology (`gratinglab.metrology`) reads AFM scans: Bruker/Veeco Nanoscope `.spm`
@@ -267,6 +276,19 @@ hides it), and the window has one tab for each task:
   the boundary nodes at the profile's corners, which a cornered profile needs to
   converge quickly (4 is recommended). It takes minutes where the scalar solver takes milliseconds, so the
   window opens on the scalar solver and this tab computes only when asked to.
+- **Compare:** the geometry solved by several solvers at once, each with the
+  settings on its own tab. Efficiency is drawn with order by colour and solver by
+  line style, above each solver's difference from a chosen reference, on a linear
+  or log scale. A solver that cannot model the problem, such as the C-method on a
+  lamellar groove, is named with its reason and the others still run.
+
+  ![The Compare tab: four solvers on a 40 nm gold sinusoid at 80 degrees, 2 to 6 nm](https://raw.githubusercontent.com/jamccoy/gratinglab/master/docs/images/compare-tab.png)
+
+  *Four solvers on one problem: a 40 nm gold sinusoid, 5% deep, at 80° incidence,
+  unpolarized. The lower panel is each solver's difference from the C-method on a
+  log scale: the integral method and RCWA agree with it to within 2e-6, and the
+  scalar one is off by up to 0.018. That agreement is a consistency check between
+  methods, not a verification of any of them; see Status.*
 - **Setup:** the material library, showing which optical constants are installed, the
   range each covers, where each came from, and how to add others. The coating itself is
   chosen in the geometry dock, because it is a `Problem` field, like the period, and the
