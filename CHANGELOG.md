@@ -10,6 +10,36 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- Reading Zeiss SmartSEM electron micrographs: `metrology.io.sem.read_sem`
+  returns the image with the instrument's own pixel size attached, together
+  with the magnification, accelerating voltage, working distance, detector,
+  stage tilt and the foreshortening a tilted stage imposes. The TIFF is
+  decoded in-house, as the Nanoscope reader is and for the same reason, so the
+  package still depends on nothing beyond numpy/scipy. A cross-section is the
+  one groove measurement with no tip to deconvolve, the only one that can see
+  an undercut, and the only one that measures the width of a crest, which is
+  the feature an AFM tip rounds away. Three traps the format sets are handled
+  rather than inherited: the burnt-in data bar is detected and cropped (the
+  two instruments draw it differently and one leaves the micrograph showing
+  through it), the palette is not mapped because the stored index is already
+  the detector level, and the full-precision pixel size in the private tag is
+  the *display* pixel, which is twice the image pixel at a store resolution of
+  2048 x 1536. See `docs/findings.md`, "What a cross-section shows that a scan
+  cannot".
+- `profiles.Trapezoidal`: a binary groove with a sidewall angle and a corner
+  radius, which is the shape the cross-sections above show an etched grating
+  to have -- a trench a third narrower at its floor than at its mouth, with
+  crest and floor meeting the sidewall on a radius. It supplies all four
+  representations analytically, including the slope across the fillets, and
+  reduces to `Lamellar` point for point when the sidewall is vertical and the
+  corners are sharp. `Lamellar` is unchanged: it is the idealisation the
+  published benchmark tables are computed for, and the validation rests on it
+  staying exactly that. Not yet offered in the GUI's profile chooser.
+
 ## 0.2.7 (2026-10-28)
 
 ### Added
