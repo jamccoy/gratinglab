@@ -62,11 +62,17 @@ from numpy.typing import ArrayLike
 from ...geometry import cos_beta, is_propagating, order_range, sin_beta
 from ...illumination import Illumination
 from ...problem import Problem
+from ...profiles import (
+    CORNER_TURN_DEGREES,
+    FromProfileData,
+    polyline_corner_count,
+    polyline_rounded_turn,
+)
 from ...result import EfficiencyScan, Provenance, Transmission
 from .._conditioning import ESTIMATOR, ConditionLog
 from .._execution import capped_blas, check_blas_threads, check_workers, run_rows
 from ..base import Capabilities, Progress, UnsupportedConfiguration, register
-from ._boundary import physical_boundary
+from ._boundary import physical_boundary, smooths
 from ._core import solve_transverse
 from ._finite import solve_finite_states
 from ._nystrom import OperatorAssembler
@@ -82,6 +88,27 @@ __all__ = ["IntegralSolver", "integral"]
 #: same floor applies to the metal-side transverse wavelength, which is what
 #: makes visible-light metals (|n| of a few) cost more nodes than X-rays.
 _POINTS_PER_WAVELENGTH = 6.0
+
+#: ``profile_smoothing="auto"`` low-passes a measured polygon with a Gaussian
+#: whose standard deviation is the shortest transverse wavelength in the
+#: scan over this. Measured 2026-10-29 on an AFM groove (2018 TASTE scan,
+#: 2000 points, 400 nm period, 15.5 nm at |n| = 0.888, where that wavelength
+#: is 30.5 nm): 2 nm costs the C-method's own R 3.5e-6 against the polygon,
+#: and the integral solver's R + A - 1 falls 1.7e-3, 1.1e-4, 6.4e-6 at 256,
+#: 512, 1024 points. 0.5 nm still stood at 2.4e-3 at 1024, because what the
+#: mesh must resolve is the finest curvature the smoothing leaves.
+_SMOOTHING_PER_WAVELENGTH = 16.0
+
+#: A measured groove whose sub-threshold vertices turn by more than this many
+#: degrees within this many nm of arc gets a provenance warning: a corner
+#: rounded into slight bends, which smoothing cannot help and the graded mesh
+#: cannot see. Measured 2026-10-29 on four grooves: the three that converge
+#: carry at most 16.7 deg in any 5 nm, and the one that does not (the
+#: repository's synthetic tip-dilated blazed scan through metrology.boundary,
+#: whose valley turns 104 deg over +-5 nm) carries 74. A heuristic separating
+#: those cases, not a convergence theorem.
+_ROUNDED_WINDOW_NM = 5.0
+_ROUNDED_TURN_DEGREES = 45.0
 
 #: Deviation of the conserved quantity from unity -- the sum alone under the
 #: perfect boundary, the sum plus absorption under the tabulated one -- above
@@ -159,6 +186,52 @@ def _resolve_index(problem: Problem) -> "tuple[str, OpticalConstants]":
     return name, lookup(name)
 
 
+def _profile_note(problem: Problem, boundary, conductivity, requested) -> dict:
+    """What the integral solver meshed for a measured groove, and why.
+
+    Recorded on every :class:`FromProfileData` solve, so a result can be
+    compared against PCGrate's linear interpolation knowing which geometry
+    produced it.
+    """
+    profile = problem.profile
+    vertices = len(profile.t)
+    if boundary.smoothed is not None:
+        rule = (
+            f"auto: shortest transverse wavelength / {_SMOOTHING_PER_WAVELENGTH:g}"
+            if requested == "auto"
+            else "given"
+        )
+        note = {
+            "representation": "smoothed",
+            "gaussian_sigma_nm": boundary.smoothed,
+            "rule": rule,
+            "vertices": vertices,
+        }
+        corners = polyline_corner_count(profile.t, profile.y)
+        if corners:
+            note["representation"] = (
+                "smoothed between its corners, which are kept and graded"
+            )
+            note["corners"] = corners
+        return note
+    if conductivity != "tabulated":
+        reason = "the perfectly conducting condition meshes the polygon as given"
+    elif requested is None:
+        reason = "profile_smoothing=None"
+    elif not smooths(problem):
+        reason = (
+            "nothing to smooth: every vertex is straight or turns by more "
+            f"than {CORNER_TURN_DEGREES:g} deg, a corner the mesh grades"
+        )
+    else:  # pragma: no cover - every route to an unsmoothed mesh is above
+        reason = "not smoothed"
+    return {
+        "representation": "polygon, joined by straight segments as PCGrate joins it",
+        "reason": reason,
+        "vertices": vertices,
+    }
+
+
 class IntegralSolver:
     """Boundary-integral (Nystrom) solver for gratings in any mount.
 
@@ -187,6 +260,7 @@ class IntegralSolver:
         spectral_terms: int | None = None,
         conductivity: Literal["perfect", "tabulated"] = "perfect",
         corner_grading: int = 4,
+        profile_smoothing: "float | Literal['auto'] | None" = None,
         workers: int = 1,
         blas_threads: int | None = 1,
         progress: "Progress | None" = None,
@@ -230,6 +304,36 @@ class IntegralSolver:
             (a vertex turning by more than
             :data:`gratinglab.profiles.CORNER_TURN_DEGREES`) keeps the
             equal-arc mesh whatever is passed. Both boundary conditions.
+        profile_smoothing
+            How a measured groove (:class:`~gratinglab.profiles.FromProfileData`)
+            is meshed under ``conductivity="tabulated"``. Every point of
+            such a polygon that bends by less than
+            :data:`gratinglab.profiles.CORNER_TURN_DEGREES` is a slight
+            corner of the metal interface, too slight to grade towards and
+            too many to resolve, and meshing them as given wrecked the
+            independently computed absorption, by 8% of the incident power
+            on a measured groove at 80 eV, while leaving the reflected
+            orders nearly right (issue #6). ``"auto"`` low-passes the
+            polygon along its arc length by a Gaussian of standard
+            deviation one sixteenth of the shortest transverse wavelength
+            in the scan, either side of the interface, and a number sets
+            that width in nm. With no real corner the whole curve is
+            smoothed; with real corners each side between them is, with the
+            corners kept where they are and graded as before.
+
+            ``None``, the default, meshes the polygon as given, joined by
+            straight segments as PCGrate joins it, bit for bit as before.
+            Smoothing is opt-in because its width is only negligible where
+            it was measured: in the X-ray grazing regime the fault lives in
+            it cost R 3.5e-6, but on a finely sampled smooth groove at
+            500 nm "auto" moved the efficiencies by up to 4e-3 where the
+            polygon as given was already right. Reach for it when the
+            energy-balance warning fires on a measured groove, and check
+            the result against the C-method. A polygon of corners and
+            straight sides, every analytic profile and the perfectly
+            conducting condition are untouched whatever is passed.
+            Provenance records what was meshed under ``notes["profile"]``.
+            See ``docs/theory/integral.md`` section 8.
         workers
             Threads solving wavelengths concurrently. ``1`` (the default) is
             the serial loop. Each thread has its own kernel memo over the
@@ -277,6 +381,20 @@ class IntegralSolver:
                 f"from 2 to {_MAX_GRADING}, got {corner_grading!r}"
             )
         corner_grading = int(corner_grading)
+        if not (
+            profile_smoothing is None
+            or profile_smoothing == "auto"
+            or (
+                isinstance(profile_smoothing, (int, float, np.integer, np.floating))
+                and not isinstance(profile_smoothing, bool)
+                and np.isfinite(profile_smoothing)
+                and profile_smoothing > 0
+            )
+        ):
+            raise ValueError(
+                'profile_smoothing must be "auto", a positive width in nm, '
+                f"or None (mesh the polygon as given), got {profile_smoothing!r}"
+            )
         workers = check_workers(workers)
         threads = check_blas_threads(blas_threads)
 
@@ -287,8 +405,48 @@ class IntegralSolver:
         # cross blocks vanish identically rather than to rounding.
         cos_gamma = float(np.sqrt(1.0 - sin_gamma**2))
 
+        # The field oscillates along the boundary at the *reduced* wavelength.
+        reduced_min = float(wavelengths.min()) / sin_gamma
+
+        material: str | None = None
+        indices = None
+        metal_cone = 0
+        metal_reduced_min = np.inf
+        if conductivity == "tabulated":
+            material, constants = _resolve_index(problem)
+            indices = np.asarray(constants.n(wavelengths), dtype=np.complex128)
+            if (indices.imag < 0.0).any():
+                raise ValueError(
+                    f"material {material!r} tabulates a negative absorption "
+                    "(gain); the transmission problem loses uniqueness there "
+                    "(Goray & Schmidt 2010, section 2.B)"
+                )
+            # The transverse wavelength inside the material is lambda /
+            # |sqrt(n^2 - cos^2 gamma)|, short for visible-light metals.
+            factors = np.abs(np.sqrt(indices**2 - cos_gamma**2))
+            metal_reduced_min = float((wavelengths / factors).min())
+            # The kernel's spectral sum must also clear the metal-side
+            # propagating cone |k_t^-| d / 2 pi.
+            metal_cone = int(
+                np.ceil(
+                    (factors / wavelengths).max() * problem.period
+                )
+            )
+
+        # A measured polygon with no corner is meshed as a smooth curve under
+        # the tabulated condition (profile_smoothing, docs/theory/integral.md
+        # section 8), at a width set by the shortest transverse wavelength
+        # either side unless one is given.
+        smoothing = None
+        if conductivity == "tabulated" and profile_smoothing is not None:
+            smoothing = (
+                min(reduced_min, metal_reduced_min) / _SMOOTHING_PER_WAVELENGTH
+                if profile_smoothing == "auto"
+                else float(profile_smoothing)
+            )
+
         boundary = physical_boundary(
-            problem, boundary_points, grading=corner_grading
+            problem, boundary_points, grading=corner_grading, smoothing=smoothing
         )
         coincident = _coincident_nodes(boundary, problem.period)
         if coincident is not None:
@@ -301,10 +459,8 @@ class IntegralSolver:
                 "recommended) or boundary_points"
             )
 
-        # The field oscillates along the boundary at the *reduced* wavelength;
-        # a mesh that cannot resolve it would not fail loudly on its own.
-        reduced_min = float(wavelengths.min()) / sin_gamma
-        # The coarsest spacing must resolve it, which on a graded mesh is
+        # A mesh that cannot resolve the reduced wavelength would not fail
+        # loudly on its own. The coarsest spacing must resolve it, which on a graded mesh is
         # about twice the mean (resolution_length is arc_length otherwise).
         needed = int(
             np.ceil(
@@ -319,23 +475,8 @@ class IntegralSolver:
                 f"boundary; need at least {needed}"
             )
 
-        material: str | None = None
-        indices = None
-        metal_cone = 0
         if conductivity == "tabulated":
-            material, constants = _resolve_index(problem)
-            indices = np.asarray(constants.n(wavelengths), dtype=np.complex128)
-            if (indices.imag < 0.0).any():
-                raise ValueError(
-                    f"material {material!r} tabulates a negative absorption "
-                    "(gain); the transmission problem loses uniqueness there "
-                    "(Goray & Schmidt 2010, section 2.B)"
-                )
-            # The same resolution floor on the metal side: the transverse
-            # wavelength inside the material is lambda / |sqrt(n^2 -
-            # cos^2 gamma)|, short for visible-light metals.
-            factors = np.abs(np.sqrt(indices**2 - cos_gamma**2))
-            metal_reduced_min = float((wavelengths / factors).min())
+            # The same resolution floor on the metal side.
             needed_metal = int(
                 np.ceil(
                     _POINTS_PER_WAVELENGTH
@@ -352,13 +493,6 @@ class IntegralSolver:
                     "inside a conductive material oscillates and decays on "
                     "the scale lambda/|n|, and the mesh must resolve it"
                 )
-            # The kernel's spectral sum must also clear the metal-side
-            # propagating cone |k_t^-| d / 2 pi.
-            metal_cone = int(
-                np.ceil(
-                    (factors / wavelengths).max() * problem.period
-                )
-            )
 
         all_orders = order_range(
             float(wavelengths.min()), problem.period, sin_alpha, sin_gamma
@@ -505,6 +639,23 @@ class IntegralSolver:
         )
         if conditioning_warning is not None:
             warnings.append(conditioning_warning)
+        if conductivity == "tabulated" and isinstance(problem.profile, FromProfileData):
+            rounded = polyline_rounded_turn(
+                problem.profile.t,
+                problem.profile.y,
+                _ROUNDED_WINDOW_NM / problem.period,
+            )
+            if rounded > _ROUNDED_TURN_DEGREES:
+                warnings.append(
+                    f"the measured groove turns {rounded:.0f} deg within "
+                    f"{_ROUNDED_WINDOW_NM:g} nm through vertices each under "
+                    f"{CORNER_TURN_DEGREES:g} deg: a corner rounded tighter "
+                    "than this solver converges on quickly, and smoothing does "
+                    "not help it. On such a valley R was still 7.5e-3 from the "
+                    "converged C-method at 1024 points; check convergence in "
+                    "boundary_points, or compare with the C-method "
+                    "(docs/theory/integral.md section 8, issue #6)"
+                )
         if conductivity == "perfect" and problem.coating is not None:
             warnings.append(
                 f"coating {problem.coating!r} is not consulted: the perfectly "
@@ -552,6 +703,16 @@ class IntegralSolver:
                     else "Raise boundary_points, and read the deviation as "
                     "the discretisation error estimate"
                 )
+                + (
+                    ". This is a measured groove meshed as given, whose "
+                    "slight bends the mesh cannot resolve: try "
+                    'profile_smoothing="auto" and compare with the C-method '
+                    "(docs/theory/integral.md section 8, issue #6)"
+                    if conductivity == "tabulated"
+                    and boundary.smoothed is None
+                    and smooths(problem)
+                    else ""
+                )
             )
 
         from ... import __version__
@@ -579,6 +740,10 @@ class IntegralSolver:
             )
             notes["normalization"] = "absolute"
             notes["material"] = material
+        if isinstance(problem.profile, FromProfileData):
+            notes["profile"] = _profile_note(
+                problem, boundary, conductivity, profile_smoothing
+            )
 
         return EfficiencyScan(
             wavelengths=wavelengths,

@@ -146,6 +146,46 @@ entries under "Unreleased" into a section named for the new version;
   by 4e-3 or less (`docs/theory/cmethod.md` section 6). The GUI's default
   scan is unaffected: its 70.5 degree facet needs 29 at 1 nm, under the
   default 32.
+- The integral solver's absorption on a measured groove (#6). With
+  `conductivity="tabulated"`, a `FromProfileData` profile with no corner, which
+  is what an AFM export usually is, returned an absorbed fraction that was
+  wrong and did not converge: R + A reached 1.08 on the TASTE grating's
+  measured groove at 80 eV, twice the C-method's absorption, while the
+  reflected orders agreed with the C-method to 2e-5. The absorption formula was
+  right. The cause was the geometry: such a profile is a polygon of thousands
+  of points, every one a slight corner of the metal interface, too slight to
+  grade towards (under 10 deg) and too many to resolve, and the boundary fields
+  came out wrong beside every vertex. The reflected orders pass through a
+  smoothing integral and survive that; the absorption is a pointwise product
+  and does not, and the error scales with how far |n| is from 1, which is why
+  every earlier check, all near |n| = 1, passed. The new `profile_smoothing`
+  option meshes such a polygon as a smooth curve, low-passed along its arc by
+  a Gaussian: `"auto"` makes it one sixteenth of the shortest transverse
+  wavelength in the scan wide, a number sets the width in nm, and `None`, the
+  default, meshes the polygon as given, which is how PCGrate joins it. It is
+  opt-in because the width is negligible only where it was measured: at
+  500 nm `"auto"` moved a finely sampled smooth groove by up to 4e-3 where the
+  polygon as given was right. The energy-balance warning now names the option
+  for a measured groove, and `provenance.notes["profile"]` records what was
+  meshed. On the TASTE-like groove with `"auto"`, R + A - 1
+  falls 1.9e-3, 1.3e-4, 7.4e-6 at 256, 512, 1024 points, against 2.5e-2,
+  5.3e-2, 2.4e-2 before, and the converged C-method gives the same R to 1e-6
+  for the polygon and a smooth fit of it. With the option set, a measured groove with
+  real corners (above 10 deg, as a sharp blazed valley is) gets each side
+  between them smoothed, the corners kept where they are and graded as before: on a
+  sharp-cornered measured trapezoid R + A - 1 falls 9.0e-4, 5.8e-4, 3.6e-4 at
+  1024, 1536, 2048 points where the polygon as given stalls near 1.05e-2.
+  Analytic profiles, a measured polygon of corners and straight sides, and the
+  perfectly conducting condition come out bit for bit as before. See
+  `docs/theory/integral.md` section 8, "A measured polygon".
+
+  Known limitation, not fixed: a corner rounded into many slight bends, as
+  averaging can round a measured valley, is a curvature the mesh must resolve,
+  and smoothing does not help it. On the repository's synthetic tip-dilated
+  blazed scan, whose valley turns 104 deg within 5 nm, R is still 7.5e-3 from
+  the C-method at 1024 points. The solver warns in provenance when a measured
+  groove turns more than 45 deg within 5 nm through vertices each under the
+  corner threshold.
 
 ## 0.2.8 (2026-10-29)
 
