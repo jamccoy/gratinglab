@@ -10,6 +10,30 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- From an SEM cross-section to a groove profile:
+  `metrology.boundary.trace_cross_section` takes a micrograph from `read_sem`
+  and traces the groove boundary along the cleave edge, at the first crossing
+  of a level halfway between vacuum and material, sub-pixel down each column
+  and across each wall. The first crossing is what keeps a bright edge rim, and
+  a bulk darker than it, from being traced twice. It fits the ridge lattice for
+  the period and each groove's centre, levels a tilted edge on whole grooves,
+  folds every complete groove into one period and returns the averaged groove
+  as a `FromProfileData` in the package's conventions, together with a fitted
+  `Trapezoidal`: depth, crest and base widths, sidewall angle and corner
+  radius, each with a groove-to-groove standard error, and the distance of the
+  averaged groove from the fitted shape as the statement of how well a
+  trapezoid describes it. The stage tilt's foreshortening is applied only to an
+  axis the caller names, and an image that needs it is refused until one is.
+  Validated on rendered cross-sections of a known groove at the scale of the
+  OGRE micrographs (depth to 0.1 nm, walls to 0.02 nm, angle to 0.05°, errors
+  matching the scatter between images); the beam's rounding of the radius and a
+  bright rim's outward shift of each wall are measured and documented, not
+  corrected. Undercut walls are not traced. See `docs/theory/metrology.md` §6.
+
 ## 0.2.8 (2026-10-29)
 
 ### Added
