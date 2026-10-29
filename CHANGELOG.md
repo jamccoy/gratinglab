@@ -28,6 +28,13 @@ entries under "Unreleased" into a section named for the new version;
   profile is the mean of the scan lines and that its band is not the
   Névot–Croce sigma's, are in `docs/theory/metrology.md` section 4. The
   exported profile is unchanged.
+- `tests/test_four_way.py`: all four solvers on one problem through
+  `compare.sweep`, a shallow gold sinusoid at alpha = 80 deg over 2 to 6 nm.
+  RCWA and the C-method are held to the integral solver order by order, with
+  tolerances set from a convergence ladder recorded in the file, and each
+  rigorous method to `R + A = 1`. Scalar theory is held only to the right
+  orders and a factor-of-two band. Perfect-conductor variants in TE and TM
+  need no table and leave RCWA out, which refuses that case.
 
 ## 0.2.5 (2026-10-28)
 
