@@ -292,14 +292,19 @@ def _vertex_turns(
     return vx, vy, turn
 
 
-def polyline_has_corners(x: ArrayLike, y: ArrayLike) -> bool:
-    """Whether the open vertex list ``(x, y)`` of a polygon spanning one
-    period turns by more than :data:`CORNER_TURN_DEGREES` anywhere, closing
-    through ``(x[0] + 1, y[0])`` as :func:`_polyline_boundary` does."""
+def polyline_corner_count(x: ArrayLike, y: ArrayLike) -> int:
+    """How many vertices of the open vertex list ``(x, y)`` of a polygon
+    spanning one period turn by more than :data:`CORNER_TURN_DEGREES`,
+    closing through ``(x[0] + 1, y[0])`` as :func:`_polyline_boundary` does."""
     x = np.asarray(x, dtype=np.float64)
     y = np.asarray(y, dtype=np.float64)
     _, _, turn = _vertex_turns(np.append(x, x[0] + 1.0), np.append(y, y[0]))
-    return bool((turn > CORNER_TURN_DEGREES).any())
+    return int((turn > CORNER_TURN_DEGREES).sum())
+
+
+def polyline_has_corners(x: ArrayLike, y: ArrayLike) -> bool:
+    """Whether :func:`polyline_corner_count` finds any corner."""
+    return polyline_corner_count(x, y) > 0
 
 
 def smoothed_polyline(
@@ -347,11 +352,141 @@ def smoothed_polyline(
     return xs, ys
 
 
+#: A vertex turning by no more than this, in degrees, is collinear with its
+#: neighbours to rounding: a side made only of such vertices is straight and
+#: :func:`smoothed_polygon_sides` leaves it exactly as given.
+_STRAIGHT_TURN_DEGREES = 1e-6
+
+
+def polyline_rounded_turn(
+    x: ArrayLike, y: ArrayLike, window: float
+) -> float:
+    """The most turning, in degrees, that vertices each below
+    :data:`CORNER_TURN_DEGREES` carry within any stretch ``window`` long
+    (in units of the period, along the arc) of the polygon ``(x, y)``.
+
+    Large where a corner has been rounded into many slight bends, which is
+    what averaging and resampling do to a measured valley: the turning is
+    all there, but no single vertex crosses the threshold the graded mesh
+    looks for.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    vx, vy, turn = _vertex_turns(np.append(x, x[0] + 1.0), np.append(y, y[0]))
+    slight = np.where(turn <= CORNER_TURN_DEGREES, turn, 0.0)
+    edge = np.hypot(np.diff(np.append(vx, vx[0] + 1.0)), np.diff(np.append(vy, vy[0])))
+    at = np.concatenate(([0.0], np.cumsum(edge)))
+    length, at = at[-1], at[:-1]
+    # Two laps, so a window may run through the period wrap.
+    laps = np.concatenate((at, at + length))
+    running = np.concatenate(([0.0], np.cumsum(np.concatenate((slight, slight)))))
+    reach = np.searchsorted(laps, at + window)
+    return float((running[reach] - running[np.arange(len(at))]).max())
+
+
+def polyline_has_bends(x: ArrayLike, y: ArrayLike) -> bool:
+    """Whether the polygon ``(x, y)`` has a vertex that turns, but by no more
+    than :data:`CORNER_TURN_DEGREES`: the slight corners a measured profile is
+    made of, which no graded mesh resolves."""
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    _, _, turn = _vertex_turns(np.append(x, x[0] + 1.0), np.append(y, y[0]))
+    slight = (turn > _STRAIGHT_TURN_DEGREES) & (turn <= CORNER_TURN_DEGREES)
+    return bool(slight.any())
+
+
+def smoothed_polygon_sides(
+    x: ArrayLike,
+    y: ArrayLike,
+    sigma: float,
+    samples: int,
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.intp]]:
+    """The polygon ``(x, y)`` with each side between its corners low-passed,
+    and the corners kept.
+
+    The corners are the vertices turning by more than
+    :data:`CORNER_TURN_DEGREES`, found on the polygon as given. Each side
+    between two of them is resampled at equal arc length and its departure
+    from the chord joining its corners is convolved with the Gaussian of
+    :func:`smoothed_polyline`. The departure is extended oddly about both
+    ends before filtering, so it stays zero at the corners, which do not
+    move, and the side keeps its slope into each corner. A side with no
+    bend is returned as given. ``samples`` is spread over the sides in
+    proportion to their length, with a few per side at least.
+
+    Returns the open vertex list, starting at the polygon's first vertex as
+    :func:`_polyline_boundary` expects, and the indices of the corners in
+    it, for :func:`_graded_polyline`. With no corner this is
+    :func:`smoothed_polyline`'s job, and it raises.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    if not sigma > 0.0:
+        raise ValueError(f"sigma must be positive, got {sigma}")
+    vx, vy, turn = _vertex_turns(np.append(x, x[0] + 1.0), np.append(y, y[0]))
+    m = len(vx)
+    corners = np.flatnonzero(turn > CORNER_TURN_DEGREES)
+    if corners.size == 0:
+        raise ValueError("the polygon has no corner; use smoothed_polyline")
+
+    # Two periods of vertices, so a side may run through the period wrap.
+    big_x = np.concatenate((vx, vx + 1.0, [vx[0] + 2.0]))
+    big_y = np.concatenate((vy, vy, [vy[0]]))
+    big_turn = np.concatenate((turn, turn, [turn[0]]))
+    edge = np.hypot(np.diff(big_x), np.diff(big_y))
+    cumulative = np.concatenate(([0.0], np.cumsum(edge)))
+    total = float(cumulative[m])
+
+    pieces_x, pieces_y, starts, positions = [], [], [], []
+    count = 0
+    for first, last in zip(corners, np.append(corners[1:], corners[0] + m)):
+        side_x, side_y = big_x[first : last + 1], big_y[first : last + 1]
+        starts.append(count)
+        if not (big_turn[first + 1 : last] > _STRAIGHT_TURN_DEGREES).any():
+            pieces_x.append(side_x[:-1])
+            pieces_y.append(side_y[:-1])
+            positions.append(cumulative[first:last])
+            count += len(side_x) - 1
+            continue
+        along = cumulative[first : last + 1] - cumulative[first]
+        length = float(along[-1])
+        stations = max(8, int(np.ceil(samples * length / total)))
+        s = np.arange(stations + 1) * (length / stations)
+        fraction = s / length
+        smoothed = []
+        for coordinate in (side_x, side_y):
+            chord = coordinate[0] + (coordinate[-1] - coordinate[0]) * fraction
+            departure = np.interp(s, along, coordinate) - chord
+            odd = np.concatenate((departure[:-1], -departure[:0:-1]))
+            frequency = np.fft.rfftfreq(2 * stations, d=length / stations)
+            gain = np.exp(-2.0 * np.pi**2 * sigma**2 * frequency**2)
+            filtered = np.fft.irfft(np.fft.rfft(odd) * gain, n=2 * stations)
+            smoothed.append(chord + filtered[: stations + 1])
+        pieces_x.append(np.concatenate(([side_x[0]], smoothed[0][1:-1])))
+        pieces_y.append(np.concatenate(([side_y[0]], smoothed[1][1:-1])))
+        positions.append(cumulative[first] + s[:-1])
+        count += stations
+
+    dense_x = np.concatenate(pieces_x)
+    dense_y = np.concatenate(pieces_y)
+    corner_at = np.array(starts, dtype=np.intp)
+    # The sides start at the first corner; put the stretch past one period,
+    # measured along the polygon as given, back at the front, so the list
+    # starts where the polygon did.
+    over = np.concatenate(positions) >= total
+    dense_x[over] -= 1.0
+    shift = int(over.sum())
+    order = np.roll(np.arange(len(dense_x)), shift)
+    corner_at = (corner_at + shift) % len(dense_x)
+    return dense_x[order], dense_y[order], np.sort(corner_at)
+
+
 def _graded_polyline(
     tx: NDArray[np.float64],
     ty: NDArray[np.float64],
     n: int,
     order: int,
+    corners: NDArray[np.intp] | None = None,
 ) -> BoundaryCurve | None:
     """A corner-graded mesh on the closed polyline ``(tx, ty)``.
 
@@ -361,12 +496,18 @@ def _graded_polyline(
     split of the mesh parameter and mapped through :func:`_grading_map`, so
     no point sits on a corner and every point lies on a straight piece with
     an exact normal. The weights are the exact ``ds/dtau / n``.
+
+    ``corners``, indices into the distinct vertices, names the corners
+    instead of detecting them, which a smoothed polygon needs
+    (:func:`smoothed_polygon_sides`): smoothing a side can move a corner's
+    turn across the threshold, and its own dense vertices must not count.
     """
     vx, vy, turn = _vertex_turns(tx, ty)
     m = len(vx)
     if m < 2:
         return None
-    corners = np.flatnonzero(turn > CORNER_TURN_DEGREES)
+    if corners is None:
+        corners = np.flatnonzero(turn > CORNER_TURN_DEGREES)
     if corners.size == 0:
         return None
     if n < _MIN_POINTS_PER_SIDE * corners.size:
@@ -478,6 +619,7 @@ def _polyline_boundary(
     n: int,
     *,
     grading: int = 0,
+    corners: NDArray[np.intp] | None = None,
 ) -> BoundaryCurve:
     """Boundary samples of a polyline spanning one period.
 
@@ -494,6 +636,7 @@ def _polyline_boundary(
     Kress's sigmoidal transformation of order ``p`` (M&P section 4.6.6;
     Kress 1990), which restores high-order convergence where the field is
     singular. With no corner the equal-arc mesh is returned unchanged.
+    ``corners`` names the corners instead (:func:`_graded_polyline`).
     """
     if n < 3:
         raise ValueError(f"need at least 3 boundary points, got {n}")
@@ -514,7 +657,7 @@ def _polyline_boundary(
         raise ValueError("profile has zero arc length")
 
     if grading:
-        graded = _graded_polyline(tx, ty, n, grading)
+        graded = _graded_polyline(tx, ty, n, grading, corners)
         if graded is not None:
             return graded
 
@@ -1050,10 +1193,10 @@ class FromProfileData(_BaseProfile):
     The profile is stored as given and interpolated linearly, matching how
     PCGrate treats a polygonal border, so a scalar calculation and a PCGrate
     run can be driven from the identical geometry. One solver departs from
-    this: the integral method under ``conductivity="tabulated"`` meshes a
-    profile with no corner as a smooth curve by default, because the polygon's
-    many slight vertices wreck its absorption (issue #6; its
-    ``profile_smoothing`` option, and ``docs/theory/integral.md`` section 8).
+    this when asked: the integral method under ``conductivity="tabulated"``
+    can smooth the polygon's slight vertices, which wreck its absorption in
+    the X-ray regime (issue #6; its ``profile_smoothing`` option, off by
+    default, and ``docs/theory/integral.md`` section 8).
 
     Undercut profiles are representable. If ``t`` doubles back, the boundary
     is not a function of position and :meth:`height` and

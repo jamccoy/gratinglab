@@ -483,8 +483,10 @@ by 1e-5: the error is in the solved data, not in the quadrature. Applying the
 derivative, does bring A to within 5e-4, but makes R first-order wrong
 (−1.4e-3, −6.8e-4, −3.4e-4 at 256, 512, 1024), worse than before.
 
-**The fix.** Under `conductivity="tabulated"` the solver meshes a measured
-polygon with no corner as a smooth curve: the polygon resampled at equal arc
+**The fix, opt-in.** Under `conductivity="tabulated"`, with
+`profile_smoothing` set, the solver meshes a measured polygon with no corner as
+a smooth curve (one with real corners is smoothed side by side, below): the
+polygon resampled at equal arc
 length, and the periodic parts of `x(s)` and `y(s)` convolved with a Gaussian
 along the arc (`profiles.smoothed_polyline`). A Gaussian rather than a sharp
 spectral cut, because truncating a polygon's spectrum rings, and the ringing is
@@ -505,7 +507,7 @@ because it keeps the sample-scale wiggles. On the 2000-vertex groove:
 | 1 nm | 9e-7 | 7.3e-3 / 1.5e-3 / 1.1e-4 |
 | 2 nm | 3.5e-6 | 1.7e-3 / 1.1e-4 / 6.4e-6 |
 
-`profile_smoothing="auto"`, the default, sets σ to the shortest transverse
+`profile_smoothing="auto"` sets σ to the shortest transverse
 wavelength in the scan, `λ/sin γ` on the vacuum side or `λ/|√(n² − cos²γ)|` on
 the metal side, over 16: 1.9 nm for the case above, where the metal side's is
 30.5 nm. The rationale is that both sides' fields vary on those scales, so
@@ -530,16 +532,83 @@ bit with 0.2.8, for a like-for-like comparison.
 
 What it leaves alone: every analytic profile, the perfectly conducting
 condition (which has no absorption to break, and whose grazing reduced
-wavelength would imply far too wide a filter), and a measured polygon with a
-real corner, which keeps the graded mesh. All three are bit for bit as in 0.2.8
-whatever `profile_smoothing` says (20 cases compared against 0.2.8's source).
-**The last of those is a known gap.** A measured blazed groove usually has a
-sharp valley, a real corner, and is then graded at that corner while its other
-vertices remain straight segments; on the repository's synthetic tip-dilated
-scan through `metrology.boundary` (one 10.3° valley, 1999 slight vertices), R
-misses the C-method by 9.9e-2, 3.1e-2, 7.6e-3 at 256, 512, 1024 points and
-R + A − 1 is 0.30, 0.09, 0.011. Smoothing each side between the real corners,
-with the corners pinned and still graded, is the natural extension.
+wavelength would imply far too wide a filter), and a measured polygon made only
+of corners and straight sides, which has nothing to smooth. All three are bit
+for bit as in 0.2.8 whatever `profile_smoothing` says (compared against 0.2.8's
+source).
+
+**With real corners, each side between them is smoothed.** A measured blazed
+groove usually has a sharp valley, a corner above the threshold, and with one
+present the whole groove used to be graded at it with every other vertex left
+a straight segment. Now `profiles.smoothed_polygon_sides` filters each side
+between consecutive corners on its own: its departure from the chord joining
+its corners is extended oddly about both ends and convolved with the same
+Gaussian, so the corners do not move and each side keeps its slope into them,
+and the graded mesh is then built at exactly those corners, named rather than
+re-detected, because smoothing can move a corner's turn across the threshold.
+A side with no bend is left as given. The dense polygon this produces has
+thousands of vertices, so `_nystrom.corner_subtraction` works in blocks of
+segments above four million node-segment products; every analytic polygon is
+far below that and keeps its summation order bit for bit.
+
+Measured 2026-10-29 on the test groove's trapezoid with its corners left sharp
+(they fall between pixels, so each becomes a pair: 7 corners), at the 80 eV-like
+index. R + A − 1:
+
+| points | 256 | 512 | 768 | 1024 | 1536 | 2048 |
+|---|---:|---:|---:|---:|---:|---:|
+| sides smoothed | 9.2e-4 | 2.1e-3 | 1.1e-3 | 9.0e-4 | 5.8e-4 | 3.6e-4 |
+| as given | 1.6e-2 | 1.2e-2 | | 1.05e-2 | | |
+
+Falling at about first order from 768 points, against a polygon-as-given
+answer that stalls near 1e-2. R stays about 4e-5 from the C-method at every
+mesh, which is the size of that reference's own uncertainty on these corners
+(it closes R + A to 6.6e-6 at truncation 40). First order rather than the
+graded mesh's usual rate is what corner pairs a few nm apart cost.
+
+**Known limitation: a corner rounded into slight bends.** Averaging and
+resampling a measured valley can spread its turn across many samples, so that
+the turning is all there and no single vertex crosses the threshold, or only
+one does. The repository's synthetic tip-dilated blazed scan
+(`tests/metrology/fixtures/synthetic_dilated_scan.txt` through
+`metrology.boundary` at its defaults, period 316 nm) has exactly that: its
+valley turns 104° within ±5 nm and one vertex of it exceeds 10°. That is a
+curvature of a few nm radius, which the mesh must resolve whatever is done to
+the vertices, and smoothing cannot remove it. At the 80 eV-like index the
+converged C-method gives R = 0.9168049 (stable from truncation 24 to 64), and
+the integral solver's R misses it by 9.6e-2, 3.1e-2, 7.5e-3 at 256, 512, 1024
+points with the sides smoothed and 9.9e-2, 3.1e-2, 7.6e-3 as given, R + A − 1
+0.32, 0.072, 7.2e-3 against 0.30, 0.090, 1.1e-2. It is converging, slowly, and
+it is not fixed.
+
+The solver therefore warns. A measured groove under the tabulated condition
+whose vertices below the threshold turn by more than 45° within 5 nm of arc
+gets a provenance warning naming the turning and pointing here. The figure is
+a heuristic that separates the grooves measured so far, not a convergence
+theorem: the three that converge carry at most 16.7° in any 5 nm (the TASTE
+AFM average 14.6°, the test groove 16.7°, its sharp-cornered variant 8.6°) and
+the rounded valley carries 74°. Compare with the C-method on such a groove, or
+check convergence in `boundary_points`.
+
+**Why it is opt-in.** The width is negligible only where it was measured. On
+a sinusoid (period 600 nm, depth 0.3) sampled at 400 points as a
+`FromProfileData`, at 500 nm, TE, α = 20°, 512 points, against the analytic
+`Sinusoidal`:
+
+| index | `"auto"` (σ) | as given |
+|---|---:|---:|
+| n = 1.5 | 6.0e-4 (20.8 nm) | 6.1e-7 |
+| n = 0.2 + 3i | 4.2e-3 (10.4 nm) | 1.8e-5 |
+
+In the visible the polygon as given is already right and `"auto"` rounds
+features the field can see; `test_rcwa.py`'s offset-groove cross-check, a
+403-vertex `FromProfileData` with two corners, moved by up to 3.4e-3 under it.
+In the X-ray grazing regime the fault lives in, the same rule cost R 3.5e-6.
+So `profile_smoothing` defaults to `None`, every result is bit for bit as in
+0.2.8 unless smoothing is asked for, and the energy-balance warning, which
+fires above 0.5% and so would have caught the TASTE campaign's 8%, names the
+option when the groove is a measured polygon meshed as given. Check a smoothed
+result against the C-method.
 
 ## 9. Conditioning, and Rayleigh anomalies
 

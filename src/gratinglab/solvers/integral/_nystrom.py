@@ -215,6 +215,51 @@ def _principal_value(
     )
 
 
+#: Node-by-segment products above which :func:`corner_subtraction` works in
+#: blocks of segments. A smoothed measured polygon has thousands of
+#: vertices (``_boundary.physical_boundary``), and the one-shot arrays would
+#: take gigabytes; every analytic polygon is far below this, so its
+#: correction keeps the one-shot summation order, bit for bit.
+_SUBTRACTION_BLOCK = 4_000_000
+
+
+def _subtended_in_blocks(
+    boundary: PhysicalBoundary,
+    ax: NDArray[np.float64],
+    ay: NDArray[np.float64],
+    bx: NDArray[np.float64],
+    by: NDArray[np.float64],
+) -> NDArray[np.float64]:
+    """:func:`corner_subtraction`'s exact Laplace integral, a block of
+    segments at a time: the summed subtended angle, less the angle of each
+    node's own segment, the one nearest it over all blocks."""
+    points = len(boundary.x)
+    x, y = boundary.x[:, None], boundary.y[:, None]
+    rows = np.arange(points)
+    step = max(1, _SUBTRACTION_BLOCK // points)
+    total = np.zeros(points)
+    nearest = np.full(points, np.inf)
+    own_angle = np.zeros(points)
+    for first in range(0, len(ax), step):
+        block = slice(first, first + step)
+        sax, say, sbx, sby = ax[block], ay[block], bx[block], by[block]
+        to_a_x, to_a_y, to_b_x, to_b_y = sax - x, say - y, sbx - x, sby - y
+        angle = np.arctan2(
+            to_a_x * to_b_y - to_a_y * to_b_x, to_a_x * to_b_x + to_a_y * to_b_y
+        )
+        ex, ey = sbx - sax, sby - say
+        along = np.clip(
+            ((x - sax) * ex + (y - say) * ey) / (ex**2 + ey**2), 0.0, 1.0
+        )
+        distance = np.hypot(sax + along * ex - x, say + along * ey - y)
+        closest = np.argmin(distance, axis=1)
+        closer = distance[rows, closest] < nearest
+        nearest = np.where(closer, distance[rows, closest], nearest)
+        own_angle = np.where(closer, angle[rows, closest], own_angle)
+        total += angle.sum(axis=1)
+    return -(total - own_angle) / (2.0 * np.pi)
+
+
 def corner_subtraction(
     boundary: PhysicalBoundary, *, period: float
 ) -> NDArray[np.float64]:
@@ -248,17 +293,21 @@ def corner_subtraction(
     big_x = np.concatenate((vx - period, vx, vx + period, [vx[0] + 2.0 * period]))
     big_y = np.concatenate((vy, vy, vy, [vy[0]]))
     ax, ay, bx, by = big_x[:-1], big_y[:-1], big_x[1:], big_y[1:]
-    x, y = boundary.x[:, None], boundary.y[:, None]
-
-    to_a_x, to_a_y, to_b_x, to_b_y = ax - x, ay - y, bx - x, by - y
-    angle = np.arctan2(
-        to_a_x * to_b_y - to_a_y * to_b_x, to_a_x * to_b_x + to_a_y * to_b_y
-    )
-    ex, ey = bx - ax, by - ay
-    along = np.clip(((x - ax) * ex + (y - ay) * ey) / (ex**2 + ey**2), 0.0, 1.0)
-    own = np.argmin(np.hypot(ax + along * ex - x, ay + along * ey - y), axis=1)
-    angle[np.arange(points), own] = 0.0
-    exact = -angle.sum(axis=1) / (2.0 * np.pi)
+    if points * len(ax) > _SUBTRACTION_BLOCK:
+        exact = _subtended_in_blocks(boundary, ax, ay, bx, by)
+    else:
+        x, y = boundary.x[:, None], boundary.y[:, None]
+        to_a_x, to_a_y, to_b_x, to_b_y = ax - x, ay - y, bx - x, by - y
+        angle = np.arctan2(
+            to_a_x * to_b_y - to_a_y * to_b_x, to_a_x * to_b_x + to_a_y * to_b_y
+        )
+        ex, ey = bx - ax, by - ay
+        along = np.clip(
+            ((x - ax) * ex + (y - ay) * ey) / (ex**2 + ey**2), 0.0, 1.0
+        )
+        own = np.argmin(np.hypot(ax + along * ex - x, ay + along * ey - y), axis=1)
+        angle[np.arange(points), own] = 0.0
+        exact = -angle.sum(axis=1) / (2.0 * np.pi)
 
     rule = np.zeros(points)
     weights = boundary.quadrature

@@ -62,7 +62,12 @@ from numpy.typing import ArrayLike
 from ...geometry import cos_beta, is_propagating, order_range, sin_beta
 from ...illumination import Illumination
 from ...problem import Problem
-from ...profiles import CORNER_TURN_DEGREES, FromProfileData
+from ...profiles import (
+    CORNER_TURN_DEGREES,
+    FromProfileData,
+    polyline_corner_count,
+    polyline_rounded_turn,
+)
 from ...result import EfficiencyScan, Provenance, Transmission
 from .._conditioning import ESTIMATOR, ConditionLog
 from .._execution import capped_blas, check_blas_threads, check_workers, run_rows
@@ -93,6 +98,17 @@ _POINTS_PER_WAVELENGTH = 6.0
 #: 512, 1024 points. 0.5 nm still stood at 2.4e-3 at 1024, because what the
 #: mesh must resolve is the finest curvature the smoothing leaves.
 _SMOOTHING_PER_WAVELENGTH = 16.0
+
+#: A measured groove whose sub-threshold vertices turn by more than this many
+#: degrees within this many nm of arc gets a provenance warning: a corner
+#: rounded into slight bends, which smoothing cannot help and the graded mesh
+#: cannot see. Measured 2026-10-29 on four grooves: the three that converge
+#: carry at most 16.7 deg in any 5 nm, and the one that does not (the
+#: repository's synthetic tip-dilated blazed scan through metrology.boundary,
+#: whose valley turns 104 deg over +-5 nm) carries 74. A heuristic separating
+#: those cases, not a convergence theorem.
+_ROUNDED_WINDOW_NM = 5.0
+_ROUNDED_TURN_DEGREES = 45.0
 
 #: Deviation of the conserved quantity from unity -- the sum alone under the
 #: perfect boundary, the sum plus absorption under the tabulated one -- above
@@ -177,27 +193,35 @@ def _profile_note(problem: Problem, boundary, conductivity, requested) -> dict:
     compared against PCGrate's linear interpolation knowing which geometry
     produced it.
     """
-    vertices = len(problem.profile.t)
+    profile = problem.profile
+    vertices = len(profile.t)
     if boundary.smoothed is not None:
         rule = (
             f"auto: shortest transverse wavelength / {_SMOOTHING_PER_WAVELENGTH:g}"
             if requested == "auto"
             else "given"
         )
-        return {
+        note = {
             "representation": "smoothed",
             "gaussian_sigma_nm": boundary.smoothed,
             "rule": rule,
             "vertices": vertices,
         }
+        corners = polyline_corner_count(profile.t, profile.y)
+        if corners:
+            note["representation"] = (
+                "smoothed between its corners, which are kept and graded"
+            )
+            note["corners"] = corners
+        return note
     if conductivity != "tabulated":
         reason = "the perfectly conducting condition meshes the polygon as given"
     elif requested is None:
         reason = "profile_smoothing=None"
     elif not smooths(problem):
         reason = (
-            f"a vertex turns by more than {CORNER_TURN_DEGREES:g} deg, so the "
-            "corners are graded instead"
+            "nothing to smooth: every vertex is straight or turns by more "
+            f"than {CORNER_TURN_DEGREES:g} deg, a corner the mesh grades"
         )
     else:  # pragma: no cover - every route to an unsmoothed mesh is above
         reason = "not smoothed"
@@ -236,7 +260,7 @@ class IntegralSolver:
         spectral_terms: int | None = None,
         conductivity: Literal["perfect", "tabulated"] = "perfect",
         corner_grading: int = 4,
-        profile_smoothing: "float | Literal['auto'] | None" = "auto",
+        profile_smoothing: "float | Literal['auto'] | None" = None,
         workers: int = 1,
         blas_threads: int | None = 1,
         progress: "Progress | None" = None,
@@ -282,23 +306,32 @@ class IntegralSolver:
             equal-arc mesh whatever is passed. Both boundary conditions.
         profile_smoothing
             How a measured groove (:class:`~gratinglab.profiles.FromProfileData`)
-            with no corner is meshed under ``conductivity="tabulated"``.
-            Every point of such a polygon is a slight corner of the metal
-            interface, too slight to grade towards and too many to resolve,
-            and meshing them as given wrecked the independently computed
-            absorption, by 8% of the incident power on a measured groove at
-            80 eV, while leaving the reflected orders nearly right (issue
-            #6). So by default (``"auto"``) the polygon is meshed as a
-            smooth curve: low-passed along its arc length by a Gaussian of
-            standard deviation one sixteenth of the shortest transverse
-            wavelength in the scan, either side of the interface. A number
-            sets that width in nm instead, and ``None`` meshes the polygon
-            as given, joined by straight segments as PCGrate joins it. This
-            departs from :class:`~gratinglab.profiles.FromProfileData`'s
-            linear interpolation for this solver only; a polygon with a
-            real corner (above
-            :data:`gratinglab.profiles.CORNER_TURN_DEGREES`), every analytic
-            profile and the perfectly conducting condition are untouched.
+            is meshed under ``conductivity="tabulated"``. Every point of
+            such a polygon that bends by less than
+            :data:`gratinglab.profiles.CORNER_TURN_DEGREES` is a slight
+            corner of the metal interface, too slight to grade towards and
+            too many to resolve, and meshing them as given wrecked the
+            independently computed absorption, by 8% of the incident power
+            on a measured groove at 80 eV, while leaving the reflected
+            orders nearly right (issue #6). ``"auto"`` low-passes the
+            polygon along its arc length by a Gaussian of standard
+            deviation one sixteenth of the shortest transverse wavelength
+            in the scan, either side of the interface, and a number sets
+            that width in nm. With no real corner the whole curve is
+            smoothed; with real corners each side between them is, with the
+            corners kept where they are and graded as before.
+
+            ``None``, the default, meshes the polygon as given, joined by
+            straight segments as PCGrate joins it, bit for bit as before.
+            Smoothing is opt-in because its width is only negligible where
+            it was measured: in the X-ray grazing regime the fault lives in
+            it cost R 3.5e-6, but on a finely sampled smooth groove at
+            500 nm "auto" moved the efficiencies by up to 4e-3 where the
+            polygon as given was already right. Reach for it when the
+            energy-balance warning fires on a measured groove, and check
+            the result against the C-method. A polygon of corners and
+            straight sides, every analytic profile and the perfectly
+            conducting condition are untouched whatever is passed.
             Provenance records what was meshed under ``notes["profile"]``.
             See ``docs/theory/integral.md`` section 8.
         workers
@@ -606,6 +639,23 @@ class IntegralSolver:
         )
         if conditioning_warning is not None:
             warnings.append(conditioning_warning)
+        if conductivity == "tabulated" and isinstance(problem.profile, FromProfileData):
+            rounded = polyline_rounded_turn(
+                problem.profile.t,
+                problem.profile.y,
+                _ROUNDED_WINDOW_NM / problem.period,
+            )
+            if rounded > _ROUNDED_TURN_DEGREES:
+                warnings.append(
+                    f"the measured groove turns {rounded:.0f} deg within "
+                    f"{_ROUNDED_WINDOW_NM:g} nm through vertices each under "
+                    f"{CORNER_TURN_DEGREES:g} deg: a corner rounded tighter "
+                    "than this solver converges on quickly, and smoothing does "
+                    "not help it. On such a valley R was still 7.5e-3 from the "
+                    "converged C-method at 1024 points; check convergence in "
+                    "boundary_points, or compare with the C-method "
+                    "(docs/theory/integral.md section 8, issue #6)"
+                )
         if conductivity == "perfect" and problem.coating is not None:
             warnings.append(
                 f"coating {problem.coating!r} is not consulted: the perfectly "
@@ -652,6 +702,16 @@ class IntegralSolver:
                     if not boundary.graded
                     else "Raise boundary_points, and read the deviation as "
                     "the discretisation error estimate"
+                )
+                + (
+                    ". This is a measured groove meshed as given, whose "
+                    "slight bends the mesh cannot resolve: try "
+                    'profile_smoothing="auto" and compare with the C-method '
+                    "(docs/theory/integral.md section 8, issue #6)"
+                    if conductivity == "tabulated"
+                    and boundary.smoothed is None
+                    and smooths(problem)
+                    else ""
                 )
             )
 

@@ -24,7 +24,9 @@ from ...problem import Problem
 from ...profiles import (
     FromProfileData,
     _polyline_boundary,
+    polyline_has_bends,
     polyline_has_corners,
+    smoothed_polygon_sides,
     smoothed_polyline,
 )
 
@@ -98,12 +100,13 @@ class PhysicalBoundary:
 
 
 def smooths(problem: Problem) -> bool:
-    """Whether :func:`physical_boundary` would mesh this profile as a smooth
-    curve when asked to: a measured polygon (:class:`FromProfileData`) with
-    no vertex turning by more than
-    :data:`~gratinglab.profiles.CORNER_TURN_DEGREES`."""
+    """Whether :func:`physical_boundary` would smooth this profile when
+    asked to: a measured polygon (:class:`FromProfileData`) with at least one
+    vertex that bends by no more than
+    :data:`~gratinglab.profiles.CORNER_TURN_DEGREES`. A polygon made only of
+    corners and straight sides has nothing to smooth."""
     profile = problem.profile
-    return isinstance(profile, FromProfileData) and not polyline_has_corners(
+    return isinstance(profile, FromProfileData) and polyline_has_bends(
         profile.t, profile.y
     )
 
@@ -117,15 +120,18 @@ def physical_boundary(
     written against the older ``boundary(n)`` signature still serves the
     equal-arc mesh.
 
-    ``smoothing``, a Gaussian width in nm, meshes a measured polygon with no
-    corner (:func:`smooths`) as that polygon low-passed along its arc
-    length (:func:`~gratinglab.profiles.smoothed_polyline`) instead of as
-    straight segments joining its points. Every vertex of such a polygon is
-    a real corner of the interface, too slight to grade towards and too
-    many to resolve, and on the finite-conductivity system the unresolved
-    edge fields at those vertices wrecked the absorption while leaving the
-    reflected orders nearly right (issue #6, ``docs/theory/integral.md``
-    section 8). Every other profile, and a polygon with a real corner, is
+    ``smoothing``, a Gaussian width in nm, meshes a measured polygon with
+    slight bends (:func:`smooths`) low-passed along its arc length instead
+    of as straight segments joining its points. Every such bend is a real
+    corner of the interface, too slight to grade towards and too many to
+    resolve, and on the finite-conductivity system the unresolved edge
+    fields there wrecked the absorption, and with a real corner present the
+    reflected orders too (issue #6, ``docs/theory/integral.md`` section 8).
+    With no real corner the whole closed curve is filtered
+    (:func:`~gratinglab.profiles.smoothed_polyline`) and meshed at equal
+    arc length. With real corners each side between them is filtered with
+    its corners pinned (:func:`~gratinglab.profiles.smoothed_polygon_sides`)
+    and the mesh is graded at exactly those corners. Every other profile is
     meshed as given whatever is passed.
 
     The profile parameter runs against the dispersion direction,
@@ -142,13 +148,17 @@ def physical_boundary(
     if smoothing is not None and smooths(problem):
         profile = problem.profile
         vertices = len(profile.t)
-        xs, ys = smoothed_polyline(
-            profile.t,
-            profile.y,
-            smoothing / period,
-            samples=max(_SMOOTH_SAMPLES, _SMOOTH_PER_VERTEX * vertices),
-        )
-        curve = _polyline_boundary(xs, ys, n)
+        samples = max(_SMOOTH_SAMPLES, _SMOOTH_PER_VERTEX * vertices)
+        if polyline_has_corners(profile.t, profile.y):
+            xs, ys, corners = smoothed_polygon_sides(
+                profile.t, profile.y, smoothing / period, samples=samples
+            )
+            curve = _polyline_boundary(xs, ys, n, grading=grading, corners=corners)
+        else:
+            xs, ys = smoothed_polyline(
+                profile.t, profile.y, smoothing / period, samples=samples
+            )
+            curve = _polyline_boundary(xs, ys, n)
         smoothed = float(smoothing)
     elif grading:
         curve = problem.profile.boundary(n, grading=grading)

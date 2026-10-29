@@ -10,10 +10,12 @@ the Green's representation, which integrates a localised error away, but the
 absorption is a pointwise product of trace and normal derivative and does not.
 On the TASTE grating's measured groove at 80 eV that put R + A at 1.08.
 
-So the solver meshes such a polygon as a smooth curve by default
-(``profile_smoothing="auto"``, ``docs/theory/integral.md`` section 8). These
-tests hold the fix to the C-method, which treats the polygon exactly, and hold
-everything else to being untouched.
+So the solver can mesh such a polygon as a smooth curve
+(``profile_smoothing="auto"``, ``docs/theory/integral.md`` section 8). It is
+opt-in, because at visible wavelengths the same width moves an already-right
+answer. These tests hold the fix to the C-method, which treats the polygon
+exactly, hold the default to the polygon as given, and hold everything else to
+being untouched.
 
 The groove is built here rather than read from a scan, because the measurement
 data are not committed (``tests/metrology/scans.py``). It is made the way an AFM
@@ -37,7 +39,10 @@ from gratinglab.profiles import (
     Blazed,
     FromProfileData,
     Sinusoidal,
+    polyline_corner_count,
     polyline_has_corners,
+    polyline_rounded_turn,
+    smoothed_polygon_sides,
     smoothed_polyline,
 )
 from gratinglab.solvers import get_solver
@@ -245,9 +250,9 @@ class TestNothingElseMoves:
     def test_analytic_profiles(self, library, profile):
         self.solve_all_ways(Problem(period=PERIOD, profile=profile, coating="Au"), "tabulated")
 
-    def test_a_measured_polygon_with_a_corner(self, library):
-        """A real corner keeps the graded mesh, and the polygon is used as
-        given; provenance says why."""
+    def test_a_measured_polygon_of_corners_and_straight_sides(self, library):
+        """Nothing to smooth: every vertex is a corner the mesh grades, so
+        the polygon is used as given; provenance says why."""
         cornered = FromProfileData(
             t=(0.0, 0.25, 0.30, 0.55, 1.0), y=(0.0, 0.0, 0.08, 0.08, 0.0)
         )
@@ -255,11 +260,35 @@ class TestNothingElseMoves:
         scans = self.solve_all_ways(
             Problem(period=PERIOD, profile=cornered, coating="Au"), "tabulated"
         )
-        assert "graded" in scans[0].provenance.notes["profile"]["reason"]
+        assert "nothing to smooth" in scans[0].provenance.notes["profile"]["reason"]
 
     def test_the_perfect_conductor(self, library):
         scans = self.solve_all_ways(Problem(period=PERIOD, profile=GROOVE), "perfect")
         assert "perfectly conducting" in scans[0].provenance.notes["profile"]["reason"]
+
+
+class TestOptIn:
+    """Smoothing is asked for, never assumed: in the visible its width is not
+    negligible (a sinusoid sampled at 400 points moved by up to 4e-3 at
+    500 nm under "auto" where as given it was right to 2e-5)."""
+
+    def test_the_default_is_the_polygon_as_given(self, library):
+        problem = Problem(period=PERIOD, profile=GROOVE, coating="Au")
+        default = get_solver("integral").solve(
+            problem, MOUNT, [6.199], boundary_points=256, conductivity="tabulated"
+        )
+        given = integral_scan("Au", 6.199, 256, smoothing=None)
+        assert np.array_equal(default.efficiency, given.efficiency, equal_nan=True)
+        assert np.array_equal(default.absorption, given.absorption)
+        assert default.provenance.notes["profile"]["reason"] == "profile_smoothing=None"
+
+    def test_the_energy_warning_points_at_the_option(self, library):
+        """The fault is loud in the energy balance; the warning now says what
+        to try for a measured groove."""
+        scan = integral_scan(LOW_ENERGY, LOW_ENERGY_NM, 512, smoothing=None)
+        assert any('profile_smoothing="auto"' in w for w in scan.provenance.warnings)
+        smoothed = integral_scan(LOW_ENERGY, LOW_ENERGY_NM, 512)
+        assert not any("profile_smoothing" in w for w in smoothed.provenance.warnings)
 
 
 class TestRefusals:
@@ -290,3 +319,92 @@ class TestSmoothedPolyline:
     def test_width_must_be_positive(self):
         with pytest.raises(ValueError, match="sigma"):
             smoothed_polyline([0.0, 0.5], [0.0, 0.1], 0.0, samples=64)
+
+
+def rounded_valley(period=316.0, points=2000, round_nm=2.0):
+    """A 30/70 deg sawtooth whose valley and apex are rounded at 2 nm, as
+    averaging and resampling round a measured valley: about 82 deg of turning
+    within 5 nm, and no vertex over the corner threshold."""
+    apex = np.tan(np.radians(70.0)) / (np.tan(np.radians(30.0)) + np.tan(np.radians(70.0)))
+    depth = np.tan(np.radians(30.0)) * apex * period
+    fine = 8192
+    grid = np.arange(fine) * period / fine
+    height = np.interp(grid, [0.0, apex * period, period], [0.0, depth, 0.0])
+    frequency = np.fft.rfftfreq(fine, d=period / fine)
+    height = np.fft.irfft(
+        np.fft.rfft(height) * np.exp(-2.0 * np.pi**2 * round_nm**2 * frequency**2),
+        n=fine,
+    )
+    t = np.linspace(0.0, 1.0, points)
+    y = np.interp(t * period, grid, height, period=period)
+    return FromProfileData.along_dispersion(t, (y - y[0]) / period, blaze_angle=30.0)
+
+
+class TestRoundedCornerWarning:
+    """The known limitation, made visible. A corner rounded into many slight
+    bends is a curvature the mesh must resolve, and smoothing cannot remove
+    it. The repository's synthetic tip-dilated blazed scan, whose valley
+    turns 104 deg over +-5 nm, had R 9.6e-2, 3.1e-2, 7.5e-3 from the
+    converged C-method at 256, 512, 1024 points, smoothed or not
+    (docs/theory/integral.md section 8). So the solver says so."""
+
+    def test_the_statistic_separates_the_cases(self):
+        assert polyline_rounded_turn(GROOVE.t, GROOVE.y, 5.0 / PERIOD) < 20.0
+        valley = rounded_valley()
+        assert polyline_rounded_turn(valley.t, valley.y, 5.0 / 316.0) > 70.0
+        assert not polyline_has_corners(valley.t, valley.y)
+
+    def test_a_rounded_valley_is_warned_about(self, library):
+        problem = Problem(period=316.0, profile=rounded_valley(), coating="Au")
+        scan = get_solver("integral").solve(
+            problem, MOUNT, [6.199], boundary_points=256, conductivity="tabulated"
+        )
+        assert any("rounded tighter" in w for w in scan.provenance.warnings)
+
+    def test_the_converging_groove_is_not(self, ladder):
+        for scan in ladder["Au", 6.199]:
+            assert not any("rounded tighter" in w for w in scan.provenance.warnings)
+
+    def test_not_under_the_perfect_conductor(self):
+        problem = Problem(period=316.0, profile=rounded_valley())
+        scan = get_solver("integral").solve(problem, MOUNT, [6.199], boundary_points=256)
+        assert not any("rounded tighter" in w for w in scan.provenance.warnings)
+
+
+#: The same etched trapezoid with its corners left sharp: they fall between
+#: pixels, so each becomes a pair of real corners (7 in all), and the sides
+#: carry the pixels' slight bends.
+SHARP = measured_groove(round_nm=0.001)
+
+
+class TestSmoothingBetweenCorners:
+    """A measured polygon with real corners: each side between them is
+    smoothed, the corners stay where they are and are graded."""
+
+    def test_the_corners_are_kept_exactly(self):
+        t, y = np.asarray(SHARP.t), np.asarray(SHARP.y)
+        xs, ys, corners = smoothed_polygon_sides(t, y, 2.0 / PERIOD, samples=16384)
+        assert len(corners) == polyline_corner_count(t, y) == 7
+        originals = {(round(a, 12), round(b, 12)) for a, b in zip(t, y)}
+        assert all((round(xs[i], 12), round(ys[i], 12)) in originals for i in corners)
+        assert np.all(np.diff(xs) > -1e-12)  # one period, in order
+
+    def test_closes_where_the_polygon_as_given_stalls(self, library):
+        """Measured 2026-10-29 at the 80 eV-like index: R + A - 1 of 9.2e-4,
+        2.1e-3, 1.1e-3, 9.0e-4, 5.8e-4 at 256, 512, 768, 1024, 1536 points,
+        falling at about first order from 768, against 1.6e-2, 1.2e-2,
+        1.05e-2 as given. R stays 4e-5 from the C-method at every mesh."""
+        smoothed = integral_scan(LOW_ENERGY, LOW_ENERGY_NM, 1024, profile=SHARP)
+        given = integral_scan(LOW_ENERGY, LOW_ENERGY_NM, 1024, smoothing=None, profile=SHARP)
+        closure = abs(reflected(smoothed)[0] + smoothed.absorption[0] - 1.0)
+        stalled = abs(reflected(given)[0] + given.absorption[0] - 1.0)
+        assert closure < 1.5e-3
+        assert stalled > 5 * closure
+        note = smoothed.provenance.notes["profile"]
+        assert note["representation"].startswith("smoothed between its corners")
+        assert note["corners"] == 7
+        problem = Problem(period=PERIOD, profile=SHARP, coating=LOW_ENERGY)
+        reference = get_solver("cmethod").solve(
+            problem, MOUNT, [LOW_ENERGY_NM], truncation=40, conductivity="tabulated"
+        )
+        assert abs(reflected(smoothed)[0] - reflected(reference)[0]) < 1e-4
