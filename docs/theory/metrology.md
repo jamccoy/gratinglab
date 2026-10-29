@@ -324,3 +324,162 @@ instead of obtaining it. Connecting them would require substantial work and has
 deliberately not been done: the fit has settings of its own (facet trimming in
 particular), and adopting their defaults silently would conceal a choice that
 changes the answer.
+
+---
+
+## 6. From an SEM cross-section to a groove
+
+Implemented in
+[`boundary/cross_section.py`](../../src/gratinglab/metrology/boundary/cross_section.py)
+as `trace_cross_section`, which takes a `SemImage` (or an array and a pixel
+size) and returns the traced boundary, the averaged groove as a
+`FromProfileData`, and a fitted `Trapezoidal` with uncertainties. It is the
+third row of the table in §4, "What an electron micrograph measures instead",
+turned into a number.
+
+### What it does, in order
+
+1. **Levels.** The median of the region's top rows is the vacuum level and of
+   its bottom rows the material level. The iso-level sits halfway between
+   (`level_fraction`), or is given outright (`level`). A region whose two
+   levels differ by less than four times the vacuum noise is refused rather
+   than traced. Material darker than vacuum is handled by negating the image.
+2. **Edge, per column.** After a light Gaussian smoothing (`smoothing_px`,
+   0.5 by default), each column is scanned downward from the vacuum and the
+   *first* pixel at or above the level, followed by at least two more, is the
+   surface. Its row is interpolated linearly between that pixel and the one
+   above it. The first crossing is the point of the method: an
+   in-lens or secondary-electron image puts a bright rim just inside every
+   surface, and the bulk beneath it may be darker than the rim and even darker
+   than the level. The outer flank of the rim is the surface; the inner flank
+   is not, and a contour tracer would follow both. The run of three rejects an
+   isolated charging speck in the vacuum.
+3. **Edge, across walls.** Where two neighbouring columns cross more than a
+   pixel apart, each row between them is crossed horizontally too, so a steep
+   wall is located to a fraction of a pixel across as well as down. Below its
+   crossing a column is treated as solid, but only a pixel reading *below* the
+   level is raised to the material level. Raising every pixel there also
+   lifted the partly covered pixel at the wall and moved each wall 0.17 nm
+   into the vacuum on a clean render; that was found by the synthetic tests and
+   is why the rule is as narrow as it is.
+4. **Grooves.** A first period comes from the strongest spatial frequency of
+   the traced height. Each ridge's centre is the midpoint of its two
+   half-height crossings, found with hysteresis at a quarter and three quarters
+   of the depth so noise on a wall cannot count as a second wall. A straight
+   line through the centres against their index gives the measured period, its
+   standard error and the placement scatter. A tilted cleave edge is levelled
+   by a line through the *per-groove mean heights*: a least-squares line
+   through the whole trace is biased by the groove shape (the covariance of a
+   periodic function with `x` over whole periods is not zero), and the mean
+   over one period is not.
+5. **Fit.** Every groove with a whole period about its own centre is folded
+   into one period, ridge on `u = 0.5`, heights in periods, and a
+   `Trapezoidal` is fitted to all the folded points at once by **orthogonal**
+   distance (`scipy.optimize.least_squares`), with a horizontal and a vertical
+   offset. Orthogonal, because a vertical residual on a 72° wall is three times
+   the real one and would let the walls outvote the flats. The parameters are
+   chosen so every point inside the bounds is a valid groove: crest width, the
+   base width as a share of the room left, so the floor never closes, and the
+   radius as a share of the largest that fits.
+6. **Uncertainties.** The same fit is run on each groove alone, and every
+   quoted error is the standard deviation across grooves over the square root
+   of their number. That carries the real variation of the etch, not only the
+   pixel noise. Depth and radius in nm also carry the period's error. With a
+   single complete groove the least-squares covariance is used instead and
+   `TrapezoidFit.uncertainty` says `"covariance"`.
+7. **The averaged groove.** Starting from the fitted shape, the orthogonal
+   residuals are binned along it by the arc position of their foot (one bin
+   per pixel of arc), the curve is moved along its normal by each bin's mean,
+   and the projection is repeated on the result until a pass moves nothing by
+   a hundredth of a pixel. One pass is enough where the trapezoid fits. It is
+   not where it does not: an asymmetric groove came back from one pass with its
+   steep wall twice as wide as rendered, and the repeated passes restore it.
+   The averaged groove is therefore model-free, and its distance from the
+   fitted trapezoid (`mean_profile_rms_nm`, `mean_profile_max_nm`) is the
+   honest statement of how well a trapezoid describes the grating.
+
+### Inputs that are inputs, not guesses
+
+| Input | Why the file cannot decide it |
+|---|---|
+| `foreshortened` | `SemImage.foreshortening` is `cos` of the stage tilt when the tilt correction was off, and which image axis it compresses depends on how the piece was mounted. Any image with a factor below one is refused until this is `"vertical"`, `"horizontal"` or `"neither"`, and the factor is then undone on that axis alone. Naming the wrong axis is not silent: it shows as a period wrong by `1 / cos`, which the tests pin |
+| `material_below` | which side of the cleave edge is solid |
+| `image_x_along_dispersion` | which way the columns run against `d̂`. `to_profile` uses `FromProfileData.along_dispersion` when it is true (the default, matching the AFM pipeline's `x_norm`), so `t = 1 - u` as `conventions.md` requires. A symmetric groove does not care; an asymmetric one does, and the tests use one |
+| `period_nm` | optional. A period known from diffraction is better than a few dozen grooves; given, it normalises the profile, and the lattice period is still reported beside it |
+| `region` | the levels are read from the region's top and bottom rows, so it must hold vacuum above and solid below and nothing else |
+
+### Validation
+
+No real micrograph is in the repository, and none may be. The tests render
+cross-sections of a known `Trapezoidal` (`tests/metrology/xsec_synth.py`):
+pixel coverage from an 8×8 supersample, vacuum 40 and material 110 on the
+8-bit scale, an optional bright rim decaying over 4 nm inside the solid, a
+Gaussian beam, Gaussian noise and 8-bit quantisation, at the scale of
+`ogre_xsec/xsec_050` in `findings.md` (2.233 nm pixels, a 163.3 nm period,
+8 whole grooves in 640 columns). The truth is that table's groove: 68 nm deep,
+a crest 0.30 of the period, a 72° wall and a 6 nm radius. Five noise
+realisations per row, measured 2026-10-29 with the defaults:
+
+| case | depth error | wall position, per side | angle error | radius, nm | reported σ depth / angle | scatter between realisations |
+|---|---|---|---|---|---|---|
+| clean, no beam | +0.10 nm | −0.01 nm | −0.01° | 6.7 | noise-free | noise-free |
+| 0.7 px beam | +0.10 | −0.02 | −0.03 | 7.7 | noise-free | noise-free |
+| + noise σ = 6 | +0.11 | −0.02 | −0.04 | 7.6 | 0.028 nm / 0.048° | 0.028 nm / 0.051° |
+| + rim of 40 | −0.15 | +0.56 | −0.05 | 7.2 | 0.024 / 0.038 | 0.025 / 0.035 |
+| + rim of 80 | −0.27 | +0.93 | −0.05 | 7.1 | 0.021 / 0.032 | 0.016 / 0.035 |
+| + rim 80, edge tilted 0.03 | −0.04 | +0.87 | −0.02 | 7.7 | 0.059 / 0.033 | 0.031 / 0.039 |
+
+The reported errors match the scatter between independent images, which is
+what they claim to be. They are **statistical only**: the two systematic rows
+below are larger than any of them, and nothing in the result adds those in.
+
+A vertical wall (the resist line, 223.5 nm deep, 90°) is found at 89.9° and
+223.5 nm; a 45° wall at 45 ± 0.5°.
+
+### What moves the answer, and is not corrected
+
+**The beam rounds every corner.** The level set of a blurred edge moves with
+its curvature, so a corner traced through a beam is rounder than the corner
+was, and the fitted radius reads high. Measured with no noise, true radius
+against beam σ:
+
+| true radius | no beam | 0.7 px (1.6 nm) | 2 px (4.5 nm) |
+|---|---|---|---|
+| 0 | 2.9 | 4.8 | 11.4 |
+| 6 | 6.7 | 7.7 | 12.7 |
+| 12 | 12.5 | 12.9 | 16.1 |
+| 20 | 20.3 | 20.6 | 22.4 |
+
+Close to `R_fit² = R² + R₀²`, with `R₀` about two and a half times the beam σ.
+So a fitted radius is an upper bound, and one below about `2.5 σ` of the beam is
+not resolved at all. The depth, the angle and the widths are not affected:
+the walls are straight and a straight edge does not move.
+
+**A bright rim moves each wall into the vacuum** by 0.5 to 0.9 nm for a rim
+0.6 to 1.1 times the material contrast, the ridge reads that much wider on each
+side and the depth a few tenths of a nanometre shallower. The first crossing
+stops the rim's inner flank being traced; it cannot stop the beam spreading
+the rim's light outward. A threshold method has no way to tell that light from
+the specimen without a model of the detector, and none is attempted.
+Raising `level_fraction` pulls the edge back in, but on an image without a rim
+it moves the edge by the same amount the other way.
+
+### What it cannot do yet
+
+- **Undercut walls.** The trace is a height function (a column has one first
+  crossing), so an overhang is traced as a vertical wall. The averaged groove
+  drops any point that steps back in `u` for that reason, so `to_profile()`
+  is always single-valued. Tracing an undercut wants a true contour follower,
+  which is the one thing a column scan cannot become.
+- **A protective cap.** A cross-section prepared with a deposited cap over the
+  grooves shows grating against cap, not grating against vacuum, and the
+  outermost-surface rule will trace the cap. `level` and a `region` cropped
+  below the cap may get through it; nothing here has been tested on one.
+- **A tilted view of the top surface.** An image holding both the cleave face
+  and the grating's top surface beyond it must be cropped to the face.
+- **Rotation beyond a shear.** A tilted cleave edge is levelled, which is a
+  shear; a rotation of θ also shortens the period by `cos θ`, which is second
+  order and not corrected.
+- **The real micrographs.** `findings.md`'s three OGRE cross-sections are on a
+  machine this was written without access to, so the method has not yet been
+  run on them; its numbers there were read from brightness thresholds by hand.
