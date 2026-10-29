@@ -29,6 +29,21 @@ entries under "Unreleased" into a section named for the new version;
   the solver's reason and fix. One progress bar covers the whole run, and
   Cancel stops it. Built on `compare.sweep` and `compare.align`; the
   drawing and the panel text are in `gui/comparison.py`, without Qt.
+- The measured comparison the roadmap deferred on 2026-10-24 has run, against
+  the ALS October 2021 campaign on OGRE laminar grating I: 251 absolute
+  per-order efficiencies from `als_eff_meas`, orders −2 to 7, 1.03 to
+  2.82 nm. It does not clear the 0.3 gate. The campaign records no groove, so
+  the comparison is a fit over depth and duty cycle, and the best leaves an
+  RMS of 0.0706 that no recorded uncertainty explains; a fit cannot tell a
+  profile error from a solver error, so the solvers stay experimental until
+  that grating's groove is measured. `findings.md`, "The measured comparison
+  ran", has the residuals per order and wavelength. Two open questions close
+  with it: `als_eff_meas`'s recovered alpha is already in
+  `Illumination.alpha_deg`'s convention, pinned by a new test in
+  `tests/test_measured.py`, and the unrecorded polarization does not matter
+  at this graze (TE and TM within 9.1e-4). The numbers were taken before
+  `corner_grading` became 4 by default, with the integral solver converged
+  at that time's equal-arc mesh. The measurement is not in this repository.
 
 ### Changed
 
