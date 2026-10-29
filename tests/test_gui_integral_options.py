@@ -225,24 +225,11 @@ class TestTabulatedConductivity:
                 parsed.problem, parsed.illumination, parsed.wavelengths,
                 IntegralOptionsState(boundary_points="32", conductivity="tabulated"),
             )
-        needed = int(re.search(r"at least (\d+)", refused.value.errors[0].message)[1])
-        # On a graded mesh the floor depends on the count itself (the
-        # coarsest spacing moves with it), so the figure quoted at 32 points
-        # can be a point short at the floor: asked at 32 it said 208, and 208
-        # then needed 209. Step to the first count the form accepts.
-        for points in range(needed, needed + 8):
-            try:
-                options = build_options(
-                    parsed.problem, parsed.illumination, parsed.wavelengths,
-                    IntegralOptionsState(
-                        boundary_points=str(points), conductivity="tabulated"
-                    ),
-                )
-                break
-            except FormErrors:
-                continue
-        else:
-            pytest.fail(f"no count from {needed} to {needed + 7} was accepted")
+        needed = re.search(r"at least (\d+)", refused.value.errors[0].message)[1]
+        options = build_options(
+            parsed.problem, parsed.illumination, parsed.wavelengths,
+            IntegralOptionsState(boundary_points=needed, conductivity="tabulated"),
+        )
         scan = integral.solve(
             parsed.problem, parsed.illumination, parsed.wavelengths, **options
         )
@@ -292,6 +279,43 @@ class TestCornerGrading:
             parsed.problem, parsed.illumination, parsed.wavelengths, **options
         )
         assert scan.provenance.notes["mesh"] == "corner-graded, order 4"
+
+    @pytest.mark.parametrize("grading", ["off", "2", "4", "6"])
+    @pytest.mark.parametrize(
+        "geometry, conductivity",
+        [
+            ({}, "perfect"),
+            ({"coating": "Au"}, "tabulated"),
+            ({"profile_kind": "Lamellar"}, "perfect"),
+            ({"coating": "Au", "wavelength_start": "4.0", "wavelength_stop": "4.5",
+              "wavelength_count": "2"}, "tabulated"),
+        ],
+    )
+    def test_the_quoted_floor_is_exact(self, grading, conductivity, geometry):
+        """The count the refusal names is accepted, and one fewer is not.
+
+        On a graded mesh the floor depends on the count, so the floor computed
+        at the count typed was a node short of the floor at the count it
+        named: the Au scan at 32 points said "at least 208", and 208 then said
+        209. A refusal that names a number the form then refuses is the
+        message being wrong, so it is held to the exact floor."""
+        parsed = build(FormState(**geometry))
+
+        def attempt(points):
+            return build_options(
+                parsed.problem, parsed.illumination, parsed.wavelengths,
+                IntegralOptionsState(
+                    boundary_points=str(points), conductivity=conductivity,
+                    corner_grading=grading,
+                ),
+            )
+
+        with pytest.raises(FormErrors) as refused:
+            attempt(32)
+        quoted = int(re.search(r"at least (\d+)", refused.value.errors[0].message)[1])
+        attempt(quoted)
+        with pytest.raises(FormErrors):
+            attempt(quoted - 1)
 
     def test_the_graded_floor_binds_where_equal_arc_does_not(self):
         """The coarsest graded spacing is about twice the mean, so the count
