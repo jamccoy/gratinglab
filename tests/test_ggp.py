@@ -221,9 +221,18 @@ class TestRealFiles:
 
         profile = read_profile(path)
         assert profile.is_single_valued()
-        assert profile.apex == pytest.approx(0.383, abs=0.01)
+        # 0.617 and not the 0.383 this asserted from M1 until 2026-10-29: the
+        # file's x runs along +d-hat and `to_profile` reflects it into t, so the
+        # apex sits at 1 - 0.383. The expectation was written before that
+        # reflection existed and was never moved with it. The two numbers
+        # summing to one is the whole of the difference.
+        assert profile.apex == pytest.approx(0.617, abs=0.01)
         # A rounded AFM apex, not an ideal sawtooth: the peak is interior.
         assert 0.0 < profile.apex < 1.0
+        # And the reflection is invertible, so the file's own apex is still
+        # where the file puts it.
+        x, y = profile.dispersion_axis()
+        assert x[y.argmax()] == pytest.approx(0.383, abs=0.01)
 
     def test_known_defect_afm_test_ggp_is_truncated(self, ref_dir):
         """`OGRE/AFM_test.ggp` line 164 has a missing x value.
