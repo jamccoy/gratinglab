@@ -1095,6 +1095,9 @@ def _reflecting_graze(problem: Problem, illumination: Illumination):
     - Lamellar tops and bottoms are parallel to the mean surface, so the
       result is exact for them. It omits the vertical walls, which at grazing
       incidence are nearly edge-on.
+    - Trapezoidal has the same flat tops and bottoms, but its walls are tilted
+      and so are neither edge-on nor parallel to the mean surface. The result
+      is exact on the lands and ignores the walls, and says so.
     - Sinusoidal and measured profiles have a local slope that varies across
       the groove, so the mean is an approximation and is recorded as one.
 
@@ -1124,16 +1127,17 @@ def _reflecting_graze(problem: Problem, illumination: Illumination):
             f"active facet, {blaze_angle:g} deg tilt ({origin})",
         )
 
-    exact = kind == "Lamellar"
+    caveat = {
+        "Lamellar": "exact for its flat tops and bottoms, omits the vertical walls",
+        "Trapezoidal": "exact for its flat tops and bottoms, omits the sloped "
+        "sidewalls",
+    }.get(
+        kind,
+        "the local slope varies across the groove, so this is an approximation",
+    )
     return (
         facet_graze(illumination.gamma, 0.0, illumination.alpha),
-        f"mean surface ({kind} has no single facet angle; "
-        + (
-            "exact for its flat tops and bottoms, omits the vertical walls)"
-            if exact
-            else "the local slope varies across the groove, so this is an "
-            "approximation)"
-        ),
+        f"mean surface ({kind} has no single facet angle; {caveat})",
     )
 
 

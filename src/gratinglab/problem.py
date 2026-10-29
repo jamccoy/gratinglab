@@ -15,13 +15,19 @@ from typing import Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .profiles import Blazed, FromProfileData, Lamellar, Sinusoidal
+from .profiles import Blazed, FromProfileData, Lamellar, Sinusoidal, Trapezoidal
 
 __all__ = ["Problem", "ConformalLayer", "AnyProfile"]
 
 #: Profiles that can round-trip through JSON. A ``Profile`` structurally typed
 #: duck can be passed to a solver directly, but only these serialise.
-AnyProfile = Union[Blazed, Lamellar, Sinusoidal, FromProfileData]
+#:
+#: ``Lamellar`` is listed before ``Trapezoidal`` deliberately. A stored profile
+#: carrying only a depth and a duty cycle fits both, and the rectangle is the
+#: one that was meant: a ``Trapezoidal`` always writes its sidewall angle and
+#: corner radius, which ``Lamellar`` then refuses, so a real one still comes
+#: back as itself.
+AnyProfile = Union[Blazed, Lamellar, Sinusoidal, Trapezoidal, FromProfileData]
 
 
 class ConformalLayer(BaseModel):
