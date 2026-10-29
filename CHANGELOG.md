@@ -14,21 +14,31 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
-- A Compare tab in the efficiency window. Tick any of the solvers and it
-  solves the shared geometry with each, using the settings on that solver's
-  own tab, then draws them on one plot (order by the theme's order colour,
-  solver by line style) above a second panel of each solver's difference
-  from a chosen reference, with a log |Δ| option so a 1e-7 agreement
-  between rigorous methods is visible beside the scalar one's. A solver
-  that refuses the problem, such as the C-method on a lamellar sidewall, or
-  whose own tab rejects its settings, is named in the panel with its reason
-  and the others still run. The panel ends every comparison by saying that
-  agreement between solvers is not verification: all four methods are
-  experimental. Each solver's own provenance warnings are listed under its
-  line, word for word, so a verdict such as "EXCEEDS UNITY" arrives with
-  the solver's reason and fix. One progress bar covers the whole run, and
-  Cancel stops it. Built on `compare.sweep` and `compare.align`; the
-  drawing and the panel text are in `gui/comparison.py`, without Qt.
+- Reading Zeiss SmartSEM electron micrographs: `metrology.io.sem.read_sem`
+  returns the image with the instrument's own pixel size attached, together
+  with the magnification, accelerating voltage, working distance, detector,
+  stage tilt and the foreshortening a tilted stage imposes. The TIFF is
+  decoded in-house, as the Nanoscope reader is and for the same reason, so the
+  package still depends on nothing beyond numpy/scipy. A cross-section is the
+  one groove measurement with no tip to deconvolve, the only one that can see
+  an undercut, and the only one that measures the width of a crest, which is
+  the feature an AFM tip rounds away. Three traps the format sets are handled
+  rather than inherited: the burnt-in data bar is detected and cropped (the
+  two instruments draw it differently and one leaves the micrograph showing
+  through it), the palette is not mapped because the stored index is already
+  the detector level, and the full-precision pixel size in the private tag is
+  the *display* pixel, which is twice the image pixel at a store resolution of
+  2048 x 1536. See `docs/findings.md`, "What a cross-section shows that a scan
+  cannot".
+- `profiles.Trapezoidal`: a binary groove with a sidewall angle and a corner
+  radius, which is the shape the cross-sections above show an etched grating
+  to have -- a trench a third narrower at its floor than at its mouth, with
+  crest and floor meeting the sidewall on a radius. It supplies all four
+  representations analytically, including the slope across the fillets, and
+  reduces to `Lamellar` point for point when the sidewall is vertical and the
+  corners are sharp. `Lamellar` is unchanged: it is the idealisation the
+  published benchmark tables are computed for, and the validation rests on it
+  staying exactly that. Not yet offered in the GUI's profile chooser.
 - The measured comparison the roadmap deferred on 2026-10-24 has run, against
   the ALS October 2021 campaign on OGRE laminar grating I: 251 absolute
   per-order efficiencies from `als_eff_meas`, orders −2 to 7, 1.03 to
@@ -44,6 +54,26 @@ entries under "Unreleased" into a section named for the new version;
   at this graze (TE and TM within 9.1e-4). The numbers were taken before
   `corner_grading` became 4 by default, with the integral solver converged
   at that time's equal-arc mesh. The measurement is not in this repository.
+
+## 0.2.7 (2026-10-28)
+
+### Added
+
+- A Compare tab in the efficiency window. Tick any of the solvers and it
+  solves the shared geometry with each, using the settings on that solver's
+  own tab, then draws them on one plot (order by the theme's order colour,
+  solver by line style) above a second panel of each solver's difference
+  from a chosen reference, with a log |Δ| option so a 1e-7 agreement
+  between rigorous methods is visible beside the scalar one's. A solver
+  that refuses the problem, such as the C-method on a lamellar sidewall, or
+  whose own tab rejects its settings, is named in the panel with its reason
+  and the others still run. The panel ends every comparison by saying that
+  agreement between solvers is not verification: all four methods are
+  experimental. Each solver's own provenance warnings are listed under its
+  line, word for word, so a verdict such as "EXCEEDS UNITY" arrives with
+  the solver's reason and fix. One progress bar covers the whole run, and
+  Cancel stops it. Built on `compare.sweep` and `compare.align`; the
+  drawing and the panel text are in `gui/comparison.py`, without Qt.
 
 ### Changed
 

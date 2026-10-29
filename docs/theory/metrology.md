@@ -129,6 +129,31 @@ route requires the period to be supplied again from another source, and
 | Groove residual about the average | **yes**, after sub-pixel registration | `metrics['groove_residual_rms_nm']`, per groove in `metrics['groove_residual_per_groove_nm']` |
 | **RMS surface roughness** (the Névot–Croce σ) | **no** | (none; the residual above is related, and is not it) |
 
+### What an electron micrograph measures instead
+
+The table above is about an AFM scan. A cleaved cross-section, read by
+`metrology/io/sem.py`, is subject to none of the same limits and to several of
+its own, and the two are complementary rather than ranked:
+
+| Quantity | AFM scan | SEM cross-section |
+|---|---|---|
+| Groove depth | yes, absolutely calibrated | yes, but only of the grooves the cleave happens to cross |
+| Facet or sidewall angle | yes, with a propagated uncertainty, subject to tip dilation | yes, free of any tip, subject to the plane of the cleave |
+| Width of a crest or a land | dilated by the tip, which rounds exactly this feature | yes, directly |
+| Undercut | never; a tip cannot reach beneath an overhang | yes |
+| Averaging over many grooves | yes, hundreds per scan | no; one cleave, a few dozen grooves, destructively |
+| Absolute height scale | from the Z sensor | from the pixel size, and foreshortened if the stage was tilted |
+
+The last row is the SEM's counterpart of the tip problem, and it is handled the
+same way: `SemImage.foreshortening` reports `cos` of the stage tilt when the
+instrument's own tilt correction was off, and the reader declines to apply it,
+because which image direction lies across the tilt axis depends on how the
+specimen was loaded and the file does not record that.
+
+The destructive row is why a cross-section is an arbiter and not a routine
+input. It settles a question about a sacrificial piece of a wafer; it cannot be
+run on the grating that is about to fly.
+
 ### Roughness is not computed, and related quantities are not substitutes
 
 `Problem.roughness` denotes high-spatial-frequency surface roughness in nm, the
