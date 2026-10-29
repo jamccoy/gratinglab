@@ -88,8 +88,10 @@ class BoundaryFile:
         This is the same problem ``BoundaryProfile.to_problem`` builds in
         process, which is the purpose of the format; see
         ``tests/test_io_boundary.py``.
-        Roughness is not in the file for the reason that method's docstring
-        gives: nothing here measures surface microroughness.
+        Roughness is not applied, for the reason that method's docstring
+        gives. The measured groove residual travels in
+        ``metrics['groove_residual_rms_nm']`` and is passed only on request,
+        as ``roughness=``.
         """
         from ..problem import Problem
 
