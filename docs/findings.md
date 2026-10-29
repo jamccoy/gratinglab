@@ -1843,7 +1843,12 @@ returns efficiency relative to a perfect reflector, so comparing it to absolute
 measured data charges it the whole 35–39% the model absorbs. It is kept in the
 table as a diagnostic of the diffraction pattern, not as a candidate.
 
-### The verdict on 0.3
+### The verdict on 0.3, from this campaign
+
+*Superseded on 2026-10-29 by "The verdict on 0.3, from the TASTE campaign" at
+the end of this file, which met the criterion. What follows is why this campaign
+could not, and it is still the reason: the absence of a groove. Nothing in it
+was wrong.*
 
 **The criterion is not met.** The roadmap's gate for the solvers to lose their
 experimental status is "use on a real problem, with the integral solver
@@ -1880,6 +1885,744 @@ experimental, and the honest statement of their status is unchanged by this
 work: validated against another implementation of the same method and against
 published tables, not yet against a measured grating.
 
+The second of those two routes is the one that opened: the December 2018 TASTE
+campaign both records its groove and has an AFM scan of the grating, and the
+comparison against it is at the end of this file. The AFM scan of OGRE laminar I
+is still worth taking, because it would make *this* campaign's 251 points a
+prediction too.
+
 Reproduced by `tests/test_measured.py::TestOgreLaminarCampaign`, which skips
 without `als_eff_meas` and `$ALS_DATA_ROOT`. The measurement itself is not in
 this repository and must not be committed.
+
+---
+
+## The TASTE campaign: a measured groove and a measured efficiency, at last
+
+The gate under "The measured comparison ran" closed on the absence of a
+groove: the OGRE campaign recorded none, so the comparison could only be a
+two-parameter fit, and a fit cannot separate a solver error from a profile
+error. The December 2018 TASTE campaign is the case that absence pointed at.
+It has both halves of the pair — 296 absolute per-order efficiencies and an
+AFM scan of the grating they were measured on — and it was published, as
+McCoy, McEntaffer & Miles, *ApJ* **891**, 114 (2020), erratum *ApJ* **926**,
+105 (2022), with its mount in a table and its own model for comparison.
+
+This entry runs: what the reduction had to recover before the data could be
+used at all, a convention error the data found, what the metrology says the
+groove is, the comparison and where its residual lives, the paper's own
+suspicion about the apex tested as a labelled hypothesis, two defects the
+comparison turned up in the solvers themselves, and the verdict on 0.3.
+
+### The published reduction is not the surviving code
+
+`als_eff_meas` gained two campaigns, `taste_dec18_round3a` (440–800 eV) and
+`taste_dec18_round3b` (80–420 eV). They are two and not one because each half
+has its own arc fit: the low-energy half was taken with the beamline's
+triple-mirror order sorter inserted, which moves the beam on the grating. The
+paper allows for this and calls the effect small — "the effect is small and not
+apparent in the measured absolute efficiency data" — and on γ it is not small.
+Round 3a's fit is the published Table 1 to the digit (γ = 1.7304° against
+1.73 ± 0.03, α = 23.3925° against 23.4 ± 0.6, and six more); round 3b's is
+γ = 2.2125°, sixteen published sigmas away.
+
+Both halves reproduce their saved `results/` to better than 5 × 10⁻⁹, which is
+exact at the eight decimals those files carry. Getting there meant discovering
+that **the driver script on disk is not the record of the published run**, three
+times over:
+
+| what the surviving code says | what the saved output needed |
+|---|---|
+| `als_eff_3a.py`: thirty `#delete` blocks | twenty-two points excluded |
+| `als_eff_3b.py`: six `#delete` blocks | none of them applied |
+| `december_2018_taste3b.py`: `R_correct = 1.05 # 0.85` | 0.825, and 1.05 cannot complete the reduction |
+| `als.py`: `throw = ufloat(235.0, 2.0)`; Table 1: 232.0 ± 1.4 mm | 233.0 mm |
+
+For OGRE the driver and the saved output agreed, and
+`als_eff_meas/docs/VERIFICATION.md` warned only that the `#delete` comments
+disagreed with the `#delete` code. Here the whole script post-dates the run.
+`results/` is byte-identical to `results_3a_rev23`, the last of that round's
+twenty-one saved revisions and the state the paper was submitted from a week
+later, so the saved output is the record and the script is a later draft.
+
+Two of those four are worth their own line.
+
+**`R_correct` is not cosmetic.** It scales the fitted arc radius between the
+arc fit and the order prediction, so it decides how many orders are counted as
+propagating. The original's per-energy noise floors are hand-written lists with
+one entry per order, so a wrong value does not give wrong numbers — it raises a
+broadcast error. Those lists are an accidental and strict check on it, and they
+reject the 1.05 that the code actually sets.
+
+**The throw is nobody's published number.** 232.0 ± 1.4 mm admits a tenth order
+at 440–500 eV against the nine the noise lists are written for there; 235.0
+drops a fifteenth at 740–800 eV. 233.0 reproduces all eight of round 3a's geometry
+numbers and all 296 efficiencies, and sits inside Table 1's uncertainty. Round
+3a's efficiencies are insensitive to it anywhere in 232.1–233.9; round 3b's are
+not, and pick out 233.0, so one value serves the whole beamtime.
+
+One thing could not be recovered. Round 3b's module defines no direct-beam
+block, and the `dir_x` its saved α and yaw imply, −0.183 ± 0.005, matches no
+scan surviving in that round: the direct beam sits at −0.161 mm at 80 eV,
+drifts to +0.088 at 180 eV where the gain and the order sorter changed, and
+ends at −0.008 at 420 eV. Round 3a's holds −0.057 to −0.064 across its whole
+sweep. The campaign uses round 3b's own first direct-beam pair instead, which
+gives α = 19.24° against the saved 19.4 and yaw 0.729° against 0.730 — close,
+and still not it. It costs nothing, because `direct_x` feeds only α and yaw and
+neither enters the efficiency reduction, but the α this campaign reports is not
+the mount. Table 1 is the mount.
+
+**Two measured points should not exist.** At Table 1's mount the grating
+equation makes order −4 at 680 eV and order −2 at 340 eV evanescent, and the
+campaign has a measured point for each. Both are the most negative order their
+energy recorded, at the edge of the arc, and order −2 at 340 eV is precisely
+the one point of round 3b whose reduction is sensitive to `R_correct`. The model
+is not wrong to call them evanescent and the reduction is not wrong to have
+found something there, but one of the two is mistaken.
+`tests/test_measured.py::TestTasteCampaign` names them, so their number cannot
+grow quietly.
+
+### The reduction reproduces the paper's prose, not only its files
+
+Agreement with `results/` proves the port, not the physics. Three statements the
+paper makes in words, which no saved file carries, come out of the reduction
+independently:
+
+- **"Peak-order efficiency ranges from about 75% down to 25%."** The strongest
+  non-zero order runs 0.741 at 160 eV down to 0.157 at 760 eV, and the order
+  carrying it walks +1 → +7 as the energy rises, which is the paper's orders 0
+  through 7.
+- **"The sharp cutoff in the measured n = 2 curve at 160 eV."** Order 2 appears
+  at 160 eV and not below, in the reduction as in Figure 13.
+- **"Total relative diffraction efficiency ranges from about 95% to 88% as
+  photon energy increases from 240 to 800 eV."** Summing every measured order
+  and dividing by the Fresnel reflectivity of gold at ζ = 1.73° gives 0.967 at
+  240 eV falling to 0.882 at 800 eV.
+
+The third is worth more than a cross-check. Overlaid on it, the Névot–Croce
+factor for σ = 1.5 nm rms — the paper's Figure 15 argument — tracks it to
+within 0.013 across the whole band, and to within 0.002 below 500 eV:
+
+| eV | measured total / Fresnel Au | Névot–Croce, σ = 1.5 nm |
+|---:|---:|---:|
+| 240 | 0.967 | 0.971 |
+| 320 | 0.952 | 0.951 |
+| 400 | 0.938 | 0.937 |
+| 480 | 0.925 | 0.926 |
+| 560 | 0.909 | 0.916 |
+| 640 | 0.895 | 0.907 |
+| 720 | 0.892 | 0.901 |
+| 800 | 0.882 | 0.895 |
+
+So **the absolute level of this measurement is accounted for to about 1%** by
+gold's reflectivity and a 1.5 nm rms roughness, with nothing structured left
+over. That is a stronger starting point than the OGRE campaign gave: there the
+model diffracted 15% more than the grating did, and normalising the level away
+removed none of the disagreement. Here the level is explained before the
+comparison begins, so what the comparison below finds is almost entirely a
+disagreement about the *distribution among orders*.
+
+One consequence for the solvers. `Problem.roughness` is consumed by the scalar
+solver alone; the three rigorous backends solve the smooth boundary and ignore
+it. The paper applies its roughness factor outside PCGrate for the same reason,
+so the comparison below is run both ways: the rigorous model as the solver
+returns it, and the same model multiplied by the Névot–Croce factor above, which
+is the paper's procedure.
+
+### The erratum does not touch any of this
+
+The erratum (*ApJ* **926**, 105) corrects three things: a missing space in
+Equation 1, a swap of the φ and ϕ glyphs in the online version, and a
+clarification about why the coated bottom plateau looks widened (non-conformal
+EBPVD rather than surface composition). It also replaces Equation 14 with
+φ = arcsin(Δx₀/r) − α, noting that the published form held only for small roll
+and that Table 1's value was derived with the corrected one.
+
+`als_eff_meas.geometry.arc_angles` computes `roll = arcsin(delta_x_zero / R) -
+alpha`, which is the erratum's form, so the port carries the correction without
+having been told about it: the reduction's 1.1744° reproduces the saved −1.17
+and sits inside the published 1.14 ± 0.04. Roll enters nothing this comparison
+uses, but it is worth knowing that the number the port reproduces is the
+corrected one and not the printed equation's.
+
+That same function carries a known grouping quirk — `eta` is computed as
+`(|Δy|/L)·cos(roll)` and not `|Δy|/(L·cos(roll))`, preserved because it is what
+produced the published angles. TASTE's roll is twice OGRE's, so it is worth
+restating the size: the two forms differ by cos²(roll) inside the arcsin, which
+here is 4 parts in 10⁴, or 0.0007° of η against a quoted ±0.04°. Still
+immaterial, now at twice the roll.
+
+### A measured groove has no handedness of its own
+
+Before any of the numbers below meant anything, a convention error had to be
+found, and it was found by the data rather than by reading.
+
+An AFM scan fixes a shape, not an orientation. Nothing in a scan records which
+way the sample faced the beam, or the sign of the fast scan axis against the
+dispersion direction. The convention does fix it: a `.ggp` and the metrology
+pipeline's `x_norm` run along `+d̂`, `t` runs against it, and
+`FromProfileData.along_dispersion` is the one place the two meet
+(`docs/conventions.md`, "Direction of the profile parameter"). Building
+`FromProfileData(t=..., y=...)` straight from a `.ggp` skips that handover and
+solves the groove as its mirror image.
+
+The failure is not loud. At 440 eV, where the campaign's blaze order is n = +4,
+the measured groove through `along_dispersion` puts 0.437 into +4 and 0.092
+into all negative orders together; mirrored, +4 keeps 0.076 and order −2 alone
+grows to 0.224. Both look like a blazed grating. One of them blazes where the
+grating does not, and compared against measured data it reads as a profile
+error rather than as a convention error — the same trap as "The integral solver
+solved every blazed grating as its mirror image", one layer further out, in the
+caller instead of the solver.
+
+`tests/test_measured.py::TestTheMeasuredGroovesHandedness` pins it, needs
+neither the measurement nor an optical-constant table, and so always runs.
+
+### What the AFM says the groove is
+
+Three scans of this grating survive, all at 400 nm period and 2 µm scan width:
+`TASTE_post-test.0_0000{0,1}` from 2018-12-18, ten days after the beamtime, and
+`bareTASTE_ALS.0_00000` from 2022-09-01, a re-scan of the same sample at
+512 rows rather than 128. The mould before coating is there too
+(`final_TASTE.0_00000`, 2018-11-16, peak-to-valley 130 nm, which is the 130 nm
+PMMA the paper names); the coated grating measures 10 nm shallower, exactly as
+the paper reports.
+
+Through `metrology.boundary` with tip correction at the probe's nominal
+condition (Bruker ScanAsyst-Air, R = 2 nm, 17.5° sides):
+
+| scan | rows | grooves | period | depth / period | groove residual | pixels certain |
+|---|---:|---:|---:|---:|---:|---:|
+| post-test 2018, scan 0 | 128 | 4 | 396.2 nm | 0.2933 | 3.68 nm RMS | 96.7% |
+| post-test 2018, scan 1 | 128 | 4 | 412.3 nm | 0.2880 | 11.46 nm RMS | 96.1% |
+| bare 2022 | 512 | 3 | 408.8 nm | 0.2847 | 1.79 nm RMS | 96.3% |
+
+The groove residual is the scatter of the individual grooves about their
+average, and it is what the 2022 re-scan bought: 1.79 nm against 3.7 and
+11.5 nm, from four times the rows. Tip correction changes the depth of none of
+them — 0.2933 to 0.2930 for the worst probe within Bruker's specification,
+0.2933 to 0.2933 for the nominal one — which is the same null result recorded
+under "A nominal tip does not explain the rounded groove", now on a second
+grating: the measured surface is already reachable by any defensible tip, so
+erosion has no hidden depth to return.
+
+Swath statistics on the same scans, which re-measure the same grooves in bands
+of rows and so describe variation rather than independent samples:
+
+| scan | swaths | depth / period | period | shape spread between swaths |
+|---|---:|---:|---:|---:|
+| bare 2022 | 16 | 0.2854 ± 0.0023 | 407.3 ± 5.1 nm | 1.07 nm RMS |
+| post-test 2018 | 8 | 0.2882 ± 0.0037 | 398.5 ± 8.3 nm | 1.93 nm RMS |
+
+Three things follow, and one does not.
+
+**The period is 400 nm.** The AFM's own estimate runs 398.5 ± 8.3 to
+407.3 ± 5.1 nm depending on the scan, and the reduction's re-derivation from the
+measured dispersion gives 401 ± 8 nm in round 3a and 382 ± 14 in round 3b.
+Three of those four cover the lithographic 400 nm within their own scatter; the
+fourth, round 3b's 382 ± 14, falls 1.3σ short of it and is the noisier of the
+two dispersion estimates. So the model takes 400 nm and the AFM is used for
+shape only — and that 382 returns, uncomfortably, under "One number explains the
+residual" below. The alternative, trusting the AFM laterally and rescaling the
+depth to the 400 nm period, moves depth/period from 0.2847 to 0.2910, and its
+effect on the comparison is in the budget below.
+
+**The three scans agree on the shape.** Registered to their best lateral shift
+and compared point for point, the three normalised grooves sit 3.0 to 4.4 nm
+RMS apart, against a depth of 114 nm — and the 2022 scan with and without tip
+correction differ by 0.32 nm. Four years and a different session change the
+measured groove by about 3% of its depth.
+
+**The apex is flat and the floor is flat.** The measured groove is a trapezoid:
+a bottom land of 93–95 nm, a steep side rising at 66–67°, a top land of
+68–70 nm, and a facet descending at 27.9° ± 0.2 (the fitted blaze angle, from
+60 grooves across 20 row groups of the 2022 scan; the 2018 scans fit 29.4 ± 0.2
+and 28.5 ± 0.1). The paper's own fitted trapezoid, from PCGrate and never
+compared against this scan, is a flat top of 77 nm and a bottom of 85 nm at
+blaze 27° and depth 120 nm. The agreement is close enough to be worth saying
+plainly: **the AFM independently confirms the groove the paper fitted to the
+efficiency data**, to about 10 nm on each land and 6 nm in depth.
+
+What does not follow is the steep side. The measured 66–67° is where the
+probe's own flanks sit — 65° for the 25° back face, 72.5° for the 17.5° sides —
+so the AFM cannot distinguish that wall from the near-vertical 88.8° the
+paper's trapezoid needs, and the measurement is consistent with either. This is
+the same tip limit recorded under "A nominal tip does not explain the rounded
+groove", on the other facet.
+
+### Convergence, and one solver that does not reach the tolerance
+
+The tolerance is taken from the measurement rather than from habit: the
+campaign's median σ is 3.0 × 10⁻⁵, so 10⁻⁵ sits below the error bar of every
+point the model is compared against. Three probe wavelengths spanning the band
+— 1.5498, 3.0996 and 15.4980 nm, i.e. 800, 400 and 80 eV — with `plateau` at its
+default of two, so a pass needs three knob values in a row that agree.
+
+| configuration | knob | ladder | last two differences | converged at |
+|---|---|---|---|---:|
+| C-method, `conductivity="tabulated"` | `truncation` | 32–128 | 6.9e-6, 5.3e-6 | **32** |
+| integral, `conductivity="perfect"` | `boundary_points` | 256–1024 | 3.1e-6, 2.0e-6 | **256** |
+| scalar | `quadrature_points` | 65536–1048576 | 2.5e-6, 3.1e-6 | **65536** |
+| integral, `conductivity="tabulated"` | `boundary_points` | 512–2048 | 3.4e-4, 4.9e-5 | **not reached** |
+| RCWA | `truncation` | 20–80 | 3.0e-3, 9.7e-4 | **not reached** |
+
+The two failures are different in kind.
+
+**RCWA is in the wrong regime and says so by not plateauing.** Its differences
+fall by about a factor of three per doubling, so 10⁻⁵ is four or five more
+doublings away, at a truncation near 10³ — an eigenproblem of order 4000 per
+slab, with the slab count tied to the truncation. The reason is the aspect
+ratio: this groove is 114 nm deep at wavelengths down to 1.55 nm, i.e. 74
+wavelengths deep, staircased into slabs. RCWA's answer at truncation 80 is
+nevertheless good, as the cross-method table below shows; what it cannot do at
+this geometry is *demonstrate* that it is.
+
+**The integral solver's tabulated mode converges, slowly, and is accurate well
+before it gets there.** Its differences run 3.4 × 10⁻⁴ then 4.9 × 10⁻⁵ at 2048
+nodes, which is a clean factor of seven per doubling and puts the tolerance one
+more doubling out, at 4096. That rung was not run: at 2048 one wavelength
+already costs over a minute, and the point is already made by the cross-method
+comparison, where the integral solver at 1024 nodes agrees with the *converged*
+C-method to 2 × 10⁻⁵ RMS. So `converged=False` here is a statement about the
+plateau test and not about the answer, and this file's own rule applies —
+"`converged=False` is itself a result and does not indicate a missing one".
+
+A reader deciding what to run at this geometry should note the cost, which is
+the opposite way round from the OGRE case: the C-method reaches the tolerance at
+truncation 32 and sweeps all 37 wavelengths in 24 seconds, where the integral
+method needs 1024 nodes and 50 seconds to get within 2 × 10⁻⁵ of it.
+
+### The comparison
+
+The model is a prediction, not a fit. Every input is measured: the period from
+the lithography and confirmed by two dispersion re-derivations, the mount from
+the paper's Table 1, the groove from the AFM scan through
+`metrology.boundary`, the optical constants from a CXRO export, the roughness
+from the same AFM. Nothing was adjusted to improve the agreement.
+
+One practical note on the optical constants. The table this repository carries
+for the test suite starts at 200 eV, and this campaign starts at 80, so an
+absolute model across the whole band is impossible with it — `lookup` refuses
+rather than extrapolate, which is correct. The runs below use
+`Au_CXRO.dat` from the beamline tree, a CXRO export in the same format covering
+80–1300 eV, supplied through `GRATINGLAB_MATERIALS` as `materials/SOURCES.md`
+describes. That is the table the paper itself used, so the model and the paper's
+own model see identical n(λ). Nothing was added to this repository.
+
+| model | n | RMS | max abs | where | mean |
+|---|---:|---:|---:|---|---:|
+| C-method, tabulated, truncation 64 | 296 | 0.0383 | 0.1079 | order +5, 520 eV | −0.0058 |
+| integral, tabulated, 1024 nodes | 296 | 0.0383 | 0.1079 | order +5, 520 eV | −0.0058 |
+| RCWA, truncation 80 | 296 | 0.0383 | 0.1080 | order +5, 520 eV | −0.0057 |
+| scalar, 65536 points | 296 | 0.0767 | 0.4932 | order 0, 80 eV | +0.0257 |
+
+**The three rigorous methods agree with each other two hundred times more
+closely than any of them agrees with the measurement.**
+
+| pair | RMS difference | max difference |
+|---|---:|---:|
+| C-method vs integral | 2.0e-5 | 2.4e-4 |
+| C-method vs RCWA | 2.0e-4 | 7.3e-4 |
+| integral vs RCWA | 2.0e-4 | 7.3e-4 |
+
+This is the thing the OGRE comparison could not do. Three independent
+formulations — an integral equation on the boundary, a coordinate
+transformation, and a Fourier-space eigenmode expansion through a staircase —
+land on the same 296 numbers to within 7 × 10⁻⁴, so the 0.038 that separates all
+of them from the grating is not the solver. It is the geometry or the
+measurement, and those are now the only candidates left.
+
+### Where the residual is
+
+Per order, C-method at its converged setting:
+
+| order | n | RMS | mean | ⟨measured⟩ | ⟨model⟩ |
+|---:|---:|---:|---:|---:|---:|
+| −4 | 7 | 0.0142 | −0.0061 | 0.0156 | 0.0217 |
+| −3 | 15 | 0.0161 | −0.0062 | 0.0207 | 0.0269 |
+| −2 | 24 | 0.0127 | +0.0020 | 0.0263 | 0.0243 |
+| −1 | 32 | 0.0172 | −0.0013 | 0.0273 | 0.0286 |
+| 0 | 37 | 0.0223 | −0.0047 | 0.0879 | 0.0926 |
+| 1 | 37 | 0.0361 | −0.0064 | 0.1458 | 0.1522 |
+| 2 | 33 | 0.0360 | −0.0062 | 0.1112 | 0.1174 |
+| 3 | 29 | 0.0400 | −0.0020 | 0.1021 | 0.1040 |
+| 4 | 26 | 0.0505 | +0.0002 | 0.0975 | 0.0973 |
+| 5 | 22 | 0.0579 | −0.0055 | 0.0973 | 0.1028 |
+| 6 | 16 | 0.0665 | −0.0058 | 0.1125 | 0.1183 |
+| 7 | 11 | 0.0601 | −0.0463 | 0.0778 | 0.1241 |
+| 8 | 7 | 0.0353 | −0.0269 | 0.0150 | 0.0419 |
+
+Three features, and none of them is the OGRE pattern.
+
+**It is not the zero order.** Order 0 carries RMS 0.0223 against a mean measured
+0.0879 — the *best* of the seven orders that carry real power. In the OGRE
+comparison order 0 held RMS 0.1417 and the single largest residual of every
+method, and orders 0 and 1 together were 85% of the total squared residual on
+31% of the points. Here order 0 is modelled better than every order above it.
+
+**There is no parity alternation.** The per-order means run −0.006, −0.006,
++0.002, −0.001, −0.005, −0.006, −0.006, −0.002, +0.000, −0.006, −0.006 for
+orders −4 through 6: all small, all the same sign but one, with no even/odd
+structure. The duty-cycle signature that made the OGRE fit self-contradictory is
+simply absent, which it should be — this groove is not a rectangle and has no
+duty cycle.
+
+**The residual grows with order number.** RMS climbs almost monotonically from
+0.013 at order −2 to 0.067 at order 6 — orders 1 and 2 are the only inversion,
+and they differ by 1 × 10⁻⁴ — and orders
+7 and 8 are over-modelled by 0.046 and 0.027 against measured means of 0.078 and
+0.015 — that is, the model puts 60% and 180% more into them than the grating
+does. The paper saw the same thing and said so: "measured peak-order efficiency
+becomes increasingly diminished relative to the model as order number increases
+beyond n = 4". It is the high orders, the ones most sensitive to the fine
+structure of the groove, that the model gets wrong — which is where a groove
+measured on three periods with a 1.8 nm residual would be expected to fail.
+
+Per energy band, with the ratio of the measured to the modelled sum over the
+orders that band measured:
+
+| eV band | n | RMS | measured/modelled total |
+|---|---:|---:|---:|
+| 80–160 | 11 | 0.0433 | 0.975 |
+| 180–260 | 22 | 0.0476 | 0.968 |
+| 280–360 | 31 | 0.0326 | 0.958 |
+| 380–460 | 40 | 0.0399 | 0.938 |
+| 480–560 | 47 | 0.0430 | 0.916 |
+| 580–660 | 54 | 0.0392 | 0.900 |
+| 680–800 | 91 | 0.0326 | 0.887 |
+
+That ratio is a genuine energy statement: at every one of the 37 wavelengths the
+campaign measured every order the model says propagates, bar the two evanescent
+points named above. It falls monotonically from 0.975 to 0.887, and it is the
+only part of this comparison that is *not* a disagreement about shape — it is
+the roughness the rigorous solvers do not model.
+
+### The roughness, put back the way the paper puts it
+
+`Problem.roughness` reaches the scalar solver only; the three rigorous backends
+solve the smooth boundary. The paper multiplies its own PCGrate output by the
+Névot–Croce factor for σ = 1.5 nm rms at ζ = 1.73°, and doing the same here:
+
+| model | RMS | max abs | mean | 680–800 eV total ratio |
+|---|---:|---:|---:|---:|
+| rigorous, smooth boundary | 0.0383 | 0.1079 | −0.0058 | 0.887 |
+| × Névot–Croce, σ = 1.5 nm | 0.0363 | 0.1136 | −0.0007 | 0.987 |
+
+The factor is not fitted — σ = 1.5 nm is the AFM's number and ζ = 1.73° is
+Table 1's — and it takes the mean residual from −0.0058 to −0.0007 and the
+energy ratio from 0.887 to 0.987. **The band-wide level discrepancy is
+roughness, to within 1.3%, and nothing else.** What it does not do is reduce the
+scatter much (0.0383 to 0.0363) or the maximum (which grows), because the
+factor is smooth in wavelength and the residual is not: it lives in the
+distribution among orders.
+
+This is a cleaner division than the OGRE comparison could draw. There,
+normalising the level away left all of the disagreement behind. Here the level
+is explained by an independently measured roughness and the remainder is
+entirely orderwise.
+
+### What the recorded uncertainties do
+
+Each input perturbed by its own recorded uncertainty, through the converged
+C-method, against the measured groove:
+
+| perturbation | RMS | max shift in the model |
+|---|---:|---:|
+| baseline | 0.03827 | — |
+| γ − 0.03° | **0.02754** | 0.0410 |
+| γ + 0.03° | 0.04901 | 0.0399 |
+| α − 0.6° | 0.03839 | 0.0259 |
+| α + 0.6° | 0.03807 | 0.0171 |
+| period ∓ 0.5 nm | 0.03747 / 0.03908 | 0.0028 |
+| polarization TM | 0.03845 | 0.0068 |
+| groove depth ∓ 1 swath σ (0.0023) | 0.03448 / 0.04211 | 0.0127 |
+| AFM lateral scale: depth × 1.022 | 0.04876 | 0.0347 |
+| roughness 0 or 3 nm | 0.03827 | 0.0000 |
+| fitted blaze angle ∓ 0.23° | 0.03827 | 0.0000 |
+
+**γ's published ±0.03° moves the model by as much as the whole residual.** This
+is the opposite of the OGRE finding, where no recorded uncertainty came within
+an eighth of the disagreement. At γ = 1.70°, one published sigma low, the RMS
+drops to 0.0275; at 1.76° it rises to 0.049. So the comparison does not
+distinguish "the model is right and γ is 1.70" from "γ is 1.73 and 0.038 of the
+residual is real", and the data cannot be made to: γ enters through
+`sin γ`, which sets the whole order spacing, and a 1.7% change in it is a 1.7%
+change in every diffracted angle.
+
+Two entries are zero by construction and are listed so that no reader mistakes
+their absence for a null result. `Problem.roughness` does not reach a rigorous
+solver, as above. `FromProfileData.blaze_angle` reaches only the scalar solver's
+facet reflectivity; a rigorous solver takes the boundary itself and never
+consults the fitted facet angle, which is why ±0.23° on a fit from 60 grooves
+changes nothing here.
+
+The polarization, which the campaign did not record, again does not matter: TE
+and TM differ by at most 6.8 × 10⁻³ across all 296 points, consistent with the
+s/p degeneracy this file already records for these grazes.
+
+### The apex: the paper's suspicion, tested as a hypothesis
+
+The paper offers two accounts of its own groove. Its model is an acute trapezoid
+with a *flat* apex, 77 nm wide, which it attributes to the 100 nm top staircase
+step that the GEBL pattern leaves unexposed and the reflow therefore barely
+touches. Its discussion then suspects something else — that the apex is
+"slightly rounded as a result of the thermal reflow process, but this is
+difficult to verify through AFM because the shape of the SCANASYST-AIR tip is
+convolved with the true grating topography". Flat and rounded are different
+shapes, and the measurement can tell them apart.
+
+Everything below is the integral solver, because the C-method cannot do it: see
+the capability note after the table. All at the recorded mount, all at the
+paper's facet angle of 27°, and all at its depth of 120 nm except the two rows
+that say otherwise. The first four rows hold the total land at the paper's
+77 + 85 = 162 nm and only move it between the floor and the apex, so they are a
+one-parameter family; the last two change the depth and the bottom land
+respectively, and are labelled with what they change. **None of these is the
+main result and none of them is fitted into it.**
+
+| groove | depth (nm) | steep side | RMS | max abs |
+|---|---:|---:|---:|---:|
+| sharp apex, the land all at the floor | 119.9 | 88.8° | 0.0481 | 0.1695 |
+| flat apex 40 nm | 120.0 | 88.8° | 0.0460 | 0.1777 |
+| **flat apex 77 nm — the paper's own fit** | 120.0 | 88.8° | **0.0345** | 0.1573 |
+| flat apex 120 nm | 120.0 | 88.8° | 0.0335 | 0.1093 |
+| sharp apex, reflowed over 20 nm | 115.0 | 88.8° | 0.0446 | 0.1375 |
+| sharp apex, reflowed over 40 nm | 109.9 | 88.8° | 0.0418 | 0.1302 |
+| sharp apex, reflowed over 80 nm | 99.8 | 88.8° | 0.0456 | 0.1567 |
+| sharp apex, reflowed over 160 nm | 79.7 | 88.8° | 0.0930 | 0.3279 |
+| the paper's fit at the measured depth, 114 nm | 113.9 | 82.8° | 0.0284 | 0.1341 |
+| the paper's fit with the bottom land cut to 37 nm, giving the measured 67° steep side | 120.0 | 67.1° | 0.0288 | 0.1554 |
+| **the measured groove, bare 2022** | 113.9 | 67.1° | **0.0383** | 0.1079 |
+| the measured groove, post-test 2018 | 117.3 | 66.4° | 0.0631 | 0.1928 |
+
+"Reflowed over w" is the sharp trapezoid smoothed by a periodic boxcar average
+of width w, which is the simplest model of a thermal reflow: it rounds every
+convex corner, fills every concave one, conserves the enclosed area, is monotone
+in w, and needs no tangency algebra where a 27° facet meets a near-vertical
+wall. It costs depth, as rounding must, and it rounds the floor as well as the
+apex, which reflow also does.
+
+**An unpointed apex is required, and the data prefer it flat.** Going from a
+sharp apex to the paper's 77 nm land improves the RMS by 28%, from 0.0481 to
+0.0345, and widening the land to 120 nm improves it a little further. Rounding
+the same sharp apex does less: 40 nm of reflow gets to 0.0418 and more reflow
+then makes it worse, because rounding takes depth away as it goes while a land
+does not. So the paper's *model* is supported and the paper's *suspicion* is
+not the better of the two accounts it offered. On this measurement the apex is
+flat-topped rather than rounded, which is what the mechanism the paper names —
+an unexposed top step that the reflow does not reach — actually predicts.
+
+**The AFM groove is not the best of these, and that is informative.** The
+measured groove gives 0.0383, which the paper's trapezoid beats when its depth
+is brought to the measured 114 nm (0.0284) or its bottom land cut until the
+steep side matches the measured 67° (0.0288). Each of those is a one-parameter
+nudge within the AFM's own uncertainty, so neither is a rival measurement; both
+are evidence that the measured groove is not yet pinned down to the level the
+comparison can feel. The measured groove's
+defence is that it is a measurement rather than a three-parameter shape, and
+its weakness is visible in this file already: it is an average over three
+periods of a 2 µm scan, and the second scan of the same grating gives 0.0631.
+The honest reading is that these four numbers — 0.028, 0.029, 0.038, 0.063 —
+bracket what is knowable about this groove, and that no member of the family
+does better than 0.028.
+
+**The C-method's guard against a vertical facet is exact, and 88.8° is not
+exact.** The flat-apex trapezoids have a near-vertical anti-blaze side, and the
+C-method does not solve them: it returns RMS between 1.6 and 3.3 with individual
+efficiencies up to 31, against the integral solver's 0.033 to 0.048 on the same
+four grooves. The README says that backend "refuses vertical facets and
+undercuts", and it does — `cmethod/_series.py` raises when a profile has two
+heights at one position (`steps == 0.0`), and for `Lamellar` and
+`Blazed(antiblaze_angle=90)` by type. A wall at 88.8° has a finite step, so it
+passes the guard, and the solver then answers confidently and wrongly on a
+boundary whose slope is 48. `check_energy_balance` catches it immediately, and
+that is currently the only thing that does. Recorded in `docs/roadmap.md` as an
+open question; the guard needs a slope ceiling rather than an equality test.
+
+### One number explains the residual, and nothing can supply it
+
+Every feature of the residual at the recorded geometry points at a single
+scalar. The grating equation reads
+`sin β_m = m λ / (period · sin γ) − sin α`
+(`geometry.sin_beta`), so `period · sin γ` sets every diffracted angle and hence
+every order's blaze wavelength. Table 1 and the lithography give
+400 nm × sin 1.73° = 12.076 nm. The measurement wants 4.6% less.
+
+The sharpest form of the evidence is not the RMS but the position of the blaze
+order, which is a yes/no at each of the 37 energies:
+
+| model | RMS | RMS × Névot–Croce | peak order matches |
+|---|---:|---:|---:|
+| measured groove, Table 1 geometry | 0.0383 | 0.0363 | **31 / 37** |
+| the same, γ = 1.65° (period 400 nm) | 0.0157 | 0.0111 | **37 / 37** |
+| the same, period 382 nm (γ = 1.73°) | 0.0142 | 0.0107 | **37 / 37** |
+
+At the recorded geometry the model's peak order runs one 20 eV step ahead of the
+measurement at 420, 520, 620, 640, 720 and 740 eV — always ahead, never behind.
+Shrink `period · sin γ` by 4.6% and all 37 agree. The paper reports that "the
+measured peak-order positions roughly match those predicted by the model", which
+is what a one-step offset looks like on a plot of eight curves.
+
+**No candidate for the missing 4.6% survives its own measurement.**
+
+- *The period is not 382 nm.* The AFM reads 396 to 412 nm across three scans,
+  with swath scatter of ±5 to ±8 nm, and round 3a's dispersion re-derives
+  401 ± 8 nm. Round 3b's re-derivation gives 382 ± 14 nm, which is the value the
+  comparison wants, but it is the noisier of the two and it disagrees with the
+  AFM at nearly 2σ. A 4.5% error in an e-beam-written period is also not a
+  plausible failure mode.
+- *γ is not 1.65°.* It would need the fitted arc radius to be 6.71 mm against
+  7.036 ± 0.124 (2.6σ low), or the throw to be 244 mm against the published
+  232.0 ± 1.4 (8.8σ high) — and the throw is already the quantity this
+  reduction had to move, to 233.0 mm. Nor is 1.65° some other recorded angle:
+  the graze is 1.56° ± 0.04 and the small-angle combination of graze and yaw is
+  1.706°.
+- *It is not α.* Its published ±0.6° moves the model by 0.026 at most and
+  changes the RMS by 0.0003.
+- *It is partly, but not mostly, the facet angle.* The peak order depends on
+  2δ − α as well as on `period · sin γ`. Holding the mount and the steep side at
+  their measured values and scanning the facet gives an optimum at 26.5–27.0°
+  with RMS 0.0283 and 35–36 of 37 peak orders — better than the AFM's own
+  27.9° (0.0371, 33/37), and notably the paper's 27°. But all three AFM scans
+  fit 27.9° or more, and the AFM's lateral scale reads 2% *high*, which biases a
+  measured facet angle shallow, not steep. So the facet cannot be 1.4° below
+  every scan, and in any case it gets 36/37 where the dispersion scale gets
+  37/37.
+- *It is not the beamline's energy scale.* λ enters only as
+  `λ / (period · sin γ)`, so a 4.6% calibration error would be
+  indistinguishable. The scan files carry a fourth column that
+  `als_eff_meas.io.read_scan` documents as "the actual monochromator energy"
+  and reads for nothing; it is a constant 500.3 in every file of both rounds,
+  at every nominal energy from 80 to 800 eV, so it is not an energy readback
+  and cannot test this. The nominal setpoints are all there is.
+
+So the comparison has produced a sharp, falsifiable statement that the recorded
+geometry cannot accommodate: the dispersion scale of this measurement is 4.6%
+smaller than `400 nm × sin 1.73°`. Either one of the two published numbers is
+wrong by more than its stated uncertainty, or something in the mount is not
+captured by the pair `(period, γ)`. That is a measurement question, and it is
+the one this campaign now hands back.
+
+### What the solver's own checks say, and the one thing they caught
+
+At the converged C-method setting, `check_energy_balance` returns
+`R + A = 1.00000` at all 37 wavelengths, and RCWA at truncation 80 does the
+same. Both compute the absorbed fraction from the solution rather than as
+`1 − R`, so this is a real theorem and not an identity.
+
+**The integral solver fails it, and the failure is a finding.** With
+`conductivity="tabulated"` at 1024 nodes, `check_energy_balance` returns FAIL
+with the total in [1.0001, 1.0827] at 37 of 37 points. The reflected orders are
+not the problem — they match the C-method to 2 × 10⁻⁵ RMS over the whole
+campaign — the independently computed absorption is:
+
+| eV | \|n\| for Au | Σ R, integral − C-method | A, integral | A, C-method | R + A, integral |
+|---:|---:|---:|---:|---:|---:|
+| 800 | 0.9971 | −5.7e-6 | 0.34891 | 0.34883 | 1.00007 |
+| 440 | 0.9946 | −3.3e-7 | 0.32667 | 0.32593 | 1.00073 |
+| 200 | 0.9888 | −3.1e-7 | 0.22232 | 0.22012 | 1.00220 |
+| 160 | 0.9762 | −1.4e-5 | 0.09029 | 0.08661 | 1.00367 |
+| 120 | 0.9445 | −3.2e-6 | 0.06810 | 0.05627 | 1.01182 |
+| 80 | 0.8880 | +3.4e-4 | 0.16107 | 0.07875 | 1.08266 |
+
+The error grows as \|n\| leaves unity — not quite monotonically; there is
+structure of a few parts in 10⁴ around the 340 eV region — and reaches 8% of the
+incident power at 80 eV, where the integral solver's absorption is twice the
+C-method's. **It also grows with refinement** — 3.9% at 512 nodes, 8.3% at 1024,
+8.1% at 2048 — so it is not a discretisation error that more mesh would cure but
+something in the absorption integral itself. It is also what spoils that
+solver's convergence plateau: dropping the 80 eV point from the probe moves the
+last two differences from 2.7e-4, 3.4e-4 to 1.3e-4, 1.9e-5.
+
+Nothing in this entry's comparison depends on it, because the comparison uses
+reflected orders and those are sound. But an absorption that is wrong by 8% is
+wrong, it is invisible to a caller who does not run the energy check, and it is
+recorded in `docs/roadmap.md` as an open question with the diagnosis above.
+
+### The verdict on 0.3, from the TASTE campaign
+
+**The comparison the criterion asks for is met. The solvers keep their
+experimental status until the two defects this comparison found are fixed**:
+the integral solver's absorption with tabulated metals
+([#6](https://github.com/jamccoy/gratinglab/issues/6)) and the C-method on
+near-vertical walls ([#7](https://github.com/jamccoy/gratinglab/issues/7)), both recorded below.
+
+The gate asks for "use on a real problem, with the integral solver compared
+against measured efficiencies ... and not only against published benchmarks and
+its own physics checks", and the roadmap's gloss on it, written when the OGRE
+comparison failed, says what the words were for: the gate "exists to establish
+that the solver is right about a real grating", and "needs a measured groove for
+the grating that was measured", because "a fit cannot separate a profile error
+from a solver error".
+
+That separation has now been made, and not by one solver's word:
+
+- **The comparison is a prediction.** Period from the lithography and confirmed
+  by dispersion, mount from the paper's Table 1, groove from the grating's own
+  AFM scan through `metrology.boundary`, optical constants from a CXRO export,
+  roughness from the same scan. No parameter was adjusted. 296 absolute
+  per-order efficiencies over 80–800 eV and orders −4 to 8 come out at RMS
+  0.0383, and 0.0363 with the roughness factor the paper applies.
+- **The residual is demonstrably not the solver.** Three independent rigorous
+  formulations agree with each other to 2 × 10⁻⁴ RMS and 7 × 10⁻⁴ at worst while
+  all three sit 0.038 from the grating. The OGRE comparison could only assert
+  that the solver was probably not the error, on the strength of evidence
+  gathered elsewhere. This one measures it.
+- **The absolute level is accounted for.** The sum over all measured orders
+  divided by Fresnel gold tracks the Névot–Croce factor for the AFM's own
+  1.5 nm rms to within 1.3% across the whole band, and applying that factor
+  takes the mean residual from −0.0058 to −0.0007. What is left of the level is
+  at the 1% mark and carries no structure.
+- **What is left is one scalar, and it is a measurement question.** The whole
+  residual is consistent with `period · sin γ` being 4.6% smaller than
+  400 nm × sin 1.73°: supply that and the RMS falls to 0.014 and all 37
+  blaze-order positions agree instead of 31. Neither published number can move
+  that far within its own uncertainty, so the question goes back to the mount,
+  not to the solver.
+
+For comparison, the OGRE attempt reached RMS 0.0706 on a *fitted* two-parameter
+groove, with order 0 holding the largest residual of every method, a duty-cycle
+parity signature the fit could not satisfy, and no recorded uncertainty within
+an eighth of the disagreement. This campaign reaches half that residual with
+nothing fitted, models the zero order better than any other order, shows no
+structural signature of a wrong profile family, and has its whole disagreement
+reproduced by one input — the dispersion scale `period · sin γ` — moving 4.6%,
+which is 2.7σ on the published γ or 1.3σ on the noisier of the two dispersion
+re-derivations of the period.
+
+**Three things this does not claim.**
+
+It does not claim the solvers are validated to the measurement's precision. The
+campaign's median σ is 3.0 × 10⁻⁵ and the residual is 1200 times that. What is
+established is agreement at the level the grating's *geometry* is known, which
+is as far as a comparison against a real grating can be taken without better
+metrology on it, and the honest statement of the remaining uncertainty is the
+0.028 to 0.063 bracket that the groove family spans.
+
+It does not rest on the integral solver's absorption, which is wrong by up to 8%
+at this geometry (above). The gate names the integral solver, and the integral
+solver's *reflected orders* are what the comparison used and are sound to
+2 × 10⁻⁵ against a converged independent method. Its absorption is a separate
+defect and a separate open question.
+
+It does not close the rounded-groove question for the 315 nm TASTE grating. That
+entry — "The measured groove is rounded rather than faceted" — concerns a
+different grating, and nothing here settles whether *its* rounding is the
+grating or the probe. What this campaign adds is a second grating from the same
+programme where the same question arises, and where the efficiency data answer
+it: the apex is unpointed, and flat rather than rounded.
+
+The remaining work for 0.3 is therefore not more solving. It is the release
+mechanics, the two defects above, and the 4.6% in `period · sin γ`. The README's
+"experimental" wording and the solver table that repeats it still say what they
+said; they change at that release and not in this entry, which only records that
+the criterion they point at has been satisfied.
+
+Reproduced by `tests/test_measured.py::TestTasteCampaign`, which needs
+`als_eff_meas` with both TASTE campaigns registered and its private beamline
+tree at `$ALS_DATA_ROOT` and skips without either, and by
+`tests/test_measured.py::TestTheMeasuredGroovesHandedness`, which needs neither
+and always runs. The measurement is not in this repository and must not be
+committed; nor are the AFM scans, which live in the group's own tree, so the
+profile the committed tests use is the paper's published trapezoid rather than
+the measured groove.
