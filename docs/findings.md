@@ -2625,8 +2625,9 @@ mechanics, the two defects above, and the 4.6% in `period · sin γ`. The README
 said; they change at that release and not in this entry, which only records that
 the criterion they point at has been satisfied.
 
-**Released as 0.3 (2026-10-29).** Both defects are fixed, #6 for measured
-polygons and #7 by a slope floor read from
+**Released as 0.3 (2026-10-29).** Both defects are dealt with: #6 by the
+opt-in `profile_smoothing="auto"`, which the energy-balance warning names when
+it fires on a measured polygon, and #7 by a slope floor read from
 the profile before solving, and the three rigorous solvers dropped
 "experimental". The 4.6% in `period · sin γ` remains open: it is a question
 about the measurement's geometry rather than a solver defect, and it is

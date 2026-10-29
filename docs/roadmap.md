@@ -672,7 +672,8 @@ The intended milestones are as follows.
   defects it found, integral absorption with tabulated metals
   ([#6](https://github.com/jamccoy/gratinglab/issues/6)) and the C-method on
   near-vertical walls ([#7](https://github.com/jamccoy/gratinglab/issues/7)),
-  are fixed. The scalar solver is an approximation and was never on this
+  are dealt with: #7 is refused, and #6 is fixed by the opt-in
+  `profile_smoothing="auto"`. The scalar solver is an approximation and was never on this
   path. Two things stay open and are not solver defects: the 4.6% in
   `period · sin γ` on the TASTE campaign, and the integral solver's absorption
   on a tightly rounded valley, recorded as a limitation in

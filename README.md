@@ -77,9 +77,13 @@ criterion was use on a real problem: on the December 2018 TASTE campaign, 296
 measured efficiencies against the grating's own AFM groove, the integral method,
 the C-method and RCWA agree with one another to 2e-4 RMS and with the
 measurement to 0.038, so the residual is measured not to be the solver. The two
-defects that comparison found, the integral solver's absorption on measured
-polygons and the C-method on near-vertical walls, are fixed. The scalar solver
-is an approximation and is described as one.
+defects that comparison found are dealt with. The C-method refuses a wall too
+steep for its truncation. The integral solver's absorption on a measured polygon
+under `conductivity="tabulated"` is fixed by `profile_smoothing="auto"`, which is
+opt-in because it moves finely sampled profiles at long wavelengths; with the
+default the polygon is solved as given, and the energy-balance warning names the
+option when it fires. A tightly rounded valley remains a recorded limitation.
+The scalar solver is an approximation and is described as one.
 
 **Every modelling method here still needs verification**, the rigorous ones
 included. The checks in the table below show that each method reproduces the
