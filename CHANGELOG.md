@@ -10,6 +10,23 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- A Compare tab in the efficiency window. Tick any of the solvers and it
+  solves the shared geometry with each, using the settings on that solver's
+  own tab, then draws them on one plot (order by the theme's order colour,
+  solver by line style) above a second panel of each solver's difference
+  from a chosen reference, with a log |Δ| option so a 1e-7 agreement
+  between rigorous methods is visible beside the scalar one's. A solver
+  that refuses the problem, such as the C-method on a lamellar sidewall, or
+  whose own tab rejects its settings, is named in the panel with its reason
+  and the others still run. The panel ends every comparison by saying that
+  agreement between solvers is not verification: all four methods are
+  experimental. One progress bar covers the whole run, and Cancel stops it. Built on `compare.sweep` and `compare.align`; the
+  drawing and the panel text are in `gui/comparison.py`, without Qt.
+
 ## 0.2.4 (2026-10-28)
 
 ### Fixed
