@@ -599,6 +599,28 @@ What is still undecided, and would be settled by writing it:
   something has to carry them together — which is a decision about the
   metrology's own interfaces and not about this section.
 
+#### The groove residual's two follow-ups
+
+The boundary pipeline measures the groove residual,
+`BoundaryProfile.groove_residual_rms_nm`
+([theory §4](theory/metrology.md)), by registering each groove to the average
+by a sub-pixel shift and a height offset before taking the residual. Two
+things it turned up are not done:
+
+- **The exported average is blurred by the same misregistration.** It is the
+  plain mean of grooves centred on whole pixels, so the set is misaligned by up
+  to half a pixel, which rounds the corners of the averaged groove. Averaging
+  the registered grooves instead would sharpen them. It changes every exported
+  profile and the byte-level `rev3` equivalence pin, so it wants a setting that
+  defaults to today's behaviour, and a check on real scans of how far the depth
+  and the facet angles move.
+- **A per-scan-line residual.** The residual is taken on the row-averaged
+  profile, so roughness that varies along the groove averages away over the
+  scan lines and the number is a lower bound. Taking it per line before the
+  average would keep that roughness, at the cost of carrying the AFM's full
+  noise, which a single scan cannot separate from it. Worth doing only with a
+  way to estimate that noise, such as trace and retrace or a repeated scan.
+
 ---
 
 ## Versioning
