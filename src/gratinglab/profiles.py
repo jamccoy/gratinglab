@@ -269,6 +269,84 @@ def _grading_map(
     return w, dw
 
 
+def _vertex_turns(
+    tx: NDArray[np.float64], ty: NDArray[np.float64]
+) -> tuple[NDArray[np.float64], NDArray[np.float64], NDArray[np.float64]]:
+    """The distinct vertices of the closed polyline ``(tx, ty)`` and the
+    angle in degrees the boundary turns through at each.
+
+    ``(tx, ty)`` ends on the first vertex one period on. Repeated vertices
+    are dropped, because a zero-length edge has no direction.
+    """
+    keep = np.hypot(np.diff(tx), np.diff(ty)) > 0.0
+    vx = tx[:-1][keep]
+    vy = ty[:-1][keep]
+    if len(vx) < 2:
+        return vx, vy, np.zeros(len(vx))
+    ex = np.append(vx[1:], vx[0] + 1.0) - vx
+    ey = np.append(vy[1:], vy[0]) - vy
+    prev_x, prev_y = np.roll(ex, 1), np.roll(ey, 1)
+    turn = np.degrees(
+        np.abs(np.arctan2(prev_x * ey - prev_y * ex, prev_x * ex + prev_y * ey))
+    )
+    return vx, vy, turn
+
+
+def polyline_has_corners(x: ArrayLike, y: ArrayLike) -> bool:
+    """Whether the open vertex list ``(x, y)`` of a polygon spanning one
+    period turns by more than :data:`CORNER_TURN_DEGREES` anywhere, closing
+    through ``(x[0] + 1, y[0])`` as :func:`_polyline_boundary` does."""
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    _, _, turn = _vertex_turns(np.append(x, x[0] + 1.0), np.append(y, y[0]))
+    return bool((turn > CORNER_TURN_DEGREES).any())
+
+
+def smoothed_polyline(
+    x: ArrayLike,
+    y: ArrayLike,
+    sigma: float,
+    samples: int,
+) -> tuple[NDArray[np.float64], NDArray[np.float64]]:
+    """The closed polygon ``(x, y)`` low-passed along its own arc length.
+
+    ``x`` and ``y`` are an open vertex list normalised to the period, closed
+    through ``(x[0] + 1, y[0])``. The polygon is resampled at ``samples``
+    equal arc-length stations, and the periodic parts of both coordinates,
+    ``x(s) - s / L`` and ``y(s)``, are convolved with a Gaussian of standard
+    deviation ``sigma`` (in units of the period, measured along the arc) by
+    multiplying their spectra by ``exp(-2 pi^2 sigma^2 f^2)``. A Gaussian
+    rather than a sharp spectral cut because truncating the spectrum of a
+    polygon rings, and the ringing is curvature the integral method would
+    have to resolve. Parametrising by arc length rather than by ``x`` keeps
+    an undercut profile representable.
+
+    Returns the open list of ``samples`` smoothed points, ready for
+    :func:`_polyline_boundary`.
+    """
+    x = np.asarray(x, dtype=np.float64)
+    y = np.asarray(y, dtype=np.float64)
+    if not sigma > 0.0:
+        raise ValueError(f"sigma must be positive, got {sigma}")
+    tx = np.append(x, x[0] + 1.0)
+    ty = np.append(y, y[0])
+    cumulative = np.concatenate(
+        ([0.0], np.cumsum(np.hypot(np.diff(tx), np.diff(ty))))
+    )
+    total = float(cumulative[-1])
+    if total <= 0.0:
+        raise ValueError("profile has zero arc length")
+    s = np.arange(samples) * (total / samples)
+    drift = s / total
+    xs = np.interp(s, cumulative, tx) - drift
+    ys = np.interp(s, cumulative, ty)
+    frequency = np.fft.rfftfreq(samples, d=total / samples)
+    gain = np.exp(-2.0 * np.pi**2 * sigma**2 * frequency**2)
+    xs = np.fft.irfft(np.fft.rfft(xs) * gain, n=samples) + drift
+    ys = np.fft.irfft(np.fft.rfft(ys) * gain, n=samples)
+    return xs, ys
+
+
 def _graded_polyline(
     tx: NDArray[np.float64],
     ty: NDArray[np.float64],
@@ -284,19 +362,10 @@ def _graded_polyline(
     no point sits on a corner and every point lies on a straight piece with
     an exact normal. The weights are the exact ``ds/dtau / n``.
     """
-    # Drop repeated vertices: a zero-length edge has no direction.
-    keep = np.hypot(np.diff(tx), np.diff(ty)) > 0.0
-    vx = tx[:-1][keep]
-    vy = ty[:-1][keep]
+    vx, vy, turn = _vertex_turns(tx, ty)
     m = len(vx)
     if m < 2:
         return None
-    ex = np.append(vx[1:], vx[0] + 1.0) - vx
-    ey = np.append(vy[1:], vy[0]) - vy
-    prev_x, prev_y = np.roll(ex, 1), np.roll(ey, 1)
-    turn = np.degrees(
-        np.abs(np.arctan2(prev_x * ey - prev_y * ex, prev_x * ex + prev_y * ey))
-    )
     corners = np.flatnonzero(turn > CORNER_TURN_DEGREES)
     if corners.size == 0:
         return None
@@ -980,7 +1049,11 @@ class FromProfileData(_BaseProfile):
 
     The profile is stored as given and interpolated linearly, matching how
     PCGrate treats a polygonal border, so a scalar calculation and a PCGrate
-    run can be driven from the identical geometry.
+    run can be driven from the identical geometry. One solver departs from
+    this: the integral method under ``conductivity="tabulated"`` meshes a
+    profile with no corner as a smooth curve by default, because the polygon's
+    many slight vertices wreck its absorption (issue #6; its
+    ``profile_smoothing`` option, and ``docs/theory/integral.md`` section 8).
 
     Undercut profiles are representable. If ``t`` doubles back, the boundary
     is not a function of position and :meth:`height` and

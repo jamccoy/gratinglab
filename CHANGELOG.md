@@ -107,6 +107,30 @@ entries under "Unreleased" into a section named for the new version;
   end, and the segment between them (about 1e-17 long, pointing anywhere) read
   as a corner, so the graded mesh put two nodes on one point and the integral
   solver refused every `boundary_points`. The zero-width run is skipped now.
+- The integral solver's absorption on a measured groove (#6). With
+  `conductivity="tabulated"`, a `FromProfileData` profile with no corner, which
+  is what an AFM export usually is, returned an absorbed fraction that was
+  wrong and did not converge: R + A reached 1.08 on the TASTE grating's
+  measured groove at 80 eV, twice the C-method's absorption, while the
+  reflected orders agreed with the C-method to 2e-5. The absorption formula was
+  right. The cause was the geometry: such a profile is a polygon of thousands
+  of points, every one a slight corner of the metal interface, too slight to
+  grade towards (under 10 deg) and too many to resolve, and the boundary fields
+  came out wrong beside every vertex. The reflected orders pass through a
+  smoothing integral and survive that; the absorption is a pointwise product
+  and does not, and the error scales with how far |n| is from 1, which is why
+  every earlier check, all near |n| = 1, passed. The solver now meshes such a
+  polygon as a smooth curve, low-passed along its arc by a Gaussian one
+  sixteenth of the shortest transverse wavelength in the scan wide, chosen by
+  the new `profile_smoothing` option (`"auto"`, a width in nm, or `None` to
+  mesh the polygon as given, which is how PCGrate joins it), and records what
+  it meshed in `provenance.notes["profile"]`. On that groove R + A - 1 now
+  falls 1.9e-3, 1.3e-4, 7.4e-6 at 256, 512, 1024 points, against 2.5e-2,
+  5.3e-2, 2.4e-2 before, and the converged C-method gives the same R to 1e-6
+  for the polygon and a smooth fit of it. Analytic profiles, a measured polygon
+  with a real corner and the perfectly conducting condition come out bit for
+  bit as before. See `docs/theory/integral.md` section 8, "A measured polygon".
+
 
 ## 0.2.8 (2026-10-29)
 

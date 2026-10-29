@@ -21,8 +21,21 @@ import numpy as np
 from numpy.typing import NDArray
 
 from ...problem import Problem
+from ...profiles import (
+    FromProfileData,
+    _polyline_boundary,
+    polyline_has_corners,
+    smoothed_polyline,
+)
 
-__all__ = ["PhysicalBoundary", "physical_boundary"]
+__all__ = ["PhysicalBoundary", "physical_boundary", "smooths"]
+
+#: Stations at which a smoothed polygon is resampled before the equal-arc
+#: mesh is taken from it: at least this many, and this many per measured
+#: vertex. Fixed by the profile alone, never by ``n``, so the smoothed curve
+#: is the same geometry at every rung of a convergence ladder.
+_SMOOTH_SAMPLES = 16384
+_SMOOTH_PER_VERTEX = 8
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,6 +47,9 @@ class PhysicalBoundary:
     and holds the per-node quadrature weights of a graded mesh otherwise.
     ``polygon`` is a graded mesh's open vertex list ``(x, y)`` in nm, on
     whose straight pieces every node lies, and ``None`` otherwise.
+    ``smoothed`` is the Gaussian width in nm when a measured polygon was
+    meshed as a smooth curve (:func:`physical_boundary`), and ``None`` when
+    the profile was meshed as given.
     """
 
     x: NDArray[np.float64]
@@ -43,6 +59,7 @@ class PhysicalBoundary:
     arc_length: float
     weights: NDArray[np.float64] | None = None
     polygon: tuple[NDArray[np.float64], NDArray[np.float64]] | None = None
+    smoothed: float | None = None
 
     @property
     def graded(self) -> bool:
@@ -80,14 +97,36 @@ class PhysicalBoundary:
         return float(self.weights.max()) * len(self.x)
 
 
+def smooths(problem: Problem) -> bool:
+    """Whether :func:`physical_boundary` would mesh this profile as a smooth
+    curve when asked to: a measured polygon (:class:`FromProfileData`) with
+    no vertex turning by more than
+    :data:`~gratinglab.profiles.CORNER_TURN_DEGREES`."""
+    profile = problem.profile
+    return isinstance(profile, FromProfileData) and not polyline_has_corners(
+        profile.t, profile.y
+    )
+
+
 def physical_boundary(
-    problem: Problem, n: int, *, grading: int = 0
+    problem: Problem, n: int, *, grading: int = 0, smoothing: float | None = None
 ) -> PhysicalBoundary:
     """Sample ``problem.profile`` at ``n`` boundary points, in nm.
 
     ``grading`` is passed to the profile only when non-zero, so a profile
     written against the older ``boundary(n)`` signature still serves the
     equal-arc mesh.
+
+    ``smoothing``, a Gaussian width in nm, meshes a measured polygon with no
+    corner (:func:`smooths`) as that polygon low-passed along its arc
+    length (:func:`~gratinglab.profiles.smoothed_polyline`) instead of as
+    straight segments joining its points. Every vertex of such a polygon is
+    a real corner of the interface, too slight to grade towards and too
+    many to resolve, and on the finite-conductivity system the unresolved
+    edge fields at those vertices wrecked the absorption while leaving the
+    reflected orders nearly right (issue #6, ``docs/theory/integral.md``
+    section 8). Every other profile, and a polygon with a real corner, is
+    meshed as given whatever is passed.
 
     The profile parameter runs against the dispersion direction,
     ``t-hat = -d-hat`` (``docs/conventions.md``, "Direction of the profile
@@ -98,12 +137,23 @@ def physical_boundary(
     a blazed grating sent its blaze to the wrong side of the normal while the
     scalar solver, on the same problem, sent it to the documented one.
     """
-    curve = (
-        problem.profile.boundary(n, grading=grading)
-        if grading
-        else problem.profile.boundary(n)
-    )
     period = problem.period
+    smoothed = None
+    if smoothing is not None and smooths(problem):
+        profile = problem.profile
+        vertices = len(profile.t)
+        xs, ys = smoothed_polyline(
+            profile.t,
+            profile.y,
+            smoothing / period,
+            samples=max(_SMOOTH_SAMPLES, _SMOOTH_PER_VERTEX * vertices),
+        )
+        curve = _polyline_boundary(xs, ys, n)
+        smoothed = float(smoothing)
+    elif grading:
+        curve = problem.profile.boundary(n, grading=grading)
+    else:
+        curve = problem.profile.boundary(n)
     graded = bool(getattr(curve, "graded", False))
     polygon = getattr(curve, "polygon", None) if graded else None
     return PhysicalBoundary(
@@ -116,6 +166,7 @@ def physical_boundary(
             np.asarray(curve.ds, dtype=np.float64)[::-1] * period if graded else None
         ),
         polygon=None if polygon is None else _mirrored_polygon(polygon, period),
+        smoothed=smoothed,
     )
 
 
