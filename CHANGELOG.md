@@ -24,6 +24,25 @@ entries under "Unreleased" into a section named for the new version;
   the graze onto the surface, not γ, so the two share only the dispersion
   cosine (conventions §10, row 8).
 
+- **A `.txl` writer: `io.txl.dumps` and `io.txl.write`.** Raith TEXTLIB /
+  LETXTLIB text layouts for a grating, which is the format BEAMER's
+  `import_txl` reads and the one `ebl_fracture` already parses. Lengths in are
+  nanometres (§1) and the file is `UNIT MICRON`, converted here and nowhere
+  else. Two shapes of output, because both appear in the reference files: one
+  boundary per groove, which is the only option when the period varies, and a
+  compact form of one groove plus an `AREF` that repeats it — 252 bytes against
+  90 kB for a 1 mm² grating at 1 µm period, flattening to the same 1000
+  polygons and the same 500,000 µm² when read back. A varying period is given
+  as a callable of position, and each groove's width is the duty cycle of its
+  own *local* period, which is the invariant the 5 mm reference layout holds to
+  as its period sweeps 0.954 → 1.050 µm. `docs/roadmap.md` records why a text
+  layout is inside this package's line while GPF, fields and dose are outside
+  it. A structure name ending in a digit is refused: `ebl_fracture`'s reader
+  recovers an `AREF`'s repeat counts as the bare integers on the line, so
+  `AREF step1 0,0 1000 1,0 1 0,0` parses with 1000 copies becoming 1, and a
+  file written here should not be the one that trips it. `tests/test_txl.py`
+  parses the output with a reader of its own rather than that one, 35 tests.
+
 ## 0.3.2 (2026-10-30)
 
 ### Fixed

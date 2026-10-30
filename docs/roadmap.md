@@ -493,8 +493,19 @@ materials of a grating in hand. There is no object for the grating one intends
 to *make*: period, duty cycle or blaze angle, patterned area, groove
 orientation, and the substrate it goes on. That is the gap a design section
 would fill, and the point worth noticing is that it is *physics and not
-fabrication* — vendor-neutral, with no fields, no subfields, no dose and no
-file format in it.
+fabrication* — vendor-neutral, with no fields, no subfields and no dose in it.
+
+**One file format is written here, and the distinction is deliberate
+(2026-10-30).** `io/txl.py` writes Raith TEXTLIB, because a text layout is
+geometry in microns and nothing more: named structures, polygons, array
+references. It carries none of the things the paragraph above excludes. It
+earns its place because it is the handoff that works *today* — BEAMER's
+`import_txl` reads it and has produced a GPF from a hand-written one
+(21 November 2025), so a designed grating reaches a machine through software
+that already exists, and `ebl_fracture` reads the same format when it is
+ready. Instrument formats stay out: GPF above all, and anything that needs to
+know about fields, subfields, dose ladders or proximity correction. The line is
+not "no formats" but "no *exposures*".
 
 What it buys is the loop. Design → predicted efficiency from the solvers →
 fabricate → measure with the metrology → measured efficiency → compare against
@@ -536,7 +547,9 @@ by accident:
 **What this is not.** General pattern design beyond a grating — arrays,
 alignment marks, dicing lanes, whole-wafer layout — belongs with the layout
 tool and not here. The line to hold is that this package describes gratings as
-optics; the layout tool describes patterns as exposures.
+optics; the layout tool describes patterns as exposures. Writing the grating's
+own grooves as polygons does not cross that line, since a grating *is* what
+this package describes; writing the frame they sit in would.
 
 **The four questions, answered (2026-10-24).** Three of them the existing code
 already decides; the fourth is the one that makes the section worth building.
