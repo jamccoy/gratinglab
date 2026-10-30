@@ -357,9 +357,9 @@ across exactly one period, and y is the height as a fraction of that period.
 ```
 
 PCGrate's border-profile import takes the points alone (Aditi, 2026-10-29).
-`GGP_WRITE_HEADER = True`, or the Boundary tab's "Write the PCGrate header"
-box, starts the file with the legacy `3 0 - Polygonal type` /
-`Period: 1 PSC: 1` lines instead. Never write these files with
+A script that needs the legacy `3 0 - Polygonal type` / `Period: 1 PSC: 1`
+lines can call `gratinglab.io.ggp.write_ggp(..., header=True)`; the GUI and
+the CLI never write them. Never write these files with
 `np.savetxt(header=...)`, which prepends `# `.
 
 ---

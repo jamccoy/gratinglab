@@ -216,27 +216,11 @@ def test_the_cli_export_writes_no_header_by_default(tmp_path, monkeypatch):
 
     monkeypatch.setattr(workflows, 'RESULTS_DIR', str(tmp_path))
     settings = AnalysisSettings.from_config()
-    assert settings.ggp_write_header is False
     with contextlib.redirect_stdout(io.StringIO()):
         out = workflows.run_boundary_profile_export(settings, filename=SOURCE)
 
     ggp = read_ggp(out['ggp_path'])
     assert ggp.header_variant == "none"
-    assert len(ggp.t) == len(out['x'])
-
-
-def test_the_cli_export_honours_the_header_setting(tmp_path, monkeypatch):
-    """GGP_WRITE_HEADER = True in config reaches the file the CLI writes."""
-    import gratinglab.metrology.workflows as workflows
-    from gratinglab.io.ggp import read_ggp
-
-    monkeypatch.setattr(workflows, 'RESULTS_DIR', str(tmp_path))
-    settings = AnalysisSettings.from_config().with_(ggp_write_header=True)
-    with contextlib.redirect_stdout(io.StringIO()):
-        out = workflows.run_boundary_profile_export(settings, filename=SOURCE)
-
-    ggp = read_ggp(out['ggp_path'])
-    assert ggp.header_variant == "canonical"
     assert len(ggp.t) == len(out['x'])
 
 

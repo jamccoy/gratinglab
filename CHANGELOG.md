@@ -12,6 +12,20 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+## 0.3.1 (2026-10-29)
+
+### Removed
+
+- **The option to write the `.ggp` header, from the Boundary tab and the
+  config.** The "Write the PCGrate header" checkbox, `GGP_WRITE_HEADER` and
+  the `ggp_write_header` setting are gone, so the GUI and the CLI always write
+  the points alone, which is what PCGrate's border-profile import takes. The
+  header was offered because PCGrate was believed to need it, and that was
+  never tested; a box that writes files PCGrate rejects is only a way to get
+  it wrong. A config that still sets `GGP_WRITE_HEADER` is ignored.
+  `write_ggp(header=True)` stays for scripts, and `.ggp` files with a header
+  still load.
+
 ## 0.3.0 (2026-10-29)
 
 The integral method, RCWA and the C-method are no longer experimental. The

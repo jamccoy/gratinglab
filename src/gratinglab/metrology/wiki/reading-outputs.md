@@ -108,9 +108,9 @@ which is what PCGrate's border-profile import takes:
 0.000500 0.000001
 ```
 
-Tick "Write the PCGrate header" on the Boundary tab, or set
-`GGP_WRITE_HEADER = True`, to start it with the legacy
-`3 0 - Polygonal type` / `Period: 1 PSC: 1` lines instead.
+Files written before 0.3.0 may start with the legacy
+`3 0 - Polygonal type` / `Period: 1 PSC: 1` lines; they still load. A script
+that needs those lines can call `write_ggp(..., header=True)`.
 
 Both columns are normalised: x runs from 0 to 1 across exactly one period, and
 y is the height as a fraction of that period. A groove 0.33 deep in this file is
