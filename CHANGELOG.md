@@ -12,6 +12,8 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+## 0.3.2 (2026-10-30)
+
 ### Fixed
 
 - **A Nanoscope `.spm` is read the same way up as the Gwyddion export of the
