@@ -12,6 +12,27 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+### Fixed
+
+- **Row-group bands are centred, so a scan measures the same read either way
+  up.** The lines that do not divide evenly between the bands used to go to
+  the last band, which moved every boundary when the slow axis was reversed —
+  and the slow axis *is* reversed between a Nanoscope `.spm` and the Gwyddion
+  text export of the same scan, which come out of the two readers row for row
+  in opposite order. On an unaltered image this cost 0.002° of blaze angle;
+  once `groove_orientation` shears the image, each line moves by an amount set
+  by its distance from the centre, and the same reshuffle cost 0.067° between
+  the two readings of one TASTE scan — past the 0.05° the two routes are
+  pinned to agree within. The leftover lines now come off the centre line and
+  the two ends, which leaves the set of bands unchanged under a reversal, and
+  `raw_data_multi_group` reports the count as `rows_unbanded`. Swath
+  statistics are cut by the same function and are centred with it.
+  Row-group numbers on every sample move slightly, since the bands now average
+  different lines: the master sample's mean blaze reads 33.13° where it read
+  33.23°, and the facet-trim sweep in the Facet fitting wiki page was
+  re-measured. Introduced in 0.2.x when groove-orientation correction was
+  added, where no real scan was to hand to catch it.
+
 ## 0.3.1 (2026-10-29)
 
 ### Removed

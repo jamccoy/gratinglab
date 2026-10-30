@@ -61,11 +61,11 @@ On the master sample:
 
 | FACET_TRIM | Mean blaze angle |
 |---|---|
-| 0.05 | 32.94° |
-| 0.10 | 33.23° |
-| 0.15 | 32.84° |
-| 0.20 | 31.58° |
-| 0.25 | 29.99° |
+| 0.05 | 32.89° |
+| 0.10 | 33.13° |
+| 0.15 | 32.71° |
+| 0.20 | 31.49° |
+| 0.25 | 29.94° |
 
 This is a 3.2° change across a plausible range of a single parameter, larger
 than most of the between-sample differences that this software is used to

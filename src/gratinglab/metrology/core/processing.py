@@ -303,21 +303,42 @@ def raw_data_multi_group(data, scan_x_size, n_groups=10):
         n_groups = max(1, n_rows // 3)
         rows_per_group = n_rows // n_groups
     
+    # `n_rows` rarely divides by `n_groups`, and where the leftover lines go
+    # decides whether the bands survive reading the scan the other way up.
+    # Giving them all to the last band -- what this did until 0.3.2 -- moves
+    # every boundary by `leftover` when the rows are reversed, so one scan read
+    # by two routes is cut into two different sets of bands. Harmless while the
+    # image is untouched (0.002 deg of blaze angle), but `align_grooves` shears
+    # each row by an amount that depends on its distance from the centre, and
+    # on a sheared image the same reshuffle cost 0.067 deg between the raw
+    # .spm and the Gwyddion .txt export of one grating.
+    #
+    # So the leftover comes off the centre line and the two ends instead, which
+    # leaves the set of bands unchanged under a reversal. Exactly unchanged
+    # when `n_rows` is odd, since only then does the centre line map to itself;
+    # with an even line count and an odd leftover, one line is still unbanded
+    # from the near side, and that much asymmetry cannot be removed.
+    #
+    # With an even band count the dropped centre line falls on a boundary. With
+    # an odd one the middle band spans it, so that band's `group_ranges` entry
+    # is a line wider than the band -- the same way a masked gap already widens
+    # one -- and a caller slicing by that range reads the extra line.
+    banded = rows_per_group * n_groups
+    leftover = n_rows - banded
+    centre_line = leftover % 2
+    per_end = (leftover - centre_line) // 2
+    rows = np.arange(per_end, n_rows - per_end)
+    if centre_line:
+        rows = rows[rows != (n_rows - 1) // 2]
+
     profiles_nm = []
     group_ranges = []
-    
+
     for i in range(n_groups):
-        # Calculate row range for this group
-        start_row = i * rows_per_group
-        
-        # For the last group, include any remaining rows
-        if i == n_groups - 1:
-            end_row = n_rows
-        else:
-            end_row = (i + 1) * rows_per_group
-        
+        band = rows[i * rows_per_group:(i + 1) * rows_per_group]
+
         # Extract and average rows in this group
-        group_data = data[start_row:end_row, :]
+        group_data = data[band, :]
         profile_avg = nan_mean_rows(group_data)
         
         # Convert to nm and subtract minimum
@@ -325,7 +346,7 @@ def raw_data_multi_group(data, scan_x_size, n_groups=10):
         
         profiles_nm.append(profile_nm)
         # In the image's own line numbers, so a masked gap shows as a wider band
-        group_ranges.append((int(kept_rows[start_row]), int(kept_rows[end_row - 1]) + 1))
+        group_ranges.append((int(kept_rows[band[0]]), int(kept_rows[band[-1]]) + 1))
     
     # Package metadata
     group_info = {
@@ -334,11 +355,17 @@ def raw_data_multi_group(data, scan_x_size, n_groups=10):
         'rows_per_group': rows_per_group,
         'group_ranges': group_ranges,
         'rows_excluded': rows_excluded,
+        # Lines inside the image that no band could take, left out at the
+        # centre and the ends to keep the stack symmetric. Distinct from
+        # `rows_excluded`, which counts lines masked or dropped as scars.
+        'rows_unbanded': int(leftover),
     }
     
     print(f"  Extracted {n_groups} row-group profiles")
     print(f"    Rows per group: {rows_per_group}")
     print(f"    Total rows used: {n_groups * rows_per_group} of {n_rows}")
+    if leftover:
+        print(f"    Lines outside the bands (centre and ends): {leftover}")
     if rows_excluded:
         print(f"    Lines excluded (masked or dropped): {rows_excluded} of {all_rows}")
     

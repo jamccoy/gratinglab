@@ -22,6 +22,24 @@ straightforwardly add information.
 Each band is flattened independently, because the background tilt is not
 necessarily uniform across the image.
 
+## Where the leftover lines go
+
+A line count rarely divides by the number of bands. The lines left over are
+left out, from the centre line and from the two ends, so that the bands sit
+symmetrically about the middle of the image. The count is reported as
+`rows_unbanded`, separately from the lines dropped as scars or masked away.
+
+The placement matters because the same scan can arrive either way up: a
+Nanoscope `.spm` and the Gwyddion text export of that scan disagree about
+which end of the slow axis is stored first. Until 0.3.2 the leftover lines
+were given to the last band, which made every boundary move when the rows were
+reversed. On an image that `groove_orientation` has sheared, each line is
+shifted by an amount that depends on its distance from the centre, so the
+reshuffle changed what each band averaged: on one 401-line scan it moved the
+mean blaze angle by 0.067°, against the 0.002° the two readings of that scan
+otherwise agree to. Centred bands are the same set of bands read either way,
+so the measurement no longer depends on the direction of the slow axis.
+
 ## Why grooves at a scan edge are rejected
 
 `EDGE_EXCLUSION_PERIODS` (0.6 by default) discards any groove detected within
