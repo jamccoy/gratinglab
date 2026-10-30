@@ -1,7 +1,12 @@
 """PCGrate .ggp boundary profiles.
 
-Read liberally (four header variants exist on disk), write one form: the points
-alone by default, the legacy two-line header on request.
+Read liberally (five control-string variants exist on disk), write one form:
+the points alone by default, the two control strings the User's Guide of
+PCGrate-S(X) 6.1 documents in 10.2.2 (p. 63) on request.
+
+The vendor ships 35 polygonal files of its own, and `TestPcgrateOwnFiles`
+checks this module against them rather than against what this module used to
+write. They are not committed; see `corpus.pcgrate_profiles_dir`.
 """
 
 import numpy as np
@@ -10,9 +15,10 @@ import pytest
 from gratinglab.io.ggp import GGP_HEADER, read_ggp, read_profile, write_ggp
 from gratinglab.profiles import FromProfileData, Sinusoidal
 
-from corpus import reference_dir
+from corpus import pcgrate_profiles_dir, reference_dir
 
-CANONICAL = "3 0 - Polygonal type\nPeriod: 1 PSC: 1\n"
+CANONICAL = "3 0 - 20 harmonics - Polygonal type\nPeriod: 1 PSC: 1\n"
+SHORT = "3 0 - Polygonal type\nPeriod: 1 PSC: 1\n"
 POINTS = "0.0 0.0\n0.25 0.2\n0.5 0.3\n0.75 0.1\n1.0 0.0\n"
 
 
@@ -24,19 +30,50 @@ def write_variant(tmp_path, header, name="p.ggp"):
 
 class TestHeaderVariants:
     def test_canonical(self, tmp_path):
+        """The documented pair: 10.2.2 step 2, and every file PCGrate ships."""
         ggp = read_ggp(write_variant(tmp_path, CANONICAL))
         assert ggp.header_variant == "canonical"
         assert ggp.format_valid
         assert len(ggp.t) == 5
 
-    def test_commented_canonical_parses_but_is_flagged(self, tmp_path):
-        """`np.savetxt(header=...)` produces this; PCGrate rejects it."""
-        ggp = read_ggp(
-            write_variant(tmp_path, "# 3 0 - Polygonal type\n# Period: 1 PSC: 1\n")
-        )
-        assert ggp.header_variant == "commented-canonical"
+    def test_the_short_type_line_parses_but_is_flagged(self, tmp_path):
+        """What this module wrote until 2026-10-30.
+
+        It lacks the `- 20 harmonics -` segment, so it is a control string "in
+        another format": legal through the Border Profile Editor, rejected by a
+        direct load. This file was labelled `canonical` and valid until the
+        guide was read.
+        """
+        ggp = read_ggp(write_variant(tmp_path, SHORT))
+        assert ggp.header_variant == "short-type-line"
         assert not ggp.format_valid
         assert len(ggp.t) == 5
+
+    def test_commented_type_line_parses_but_is_flagged(self, tmp_path):
+        """`np.savetxt(header=...)` produces this; a direct load rejects it."""
+        ggp = read_ggp(
+            write_variant(
+                tmp_path,
+                "# 3 0 - 20 harmonics - Polygonal type\n# Period: 1 PSC: 1\n",
+            )
+        )
+        assert ggp.header_variant == "commented-type-line"
+        assert not ggp.format_valid
+        assert len(ggp.t) == 5
+
+    def test_a_canonical_type_line_without_a_period_is_flagged(self, tmp_path):
+        """10.2.3's second error: the second control string is empty."""
+        ggp = read_ggp(write_variant(tmp_path, "3 0 - 20 harmonics - Polygonal type\n"))
+        assert ggp.header_variant == "canonical"
+        assert not ggp.format_valid
+
+    def test_a_tab_is_an_acceptable_separator(self, tmp_path):
+        """10.2.2 says space, and 24 of the 35 files PCGrate ships use a tab."""
+        path = tmp_path / "tabbed.ggp"
+        path.write_text(CANONICAL + POINTS.replace(" ", "\t"), encoding="utf-8")
+        ggp = read_ggp(path)
+        assert ggp.format_valid
+        assert list(ggp.t) == [0.0, 0.25, 0.5, 0.75, 1.0]
 
     def test_commented_columns_parses_but_is_flagged(self, tmp_path):
         ggp = read_ggp(
@@ -55,7 +92,7 @@ class TestHeaderVariants:
         datasets = [
             read_ggp(write_variant(tmp_path, header, f"v{i}.ggp")).y
             for i, header in enumerate(
-                [CANONICAL, "# 3 0 - Polygonal type\n# Period: 1 PSC: 1\n", ""]
+                [CANONICAL, SHORT, "# 3 0 - Polygonal type\n# Period: 1 PSC: 1\n", ""]
             )
         ]
         for other in datasets[1:]:
@@ -67,7 +104,7 @@ class TestEncoding:
     reader assumed used to be the platform's locale. A degree sign in a header
     is where the two differ."""
 
-    HEADER = "3 0 - Polygonal type\nPeriod: 1 PSC: 1 blaze 29.5°\n"
+    HEADER = "3 0 - 20 harmonics - Polygonal type\nPeriod: 1 PSC: 1 blaze 29.5°\n"
 
     @pytest.mark.parametrize("encoding", ["utf-8", "cp1252"])
     def test_a_non_ascii_header_reads_the_same_either_way(self, tmp_path, encoding):
@@ -120,7 +157,7 @@ class TestWriting:
         assert path.read_text(encoding="utf-8").startswith("0.000000 0.000000\n")
         assert read_ggp(path).header_variant == "none"
 
-    def test_writes_the_legacy_header_on_request(self, tmp_path):
+    def test_writes_the_documented_header_on_request(self, tmp_path):
         path = write_ggp(tmp_path / "out.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.3, 0.0],
                          header=True)
         assert path.read_text(encoding="utf-8").startswith(GGP_HEADER + "\n")
@@ -221,8 +258,13 @@ class TestRealFiles:
             pytest.skip("panter1.ggp not in corpus")
 
         ggp = read_ggp(path)
-        assert ggp.format_valid
-        assert ggp.header_variant == "canonical"
+        # `short-type-line`, and no longer valid: this file carries
+        # `3 0 - Polygonal type`, which this project wrote and which lacks the
+        # `- 20 harmonics -` segment PCGrate's first control string needs. It
+        # was labelled `canonical` until the guide was read. The points are
+        # unaffected, and so is every number below.
+        assert ggp.header_variant == "short-type-line"
+        assert not ggp.format_valid
         assert len(ggp.t) == 82
         assert ggp.depth == pytest.approx(0.3119, abs=1e-4)
 
@@ -252,3 +294,178 @@ class TestRealFiles:
             pytest.skip("AFM_test.ggp not in corpus")
         with pytest.raises(ValueError, match="164.*expected an"):
             read_ggp(path)
+
+
+PCGRATE = pcgrate_profiles_dir()
+requires_pcgrate = pytest.mark.skipif(
+    PCGRATE is None,
+    reason="PCGrate's own BorderProfiles unavailable; "
+           "set GRATINGLAB_PCGRATE_PROFILES_DIR",
+)
+
+
+def vendor_polygonal_files():
+    """The border profiles PCGrate ships that are of the polygonal type.
+
+    Selected on the type code at the start of the first control string -- `3 0`
+    is polygonal, while the trapezoidal, trigonometric and sine families start
+    `0 n`, `1 n` and `2 0`. Deliberately not selected on the whole caption:
+    the caption is what `TestPcgrateOwnFiles` is checking, and a selector that
+    read it would make that check circular.
+    """
+    if PCGRATE is None:
+        return []
+    files = []
+    for path in sorted(PCGRATE.glob("*.ggp")):
+        first = path.read_bytes().decode("latin-1").splitlines()[0]
+        if first.split()[:2] == ["3", "0"]:
+            files.append(path)
+    return files
+
+
+@requires_pcgrate
+class TestPcgrateOwnFiles:
+    """The vendor's own files, which are the authority on what it writes.
+
+    Until 2026-10-30 every one of them read back as `commented-canonical` and
+    `format_valid is False`, despite containing no `#` at all: `_classify`
+    compared the first control string against the short form this project
+    wrote, and the real one carries a `- 20 harmonics -` segment the short form
+    omits. Both the label and the verdict were backwards on the only files that
+    settle the question.
+    """
+
+    def test_every_polygonal_file_is_canonical_and_valid(self):
+        files = vendor_polygonal_files()
+        assert len(files) >= 30, f"only {len(files)} polygonal files; corpus thinned?"
+        wrong = {}
+        for path in files:
+            ggp = read_ggp(path)
+            if (ggp.header_variant, ggp.format_valid) != ("canonical", True):
+                wrong[path.name] = (ggp.header_variant, ggp.format_valid)
+        assert not wrong
+
+    def test_the_first_control_string_is_the_one_we_write(self, tmp_path):
+        """Byte for byte, and identical across all 35."""
+        firsts = {
+            path.read_bytes().split(b"\n")[0].rstrip(b"\r")
+            for path in vendor_polygonal_files()
+        }
+        assert firsts == {b"3 0 - 20 harmonics - Polygonal type"}
+
+        path = write_ggp(tmp_path / "ours.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.3, 0.0],
+                         header=True)
+        assert path.read_bytes().split(b"\n")[0] == firsts.pop()
+
+    def test_the_second_control_string_always_carries_a_period(self):
+        """With or without the PSC, which 4 of the 35 leave out."""
+        seconds = [
+            path.read_bytes().decode("latin-1").splitlines()[1]
+            for path in vendor_polygonal_files()
+        ]
+        assert all(line.startswith("Period:") for line in seconds)
+
+    def test_every_polygonal_file_obeys_the_documented_geometry(self):
+        """The rules of 10.2.3 are a closed list; the vendor's files keep it."""
+        offenders = {
+            path.name: violations
+            for path in vendor_polygonal_files()
+            if (violations := documented_violations(
+                path.read_bytes().decode("latin-1"), control_strings=2))
+        }
+        assert not offenders
+
+
+def documented_violations(text, *, control_strings):
+    """The errors of 10.2.3 (p. 63) that `text` would be rejected for.
+
+    The thirteen the guide lists, less the three about the control strings
+    themselves, which `read_ggp` classifies instead. A tab separator is
+    accepted: the guide asks for a space, and 24 of the files PCGrate ships use
+    a tab, so the program reads more than it documents.
+    """
+    lines = text.splitlines()[control_strings:]
+    data = [line for line in lines if line.strip()]
+    problems = []
+
+    if not 2 <= len(data) <= 5000:
+        problems.append(f"{len(data)} data strings, outside 2 .. 5000")
+
+    points = []
+    for number, line in enumerate(data, start=1):
+        if "," in line:
+            problems.append(f"line {number}: a comma, not a decimal point")
+            continue
+        fields = line.split()
+        if len(fields) != 2:
+            problems.append(f"line {number}: {len(fields)} numbers, not 2")
+            continue
+        points.append((float(fields[0]), float(fields[1])))
+
+    if not points:
+        return problems or ["no data points"]
+
+    x = [point[0] for point in points]
+    y = [point[1] for point in points]
+    if min(x) < 0.0 or max(x) > 1.0:
+        problems.append(f"x outside 0 .. 1: [{min(x):g}, {max(x):g}]")
+    if min(y) < 0.0 or max(y) > 100.0:
+        problems.append(f"y outside 0 .. 100: [{min(y):g}, {max(y):g}]")
+    if any(later < earlier for earlier, later in zip(x, x[1:])):
+        problems.append("x decreases")
+    if (x[0], y[0]) != (0.0, 0.0):
+        problems.append(f"first point {(x[0], y[0])}, not (0, 0)")
+    if (x[-1], y[-1]) != (1.0, 0.0):
+        problems.append(f"last point {(x[-1], y[-1])}, not (1, 0)")
+    return problems
+
+
+class TestWrittenFilesObeyTheDocumentedGeometry:
+    """What `write_ggp` produces, against the closed list of 10.2.3 (p. 63).
+
+    Nothing here was failing: the writer already satisfied every rule. The
+    point is that the rules are now known rather than guessed, so a future
+    change to the format, the point count or the resampling cannot quietly
+    break one.
+    """
+
+    @staticmethod
+    def groove(n_points):
+        """A groove that starts and ends on the documented endpoints."""
+        x = np.linspace(0.0, 1.0, n_points)
+        return x, 0.3 * np.sin(np.pi * x) ** 2
+
+    @pytest.mark.parametrize("n_points", [2, 3, 100, 2000, 5000])
+    @pytest.mark.parametrize("header", [False, True])
+    def test_output_has_no_documented_violation(self, tmp_path, n_points, header):
+        x, y = self.groove(n_points)
+        path = write_ggp(tmp_path / "g.ggp", t=x, y=y, header=header)
+        text = path.read_text(encoding="utf-8")
+        assert documented_violations(text, control_strings=2 if header else 0) == []
+
+    def test_a_single_space_separates_the_two_numbers(self, tmp_path):
+        """10.2.2: "to separate X and Y values in strings use the space key"."""
+        x, y = self.groove(50)
+        text = write_ggp(tmp_path / "g.ggp", t=x, y=y).read_text(encoding="utf-8")
+        assert all(line.count(" ") == 1 for line in text.splitlines())
+        assert "\t" not in text
+
+    def test_at_most_sixteen_digits_a_piece(self, tmp_path):
+        """10.2.2 caps a number at 16 digits including the decimal point."""
+        x, y = self.groove(50)
+        text = write_ggp(tmp_path / "g.ggp", t=x, y=y).read_text(encoding="utf-8")
+        assert max(len(field) for line in text.splitlines()
+                   for field in line.split()) <= 16
+
+    def test_the_point_count_is_bounded_by_the_setting(self):
+        """`ggp_n_points` is validated against the same 5000 (10.2.3)."""
+        from gratinglab.metrology.settings import MAX_GGP_POINTS, AnalysisSettings
+
+        assert MAX_GGP_POINTS == 5000
+        base = AnalysisSettings.from_config()
+        assert 'ggp_n_points' not in [
+            field for field, _ in base.with_(ggp_n_points=5000).validate()
+        ]
+        assert 'ggp_n_points' in [
+            field for field, _ in base.with_(ggp_n_points=5001).validate()
+        ]

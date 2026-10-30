@@ -194,7 +194,9 @@ def test_a_requested_header_is_the_uncommented_two_line_form():
     """
     A hashed header is what np.savetxt(header=...) writes by accident. Three
     different header variants were found among the hand-made files before
-    this was automated.
+    this was automated. The first line is the one the User's Guide of
+    PCGrate-S(X) 6.1 specifies in 10.2.2 (p. 63) and that every polygonal file
+    PCGrate ships carries.
     """
     p = _profile(ggp_n_points=100)
     with tempfile.TemporaryDirectory() as scratch:
@@ -203,7 +205,8 @@ def test_a_requested_header_is_the_uncommented_two_line_form():
         with open(path, encoding="utf-8") as handle:
             lines = handle.read().splitlines()
 
-    assert lines[0] == GGP_HEADER.splitlines()[0] == "3 0 - Polygonal type"
+    assert lines[0] == GGP_HEADER.splitlines()[0] == \
+        "3 0 - 20 harmonics - Polygonal type"
     assert lines[1] == "Period: 1 PSC: 1"
     assert not lines[0].startswith('#')
     assert len(lines) == 102, "two header lines plus one per point"

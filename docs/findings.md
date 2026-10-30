@@ -905,24 +905,49 @@ every platform and does not depend on rounding.
 Both rejections are correct behaviour, and both are encoded as tests so that
 they are not mistaken for parser bugs.
 
-### Three `.ggp` header variants on disk, and PCGrate wants none of them
+### Five `.ggp` control-string variants on disk, and what PCGrate documents
 
-| Header | Seen in |
+| Control strings | Seen in |
 |---|---|
-| `3 0 - Polygonal type` + `Period:` | most files |
+| none, points only | Aditi's files, and the default output |
+| `3 0 - 20 harmonics - Polygonal type` + `Period:` | PCGrate's own 35 polygonal exports |
+| `3 0 - Polygonal type` + `Period:` | legacy files written by this project |
 | `# 3 0 - Polygonal type` (hashed) | `*_fix6/7.ggp` |
 | `# X(normalized...)` only | `*_fix{,2,3,4}.ggp` |
 
 `np.savetxt(header=...)` is what produces the hashed variants.
 
-**Corrected 2026-10-29.** This table had a "vendor accepts" column reading yes
-for the first row and no for the other two, and the writer emitted the first
-form on that basis. Nobody had tested it in PCGrate: it was inferred from which
-files sat beside PCGrate runs. Aditi, who loads these into PCGrate through its
-border-profile import, reports that it does not want a header and that she had
-to delete it by hand. So the writer now emits the points alone by default, and
-the legacy header only on request. This project still reads all three, and
-`GgpFile.format_valid` flags only the hashed two, which are accidents.
+**Answered from the vendor manual, 2026-10-30.** The *User's Guide of
+PCGrate-S(X) Series, version 6.1* authors a polygonal `.ggp` step by step in
+10.2.2 (pp. 62–63) and lists the thirteen format errors the program rejects in
+10.2.3 (p. 63). The first control string is `3 0 - 20 harmonics - Polygonal
+type`, verbatim, and all 35 polygonal files the program ships carry exactly
+that line. This project wrote `3 0 - Polygonal type`, which omits the
+`- 20 harmonics -` segment, so `write_ggp(header=True)` produced a first
+control string a direct load rejects; and `_classify` compared against that
+short form, so every one of the vendor's own files read back as
+`commented-canonical` with `format_valid` False, despite containing no `#` at
+all. Both are fixed: the documented pair is what is written and what counts as
+`canonical`, the short form is labelled `short-type-line` and flagged, and the
+geometry rules of 10.2.3 are now asserted against the vendor's files and
+against this writer's output in `tests/test_ggp.py`.
+
+The guide also settles why the headerless practice works: a file with no
+control strings, or with control strings in another format, is explicitly legal
+input — through the Border Profile Editor, which exports it into the program,
+rather than a direct load. Aditi loads these through the border-profile import
+and reports it does not want a header, so the points are still written alone by
+default.
+
+Nothing numerical moved. No solver and no comparison gates on `format_valid` or
+`header_variant`; only the tests read them, and the point data parsed correctly
+under both labels.
+
+Two things the guide does not get quite right about its own program: 24 of the
+35 shipped files separate the columns with a tab, where 10.2.2 says to use the
+space key, and all 35 end in a line break, where a trailing one was reported
+(2026-10-27) to be rejected. The reader accepts tabs; the writer still omits
+the trailing break.
 
 ---
 
