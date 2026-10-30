@@ -45,8 +45,8 @@ wherever both apply.
 |---|---|---|---|
 | Soft X-ray and EUV, grazing incidence, off-plane | X-ray spectroscopy, the founding application | integral (rigorous), scalar (fast) | integral checked order by order against an independent code; corner-graded mesh |
 | Soft X-ray and EUV, grazing incidence, in-plane | grazing monochromators, beamline optics | integral, scalar | served by the same solvers, less exercised |
-| UV to near-IR, in-plane or conical, metallic | spectrometers, monochromators, pulse compression | integral (finite conductivity); C-method and RCWA planned | integral reproduces the published benchmark tables |
-| Dielectric, lamellar and transmission gratings | beam splitters, telecom, transmission spectroscopy | RCWA; integral for one interface into a lossless substrate | RCWA agrees with the integral solver on lamellar gratings; transmitted orders are not yet in `EfficiencyScan`, only their total |
+| UV to near-IR, in-plane or conical, metallic | spectrometers, monochromators, pulse compression | integral (finite conductivity), C-method, RCWA | integral reproduces the published benchmark tables; the three rigorous solvers agree with one another to 2e-4 RMS on the TASTE grooves |
+| Dielectric, lamellar and transmission gratings | beam splitters, telecom, transmission spectroscopy | RCWA; integral for one interface into a lossless substrate | RCWA agrees with the integral solver on lamellar gratings; transmitted orders are recorded in `EfficiencyScan.transmission` |
 | Coated and multilayer gratings | EUV multilayer gratings, protected and overcoated metals | RCWA | `Problem.layers` (conformal, rounded corners) solved by the RCWA; checked against the integral solver where it can say anything, slow in metallic TM |
 | Crossed (2D), volume, radial and VLS gratings | photonic structures, imaging spectrographs | later | not started |
 
@@ -90,7 +90,8 @@ bench.
 | **C-method** ([theory](theory/cmethod.md)) | first slice done (0.2.0): perfect conductor in any mount and one interface into a material, absorbing or lossless, conical and coupled. Validated against Goray & Schmidt Table 3 (Li's C-method), Fresnel, Maréchal–Stroke and the integral solver. Refuses vertical facets and undercuts; slow on sawtooth corners and unstable at high truncation on profiles deeper than about P/2, both reported in provenance. Refuses walls too steep for the truncation since 0.3 (#7). Not experimental since 0.3. No coatings or layer stacks. GUI tab since 0.2.1 |
 | **Integral method** ([theory](theory/integral.md)) | perfect-conductivity and finite-conductivity milestones done. Conical from the start, undercut-capable, with a GUI tab; validated against M&P Table 4.1 and, order by order, against an independent integral-method code on the private corpus (a comparison that also identified the TASTE profile). Not experimental since 0.3, after the TASTE measured comparison. M20 added `conductivity="tabulated"`, the coupled conical system of Goray & Schmidt (2010): absolute efficiencies with absorption recorded, a flat limit equal to Fresnel to 6e-5, their Table 3 reproduced per order, and both boundary conditions selectable in the GUI. A graded corner mesh (`corner_grading`) is done for both boundary conditions |
 
-The suite holds roughly 1450 tests; the skipped tests are those that need the
+The suite holds roughly 2,500 tests (2,539 passed and 52 skipped on
+2026-10-30); the skipped tests are those that need the
 private reference corpus or the AFM scans. The figure is deliberately rounded:
 this line once claimed 328 and was wrong by 400, so `pytest -q` is the authority
 and the figure here gives only the order of magnitude.
@@ -99,22 +100,23 @@ and the figure here gives only the order of magnitude.
 
 ## What is next, in order
 
-**Order from here, as of 2026-10-24.** The numbered sections below keep their
+**Order from here, as of 2026-10-30.** The numbered sections below keep their
 numbers, because other documents cite them by number; this list is the order of
-work:
+work. The first three items of the 2026-10-24 order are done:
 
 1. ~~Measured efficiency in the comparison harness~~: the gratinglab half of
-   the als_eff_meas split is done (unreleased, 2026-10-24); see "Later". It
-   serves the gate the versioning policy sets for the solvers to lose their
-   experimental status. The als_eff_meas half, its `to_measured()` export,
-   remains.
-2. RCWA, written in-house (§1), with layer stacks designed in from the start
-   so that coated and multilayer gratings are not a retrofit. The first slice
-   landed on 2026-10-27 (unreleased); §1 says what remains.
-3. The C-method.
-4. As they become useful: groove-error-degraded resolving power (§2), the
-   analytic profiles in the native format (§5), the PyXFocus formulas (§3) and
-   the JOSS submission (§6).
+   the als_eff_meas split shipped in 0.1.12 (2026-10-24); see "Later". The
+   als_eff_meas half, its `to_measured()` export, remains.
+2. ~~RCWA, written in-house (§1)~~: first slice in 0.2.0 (2026-10-27), with
+   layer stacks from the start; §1 says what remains.
+3. ~~The C-method~~: first slice in 0.2.0 (2026-10-27), refusing walls too
+   steep for its truncation since 0.3.0.
+
+What is left, as it becomes useful: groove-error-degraded resolving power
+(§2), the analytic profiles in the native format (§5), the PyXFocus formulas
+(§3) and the JOSS submission (§6). The solvers' experimental status, which the
+first three served, was lifted in 0.3.0 on the TASTE campaign; see
+"Versioning".
 
 **Run (2026-10-28): the comparison with the ported ALS campaign.** This was
 deferred on 2026-10-24 for want of the beamline tree, which has since been
@@ -125,9 +127,10 @@ both profile families available and the removal of the absolute level. The
 obstacle is that the campaign does not record the grating's groove, so the only
 comparison available is a two-parameter fit, which cannot separate a profile
 error from a solver error. What would close it is metrology on this grating,
-not more solving. The solvers therefore stay experimental; see
-[`findings.md`](findings.md), "The measured comparison ran", and the
-versioning note under 0.3.
+not more solving. The solvers therefore stayed experimental on this campaign;
+see [`findings.md`](findings.md), "The measured comparison ran". The TASTE
+campaign, which does record its groove, cleared the gate the next day, and
+0.3.0 shipped on it; see the versioning note under 0.3.
 
 ### 0. Integral method, moved ahead of RCWA
 
@@ -362,7 +365,7 @@ boundary in either direction.
 
 ### 6. First release + JOSS
 
-0.1.0 was the first release and 0.1.11 (2026-10-24) the latest. Every release
+0.1.0 was the first release and 0.3.2 (2026-10-30) the latest. Every release
 is published to PyPI by Trusted Publishing from
 `.github/workflows/release.yml` on a `v*` tag. That workflow refuses a tag that
 does not match `pyproject.toml`, checks that the wheel and sdist carry no optical
@@ -372,6 +375,11 @@ resolves.
 
 Two items remain: a Zenodo DOI (Zenodo archives only releases made after it is
 switched on, so the archive starts from the next one) and the JOSS submission.
+The release workflow's header says Zenodo listens for the GitHub Release, but a
+search of Zenodo's public records on 2026-10-30 found no gratinglab entry, even
+after 0.3.2. So either the integration is not switched on for this repository,
+or its records are not public yet; the Zenodo GitHub settings page is where to
+check.
 Shipping something citable and correct early is what recruits collaborators, and
 the reordering above strengthens the case: an open integral-method solver checked
 order by order against an established code gives a reviewer something to trust,
@@ -383,13 +391,13 @@ now nothing ships and every coating is the user's own table.
 
 ### Later
 
-C-method, measured-profile fitting, crossed/2D gratings and radial/VLS gratings
-are planned for later. See [`references.md`](references.md) for the literature
+Measured-profile fitting, crossed/2D gratings and radial/VLS gratings are
+planned for later. (The C-method was on this list and shipped in 0.2.0.) See [`references.md`](references.md) for the literature
 mapped to each.
 
 #### Measured efficiency and the als_eff_meas split
 
-**The gratinglab half is done (unreleased, 2026-10-24).** `MeasuredEfficiency`
+**The gratinglab half is done (0.1.12, 2026-10-24).** `MeasuredEfficiency`
 lives in `measured.py`, and `compare.align`/`records` accept it beside
 `EfficiencyScan`, with `Comparison.measured_order` for error-bar plots and
 `Comparison.residuals` for the model at each measured point. The model is swept
@@ -646,9 +654,10 @@ The project follows the usual convention for software before 1.0. A patch
 release (0.1.x) carries fixes and small additions; a minor release (0.x) marks a
 milestone and is also where an interface may change, provided the change is
 stated in [`CHANGELOG.md`](../CHANGELOG.md); 1.0 is a commitment that the public
-interface is stable until 2.0. The releases so far, 0.1.1 to 0.1.11, have all
-been patch releases, although two of them (swath statistics and asymmetric tips)
-added features that would justify a minor version under a stricter reading.
+interface is stable until 2.0. Releases 0.1.1 to 0.1.13 were all patch
+releases, although two of them (swath statistics and asymmetric tips) added
+features that would justify a minor version under a stricter reading. 0.2.0
+and 0.3.0 are the two minor releases so far.
 
 The intended milestones are as follows.
 
@@ -698,7 +707,8 @@ The intended milestones are as follows.
   question for the mount, and it is an open question below. See
   [`findings.md`](findings.md), "The verdict on 0.3, from the TASTE campaign".
 
-  Integrating the in-house RCWA backend is a further minor release.
+  Integrating the in-house RCWA backend was to be a further minor release; it
+  arrived first, in 0.2.0.
 - **1.0**: the public interface is declared stable. That covers `Problem`,
   `BoundaryProfile`, `AnalysisSettings`, the boundary JSON format and the solver
   plugin protocol. The preconditions are that the solvers have been validated
@@ -847,11 +857,17 @@ It does not refuse, and the reason is that its guard is an equality test.
 type; a wall at 88.8° has a finite step and passes. So the README's "refuses
 vertical facets" is true as written and does not cover the case that matters.
 
-`check_energy_balance` catches it at once, and is currently the only thing that
-does. What would fix it: a slope ceiling on that profile check rather than an
-equality, raising the same way, with a message naming the integral method as
-the backend that can do it. The ceiling's value needs measuring — the grooves
-that fail here are at 88.8° and the ones that work are at 67° and 82.8°.
+**Answered in 0.3.0 ([#7](https://github.com/jamccoy/gratinglab/issues/7),
+closed 2026-10-30).** The guard is no longer an equality test. `wall_floor` in
+`solvers/cmethod/__init__.py` reads the truncation a profile needs off its own
+Fourier series before solving: 0.75 × max(B, 3s), where B is the number of
+harmonics holding all but 1e-3 of the power and s the steepest slope. A floor
+above 256 raises `UnsupportedConfiguration`, a truncation below the floor
+raises `ValueError` naming it, and between the floor and twice it a provenance
+warning says the energy balance can understate the error. The ceiling was
+measured rather than chosen, against the integral solver on 24 configurations
+with walls from 45° to 89.5°; the commit that added it, `3089e95`, carries the
+numbers. The paragraphs above are the record of the question as it was asked.
 
 ### The 4.6% in `period · sin γ` for the TASTE campaign
 
@@ -895,7 +911,10 @@ them for both.
 
 ### The groove of OGRE laminar grating I
 
-This is now the 0.3 blocker, and it is metrology rather than software. The
+This was the 0.3 blocker until the TASTE campaign cleared that gate, and it
+is still worth settling: a second measured grating would test the solvers on a
+laminar groove, which TASTE's is not. It is metrology rather than
+software. The
 October 2021 ALS campaign gives 251 absolute per-order efficiencies with
 uncertainties and a period cross-checked two ways, but no groove depth and no
 duty cycle; the original analysis modelled no groove at all, plotting the
