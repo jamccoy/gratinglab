@@ -40,7 +40,7 @@ RESULTS_DIR = os.path.join(PROJECT_ROOT, 'results')
 # half you were standing in.
 #
 # Point GRATINGLAB_AFM_DIR somewhere else to override.
-DEFAULT_AFM_DIR = os.path.join(os.path.expanduser('~'), 'Documents', 'afm_scans')
+DEFAULT_AFM_DIR = os.path.join(os.path.expanduser('~'), 'Documents', 'Research', 'afm_scans')
 DATA_DIR = str(data_root('GRATINGLAB_AFM_DIR', DEFAULT_AFM_DIR))
 
 
