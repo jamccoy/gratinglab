@@ -161,7 +161,11 @@ def test_no_p_value_gets_smaller():
 def test_means_are_untouched_by_the_correction():
     """The whole point: uncertainties change, the measurement does not"""
     r = _result()
-    assert np.isclose(r['mean_angle'], 33.2337, atol=1e-4), (
+    # 33.2337 until 0.3.2, when the leftover scan lines moved off the last
+    # band to the centre and the ends. That shifts which lines each band
+    # averages, so every row-group number on every sample moved a little; what
+    # this test pins is that the ICC correction is not what moves it.
+    assert np.isclose(r['mean_angle'], 33.1294, atol=1e-4), (
         "the master sample's mean moved; the correction must only affect "
         "uncertainty")
 

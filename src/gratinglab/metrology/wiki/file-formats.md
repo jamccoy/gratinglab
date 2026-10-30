@@ -2,7 +2,8 @@
 
 Three input formats are supported: the Bruker/Veeco Nanoscope `.spm` file,
 the Asylum Research `.ibw` file, and a text export from Gwyddion. On the same
-scan the `.spm` and text routes agree to within 0.002°. The `.ibw` route has
+scan the `.spm` and text routes agree to within 0.005°, and to 0.000009°
+with groove-orientation correction off. The `.ibw` route has
 not yet been checked against a file from an instrument; see its section.
 
 ## Text exports
@@ -68,10 +69,33 @@ signal and does not represent topography; passing it through a blaze-angle
 pipeline produces a plausible-looking number with no physical meaning.
 
 Retrace is the default because it is the plane from which this project's
-existing Gwyddion exports were taken: it correlates 0.98 with the export, while
-Trace correlates 0.90. With this default the two input routes agree by
+existing Gwyddion exports were taken: it correlates 1.000000 with the export,
+while Trace correlates 0.92. With this default the two input routes agree by
 construction. Both directions image the same grooves and either is a legitimate
 choice, and the GUI offers a selector when a `.spm` is loaded.
+
+### Which way up
+
+The rows are returned reversed against the order the plane stores them.
+
+Gwyddion reverses the rows of every Nanoscope import, unconditionally:
+`modules/file/nanoscope.c` calls `gwy_data_field_invert(dfield, TRUE, FALSE,
+FALSE)` immediately after scaling the plane, and the first argument of that
+function is `yflipped`, documented as "the image will be flipped upside down".
+It does not consult `\Frame direction`, which reads `Down` on the files here.
+So a Gwyddion export is upside down against the plane as stored, and since
+every measurement this project has made came through such an export, the
+reader follows Gwyddion rather than the file.
+
+Reading the plane as stored, which is what this did until 0.3.2, left the two
+routes mirror images of each other. A flip does not move the blaze angle, so
+nothing showed until `groove_orientation` began measuring the groove rotation:
+the same grating then read -0.3722° as a `.spm` and +0.3721° as the Gwyddion
+export of that scan. Both routes now report +0.372°.
+
+With the rows the right way up, the plane and the export agree to 0.00027 nm
+rms on a scan 115 nm deep, which is the five significant digits the text export
+writes and nothing else.
 
 ### The height scale, and how to misread it
 
@@ -137,24 +161,36 @@ reader's was.
 
 ## The two routes compared
 
-The same scan was processed by both routes:
+The same scan was processed by both routes, at the current defaults:
 
 | Route | N | Mean blaze angle | σ | Period |
 |---|---|---|---|---|
-| Gwyddion `.txt` | 100 | 27.913° | 2.127° | 314.33 nm |
-| Raw `.spm` | 100 | 27.911° | 2.126° | 314.33 nm |
+| Gwyddion `.txt` | 100 | 27.888° | 2.053° | 313.89 nm |
+| Raw `.spm` | 100 | 27.883° | 2.049° | 313.89 nm |
 
-The means differ by 0.002°, against a standard deviation of 2.13°.
+The means differ by 0.005°, against a standard deviation of 2.05°. With
+`groove_orientation` off both routes read 27.915°, σ 2.165°, 314.33 nm — the
+same to every digit printed, and 0.000009° apart in full. The 0.005° with the
+correction on is not a disagreement about the heights: it is the slow-axis
+size, which the `.spm` header gives as 1.56640625 µm while Gwyddion's
+`# Height:` line rounds it to 1.566, so the two shear in slightly different
+pixels.
 
-The results are not bit-identical, and they are not expected to be: the export
-was flattened by Gwyddion while the `.spm` is raw, and the two differ by 7 nm
-RMS. This software, however, flattens every row-group profile itself before
-fitting, which removes the same background. The Gwyddion flattening step is
-therefore redundant for this pipeline.
+The underlying arrays agree to 0.00027 nm RMS on a scan 115 nm deep, which is
+the five significant digits the text export writes and nothing else: no per-row
+offset (0.00001 nm), no plane, and no scale difference. The export is the plane.
+
+That is not what this page said until 0.3.2. It reported a 7 nm RMS difference
+and explained it as Gwyddion's flattening, which the pipeline's own row-group
+flattening then removed. Both the figure and the explanation were artefacts of
+reading the plane upside down (see "Which way up"): comparing a grating with
+its own mirror image is what produced the 7 nm. Together with the finding
+below, the `_flatten` in that filename appears to describe nothing that was
+ever done to the data.
 
 A further finding was made during this verification: the `_flatten.0_00003`
 companion file beside the raw scan is byte-identical to it. Gwyddion never wrote
-modified data, and the flattening existed only in the text export.
+modified data, and on the evidence above the text export carries none either.
 
 ## Practical notes
 

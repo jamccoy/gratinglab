@@ -259,14 +259,35 @@ class TestRowGrouping:
         for a, b in zip(profiles, kept):
             np.testing.assert_array_equal(a, b)
 
-    def test_an_unmasked_scan_groups_exactly_as_before(self, clean):
+    def test_the_first_band_starts_below_the_lines_left_out_at_the_top(self, clean):
+        """The bands are centred, so the top band is not the top of the image.
+
+        64 lines in 10 bands of 6 leaves 4 over; two come off each end.
+        """
         data, size = clean
         _, profiles, info = _quiet(raw_data_multi_group, data, size, 10)
         assert info['rows_excluded'] == 0
+        assert info['rows_unbanded'] == 4
         rows = info['rows_per_group']
+        first = data[2:2 + rows]
         np.testing.assert_array_equal(
-            profiles[0], 1e9 * (data[:rows].mean(axis=0)
-                                - data[:rows].mean(axis=0).min()))
+            profiles[0], 1e9 * (first.mean(axis=0) - first.mean(axis=0).min()))
+
+    def test_the_bands_are_the_same_set_read_either_way(self, clean):
+        """Reversing the slow axis must not re-cut the bands.
+
+        It is not a hypothetical: a Nanoscope `.spm` and the Gwyddion export of
+        the same scan disagree about which end of the slow axis comes first, so
+        the same image reaches this function both ways up. While the leftover
+        lines went to the last band, that moved every boundary.
+        """
+        data, size = clean
+        _, upright, _ = _quiet(raw_data_multi_group, data, size, 20)
+        _, flipped, _ = _quiet(raw_data_multi_group, data[::-1], size, 20)
+        assert len(upright) == len(flipped) == 20
+        for i, (a, b) in enumerate(zip(upright, reversed(flipped))):
+            np.testing.assert_allclose(a, b, rtol=1e-12, atol=1e-12,
+                                       err_msg=f"band {i}")
 
     def test_a_fully_masked_column_is_a_gap(self, clean):
         data, size = clean

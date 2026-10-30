@@ -73,6 +73,34 @@ def _image(theta_deg, *, rows=96, cols=768, width_um=8.0, height_um=2.0,
     return z * 1e-9
 
 
+def _drifting_image(theta_deg, *, rows, cols=3072, width_um=8.0, height_um=2.0,
+                    blaze_from=29.0, blaze_to=31.0, noise_nm=0.15, seed=3):
+    """A rotated grating whose blaze drifts down the rows, 29 deg to 31 deg.
+
+    The drift is the point. On a grating that is the same all the way down,
+    which band a given line lands in makes almost no difference, so a scan cut
+    into bands two different ways measures the same either way and a test on
+    `_image` cannot see the band placement at all. A real scan varies down the
+    image -- the TASTE scan's groups spread over 2 deg -- and then the
+    placement shows. 2 deg over 97 lines is that scan's spread, quietened.
+    """
+    x = np.linspace(0.0, width_um * 1000.0, cols)
+    y = np.linspace(0.0, height_um * 1000.0, rows)
+    theta = math.radians(theta_deg)
+    z = np.empty((rows, cols))
+    for row in range(rows):
+        blaze = blaze_from + (blaze_to - blaze_from) * row / max(rows - 1, 1)
+        cot_b = 1.0 / math.tan(math.radians(blaze))
+        cot_a = 1.0 / math.tan(math.radians(ANTIBLAZE_DEG))
+        apex = cot_b / (cot_b + cot_a)
+        depth = 1.0 / (cot_b + cot_a)
+        t = np.mod(-(x * math.cos(theta) - y[row] * math.sin(theta)) / PERIOD_NM, 1.0)
+        z[row] = np.where(t < apex, t * depth / apex,
+                          depth * (1.0 - t) / (1.0 - apex)) * PERIOD_NM
+    z = z + np.random.default_rng(seed).normal(0.0, noise_nm, z.shape)
+    return z * 1e-9
+
+
 def _write_text(path, data, width_um, height_um=None):
     """As Gwyddion writes it; ``height_um=None`` leaves the Height line out."""
     head = ["# Channel: ZSensor", f"# Width: {width_um:.3f} µm"]
@@ -248,6 +276,37 @@ def test_detect_reports_the_angle_and_changes_nothing(rotated_scans):
     assert not detected['groove_orientation']['applied']
     assert detected['mean_angle'] == untouched['mean_angle']
     assert detected['period_nm'] == untouched['period_nm']
+
+
+def test_a_scan_read_the_other_way_up_measures_the_same(tmp_path):
+    """
+    Same grating, slow axis reversed: the correction must give the same answer.
+
+    Not a hypothetical. A Nanoscope `.spm` and the Gwyddion text export of the
+    same scan come out of the two readers row for row in opposite order, so one
+    grating reaches this pipeline both ways up, and the only thing that should
+    flip is the sign of the measured rotation.
+
+    97 lines in 16 bands leaves one line over, which is the case that used to
+    hurt: the last band took it, so reversing the rows moved every boundary.
+    Here that reads 29.990 deg one way up and 30.009 the other; on the TASTE
+    scan, whose bands spread four times as far, it was worth 0.067 deg, against
+    the 0.005 deg its two readings now agree to.
+    """
+    data = _drifting_image(1.5, rows=97)
+    upright = _analyse(_write_text(tmp_path / "up.txt", data, 8.0, 2.0), 'always')
+    flipped = _analyse(_write_text(tmp_path / "down.txt", data[::-1], 8.0, 2.0),
+                       'always')
+
+    assert flipped['groove_orientation']['angle_deg'] == pytest.approx(
+        -upright['groove_orientation']['angle_deg'], abs=0.005), \
+        "the rotation is the one thing that should change sign"
+    assert flipped['mean_angle'] == pytest.approx(upright['mean_angle'], abs=0.001)
+    assert flipped['period_nm'] == pytest.approx(upright['period_nm'], abs=0.01)
+    assert flipped['n_grooves'] == upright['n_grooves']
+    # The centred bands are also the more accurate pair: the drift averages to
+    # 30 deg, and the old placement read 29.990 / 30.009 either side of it.
+    assert upright['mean_angle'] == pytest.approx(30.0, abs=0.005)
 
 
 def test_the_traditional_path_carries_the_report_too(rotated_scans):

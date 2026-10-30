@@ -12,6 +12,47 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+### Fixed
+
+- **A Nanoscope `.spm` is read the same way up as the Gwyddion export of the
+  same scan.** The reader returned the plane as stored, and Gwyddion reverses
+  the rows of every Nanoscope import unconditionally
+  (`modules/file/nanoscope.c`, `gwy_data_field_invert(dfield, TRUE, FALSE,
+  FALSE)`, whose first argument is `yflipped`), so the two input routes were
+  mirror images of each other. A flip does not move the blaze angle, which is
+  why this survived the reader's introduction; `groove_orientation` does
+  notice, and reported −0.3722° of groove rotation for the `.spm` against
+  +0.3721° for the `.txt` of one grating. Both now read +0.372°. With the rows
+  the right way up the plane and the export agree to 0.00027 nm rms on a scan
+  115 nm deep — the text export's five significant digits and nothing else, so
+  `test_correlation_is_below_one_because_the_export_was_flattened` has been
+  replaced: the shortfall it pinned was the reversal, not the flattening its
+  name claimed, and whatever `_flatten` in that filename refers to is not
+  visible in the numbers. The two routes' blaze angles now agree to 0.000009°
+  with orientation correction off, and to 0.005° with it on, where the floor is
+  Gwyddion's `# Height:` line rounding 1.56640625 µm to 1.566 and so shearing
+  in a slightly different pixel. The Asylum `.ibw` reader has not been checked
+  this way, for want of a file paired with an export.
+
+- **Row-group bands are centred, so a scan measures the same read either way
+  up.** The lines that do not divide evenly between the bands used to go to
+  the last band, which moved every boundary when the slow axis was reversed —
+  and the slow axis *is* reversed between a Nanoscope `.spm` and the Gwyddion
+  text export of the same scan, which come out of the two readers row for row
+  in opposite order. On an unaltered image this cost 0.002° of blaze angle;
+  once `groove_orientation` shears the image, each line moves by an amount set
+  by its distance from the centre, and the same reshuffle cost 0.067° between
+  the two readings of one TASTE scan — past the 0.05° the two routes are
+  pinned to agree within. The leftover lines now come off the centre line and
+  the two ends, which leaves the set of bands unchanged under a reversal, and
+  `raw_data_multi_group` reports the count as `rows_unbanded`. Swath
+  statistics are cut by the same function and are centred with it.
+  Row-group numbers on every sample move slightly, since the bands now average
+  different lines: the master sample's mean blaze reads 33.13° where it read
+  33.23°, and the facet-trim sweep in the Facet fitting wiki page was
+  re-measured. Introduced in 0.2.x when groove-orientation correction was
+  added, where no real scan was to hand to catch it.
+
 ## 0.3.1 (2026-10-29)
 
 ### Removed

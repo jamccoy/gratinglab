@@ -134,17 +134,109 @@ def test_retrace_is_the_plane_the_export_came_from():
         f"({corr_retrace:.3f}); the default direction may be wrong")
 
 
-def test_correlation_is_below_one_because_the_export_was_flattened():
+def test_the_export_is_the_plane_to_the_text_file_s_own_rounding():
     """
-    Not a defect - a fact worth pinning.
+    The two routes are the same numbers, not merely similar.
 
-    The .txt was flattened by Gwyddion on export; the .spm is raw. A correlation
-    of exactly 1.0 would mean the export applied nothing, which would make the
-    'flatten' in its filename a lie.
+    This asserted a correlation strictly below 1 until 0.3.2, reasoning that
+    the .txt was flattened on export and so had to differ. What the shortfall
+    actually measured was the row order: the plane was upside down against the
+    export, and an upside-down grating still correlates 0.98 with itself, so
+    the test read a reversal as evidence of flattening.
+
+    The rows the right way up, the two agree to 0.00027 nm rms on a scan 115 nm
+    deep. That is the export's five significant digits and nothing else: the
+    per-row offsets a flattening would leave differ by 0.00001 nm, and taking
+    out a term proportional to the height does not reduce the residual, so
+    there is no scale difference either. Whatever `_flatten` in the filename
+    refers to, it is not visible in the numbers.
     """
     retrace, _ = read_spm(real_scan(SPM_NAME))
-    corr = np.corrcoef(retrace.ravel(), _txt().ravel())[0, 1]
-    assert 0.95 < corr < 0.9999, f"correlation {corr:.5f}"
+    difference = (retrace - _txt()) * 1e9           # nm
+    depth = (_txt().max() - _txt().min()) * 1e9
+
+    assert np.corrcoef(retrace.ravel(), _txt().ravel())[0, 1] > 1.0 - 1e-9
+    assert difference.std() < 0.001, (
+        f"{difference.std():.5f} nm rms over {depth:.1f} nm is more than the "
+        f"export's own rounding; the two routes have diverged")
+    assert np.abs(difference.mean(axis=1)).max() < 1e-4, \
+        "a per-row offset means one route is being levelled and the other not"
+
+
+def test_the_rows_come_out_the_same_way_up_as_the_export():
+    """
+    Nanoscope stores the slow axis the other way up from Gwyddion.
+
+    Gwyddion reverses the rows of every Nanoscope import unconditionally
+    (`modules/file/nanoscope.c` calls `gwy_data_field_invert(dfield, TRUE,
+    FALSE, FALSE)`, whose first argument is `yflipped`), so its text export of
+    a scan is row-reversed against the plane as stored, and this reader follows
+    it. Reading the plane as stored left the two routes mirror images: the
+    blaze angle does not notice a flip, but `groove_orientation` reported
+    -0.3722 deg for the .spm and +0.3721 deg for the .txt of one grating.
+    """
+    retrace, _ = read_spm(real_scan(SPM_NAME))
+    txt = _txt()
+    as_is = np.corrcoef(retrace.ravel(), txt.ravel())[0, 1]
+    upside_down = np.corrcoef(retrace.ravel(), txt[::-1].ravel())[0, 1]
+    assert as_is > upside_down, (
+        f"the plane matches the export better upside down ({upside_down:.6f}) "
+        f"than as read ({as_is:.6f}); the row order is wrong")
+
+
+def _write_spm(path, plane):
+    """A minimal Nanoscope file holding one Height Sensor / Retrace plane.
+
+    Synthesised rather than taken from the corpus for the same reason the SEM
+    reader's TIFFs are: the row-order tests above need the group's scans, so
+    without this the convention is pinned nowhere CI can see it. The scale is
+    1 nm per least significant bit, so the heights come back as the integers
+    that went in.
+    """
+    rows, cols = plane.shape
+    bs = chr(92)
+    offset = 4096
+    header = "\r\n".join([
+        f"{bs}*File list",
+        f"{bs}*Ciao scan list",
+        f"{bs}Lines: {rows}",
+        f"{bs}Scan Size: 1000 nm",
+        f"{bs}@Sens. Zsens: V 1.0 nm/V",
+        f"{bs}*Ciao image list",
+        f"{bs}Data offset: {offset}",
+        f"{bs}Bytes/pixel: 2",
+        f"{bs}Samps/line: {cols}",
+        f"{bs}Number of lines: {rows}",
+        f"{bs}Line Direction: Retrace",
+        f"{bs}Scan Size: 1.000 1.000 ~m",
+        f"{bs}@2:Z scale: V [Sens. Zsens] (1.0 V/LSB) 1.0 V",
+        f'{bs}@2:Image Data: S [Height] "Height Sensor"',
+        f"{bs}*File list end",
+        "",
+    ]).encode("latin-1")
+    assert len(header) < offset, "the header outgrew the space before the plane"
+    path.write_bytes(header + b" " * (offset - len(header))
+                     + plane.astype("<i2").tobytes())
+    return path
+
+
+def test_the_plane_comes_back_bottom_line_first(tmp_path):
+    """
+    The row order, on a file whose stored order is known by construction.
+
+    Line `r` of the plane holds the value `r`, so a reader that passes the
+    plane through returns 0 first and a reader that follows Gwyddion returns
+    the last line first. This is the one row-order test that runs without the
+    group's scans.
+    """
+    rows, cols = 6, 4
+    plane = np.repeat(np.arange(rows, dtype=int), cols).reshape(rows, cols)
+    data, width = read_spm(_write_spm(tmp_path / "ramp.spm", plane))
+
+    assert width == pytest.approx(1.0)
+    np.testing.assert_array_equal(np.round(data * 1e9).astype(int), plane[::-1])
+    assert np.round(data[0] * 1e9).tolist() == [rows - 1] * cols, \
+        "the first row returned should be the last line stored"
 
 
 # ── Errors ───────────────────────────────────────────────────────────────────
@@ -181,9 +273,13 @@ def test_both_routes_give_the_same_blaze_angle():
     """
     The measurement that matters: one scan, two routes.
 
-    They are not bit-identical - the export was flattened and the .spm is raw -
-    but the software flattens each row group itself, which removes what Gwyddion
-    removed. Measured difference is 0.002 degrees against a sigma of 2.13.
+    The two files agree to the export's own rounding once the rows are the
+    right way up, so with `groove_orientation` off the two routes measure
+    0.000009 degrees apart. The figure below is with it on, where the floor is
+    set by the slow-axis size rather than by the heights: the .spm header gives
+    1.56640625 um and Gwyddion's `# Height:` line rounds it to 1.566, which
+    changes the pixel the shear is measured in. 0.005 degrees against a sigma
+    of 2.05.
     """
     from gratinglab.metrology.analyzer import analyze_single_file
     from gratinglab.metrology.settings import AnalysisSettings
