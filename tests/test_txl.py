@@ -314,8 +314,10 @@ def test_an_impossible_length_is_refused(bad):
 
 def test_groove_edges_is_usable_on_its_own():
     edges = groove_edges(1000.0, 3500.0, 0.4)
-    assert edges == pytest.approx([(0.0, 400.0), (1000.0, 1400.0),
-                                   (2000.0, 2400.0), (3000.0, 3400.0)])
+    # Flattened, because pytest.approx refuses a nested structure from 9.2 on.
+    assert len(edges) == 4
+    assert [v for edge in edges for v in edge] == pytest.approx(
+        [0.0, 400.0, 1000.0, 1400.0, 2000.0, 2400.0, 3000.0, 3400.0])
 
 
 def test_write_creates_parent_directories(tmp_path):
