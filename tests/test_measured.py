@@ -321,7 +321,7 @@ class TestOgreLaminarCampaign:
     """OGRE laminar grating I, ALS October 2021, against the scalar model.
 
     This needs ``als_eff_meas`` importable and its private beamline tree at
-    ``$ALS_DATA_ROOT`` (default ``~/Documents/ALS``), and skips without
+    ``$ALS_DATA_ROOT`` (default ``~/Documents/Research/ALS``), and skips without
     either. Checked 2026-10-24: neither MC1 nor MAC1 holds that tree, so it
     has not yet run anywhere.
 

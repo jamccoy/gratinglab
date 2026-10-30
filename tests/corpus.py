@@ -21,7 +21,7 @@ DATA = Path(__file__).parent / "data"
 #: The corpus is reference data belonging to the research group and is
 #: deliberately not committed. Point ``GRATINGLAB_REF_DIR`` elsewhere to
 #: override.
-DEFAULT_REF_DIR = Path.home() / "Documents" / "diffraction_efficiency"
+DEFAULT_REF_DIR = Path.home() / "Documents" / "Research" / "diffraction_efficiency"
 
 
 def reference_dir() -> Path | None:
