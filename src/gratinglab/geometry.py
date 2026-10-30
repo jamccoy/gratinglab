@@ -27,6 +27,7 @@ __all__ = [
     "horizon_weights",
     "blaze_direction",
     "blaze_wavelength",
+    "littrow_alpha",
     "interference_factor",
 ]
 
@@ -464,6 +465,47 @@ def blaze_wavelength(
     numerator = 2.0 * period * np.sin(zeta) * np.sin(blaze_angle)
     with np.errstate(divide="ignore", invalid="ignore"):
         return np.where(m != 0, numerator / m, np.inf)
+
+
+def littrow_alpha(order: int, wavelength: float, period: float, gamma: float) -> float:
+    r"""Azimuthal incidence angle that sends order ``order`` back along itself, in radians.
+
+    .. math::
+        \sin\alpha_L = \frac{m\lambda}{2 p \sin\gamma}
+
+    This is the grating equation with :math:`\beta_m = \alpha`, so the
+    diffracted order returns along the azimuth it arrived on. It is also the
+    facet angle a sawtooth needs to blaze into that order there, since
+    :func:`blaze_direction` gives :math:`\beta_b = 2\delta - \alpha = \alpha`
+    exactly when :math:`\delta = \alpha`.
+
+    Ported from PyXFocus ``grating.blazeYaw``, whose ``inc`` is the graze onto
+    the grating surface and whose yaw is measured in the surface from the
+    grooves. Neither is :math:`\gamma` or :math:`\alpha`; the two frames share
+    only the dispersion cosine, :math:`\cos(\text{inc})\sin\psi = \sin\gamma\sin\alpha`.
+    ``docs/conventions.md`` §10 records the mapping.
+
+    Raises
+    ------
+    ValueError
+        When :math:`|m\lambda| \ge 2 p \sin\gamma`, where no incidence angle
+        short of grazing reaches Littrow.
+    """
+    if period <= 0:
+        raise ValueError(f"period must be positive, got {period}")
+    if wavelength <= 0:
+        raise ValueError(f"wavelength must be positive, got {wavelength}")
+    if not 0 < gamma <= np.pi / 2:
+        raise ValueError(f"gamma must lie in (0, pi/2], got {gamma}")
+
+    s = order * wavelength / (2.0 * period * np.sin(gamma))
+    if not -1.0 < s < 1.0:
+        raise ValueError(
+            f"order {order} at wavelength {wavelength} cannot reach Littrow on period "
+            f"{period} at gamma {np.degrees(gamma):g} deg: it needs sin(alpha) = {s:.4g}. "
+            "Littrow is reachable only while |m * wavelength| < 2 * period * sin(gamma)."
+        )
+    return float(np.arcsin(s))
 
 
 def interference_factor(s: ArrayLike, n_grooves: int) -> NDArray[np.float64]:

@@ -12,6 +12,18 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+### Added
+
+- **The Littrow mount: `geometry.littrow_alpha` and `Illumination.littrow`.**
+  `sin α = mλ / (2p sin γ)` puts order m back on the azimuth it arrived on, in
+  any mount from in-plane (the default) to extreme off-plane, and that angle is
+  also the facet angle that blazes into the order there. An order that cannot
+  reach Littrow short of grazing is refused with the condition it fails.
+  Ported from PyXFocus's `grating.py` and held to it in `tests/test_littrow.py`,
+  which pins the two frames from direction cosines: PyXFocus measures `inc` as
+  the graze onto the surface, not γ, so the two share only the dispersion
+  cosine (conventions §10, row 8).
+
 ## 0.3.2 (2026-10-30)
 
 ### Fixed

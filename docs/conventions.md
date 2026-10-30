@@ -489,9 +489,11 @@ a source that is in error.
 | 5 | thesis Chapter-2.tex:1016, 1045 | claims PCGrate internally multiplies by Fresnel reflectivity in perfect-conductivity mode, which contradicts the `ΣE = 1` result proved just above | Treat `ΣE ≈ R_F(ζ)` as an emergent result of an impedance-type (Leontovich) boundary condition. Follow Goray & Schmidt (2010) for the rigorous finite-conductivity case |
 | 6 | thesis Chapter-2.tex:1006–1007 | `A_n'` should be `A_n''`; evanescent exponential missing its `y` | corrected |
 | 7 | thesis Chapter-2.tex:905 vs 1006 | inconsistent `k_y` sign convention | §6 above |
+| 8 | PyXFocus `grating.py` (`62454cd`), `blazeYaw`, `blazeAngle`, `blazeAngle2`, `litBetaAlpha` | a different frame, not an error: `inc` is the graze onto the grating surface, `sin inc = sin γ cos α`, and the yaw ψ is the beam's projection on the surface measured from the grooves, `tan ψ = sin γ sin α / cos γ`. Its dispersion cosine is signed opposite to ours, so `blazeAngle` returns −α where `blazeAngle2` returns α. `litBetaAlpha`'s "cone angle" `beta1` is `cos γ`, not γ | `geometry.littrow_alpha` in (α, γ); the mapping is pinned from direction cosines in `tests/test_littrow.py`, never by equating `cos inc` with `sin γ`, which is wrong by up to ~1 at grazing incidence |
 
 Items 3, 4, 6 are transcription errors with no effect on published results. Items 1, 2,
-5, 7 change what the code computes.
+5, 7 change what the code computes. Item 8 is no error at all, only a second frame, and
+is recorded because the obvious reading of it is wrong.
 
 ---
 

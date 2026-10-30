@@ -266,7 +266,24 @@ Rayleigh criterion applied to the degraded profile. This would connect the
 metrology of groove errors to spectrograph performance, and it is deliberately
 not approximated by the ideal formula now in the API.
 
-### 3. PyXFocus analytics: porting the formulas
+### 3. ~~PyXFocus analytics: porting the formulas~~: done, unreleased (2026-10-30)
+
+`geometry.littrow_alpha` and `Illumination.littrow` are in, and
+`tests/test_littrow.py` holds them to the transcribed PyXFocus functions on six
+mounts from 1.5° off-plane to in-plane. Two things the plan below did not know:
+
+- **The frame mapping it proposed was wrong.** PyXFocus's `inc` is the graze
+  onto the grating surface and its yaw is measured in the surface from the
+  grooves, so `cos inc` is not `sin γ`; at γ = 1.5° and α = 30° they differ by
+  0.97. The only quantity the frames share is the dispersion cosine,
+  `cos(inc)·sin ψ = sin γ·sin α`. Conventions §10, row 8.
+- **There was nothing separate to port for the blaze angle.** In our frame the
+  facet angle that blazes at Littrow is the Littrow azimuth itself, δ = α,
+  because `blaze_direction` gives 2δ − α. `blazeAngle2` equals it to 1e-12 and
+  `blazeAngle` is the same angle with the opposite sign. `blazeYaw` is singular
+  in-plane, where its yaw is exactly 90°.
+
+The plan as it stood:
 
 PyXFocus (the sequential X-ray raytracer that this project's author forked)
 stays where it is. It is unpackaged, pinned to numpy<2 and built with Fortran, so

@@ -5,11 +5,13 @@ incidence angle and the half-cone angle, because every mount reduces to it and i
 serialises readably. Direction cosines are available as a derived property.
 
 Three constructors exist so that each community can pass the angles it
-uses; they all resolve to the same internal state:
+uses; they all resolve to the same internal state. A fourth places a mount at
+Littrow for one order:
 
 >>> Illumination.classical(alpha=10.0)                  # in-plane
 >>> Illumination.conical(theta=10.0, phi=45.0)          # RCWA-style polar/azimuth
 >>> Illumination.offplane(graze=1.5, azimuth=0.97)      # extreme off-plane, X-ray
+>>> Illumination.littrow(1, 1.55, 400.0, graze=1.73)    # order 1 back on itself
 
 See ``docs/conventions.md`` §3 for the frame and the sign of ``alpha``.
 """
@@ -20,6 +22,8 @@ from typing import Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, field_validator
+
+from .geometry import littrow_alpha
 
 __all__ = ["Illumination", "Polarization"]
 
@@ -132,6 +136,45 @@ class Illumination(BaseModel):
             operation has ``azimuth`` close to the facet angle.
         """
         return cls(alpha_deg=azimuth, gamma_deg=graze, polarization=polarization)
+
+    @classmethod
+    def littrow(
+        cls,
+        order: int,
+        wavelength: float,
+        period: float,
+        graze: float = 90.0,
+        polarization: Polarization = "TE",
+    ) -> "Illumination":
+        """The Littrow mount for one order at one wavelength.
+
+        Order ``order`` leaves along the azimuth it arrived on,
+        :math:`\\beta_m = \\alpha`. The default ``graze = 90`` is the in-plane
+        Littrow mount; a small ``graze`` is the off-plane one, with ``graze``
+        the half-cone angle :math:`\\gamma` exactly as in :meth:`offplane`.
+        The azimuth found is also the facet angle that blazes into this order
+        here; see :func:`gratinglab.geometry.littrow_alpha`.
+
+        Parameters
+        ----------
+        order
+            Diffraction order :math:`m`.
+        wavelength, period
+            In nm, or any unit the two share.
+        graze
+            Half-cone angle :math:`\\gamma`, degrees.
+
+        Raises
+        ------
+        ValueError
+            When the order cannot reach Littrow at this wavelength and cone.
+        """
+        alpha = littrow_alpha(order, wavelength, period, float(np.radians(graze)))
+        return cls(
+            alpha_deg=float(np.degrees(alpha)),
+            gamma_deg=graze,
+            polarization=polarization,
+        )
 
     @classmethod
     def from_direction_cosines(
