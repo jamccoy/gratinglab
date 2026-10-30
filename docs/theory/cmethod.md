@@ -174,8 +174,6 @@ error estimate; on a cornered one it is not (§6).
 - **Adaptive spatial resolution** and other improvements for steep or deep
   profiles. On a sawtooth convergence is roughly first order (§6), and the
   integral method with `corner_grading` is the better tool there.
-- **A GUI tab.** The solver is registered and appears in the Help menu; no
-  tab is written for it yet (`_TAB_FACTORIES` skips a solver without one).
 
 ## 6. Validation evidence
 
