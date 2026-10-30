@@ -242,8 +242,8 @@ same applies to the private reference corpus of efficiency tables:
 
 | Data | Environment variable | Default |
 |---|---|---|
-| AFM scans | `GRATINGLAB_AFM_DIR` | `~/Documents/afm_scans` |
-| Reference efficiency tables | `GRATINGLAB_REF_DIR` | `~/Documents/diffraction_efficiency` |
+| AFM scans | `GRATINGLAB_AFM_DIR` | `~/Documents/Research/afm_scans` |
+| Reference efficiency tables | `GRATINGLAB_REF_DIR` | `~/Documents/Research/diffraction_efficiency` |
 
 Tests that need either are skipped when it is absent, so the suite passes on a fresh
 clone. Most of the metrology tests do not need it: they run against a committed
