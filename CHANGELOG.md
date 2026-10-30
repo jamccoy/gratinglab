@@ -24,6 +24,25 @@ entries under "Unreleased" into a section named for the new version;
   the graze onto the surface, not γ, so the two share only the dispersion
   cosine (conventions §10, row 8).
 
+### Fixed
+
+- **The default data directories, which had gone stale and were silently
+  disabling tests.** `~/Documents` was reorganised on 2026-10-30 and the AFM
+  scans, the PCGrate reference corpus and the beamline tree all moved under
+  `~/Documents/Research/`. The three defaults here —
+  `metrology.config.DEFAULT_AFM_DIR`, `tests.corpus.DEFAULT_REF_DIR` and
+  `tests.metrology.scans.DEFAULT_SCAN_DIR` — still named the old locations, so
+  the scan and corpus tests skipped instead of running. Across
+  `tests/test_integral_corpus.py`, `tests/metrology` and
+  `tests/test_measured.py` that was 33 skips, of which 32 now run and pass.
+  Nothing failed, which is exactly why a full run did not show it: these tests
+  are written to skip when their data is absent so that the suite passes on a
+  fresh clone, and a moved directory is indistinguishable from a fresh clone.
+  The one that still skips wants a `.spm` paired with its Gwyddion `.txt`
+  export, and the scans directory holds exports without their sources — a gap
+  in that directory's contents, not in its path. `ALS_DATA_ROOT` had the same
+  problem; its default lives in `als_eff_meas` and is corrected there.
+
 ## 0.3.2 (2026-10-30)
 
 ### Fixed

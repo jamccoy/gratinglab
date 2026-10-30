@@ -265,7 +265,7 @@ def read_cxro(path: "str | Path", name: str | None = None) -> OpticalConstants:
     here.
 
     This is a port of ``CXRO_to_n_k`` from the prototype
-    (``~/Documents/diffraction_efficiency/panter1.py``), with one correction.
+    (``~/Documents/Research/diffraction_efficiency/panter1.py``), with one correction.
     The prototype hardcodes ``skip_header=3`` against a file with two header
     lines, so it silently discards the first data row: the lowest energy,
     which is the longest wavelength. On the Au table that truncates the range

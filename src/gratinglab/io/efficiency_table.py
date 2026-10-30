@@ -32,7 +32,7 @@ Format, confirmed by inspection of PCGrate-SX 6.7.1 output::
 Every line is tab-separated and right-padded with empty fields.
 
 Order indices come from the column headers, never from a positional offset.
-The prototype scripts in ``~/Documents/diffraction_efficiency`` read columns as
+The prototype scripts in ``~/Documents/Research/diffraction_efficiency`` read columns as
 ``data[i+11]``, which works only because ``np.genfromtxt`` splits the quoted
 label ``" Wav., nm"`` into two whitespace-delimited fields. That offset is
 different for every file and silently wrong if the order range changes.

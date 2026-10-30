@@ -591,7 +591,7 @@ therefore be replaced with a measured groove and the hypothesis tested
 directly.
 
 The scan is not in the repository. It is the group's measurement data, held
-under `GRATINGLAB_AFM_DIR` (default `~/Documents/afm_scans/`) in the same way as
+under `GRATINGLAB_AFM_DIR` (default `~/Documents/Research/afm_scans/`) in the same way as
 the reference corpus. Everything below is reproducible from the scan, and
 nothing below is reproducible from a bare clone; that is the cost of not
 committing measurements.

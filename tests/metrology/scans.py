@@ -43,7 +43,7 @@ SYNTHETIC_TIP_HALF_ANGLE_DEG = 18.0
 
 #: Real scans, not committed. Override with ``GRATINGLAB_AFM_DIR``. Kept in step
 #: with ``gratinglab.metrology.config.DEFAULT_AFM_DIR``.
-DEFAULT_SCAN_DIR = Path.home() / "Documents" / "afm_scans"
+DEFAULT_SCAN_DIR = Path.home() / "Documents" / "Research" / "afm_scans"
 
 
 def scan_dir() -> Path:
