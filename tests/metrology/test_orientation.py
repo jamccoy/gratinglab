@@ -290,8 +290,8 @@ def test_a_scan_read_the_other_way_up_measures_the_same(tmp_path):
     97 lines in 16 bands leaves one line over, which is the case that used to
     hurt: the last band took it, so reversing the rows moved every boundary.
     Here that reads 29.990 deg one way up and 30.009 the other; on the TASTE
-    scan, whose bands spread four times as far, it was worth 0.067 deg against
-    the 0.002 deg its two readings otherwise agree to.
+    scan, whose bands spread four times as far, it was worth 0.067 deg, against
+    the 0.005 deg its two readings now agree to.
     """
     data = _drifting_image(1.5, rows=97)
     upright = _analyse(_write_text(tmp_path / "up.txt", data, 8.0, 2.0), 'always')

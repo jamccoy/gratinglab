@@ -36,9 +36,10 @@ were given to the last band, which made every boundary move when the rows were
 reversed. On an image that `groove_orientation` has sheared, each line is
 shifted by an amount that depends on its distance from the centre, so the
 reshuffle changed what each band averaged: on one 401-line scan it moved the
-mean blaze angle by 0.067°, against the 0.002° the two readings of that scan
-otherwise agree to. Centred bands are the same set of bands read either way,
-so the measurement no longer depends on the direction of the slow axis.
+mean blaze angle by 0.067°, where the two readings of that scan now agree to
+0.005° with the correction on and 0.000009° with it off. Centred bands are the
+same set of bands read either way, so the measurement no longer depends on the
+direction of the slow axis.
 
 ## Why grooves at a scan edge are rejected
 

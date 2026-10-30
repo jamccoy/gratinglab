@@ -14,6 +14,26 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Fixed
 
+- **A Nanoscope `.spm` is read the same way up as the Gwyddion export of the
+  same scan.** The reader returned the plane as stored, and Gwyddion reverses
+  the rows of every Nanoscope import unconditionally
+  (`modules/file/nanoscope.c`, `gwy_data_field_invert(dfield, TRUE, FALSE,
+  FALSE)`, whose first argument is `yflipped`), so the two input routes were
+  mirror images of each other. A flip does not move the blaze angle, which is
+  why this survived the reader's introduction; `groove_orientation` does
+  notice, and reported −0.3722° of groove rotation for the `.spm` against
+  +0.3721° for the `.txt` of one grating. Both now read +0.372°. With the rows
+  the right way up the plane and the export agree to 0.00027 nm rms on a scan
+  115 nm deep — the text export's five significant digits and nothing else, so
+  `test_correlation_is_below_one_because_the_export_was_flattened` has been
+  replaced: the shortfall it pinned was the reversal, not the flattening its
+  name claimed, and whatever `_flatten` in that filename refers to is not
+  visible in the numbers. The two routes' blaze angles now agree to 0.000009°
+  with orientation correction off, and to 0.005° with it on, where the floor is
+  Gwyddion's `# Height:` line rounding 1.56640625 µm to 1.566 and so shearing
+  in a slightly different pixel. The Asylum `.ibw` reader has not been checked
+  this way, for want of a file paired with an export.
+
 - **Row-group bands are centred, so a scan measures the same read either way
   up.** The lines that do not divide evenly between the bands used to go to
   the last band, which moved every boundary when the slow axis was reversed —

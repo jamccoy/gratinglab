@@ -8,9 +8,9 @@ header section says where its bytes are and how to turn them into nanometres.
 
 The reader was written here instead of taken from a library because the format
 is small, this project depends on nothing beyond numpy/scipy/matplotlib, and
-the conversion has one pitfall (described below) that is best handled here.
+the conversion has two pitfalls (described below) that are best handled here.
 
-The pitfall is as follows. The height scale comes from a line like::
+The first is the height scale, which comes from a line like::
 
     \\@2:Z scale: V [Sens. ZsensSens] (0.0000000001872337 V/LSB) 0.804163 V
 
@@ -25,6 +25,20 @@ The result shows no visible sign of the error: the image is the right shape,
 the grooves are in the right places, and every blaze angle is silently
 incorrect. The reader was verified against a known export: with the right
 parameter, the peak-to-peak height matches to 1.0000.
+
+The second is the direction of the slow axis. The rows are returned reversed
+against the order the plane stores them, because that is what Gwyddion does
+and this project's measurements all came through Gwyddion exports. Gwyddion
+reverses every Nanoscope import unconditionally -- ``modules/file/nanoscope.c``
+calls ``gwy_data_field_invert(dfield, TRUE, FALSE, FALSE)`` straight after
+scaling the plane, and that first argument is ``yflipped``, documented as "the
+image will be flipped upside down". It does not consult ``\\Frame direction``,
+which reads ``Down`` on the files here.
+
+This showed up as a sign: the same grating measured -0.3722 deg of groove
+rotation read as a .spm and +0.3721 deg read as the Gwyddion .txt export of
+that scan. A flip does not move the blaze angle, so it went unnoticed until
+``groove_orientation`` began correcting for the rotation it reported.
 """
 from __future__ import annotations
 
@@ -299,7 +313,12 @@ def read_spm(path, channel: str = DEFAULT_CHANNEL,
         heights_nm = plane.reshape(described.rows, described.cols).astype(float) \
             * volts_per_lsb * nm_per_volt
 
-        return heights_nm * 1e-9, described.scan_x_size_um
+        # Reversed: see the module docstring. Gwyddion's importer flips every
+        # Nanoscope plane upside down, so its text export of a scan is
+        # row-reversed against the plane as stored, and this reader exists to
+        # agree with those exports -- the same reason DEFAULT_DIRECTION is
+        # Retrace.
+        return heights_nm[::-1] * 1e-9, described.scan_x_size_um
 
     available = list_channels(path)
     raise ValueError(
