@@ -24,6 +24,28 @@ entries under "Unreleased" into a section named for the new version;
   the graze onto the surface, not γ, so the two share only the dispersion
   cosine (conventions §10, row 8).
 
+- A second measured campaign has been predicted, the first on a replica
+  grating: the ALS June 2017 run on the Au-coated inverted SCIL replica. 123
+  absolute per-order efficiencies, orders −1 to 4, 1.38 to 4.77 nm, against a
+  groove measured by AFM three months before the beam time. The integral
+  solver reaches **RMS 0.0480 with nothing fitted** — the scalar solver 0.0902
+  on the same groove — where the OGRE laminar attempt reached 0.0706 on a
+  *fitted* two-parameter groove. The grating and the scan are tied together by
+  the period: six 1 µm scans give 162.7 nm against the beamline's own
+  159.9 ± 3.3 nm. The whole residual sits in orders +2 and +3, with the zero
+  order the best modelled of the six at 0.0081. It does not yet settle anything
+  stated against the measurement's error bars: the reduction wrote energy and
+  efficiency only, so the residuals are unweighted; the σ has since been
+  recovered from the same reduction and is detector noise alone, 0.082% of each
+  point, which puts a 1%-accurate model 12σ from every one of them, so the gate
+  still needs a systematic term the campaign never formed.
+  `findings.md`, "The June 2017 SCIL campaign", has the per-order table, the
+  convergence ladder and the three remaining gaps. Also recorded there: the
+  mounting is a free bit that only the data can set, and the mirror is better
+  by a factor of 3.3; and `conductivity="tabulated"` cannot be run past 1024
+  boundary nodes on this hardware, the 2048 rung passing 8 GB resident and 15
+  minutes against 9.5 s one rung below.
+
 - **The thirteen documented `.ggp` format rules are asserted**, against the 35
   polygonal profiles PCGrate ships (set `GRATINGLAB_PCGRATE_PROFILES_DIR`; the
   tests skip without them) and against `write_ggp`'s own output: two
@@ -67,6 +89,19 @@ entries under "Unreleased" into a section named for the new version;
   strings 10.2.3 allows. The default of 2000 was always inside it, but a larger
   configured value would have written a file PCGrate refuses to load. The GUI
   spin box, which offered up to 20000, is capped at the same number.
+
+- **`docs/conventions.md` stated the propagating-orders test with the wrong
+  sign on `sin α`.** It read `|sin α + mλ/(p sin γ)| ≤ 1`, while the grating
+  equation one screen above it, and `geometry.sin_beta`, give
+  `|mλ/(p sin γ) − sin α| ≤ 1` — the same expression with the mount mirrored.
+  The code was never wrong; the prose was, and it is wrong quietly, because the
+  mirrored form still returns a plausible contiguous order range. Taken from
+  the documentation, it chose the wrong sign for the α of a measured campaign
+  and reported every point propagating, which cost a whole comparison before
+  the solver's own `propagating` flags contradicted it.
+  `tests/test_geometry.py::TestTheDocumentedPropagationTest` now pins the
+  documented inequality to `is_propagating(sin_beta(...))` over a random sweep,
+  with a negative control that the old sign disagrees.
 
 ## 0.3.2 (2026-10-30)
 

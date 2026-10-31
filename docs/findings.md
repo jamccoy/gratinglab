@@ -2834,3 +2834,220 @@ polygons are the same shape translated by half a period, so their graded meshes
 meet the period boundary in different places. The perfect-conductor case shows
 the same geometry to rounding.
 `tests/test_trapezoidal_solvers.py::TestVerticalAndSharpIsLamellar`.
+
+## The June 2017 SCIL campaign: a second prediction, and two sign errors
+
+The TASTE campaign established that a measured groove and a measured
+efficiency can be put together into a prediction. This is the second grating
+for which both halves exist, and the first replica: a SCIL resist replica,
+Au-coated, 162.75 nm period against TASTE's 400 nm, measured at ALS in June
+2017 and scanned by AFM three months earlier. The rigorous solver reaches
+**RMS 0.0480 in absolute efficiency over 123 measured points with nothing
+fitted**, against the OGRE attempt's 0.0706 on a *fitted* two-parameter groove.
+
+It is also the first comparison of *this* campaign with nothing fitted. The 2020
+analysis, `ALS/scil_eff.py`, parses 29 PCGrate result tables, and among them are
+`scil_sawtooth_{25,26,27,28,29,30}_fix_results.xml` each with a `plus` and a
+`minus` variant: the sawtooth apex angle was swept over six values on top of the
+γ, α and `d_min` perturbations. So whatever agreement that analysis showed had
+the groove's own angle among its free parameters, and it was never reduced to a
+residual at all — the file contains 21 `fill_between` calls and no χ², so its
+verdict was "inside or outside the band". Here the profile is the March 2017 AFM
+scan and there is no angle to choose.
+
+The number is worth less than it looks until two sign errors are named, because
+the first comparison run came out at 0.1567 and both errors were invisible in
+it.
+
+### The groove and the campaign are the same grating
+
+Nothing links them but the sample name, so the period is the check. The
+beamline re-derives 159.9 ± 3.3 nm from its own dispersion
+(`June2017/Data/inverted_SCIL_Au/results/measured_groove_spacing.txt`). Six
+1 µm AFM scans of `SCIL_inverted_Au` from two sessions three months earlier
+(2017-03-25 and 2017-03-26) give 162.00, 162.75, 162.73, 162.72, 162.67 nm and,
+uncoated from 2017-03-15, 162.71 and 162.73 nm. That is 0.85σ inside the
+beamline's own figure, measured by a different instrument on a different day,
+and the spread across scans is 0.1 nm where the beamline's uncertainty is
+3.3 nm.
+
+The reduction itself disagrees with both: `june2017_coated_scil.py` hard-codes
+`groove_spacing_nm = ufloat(158., .5)`, which is 4.7 nm below the AFM value and
+outside its own stated error. It is a hand-set constant, not a measurement, and
+the same constant appears in the OGRE laminar campaign. The period enters the
+solver's phase term directly, so 162.75 nm is used here and 158 is not.
+
+The groove is blazed, not laminar: it rises over roughly three quarters of the
+period at about 26° and falls over the last fifth, steepest facet 73.18°, depth
+0.3597 of the period or 58.53 nm, groove residual 0.70 nm rms over the five
+grooves averaged. A replica of an etched blazed master, which is what it should
+be.
+
+### Two sign errors, one in this repository and one in the beamline's records
+
+1. **`docs/conventions.md` contradicted `geometry.sin_beta`.** The propagating-
+   orders subsection wrote the test as `|sin α + mλ/(p sin γ)| ≤ 1`, while its
+   own grating equation one screen above, and the code, give
+   `|mλ/(p sin γ) − sin α| ≤ 1`. The two differ by the sign of the mount. The
+   wrong form is not loud: it returns a plausible contiguous order range, so a
+   propagation check written from the prose agrees with itself and disagrees
+   with every solver. Fixed, with
+   `tests/test_geometry.py::TestTheDocumentedPropagationTest` pinning the
+   documented inequality to `is_propagating(sin_beta(...))` over a random sweep,
+   plus a negative control that the old sign gives a different answer.
+
+2. **`arc_angles.txt` reports α with the opposite sign to
+   `Illumination.alpha_deg`.** The campaign records α = −30.8° ± 0.9. At that
+   sign, 59 of the 123 measured points fall on evanescent branches and orders
+   +2, +3 and +4 are modelled as exactly 0.0; at α = +30.8°, all 123 propagate.
+   The ogre_laminar campaign's α needed no flip, but its value came from
+   `als_eff_meas`'s recovery rather than from `arc_angles.txt`. What settles the
+   sign is the propagation count, not either file. γ = 1.75° ± 0.04 is used as
+   recorded; roll 1.03°, eta 1.54° and yaw −0.896° are carried but not used.
+
+   The recorded mount should not be read as exact in any case, because the
+   campaign records it twice and the two disagree. `arc_angles.txt` gives
+   γ = 1.75° ± 0.04, α = −30.8° ± 0.9, yaw −0.896° ± 0.019, eta 1.54° ± 0.05;
+   `arc_angles_check.txt`, beside it, gives γ = 1.79° ± 0.06, α = −30.1° ± 0.9,
+   yaw −0.92° ± 0.04, eta 1.50° ± 0.04. That is one full σ on γ and 0.7° on α
+   between two records of the same mount. The comparison above used the first.
+   A re-run of the same reduction today is reported to print α, roll and yaw
+   with the opposite signs again, which is not verified here and is a further
+   reason to take the sign from the propagation count rather than from the file.
+
+Error 1 caused error 2 to be resolved the wrong way. The propagation count is
+the standard test for the α sign here, and run from the documented inequality
+it chose −30.8° and reported 123 of 123 propagating — the right method, the
+wrong equation, a confident wrong answer. Only the solver's own `propagating`
+flags, which disagreed with it, exposed either.
+
+### The mounting is set by the data, not by the scan
+
+An AFM scan fixes a shape and not an orientation, and
+`BoundaryProfile.to_problem` already absorbs the `x_norm` → `t` handover through
+`FromProfileData.along_dispersion`. What no scan records is which way the sample
+faced the beam in June 2017, or the sign of the fast scan axis against the
+dispersion direction. So both mountings were solved:
+
+| mounting | RMS | max abs | where | mean residual |
+|---|---|---|---|---|
+| as measured | 0.1567 | 0.4192 | +1 at 2.952 nm | +0.0232 |
+| **mirrored** | **0.0480** | 0.1553 | +3 at 1.590 nm | −0.0179 |
+
+The mirror is better by a factor of 3.3 overall and a factor of 10 in order +1,
+the brightest dispersed order, where the model moves from 0.0951 to 0.2002
+against a measured 0.2059. Two things say the operation was the one intended
+rather than a lucky perturbation: the zero order is unchanged to four decimals,
+0.0416 in both, so the mirror moved the dispersed orders and left the specular
+one where it was; and the error changes character, from over-predicting the far
+orders by as much as 0.26 in order +4 to a slight overall over-prediction of
+0.018.
+
+### The comparison
+
+Integral solver, `conductivity="tabulated"`, `coating="Au"`, 1024 boundary
+nodes, TE, mirrored groove, against 123 absolute per-order efficiencies on 33
+wavelengths from 1.3776 to 4.7686 nm (900 down to 260 eV):
+
+| order | n | mean measured | mean model | mean residual | RMS |
+|---|---|---|---|---|---:|
+| −1 | 11 | 0.0168 | 0.0279 | −0.0111 | 0.0181 |
+| 0 | 33 | 0.0460 | 0.0416 | +0.0044 | 0.0081 |
+| +1 | 33 | 0.2059 | 0.2002 | +0.0057 | 0.0186 |
+| +2 | 25 | 0.2377 | 0.2676 | −0.0299 | 0.0589 |
+| +3 | 17 | 0.2301 | 0.3181 | −0.0880 | 0.1000 |
+| +4 | 4 | 0.0313 | 0.0750 | −0.0437 | 0.0485 |
+
+Convergence was fixed from the data rather than from habit, at 1e-4 in absolute
+efficiency: two orders under the smallest measured value, 0.0052. At the hard
+end, 1.3776 nm, the `boundary_points` ladder changes by 7.3e-5 from 256 to 512
+and 1.5e-5 from 512 to 1024; at 4.7686 nm, by 1.5e-4 and then 3.0e-5. So 1024
+is inside the tolerance at both ends with an order of magnitude to spare.
+
+The scalar solver on the same mirrored groove reaches RMS 0.0902, with its worst
+point 0.2862 in order +1 and its zero order eight times worse than the rigorous
+one at 0.0655. That the rigorous method is better by nearly a factor of two is
+itself part of the evidence: an agreement the approximation shares would say
+something about the geometry, while one only the rigorous method reaches says
+something about the physics it adds. The exception is order +3, which reverses —
+scalar 0.0526 against the integral solver's 0.1000 — and it is the same order
+that carries the whole residual below.
+
+### Where the residual is, and where it is not
+
+Orders −1, 0 and +1 are all at or under 0.019, and 0.0081 in the zero order is
+the best-modelled order of the six — the opposite of the OGRE comparison, where
+the zero order held the largest residual of every method and was the signature
+of a wrong profile family. Here the whole disagreement sits in +2 and +3, with
+the model running high in both and most strongly in +3, and the sign is
+consistent across all 17 points of +3 rather than scattered.
+
+That is the part of the pattern most sensitive to the fine shape of the facet.
+The steepest measured slope is 73.18°, which is where an AFM tip rounds hardest,
+and no tip correction was applied here: these numbers are the uncorrected
+groove. "A nominal tip does not explain the rounded groove" records that the
+same question on TASTE was not settled by the obvious candidate, so this is a
+live hypothesis rather than a conclusion.
+
+### What this does not establish
+
+**No usable χ² is available, so this does not on its own decide anything stated
+against the measurement's error bars.** The residuals above are unweighted: every
+point was carried with σ = 0, which `Residuals.pull` returns as NaN and
+`summary()` counts in `n_with_sigma` as zero.
+
+The σ has since been recovered, and it does not change that. The reduction
+propagated uncertainties with the `uncertainties` package the whole way and then
+discarded them on the last line (`als_eff.py:634` writes
+`unp.nominal_values(...)`), so re-running it with `unp.std_devs(...)` beside them
+recomputes nothing: all 123 order points reproduce the two-column files of
+5 October 2020 exactly, to the eight decimals both carry. They are at
+`June2017/Data/inverted_SCIL_Au/results/measured_with_sigma/`.
+
+**What came back is detector noise and nothing else.** Every point lands at
+0.082% of its own efficiency, give or take 0.005%, which is exactly
+`sqrt(2/3) × 0.1%`: the single per-point input error in the reduction,
+`flux_err = 0.001*flux` at `als_functions.py:157`, an assumed 0.1% of the
+photodiode reading, propagated through a ratio of two three-sample sums. Nothing
+else reaches the efficiency. The throw (235 ± 2 mm), the period (158 ± 0.5 nm),
+the arc radius (7.20 ± 0.14 mm), the mount (γ 1.75° ± 0.04, α 30.8° ± 0.9) and
+the wavelength all enter only through their nominal values, where they choose
+which orders propagate and seed the peak search; they never multiply the flux
+ratio and so contribute no variance.
+
+At 0.082%, a model accurate to 1% sits about 12σ from every point, and this one
+is 24% out in the mean. A χ² against these σ is therefore a statement about the
+photodiode, not about the grating, and the gate still needs a systematic term
+that this campaign's reduction never formed. Its own systematics were built on
+the model side instead, as PCGrate variants for γ±, α± and `d_min` under
+`June2017/Data/PCGrate/`, which is a different and weaker thing than an error
+bar on a measurement.
+
+Two defects in the campaign's own files surfaced with the σ, neither of which
+touches the comparison above. `total_efficiency.txt` is not the sum of the
+per-order files at 7 of its 33 energies, by as much as 0.556 — at 340 eV it
+records 0.0 where the orders sum to 0.556 — because `als_eff.py`'s deletion
+block drops points from the per-order dictionaries by order and from the total by
+position. It is inherited from the 2020 reduction, and the comparison above is
+unaffected because it reads only the per-order files. And
+`measured_groove_spacing.txt` re-derives 159.4 ± 2.9 nm on the re-run against the
+2020 file's 159.9 ± 3.3 nm, agreeing inside their bars for reasons not yet
+established; the 2020 value is the one quoted here and above.
+
+Three further gaps, none of them closed here: the polarization is unknown and TE
+was assumed, which the s/p degeneracy at these grazes makes a small assumption
+but not a verified one; one scan of the five was used rather than the set, so the
+scan-to-scan spread does not enter the residual; and the Au is modelled as bulk
+rather than as a film on resist, which `Problem.layers` could carry.
+
+### The 2048-node rung cannot be run on this machine
+
+The ladder above stops at 1024 for a practical reason worth recording. At
+1.3776 nm the finite-conductivity solve takes 0.2 s at 256 nodes, 1.1 s at 512
+and 9.5 s at 1024; at 2048 it passed 8 GB resident and 15 minutes of CPU before
+it was killed. The coupled conical system doubles the unknowns, so 2048 nodes is
+a 4096-unknown dense complex problem, but the jump is far steeper than the ~8×
+per rung that implies, and it is memory rather than arithmetic that ends it. The
+practical convergence ceiling for `conductivity="tabulated"` on this hardware is
+therefore 1024 nodes, which happens to be sufficient here and would not be for a
+deeper groove or a shorter wavelength.
