@@ -65,6 +65,12 @@ entries under "Unreleased" into a section named for the new version;
   file written here should not be the one that trips it. `tests/test_txl.py`
   parses the output with a reader of its own rather than that one, 35 tests.
 
+- **The thirteen documented `.ggp` format rules are asserted**, against the 35
+  polygonal profiles PCGrate ships (set `GRATINGLAB_PCGRATE_PROFILES_DIR`; the
+  tests skip without them) and against `write_ggp`'s own output: two
+  space-separated numbers a line, x on [0, 1] and non-decreasing, y on
+  [0, 100], first point `0 0`, last point `1 0`, 2 to 5000 data strings.
+
 ### Fixed
 
 - **The default data directories, which had gone stale and were silently
@@ -83,6 +89,25 @@ entries under "Unreleased" into a section named for the new version;
   export, and the scans directory holds exports without their sources — a gap
   in that directory's contents, not in its path. `ALS_DATA_ROOT` had the same
   problem; its default lives in `als_eff_meas` and is corrected there.
+- **The `.ggp` header this project writes and recognises now matches what
+  PCGrate documents.** The *User's Guide of PCGrate-S(X) Series, version 6.1*
+  specifies the first control string of a polygonal `.ggp` as
+  `3 0 - 20 harmonics - Polygonal type` (10.2.2, p. 63), and all 35 polygonal
+  files the program ships carry exactly that line. `write_ggp(header=True)`
+  wrote `3 0 - Polygonal type`, which omits the `- 20 harmonics -` segment and
+  so fails the documented check, and `read_ggp` compared against that same
+  short form -- so every one of the vendor's own files read back as
+  `header_variant="commented-canonical"` with `format_valid=False`, despite
+  containing no `#` at all. The documented pair is now what is written and what
+  counts as `canonical`; the short form is read as `short-type-line` and
+  flagged, as are the two hashed variants `np.savetxt(header=...)` produces.
+  No number anywhere changes: nothing outside the tests reads either field, and
+  the point data always parsed. Headerless output stays the default, which
+  10.2.3 confirms is legal input through the Border Profile Editor.
+- **`ggp_n_points` is bounded above at 5000** (`MAX_GGP_POINTS`), the most data
+  strings 10.2.3 allows. The default of 2000 was always inside it, but a larger
+  configured value would have written a file PCGrate refuses to load. The GUI
+  spin box, which offered up to 20000, is capped at the same number.
 
 - **`docs/conventions.md` stated the propagating-orders test with the wrong
   sign on `sin α`.** It read `|sin α + mλ/(p sin γ)| ≤ 1`, while the grating

@@ -24,6 +24,26 @@ DATA = Path(__file__).parent / "data"
 DEFAULT_REF_DIR = Path.home() / "Documents" / "Research" / "diffraction_efficiency"
 
 
+#: PCGrate-S(X) 6.1 ships 53 reference border profiles with the program, 35 of
+#: them polygonal. They are the authority on what the vendor's own writer
+#: produces, and like the corpus they belong to the installation rather than to
+#: this repository. Point ``GRATINGLAB_PCGRATE_PROFILES_DIR`` elsewhere to
+#: override.
+DEFAULT_PCGRATE_PROFILES_DIR = Path.home() / "Downloads" / "PCGrate" / "BorderProfiles"
+
+
+def pcgrate_profiles_dir() -> Path | None:
+    """PCGrate's own ``BorderProfiles/``, or ``None`` if unavailable.
+
+    ``None`` rather than a skip, for the same reason as :func:`reference_dir`:
+    the module that imports this decides a ``skipif`` at collection time.
+    """
+    candidate = data_root(
+        "GRATINGLAB_PCGRATE_PROFILES_DIR", DEFAULT_PCGRATE_PROFILES_DIR
+    )
+    return candidate if candidate.is_dir() else None
+
+
 def reference_dir() -> Path | None:
     """The PCGrate reference corpus, or ``None`` if unavailable.
 

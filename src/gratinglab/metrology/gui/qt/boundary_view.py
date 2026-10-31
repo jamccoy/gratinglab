@@ -39,7 +39,7 @@ from gratinglab.io.boundary import write_boundary_csv, write_boundary_json
 from gratinglab.io.ggp import write_ggp
 
 from ...io.metrics import write_profile_metrics
-from ...settings import AnalysisSettings
+from ...settings import MAX_GGP_POINTS, AnalysisSettings
 
 __all__ = ["BoundaryView"]
 
@@ -93,7 +93,8 @@ class BoundaryView(QWidget):
 
         layout.addWidget(QLabel("Points in the exported profile:"))
         self.n_points_spin = QSpinBox()
-        self.n_points_spin.setRange(50, 20000)
+        # Upper bound is PCGrate's own: see MAX_GGP_POINTS.
+        self.n_points_spin.setRange(50, MAX_GGP_POINTS)
         self.n_points_spin.setSingleStep(100)
         self.n_points_spin.setValue(self._defaults.ggp_n_points)
         self.n_points_spin.setToolTip(

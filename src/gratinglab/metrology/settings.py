@@ -32,6 +32,14 @@ MAX_FACET_TRIM = 0.28
 
 VALID_BLAZE_SIDES = ('negative_slope', 'positive_slope', 'longer')
 
+#: The most data strings PCGrate accepts in a polygonal .ggp. One of the
+#: thirteen format errors the User's Guide of PCGrate-S(X) 6.1 lists in section
+#: 10.2.3 (p. 63) is "the number of strings is less than 2 or more than 5 000",
+#: and the program retrieves the previous profile instead of loading the file.
+#: The default of 2000 is well inside it; a larger configured value would write
+#: a file the solver this package validates against refuses.
+MAX_GGP_POINTS = 5000
+
 #: Scan directions a Nanoscope file records. Retrace is the default because it is
 #: the plane this project's existing Gwyddion exports were taken from, so a .spm
 #: and its .txt export agree by construction rather than by luck.
@@ -293,6 +301,11 @@ class AnalysisSettings:
             errors.append(('n_row_groups', "needs at least 2 groups"))
         if self.ggp_n_points < 10:
             errors.append(('ggp_n_points', "needs at least 10 points"))
+        if self.ggp_n_points > MAX_GGP_POINTS:
+            errors.append(('ggp_n_points',
+                           f"cannot exceed {MAX_GGP_POINTS}: PCGrate rejects a "
+                           "polygonal .ggp with more data strings than that "
+                           "(User's Guide 6.1, 10.2.3)"))
         if self.ggp_smoothing_window < 1:
             errors.append(('ggp_smoothing_window', "must be at least 1"))
         if self.ggp_min_half_width < 1:
