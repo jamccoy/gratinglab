@@ -24,6 +24,28 @@ entries under "Unreleased" into a section named for the new version;
   the graze onto the surface, not γ, so the two share only the dispersion
   cosine (conventions §10, row 8).
 
+- A second measured campaign has been predicted, the first on a replica
+  grating: the ALS June 2017 run on the Au-coated inverted SCIL replica. 123
+  absolute per-order efficiencies, orders −1 to 4, 1.38 to 4.77 nm, against a
+  groove measured by AFM three months before the beam time. The integral
+  solver reaches **RMS 0.0480 with nothing fitted** — the scalar solver 0.0902
+  on the same groove — where the OGRE laminar attempt reached 0.0706 on a
+  *fitted* two-parameter groove. The grating and the scan are tied together by
+  the period: six 1 µm scans give 162.7 nm against the beamline's own
+  159.9 ± 3.3 nm. The whole residual sits in orders +2 and +3, with the zero
+  order the best modelled of the six at 0.0081. It does not yet settle anything
+  stated against the measurement's error bars: the reduction wrote energy and
+  efficiency only, so the residuals are unweighted; the σ has since been
+  recovered from the same reduction and is detector noise alone, 0.082% of each
+  point, which puts a 1%-accurate model 12σ from every one of them, so the gate
+  still needs a systematic term the campaign never formed.
+  `findings.md`, "The June 2017 SCIL campaign", has the per-order table, the
+  convergence ladder and the three remaining gaps. Also recorded there: the
+  mounting is a free bit that only the data can set, and the mirror is better
+  by a factor of 3.3; and `conductivity="tabulated"` cannot be run past 1024
+  boundary nodes on this hardware, the 2048 rung passing 8 GB resident and 15
+  minutes against 9.5 s one rung below.
+
 - **A `.txl` writer: `io.txl.dumps` and `io.txl.write`.** Raith TEXTLIB /
   LETXTLIB text layouts for a grating, which is the format BEAMER's
   `import_txl` reads and the one `ebl_fracture` already parses. Lengths in are
@@ -42,6 +64,38 @@ entries under "Unreleased" into a section named for the new version;
   `AREF step1 0,0 1000 1,0 1 0,0` parses with 1000 copies becoming 1, and a
   file written here should not be the one that trips it. `tests/test_txl.py`
   parses the output with a reader of its own rather than that one, 35 tests.
+
+### Fixed
+
+- **The default data directories, which had gone stale and were silently
+  disabling tests.** `~/Documents` was reorganised on 2026-10-30 and the AFM
+  scans, the PCGrate reference corpus and the beamline tree all moved under
+  `~/Documents/Research/`. The three defaults here —
+  `metrology.config.DEFAULT_AFM_DIR`, `tests.corpus.DEFAULT_REF_DIR` and
+  `tests.metrology.scans.DEFAULT_SCAN_DIR` — still named the old locations, so
+  the scan and corpus tests skipped instead of running. Across
+  `tests/test_integral_corpus.py`, `tests/metrology` and
+  `tests/test_measured.py` that was 33 skips, of which 32 now run and pass.
+  Nothing failed, which is exactly why a full run did not show it: these tests
+  are written to skip when their data is absent so that the suite passes on a
+  fresh clone, and a moved directory is indistinguishable from a fresh clone.
+  The one that still skips wants a `.spm` paired with its Gwyddion `.txt`
+  export, and the scans directory holds exports without their sources — a gap
+  in that directory's contents, not in its path. `ALS_DATA_ROOT` had the same
+  problem; its default lives in `als_eff_meas` and is corrected there.
+
+- **`docs/conventions.md` stated the propagating-orders test with the wrong
+  sign on `sin α`.** It read `|sin α + mλ/(p sin γ)| ≤ 1`, while the grating
+  equation one screen above it, and `geometry.sin_beta`, give
+  `|mλ/(p sin γ) − sin α| ≤ 1` — the same expression with the mount mirrored.
+  The code was never wrong; the prose was, and it is wrong quietly, because the
+  mirrored form still returns a plausible contiguous order range. Taken from
+  the documentation, it chose the wrong sign for the α of a measured campaign
+  and reported every point propagating, which cost a whole comparison before
+  the solver's own `propagating` flags contradicted it.
+  `tests/test_geometry.py::TestTheDocumentedPropagationTest` now pins the
+  documented inequality to `is_propagating(sin_beta(...))` over a random sweep,
+  with a negative control that the old sign disagrees.
 
 ## 0.3.2 (2026-10-30)
 

@@ -83,6 +83,45 @@ class TestOrderBookkeeping:
         assert len(order_range(400.0, **common)) >= len(order_range(700.0, **common))
 
 
+class TestTheDocumentedPropagationTest:
+    """docs/conventions.md 4 states the propagation test in closed form.
+
+    A reader who takes it from the prose instead of from `geometry` must get the
+    same answer. The documented line carried the wrong sign on sin(alpha) until
+    2026-10-30 -- the mirrored mount -- and nothing caught it, because the wrong
+    form still yields a plausible contiguous order range. It cost one whole
+    measured comparison (docs/findings.md, "The June 2017 SCIL campaign").
+    """
+
+    @staticmethod
+    def documented(order, wavelength, period, sin_alpha, sin_gamma):
+        """The inequality exactly as conventions.md 4 writes it."""
+        m = np.asarray(order, dtype=np.float64)
+        return np.abs(m * wavelength / (period * sin_gamma) - sin_alpha) <= 1.0
+
+    def test_agrees_with_geometry_over_a_random_sweep(self):
+        rng = np.random.default_rng(0)
+        for _ in range(500):
+            lam = rng.uniform(0.5, 700.0)
+            period = rng.uniform(100.0, 2000.0)
+            sa = rng.uniform(-0.99, 0.99)
+            sg = rng.uniform(0.02, 1.0)
+            orders = np.arange(-25, 26)
+            assert np.array_equal(
+                self.documented(orders, lam, period, sa, sg),
+                is_propagating(sin_beta(orders, lam, period, sa, sg)),
+            )
+
+    def test_the_mirrored_sign_is_a_different_answer(self):
+        """The negative control: the sign that was there disagrees, so the test
+        above would fail if the documented form regressed to it."""
+        lam, period, sa, sg = 2.952, 162.75, np.sin(np.radians(30.8)), np.sin(np.radians(1.75))
+        orders = np.arange(-7, 8)
+        mirrored = np.abs(sa + orders * lam / (period * sg)) <= 1.0
+        correct = is_propagating(sin_beta(orders, lam, period, sa, sg))
+        assert not np.array_equal(mirrored, correct)
+
+
 class TestBranches:
     def test_reflected_has_positive_cos_beta(self):
         assert cos_beta(0.5) > 0

@@ -67,6 +67,16 @@ class MeasurementProvenance:
         :meth:`MeasuredEfficiency.illumination` relies on. Anything else
         (``yaw_deg``, ``eta_deg``, their uncertainties) is carried for the
         record.
+
+        A beamline's own record may not use that convention, and may not
+        agree with itself: the June 2017 SCIL campaign's
+        ``results/arc_angles.txt`` records α negative where this convention
+        needs it positive, and its ``arc_angles_check.txt`` gives a γ a full
+        σ away. So take the sign from the propagation count rather than from
+        the file — the wrong sign strands measured orders on evanescent
+        branches, 59 of 123 points in that campaign — and treat the recorded
+        angles as approximate (``docs/findings.md``, "The June 2017 SCIL
+        campaign").
     source
         Path or URL of the reduced data.
     notes
