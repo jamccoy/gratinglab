@@ -122,6 +122,21 @@ entries under "Unreleased" into a section named for the new version;
   documented inequality to `is_propagating(sin_beta(...))` over a random sweep,
   with a negative control that the old sign disagrees.
 
+- **The `pytest` and `ruff` floors in the `dev` extra now track what CI
+  installs.** `pytest>=7` was satisfied by a local 9.1.1 while CI resolved
+  9.2.0, and 9.2 stopped accepting `pytest.approx` over a list of tuples: one
+  assertion in `tests/test_txl.py` passed here and failed on all four legs.
+  The floors are now `pytest>=9.2` and `ruff>=0.17`, the versions CI resolves
+  today, because these two are the gate the suite is judged by — an older copy
+  does not merely behave differently, it accepts what CI rejects, and ruff
+  gains rules between minors the same way. The library floors are untouched and
+  stay genuine minimums: CI installing the newest of everything is what caught
+  this, and pinning matplotlib or pandas to this week's resolution would throw
+  that away while excluding environments the package supports. A new `test.yml`
+  step compares each tool's resolved version against its floor and emits a
+  `::warning::` once the floor goes stale, so the next such divergence shows up
+  in the run that introduces it rather than as a red leg months later.
+
 ## 0.3.2 (2026-10-30)
 
 ### Fixed
