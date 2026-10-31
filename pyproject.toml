@@ -62,7 +62,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7", "pytest-qt>=4.5", "matplotlib>=3.8", "pandas>=2.1", "ruff>=0.16"]
+# The two floors that are not "the oldest version that works": pytest and ruff
+# are the gate the suite is judged by, and a local copy older than the one CI
+# resolves makes that gate quietly permissive rather than merely different.
+# `pytest>=7` let a local 9.1.1 accept `pytest.approx` over a list of tuples
+# that 9.2 refuses, so tests/test_txl.py passed here and failed on all four CI
+# legs; ruff gains rules between minors the same way, so an older copy passes
+# what `ruff check .` rejects there. Both floors therefore track what CI
+# installs, and raising them is part of taking a new version of either.
+#
+# The library floors below stay as genuine minimums. CI installs the newest of
+# everything on purpose -- that is what caught the pytest change -- and pinning
+# matplotlib or pandas to whatever it resolved this week would throw that away
+# while excluding environments the package supports.
+dev = ["pytest>=9.2", "pytest-qt>=4.5", "matplotlib>=3.8", "pandas>=2.1", "ruff>=0.17"]
 # The GUI is an optional extra: `pip install gratinglab` must never require
 # a toolkit.
 #

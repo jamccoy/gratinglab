@@ -76,6 +76,43 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev,gui,metrology,refractiveindex]"
 
+      # A floor in `dev` that this job has already outgrown is how the pytest
+      # 9.2 change got in: `pytest>=7` was satisfied by the 9.1.1 a developer
+      # had installed, while CI resolved 9.2 and rejected a `pytest.approx`
+      # over a list of tuples that the older copy accepted -- green locally,
+      # red on all four legs. The install step always takes the newest, so
+      # compare what it got against what pyproject.toml asks for and say when
+      # the floor has gone stale. A warning, not a failure: a new release of
+      # either tool should not break the build on the day it lands.
+      - name: Warn when a tooling floor has gone stale
+        run: |
+          python - <<'EOF'
+          import re
+          import tomllib
+          from importlib.metadata import version
+
+          with open("pyproject.toml", "rb") as handle:
+              dev = tomllib.load(handle)["project"]["optional-dependencies"]["dev"]
+          floors = dict(
+              re.match(r"([A-Za-z0-9_.-]+)>=([0-9.]+)", req).groups()
+              for req in dev
+              if ">=" in req
+          )
+          # Only the two that gate the suite. The library floors are genuine
+          # minimums and are meant to sit below what CI resolves.
+          for name in ("pytest", "ruff"):
+              floor, got = floors[name], version(name)
+              want = tuple(int(part) for part in floor.split("."))
+              have = tuple(int(part) for part in got.split(".")[: len(want)])
+              if have > want:
+                  print(
+                      f"::warning::{name} floor is >={floor} but CI resolved {got}; "
+                      f"raise it in pyproject.toml and upgrade local environments"
+                  )
+              else:
+                  print(f"{name} {got} matches its >={floor} floor")
+          EOF
+
       - name: Lint with ruff
         run: ruff check .
 
