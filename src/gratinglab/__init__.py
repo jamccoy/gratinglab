@@ -22,7 +22,7 @@ from .measured import MeasuredEfficiency, MeasurementProvenance
 from .resolution import ResolvingPower, resolving_power
 from .result import EfficiencyScan, OrderEfficiency, Provenance
 
-__version__ = "0.3.2"
+__version__ = "0.3.3"
 
 __all__ = [
     "Illumination",
