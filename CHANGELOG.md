@@ -137,6 +137,49 @@ entries under "Unreleased" into a section named for the new version;
   `::warning::` once the floor goes stale, so the next such divergence shows up
   in the run that introduces it rather than as a red leg months later.
 
+- **`read_ggp` reads all five of PCGrate's border profile types, not just the
+  polygonal one.** It refused 18 of the 53 border profiles the program ships;
+  it now reads 53 of 53. Section 10 (p. 59) names the five types and the first
+  control string's code selects one: `0 n` trapezoidal (general, lamellar,
+  triangular, sawtooth), `1 n` sine trapezoidal (general, sinusoidal), `2 0`
+  trigonometric, `3 0` polygonal. Section-dependent carries no code in any file
+  here and is refused by code rather than guessed at, with an error that names
+  the unknown code and lists the known ones. Every type arrives as `t`/`y`, so
+  nothing downstream branches on the type, with the analytic parameters in
+  `GgpFile.parameters` and a trigonometric file's Fourier coefficients in
+  `GgpFile.harmonics`. The GUI's profile loader and `io.boundary` inherit all
+  of it for free.
+
+  The guide documents a *file* layout for two types only — polygonal (10.2.2)
+  and trigonometric (10.3.2, p. 66) — so the trapezoidal and sine layouts are
+  read off the vendor's own Border Profile Editor exports. Inference is what
+  the last `.ggp` correction was about, so the order is not taken on faith: it
+  **closes**. The ridge, the land and the two slopes' horizontal extents span
+  exactly one period for all nine trapezoidal files, and the same holds for the
+  seven sine files with the documented "frequencies F1k and F2k" read as cycles
+  per period, making a flank the half cycle of width `1/(2F)`. Sixteen of
+  sixteen, and the reader refuses a file that does not close, so a wrong order
+  cannot pass unnoticed. The trigonometric convention is checked against
+  PCGrate instead of assumed: `Lamellar_converted-to-trigonometric.ggp` is the
+  program's own conversion of `Lamellar.ggp`, and its odd sine harmonics are
+  `0.5/(nπ)` to one part in 1e9 with `C 0` at 0.125 — the square wave of depth
+  0.25 at 50% duty that `Lamellar.ggp` states. The depth reads 8.951% per side
+  high, which is the Gibbs overshoot of a series truncated at `n = 100` against
+  the Wilbraham–Gibbs 8.9490%, and a property of the vendor's file.
+
+- **A `.ggp`'s period is no longer discarded.** `GgpFile.period` carries the
+  number in the second control string. All 53 of the vendor's files have one
+  and 19 give something other than 1 (163, 165.755, 160, 161.3, 176.367, 1000,
+  11494.3, 2). The module docstring and `docs/conventions.md` both said a
+  `.ggp` "carries no period", which was too strong: what it does not carry is
+  the **unit**, so 163 is 163 of whatever the task was set in. The sidecar and
+  `BoundaryProfile.to_problem` are still the way to get a period in nm, and a
+  headerless file — this writer's own default — still carries none at all.
+  `GgpFile.psc` carries the profile scaling coefficient and `read_ggp` applies
+  it along `y` as 10.3.1 specifies; no shipped file exercises it (21 omit it,
+  32 give 1), so that path is documented but unvalidated and a no-op on every
+  real file.
+
 ## 0.3.2 (2026-10-30)
 
 ### Fixed

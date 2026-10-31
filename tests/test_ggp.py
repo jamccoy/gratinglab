@@ -1,18 +1,27 @@
 """PCGrate .ggp boundary profiles.
 
-Read liberally (five control-string variants exist on disk), write one form:
-the points alone by default, the two control strings the User's Guide of
-PCGrate-S(X) 6.1 documents in 10.2.2 (p. 63) on request.
+Read liberally -- all five border profile types, and five control-string
+variants of the polygonal one -- and write one form: the points alone by
+default, the two control strings the User's Guide of PCGrate-S(X) 6.1
+documents in 10.2.2 (p. 63) on request.
 
-The vendor ships 35 polygonal files of its own, and `TestPcgrateOwnFiles`
-checks this module against them rather than against what this module used to
-write. They are not committed; see `corpus.pcgrate_profiles_dir`.
+The vendor ships 53 border profiles of its own, 35 of them polygonal.
+`TestPcgrateOwnFiles` checks this module against them rather than against what
+this module used to write, and `TestEveryVendorFileReads` covers the other 18.
+They are not committed; see `corpus.pcgrate_profiles_dir`. The type-specific
+tests above it use synthetic files so that they still run on a fresh clone.
 """
 
 import numpy as np
 import pytest
 
-from gratinglab.io.ggp import GGP_HEADER, read_ggp, read_profile, write_ggp
+from gratinglab.io.ggp import (
+    GGP_HEADER,
+    PROFILE_TYPES,
+    read_ggp,
+    read_profile,
+    write_ggp,
+)
 from gratinglab.profiles import FromProfileData, Sinusoidal
 
 from corpus import pcgrate_profiles_dir, reference_dir
@@ -469,3 +478,280 @@ class TestWrittenFilesObeyTheDocumentedGeometry:
         assert 'ggp_n_points' in [
             field for field, _ in base.with_(ggp_n_points=5001).validate()
         ]
+
+
+# --------------------------------------------------------------------------
+# The other border profile types
+#
+# PCGrate has five major types (10, p. 59) and this module read one of them
+# until 2026-10-31: `read_ggp` refused 18 of the vendor's 53 files. The
+# synthetic files below keep these tests running on a fresh clone, because
+# tests that exist only behind reference data are tests that quietly stop
+# existing; the vendor files are then checked as well where they are present.
+# --------------------------------------------------------------------------
+
+#: A trapezoid whose four horizontal extents close on one period. The two
+#: 45 degree slopes each span the depth, so ridge + land + 2 * depth == 1.
+TRAPEZOID = "0 0 - 20 harmonics - Common trapezoidal type\nPeriod: 1000\n" \
+            "45\n45\n0.3\n0.3\n0.2\n"
+#: A pure sinusoid: one cycle per period on each flank, no ridge and no land.
+SINUSOID = "1 1 - Sinusoidal sine trapezoidal type\nPeriod: 1000\n" \
+           "1\n1\n0\n0\n0.25\n"
+#: y = 0.1 * sin(2 pi x), which has depth 0.2 and no zeroth-level shift. The
+#: explicit zero `C 0` is not padding: 10.3.3 rejects a file with fewer than
+#: two data strings, so a single-harmonic profile is not a legal file.
+TRIGONOMETRIC = ("2 0 - Trigonometric type\nPeriod: 1000 PSC: 1\n"
+                 "S 1 0.1\nC 0 0\n")
+
+
+def write_ggp_text(tmp_path, text, name="t.ggp"):
+    path = tmp_path / name
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+class TestTrapezoidalFamily:
+    """`0 n`: the five numbers are left angle, right angle, ridge, land, depth.
+
+    The guide names the parameters and says Gk, Bk and hk are held relative to
+    the period (10, pp. 59-61), but documents a *file* layout only for the
+    polygonal and trigonometric types -- the simple-type files PCGrate ships
+    are Border Profile Editor exports. The order is therefore read off those
+    files rather than out of the manual, and what makes it safe is that it
+    closes: ridge + land + depth/tan(A1) + depth/tan(A2) == 1 for all nine
+    simple trapezoidal files, to within their six-figure rounding. `_trapezoid`
+    refuses a file that does not close, so a different order cannot pass
+    unnoticed.
+    """
+
+    def test_parameters_are_read_in_the_documented_order(self, tmp_path):
+        ggp = read_ggp(write_ggp_text(tmp_path, TRAPEZOID))
+        assert ggp.profile_type == "trapezoidal"
+        assert ggp.type_code == (0, 0)
+        assert ggp.parameters == pytest.approx({
+            "left_angle_deg": 45.0, "right_angle_deg": 45.0,
+            "ridge": 0.3, "land": 0.3, "depth": 0.2,
+        })
+
+    def test_becomes_the_exact_five_vertices(self, tmp_path):
+        """A trapezoid is a polygon, so it is not sampled -- it is exact.
+
+        Land first, so the profile starts and ends in the valley and carries
+        the polygonal type's own `(0, 0)` .. `(1, 0)` convention.
+        """
+        ggp = read_ggp(write_ggp_text(tmp_path, TRAPEZOID))
+        assert [v for pair in zip(ggp.t, ggp.y) for v in pair] == pytest.approx(
+            [0.0, 0.0, 0.3, 0.0, 0.5, 0.2, 0.8, 0.2, 1.0, 0.0])
+        assert ggp.depth == pytest.approx(0.2)
+
+    def test_a_triangle_collapses_to_three_vertices(self, tmp_path):
+        """Ridge and land of zero would repeat two points; they are dropped."""
+        text = ("0 2 - 20 harmonics - Triangular trapezoidal type\nPeriod: 1\n"
+                "45\n45\n0\n0\n0.5\n")
+        ggp = read_ggp(write_ggp_text(tmp_path, text))
+        assert ggp.profile_type == "triangular"
+        assert list(ggp.t) == pytest.approx([0.0, 0.5, 1.0])
+        assert list(ggp.y) == pytest.approx([0.0, 0.5, 0.0])
+
+    def test_an_order_that_does_not_close_is_refused(self, tmp_path):
+        """The closure check is what stands in for the missing documentation."""
+        text = ("0 0 - 20 harmonics - Common trapezoidal type\nPeriod: 1\n"
+                "45\n45\n0.3\n0.3\n0.4\n")
+        with pytest.raises(ValueError, match="spans 1.400000 of a period"):
+            read_ggp(write_ggp_text(tmp_path, text))
+
+    @pytest.mark.parametrize("angle", [0, 90, -5, 120])
+    def test_a_slope_angle_outside_zero_to_ninety_is_refused(self, tmp_path, angle):
+        text = (f"0 0 - 20 harmonics - Common trapezoidal type\nPeriod: 1\n"
+                f"{angle}\n45\n0.3\n0.3\n0.2\n")
+        with pytest.raises(ValueError, match="angle must be in"):
+            read_ggp(write_ggp_text(tmp_path, text, "bad.ggp"))
+
+
+class TestSineTrapezoidalFamily:
+    """`1 n`: the first two numbers are sine frequencies, not angles.
+
+    "Slopes' angles A1k and A2k *or* frequencies F1k and F2k" (10, p. 61). A
+    frequency is in cycles per period, so the flank that climbs from valley to
+    ridge is the half cycle spanning 1 / (2F) -- which is what closes for all
+    seven of the vendor's sine files.
+    """
+
+    def test_the_sinusoidal_subtype_is_a_pure_cosine(self, tmp_path):
+        ggp = read_ggp(write_ggp_text(tmp_path, SINUSOID))
+        assert ggp.profile_type == "sinusoidal"
+        assert ggp.parameters["left_frequency"] == 1.0
+        exact = 0.25 / 2 * (1 - np.cos(2 * np.pi * ggp.t))
+        assert np.abs(ggp.y - exact).max() < 1e-12
+        assert ggp.depth == pytest.approx(0.25)
+
+    def test_flanks_span_one_over_twice_the_frequency(self, tmp_path):
+        """Ridge 0.25 + land 0.25 + two flanks of 1/(2*2) == 1."""
+        text = ("1 0 - Common sine trapezoidal type\nPeriod: 1\n"
+                "2\n2\n0.25\n0.25\n0.3\n")
+        ggp = read_ggp(write_ggp_text(tmp_path, text))
+        assert ggp.profile_type == "sine-trapezoidal"
+        assert ggp.t[0] == 0.0 and ggp.t[-1] == pytest.approx(1.0)
+        assert ggp.depth == pytest.approx(0.3)
+        # The land is flat out to 0.25 and the ridge is reached at 0.5.
+        assert ggp.y[ggp.t <= 0.25].max() == pytest.approx(0.0)
+        assert ggp.y[np.argmin(np.abs(ggp.t - 0.5))] == pytest.approx(0.3, abs=1e-6)
+
+    def test_a_frequency_that_does_not_close_is_refused(self, tmp_path):
+        text = ("1 0 - Common sine trapezoidal type\nPeriod: 1\n"
+                "8\n8\n0.25\n0.25\n0.3\n")
+        with pytest.raises(ValueError, match="of a period, not 1"):
+            read_ggp(write_ggp_text(tmp_path, text))
+
+
+class TestTrigonometricType:
+    """`2 0`: C or S, a harmonic number and an amplitude (10.3.2, p. 66)."""
+
+    def test_sums_the_fourier_series(self, tmp_path):
+        ggp = read_ggp(write_ggp_text(tmp_path, TRIGONOMETRIC), samples=4001)
+        assert ggp.profile_type == "trigonometric"
+        assert ggp.harmonics == {"C": {0: 0.0}, "S": {1: 0.1}}
+        assert np.abs(ggp.y - 0.1 * np.sin(2 * np.pi * ggp.t)).max() < 1e-12
+        assert ggp.depth == pytest.approx(0.2, abs=1e-6)
+
+    def test_the_zeroth_cosine_is_a_level_shift(self, tmp_path):
+        """10.3.3: "the zeroth even (cosine) harmonic is equal to the shift of
+        the zeroth level of the border function"."""
+        text = "2 0 - Trigonometric type\nPeriod: 1\nS 1 0.1\nC 0 0.5\n"
+        ggp = read_ggp(write_ggp_text(tmp_path, text), samples=1001)
+        assert ggp.y.mean() == pytest.approx(0.5, abs=1e-6)
+        assert ggp.depth == pytest.approx(0.2, abs=1e-6)
+
+    def test_harmonics_may_appear_in_any_order(self, tmp_path):
+        """PCGrate's own converted file puts `C 0` last, after 200 others."""
+        text = "2 0 - Trigonometric type\nPeriod: 1\nS 3 0.01\nS 1 0.1\nC 0 0.2\n"
+        ggp = read_ggp(write_ggp_text(tmp_path, text), samples=501)
+        assert list(ggp.harmonics["S"]) == [1, 3]
+
+    @pytest.mark.parametrize("line, message", [
+        ("X 1 0.1", "expected 'C' or 'S'"),
+        ("S 1", "expected 'C' or 'S'"),
+        ("S 5001 0.1", "outside 0 .. 5000"),
+        ("S 1 50.5", "outside -50 .. 50"),
+    ])
+    def test_documented_errors_are_refused(self, tmp_path, line, message):
+        text = f"2 0 - Trigonometric type\nPeriod: 1\nS 2 0.1\n{line}\n"
+        with pytest.raises(ValueError, match=message):
+            read_ggp(write_ggp_text(tmp_path, text, "bad.ggp"))
+
+    def test_a_repeated_harmonic_is_refused(self, tmp_path):
+        text = "2 0 - Trigonometric type\nPeriod: 1\nS 1 0.1\nS 1 0.2\n"
+        with pytest.raises(ValueError, match="appears twice"):
+            read_ggp(write_ggp_text(tmp_path, text))
+
+
+class TestTypeCodeDispatch:
+    def test_an_unknown_type_code_names_itself_and_the_known_ones(self, tmp_path):
+        """Section-dependent is PCGrate's fifth major type and carries no code
+        in any file here, so it is refused rather than guessed at -- but the
+        error says which codes are known, which is what a caller needs."""
+        text = "4 0 - Section-dependent type\nPeriod: 1\n0.0 0.0\n1.0 0.0\n"
+        with pytest.raises(ValueError, match="type code 4 0 is not one"):
+            read_ggp(write_ggp_text(tmp_path, text))
+        with pytest.raises(ValueError, match=r"3 0 \(polygonal\)"):
+            read_ggp(write_ggp_text(tmp_path, text))
+
+    def test_a_headerless_file_is_still_polygonal(self, tmp_path):
+        """Two numbers and no dash cannot be read as a type code, which is
+        what keeps the project's own headerless output working."""
+        ggp = read_ggp(write_variant(tmp_path, ""))
+        assert ggp.profile_type == "polygonal"
+        assert ggp.type_code is None
+        assert ggp.period is None
+
+    def test_the_period_in_the_control_string_is_kept(self, tmp_path):
+        """19 of the vendor's 53 files carry a period other than 1, which this
+        module discarded until 2026-10-31. The file records no unit, so the
+        number is all there is -- see the module docstring."""
+        ggp = read_ggp(write_ggp_text(tmp_path, TRAPEZOID))
+        assert ggp.period == 1000.0
+        assert ggp.psc == 1.0
+
+    def test_the_scaling_coefficient_scales_the_heights(self, tmp_path):
+        """10.3.1: the program "uses it to resize the profile in the OY
+        direction". No file PCGrate ships carries a PSC other than 1 -- 21 omit
+        it and 32 give 1 -- so this path is documented but unexercised by the
+        vendor, and it is a no-op on every real file.
+        """
+        doubled = TRAPEZOID.replace("Period: 1000", "Period: 1000 PSC: 2")
+        ggp = read_ggp(write_ggp_text(tmp_path, doubled))
+        assert ggp.depth == pytest.approx(0.4)
+
+
+class TestAnalyticTypesRoundTripAsPolygonal:
+    def test_a_sinusoid_read_from_a_sine_file_writes_a_valid_polygonal_file(
+        self, tmp_path
+    ):
+        """The point of reading these types: they reach the solvers, and they
+        can be handed to PCGrate as the polygonal file it documents.
+        """
+        ggp = read_ggp(write_ggp_text(tmp_path, SINUSOID))
+        out = write_ggp(tmp_path / "round.ggp", t=ggp.t, y=ggp.y)
+        back = read_ggp(out)
+        assert 2 <= len(back.t) <= 5000
+        assert (back.t[0], back.y[0]) == (0.0, 0.0)
+        assert back.t[-1] == pytest.approx(1.0)
+        assert back.depth == pytest.approx(ggp.depth, abs=1e-5)
+
+
+@requires_pcgrate
+class TestEveryVendorFileReads:
+    """All 53, not the 35 polygonal ones this module used to manage."""
+
+    def test_every_file_reads_and_names_its_type(self):
+        for path in sorted(PCGRATE.glob("*.ggp")):
+            ggp = read_ggp(path)
+            assert ggp.profile_type in PROFILE_TYPES.values(), path.name
+            assert len(ggp.t) >= 3, path.name
+            assert ggp.t[0] == pytest.approx(0.0), path.name
+            assert ggp.t[-1] == pytest.approx(1.0), path.name
+            assert np.all(np.diff(ggp.t) >= 0), path.name
+
+    def test_the_corpus_covers_every_type_this_module_claims(self):
+        seen = {read_ggp(p).profile_type for p in PCGRATE.glob("*.ggp")}
+        assert seen == set(PROFILE_TYPES.values())
+
+    def test_each_simple_file_has_the_depth_its_parameters_state(self):
+        """The strongest available check on the parameter order: the depth
+        measured off the built geometry must be the `h` that was read."""
+        for path in sorted(PCGRATE.glob("*.ggp")):
+            ggp = read_ggp(path)
+            if "depth" not in ggp.parameters:
+                continue
+            assert ggp.depth == pytest.approx(ggp.parameters["depth"]), path.name
+
+    def test_the_converted_lamellar_is_the_square_wave_it_was_converted_from(self):
+        """`Lamellar_converted-to-trigonometric.ggp` is PCGrate's own
+        conversion of `Lamellar.ggp`, which makes it an independent check on
+        the Fourier convention rather than a restatement of it.
+
+        Its odd sine harmonics are 0.5 / (n pi), the series of a square wave
+        of amplitude 0.125 about a mean of 0.125 -- so depth 0.25 at 50% duty,
+        which is exactly `Lamellar.ggp`'s h and ridge. The measured depth is
+        larger by the Gibbs overshoot of a series truncated at n = 100, which
+        is a property of the vendor's file, not of this reader.
+        """
+        converted = PCGRATE / "Lamellar_converted-to-trigonometric.ggp"
+        lamellar = PCGRATE / "Lamellar.ggp"
+        if not (converted.exists() and lamellar.exists()):
+            pytest.skip("the converted lamellar pair is not in this installation")
+
+        ggp = read_ggp(converted, samples=200_001)
+        reference = read_ggp(lamellar)
+        for order in (1, 3, 5, 51, 99):
+            assert ggp.harmonics["S"][order] == pytest.approx(
+                0.5 / (order * np.pi), rel=1e-6)
+        assert ggp.harmonics["C"][0] == pytest.approx(
+            reference.parameters["depth"] / 2, rel=1e-6)
+        assert ggp.y.mean() == pytest.approx(reference.parameters["depth"] / 2, rel=1e-5)
+
+        mid = (ggp.y.max() + ggp.y.min()) / 2
+        assert float(np.mean(ggp.y > mid)) == pytest.approx(
+            reference.parameters["ridge"], abs=1e-4)
+        # 8.9490% is the Wilbraham-Gibbs overshoot, per side.
+        assert ggp.depth == pytest.approx(0.25 * (1 + 2 * 0.089490), rel=1e-3)

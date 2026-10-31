@@ -225,8 +225,12 @@ def read_profile_file(path: "str | Path"):
 
     The format is chosen by suffix, because the two are unrelated formats and
     sniffing the content would only turn a clear refusal into a confusing one.
-    Only the JSON carries a period; read it with :func:`read_boundary_json`
-    to get that too.
+    Only the JSON carries a period *in nm*; a ``.ggp``'s control string may
+    carry the number without its unit, and ``read_ggp`` reports it. Read the
+    JSON with :func:`read_boundary_json` to get a period you can use.
+
+    All five of PCGrate's border profile types reach a profile through here --
+    see :mod:`gratinglab.io.ggp` -- so this is not polygonal-only.
     """
     path = Path(path)
     if path.suffix.lower() == ".json":

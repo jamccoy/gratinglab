@@ -943,6 +943,82 @@ Nothing numerical moved. No solver and no comparison gates on `format_valid` or
 `header_variant`; only the tests read them, and the point data parsed correctly
 under both labels.
 
+### The other four `.ggp` border profile types, and how their layout was fixed
+
+**2026-10-31.** `read_ggp` read the polygonal type alone and refused 18 of the
+53 border profiles PCGrate ships. Section 10 (p. 59) names five major types,
+selected by the first number of the first control string, with the second
+selecting a subtype (10.1, p. 59):
+
+| Code | Type | Files shipped |
+|---|---|---|
+| `0 0` / `0 1` / `0 2` / `0 3` | Trapezoidal: general, lamellar, triangular, sawtooth | 2 / 4 / 2 / 1 |
+| `1 0` / `1 1` | Sine trapezoidal: general, sinusoidal | 6 / 1 |
+| `2 0` | Trigonometric | 2 |
+| `3 0` | Polygonal | 35 |
+| — | Section-dependent | 0 |
+
+The guide documents a **file layout** for two of these only: polygonal in
+10.2.2 and trigonometric in 10.3.2 (p. 66), the latter as `C` or `S`, a
+harmonic number and a Fourier amplitude per line, giving
+`y(x) = Σ Cₙ cos(2πnx) + Σ Sₙ sin(2πnx)`. The trapezoidal and sine files are
+Border Profile Editor exports and their layout is documented nowhere, so it had
+to be read off the files: five numbers, one a line, `left angle, right angle,
+ridge, land, depth`. Those are the names 10.1 and the glossary give, and 10
+(p. 61) fixes their scaling — "values of Gk/d, Bk/d, and hk/d are constant".
+
+Inference is precisely what the 2026-10-30 correction above was about, so the
+order was not taken on faith. **It closes.** The ridge, the land and the two
+slopes' horizontal extents must span exactly one period, and they do for every
+file:
+
+| | ridge + land + h/tan A₁ + h/tan A₂ |
+|---|---|
+| `Trapezoidal`, `UV-NIL_Dec2016` | 1.000000, 1.000008 |
+| `Lamellar` ×2, `lamellarmC_…`, `mc13_semlam` | 1.000000 |
+| `Triangular`, `UV_echelle` | 1.000000, 0.999999 |
+| `Sawtooth` | 1.000000 |
+
+The sine family is the same argument with the documented "frequencies F1k and
+F2k" (10, p. 61) read as cycles per period, so a flank is the half cycle of
+width `1/(2F)`; ridge + land + 1/(2F₁) + 1/(2F₂) closes to 1.000000 for all
+seven. Sixteen of sixteen. The reader refuses a file that does not close, so a
+wrong order cannot pass unnoticed rather than merely being unlikely.
+
+The trigonometric convention was checked against PCGrate instead of assumed.
+The installation ships `Lamellar_converted-to-trigonometric.ggp`, the program's
+own conversion of `Lamellar.ggp` — an independent statement of the same groove
+in the other format. Its odd sine harmonics are `0.5/(nπ)` to one part in 10⁹,
+its even ones ~10⁻¹¹, and `C 0` is 0.125: the Fourier series of a square wave
+of amplitude 0.125 about a mean of 0.125, i.e. depth 0.25 at 50% duty, which is
+exactly `Lamellar.ggp`'s `h` of 0.25 and ridge of 0.499999. The reconstructed
+duty cycle comes back 0.499993.
+
+One discrepancy, run down rather than tolerated: the reconstruction's depth is
+0.294753, not 0.25. That is **Gibbs ringing** — 8.951% overshoot per side
+against the Wilbraham–Gibbs constant 8.9490% for a series truncated at
+`n = 100`. It is a property of the vendor's file, not of the reader, and the
+test pins it at that value rather than loosening a tolerance to hide it.
+
+### A `.ggp` does carry a period — just not its unit
+
+**2026-10-31.** This project recorded that a `.ggp` "carries no period" and
+that `benchmarks/corpus.toml` must supply it. Too strong. All 53 of PCGrate's
+files carry a `Period:` control string, and 19 give something other than 1:
+163, 165.755, 160, 161.3, 176.367, 1000, 11494.3, 2 — values that look like
+periods in nm for these gratings. `GgpFile.period` now reads it.
+
+What the format genuinely lacks is the **unit**, so 163 is 163 of whatever the
+task was set in, and a headerless file — this writer's own default, and what
+Aditi's import wants — carries no period at all. So the sidecar is still
+needed and `BoundaryProfile.to_problem` is still the right route for a measured
+groove; the claim that was wrong was about the format, not about the practice.
+
+The profile scaling coefficient (10.3.1) resizes the profile along `y`, and
+`read_ggp` now applies it. No shipped file exercises it — 21 omit it, 32 give
+1 — so that path is documented but unvalidated against the program, and a
+no-op on every real file.
+
 Two things the guide does not get quite right about its own program: 24 of the
 35 shipped files separate the columns with a tab, where 10.2.2 says to use the
 space key, and all 35 end in a line break, where a trailing one was reported
