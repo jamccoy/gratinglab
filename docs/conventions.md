@@ -250,7 +250,14 @@ explicitly on the order record.
 
 Order *m* propagates if and only if
 
-$$\left|\sin\alpha + \frac{m\lambda}{p\,\sin\gamma}\right| \leq 1$$
+$$\left|\frac{m\lambda}{p\,\sin\gamma} - \sin\alpha\right| \leq 1$$
+
+which is `|sin β_m| ≤ 1` with `sin β_m` taken from the equation above, and is what
+`geometry.is_propagating(geometry.sin_beta(...))` computes. Mind the sign on
+`sin α`: the mirrored form `|sin α + mλ/(p sin γ)| ≤ 1` describes a different
+mount, and stood here until 2026-10-30 (`findings.md`, "The June 2017 SCIL
+campaign", for what it cost). `tests/test_geometry.py::TestTheDocumentedPropagationTest`
+pins the prose and the code together.
 
 Orders that fail this condition are evanescent. They are retained in the record with
 `efficiency = 0.0` and `propagating = False`; they are never dropped silently and never
