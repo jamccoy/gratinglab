@@ -10,6 +10,22 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- **`Residuals.evanescent_warning()`, and `n_evanescent` in
+  `Residuals.summary()`.** A measured point on an order the model does not
+  propagate reads a model value of exactly 0 and is folded into every other
+  figure in the summary, so a wrong mount showed up only as a large RMS. The
+  June 2017 SCIL campaign's angle file had the opposite sign of α, which put
+  59 of its 123 points there, and the first comparison read 0.157 with
+  nothing to say why. The warning counts the stranded points per order against
+  that order's own points, so a point at the end of the arc, which can be
+  real, reads differently from a whole order lost to the sign of α. It is a
+  returned message rather than a Python warning, because the edge-of-arc case
+  is legitimate: the TASTE campaign has two such points at its published mount.
+
 ## 0.3.3 (2026-10-31)
 
 ### Added

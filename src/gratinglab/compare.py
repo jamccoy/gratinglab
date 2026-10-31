@@ -173,6 +173,8 @@ class Residuals:
     with no stated uncertainty cannot say how far off it is in those units.
     ``propagating`` is the *model's* flag: a measured order that the model
     calls evanescent is a disagreement worth seeing, and its ``model`` is 0.
+    :meth:`evanescent_warning` says how many there are and in which orders,
+    because the residual alone cannot tell a wrong mount from a wrong model.
     """
 
     measurement: str
@@ -201,8 +203,11 @@ class Residuals:
 
         ``chi2`` sums ``pull**2`` over the points that have a sigma, and
         ``n_with_sigma`` says how many that was, so the number is never read
-        without its denominator. ``at_wavelength`` and ``at_order`` locate the
-        largest absolute residual.
+        without its denominator. ``n_evanescent`` counts the measured points
+        on orders the model does not propagate, which are inside every other
+        figure here at a model value of exactly 0; see
+        :meth:`evanescent_warning`. ``at_wavelength`` and ``at_order`` locate
+        the largest absolute residual.
         """
         residual = self.residual
         pull = self.pull
@@ -214,9 +219,49 @@ class Residuals:
             "chi2": float(np.sum(pull[finite] ** 2)),
             "n_points": float(len(self)),
             "n_with_sigma": float(np.count_nonzero(finite)),
+            "n_evanescent": float(np.count_nonzero(~self.propagating)),
             "at_wavelength": float(self.wavelength[worst]),
             "at_order": int(self.order[worst]),
         }
+
+    def evanescent_warning(self) -> str | None:
+        """Say which measured points the model cannot propagate, or None.
+
+        Something was measured at each of these points, so either the model
+        or the mount it was given is wrong there. Two shapes are common and
+        they mean different things. A point or two at the end of the arc,
+        the most negative or most positive order at its energy, can be a
+        real order close to its cutoff. Whole orders stranded at every
+        wavelength they were measured at is a mount problem, and the sign
+        of alpha is the first thing to check: the June 2017 SCIL campaign's angle file put 59
+        of 123 points there, and the only symptom without this count was an
+        RMS residual of 0.157 (``docs/findings.md``).
+
+        Nothing is decided here. The message gives the count per order,
+        against how many points that order has, and leaves the reading to
+        whoever runs the comparison. It is not raised as a Python warning,
+        because the edge-of-arc case is legitimate and a campaign that has
+        one would warn on every run.
+        """
+        stranded = ~self.propagating
+        if not stranded.any():
+            return None
+        parts = []
+        for m in np.unique(self.order[stranded]):
+            in_order = self.order == m
+            parts.append(
+                f"m={int(m):+d} ({np.count_nonzero(stranded & in_order)} of "
+                f"{np.count_nonzero(in_order)})"
+            )
+        return (
+            f"{np.count_nonzero(stranded)} of {len(self)} measured points in "
+            f"{self.measurement!r} fall on orders {self.method!r} does not "
+            f"propagate, where it reads exactly 0: {', '.join(parts)}. A point "
+            "at the end of the arc can be a real order near its cutoff. A whole "
+            "order stranded usually means the mount is wrong: check the sign of "
+            "alpha first, and take the one under which the measured orders "
+            "propagate (docs/conventions.md, section 4)."
+        )
 
 
 @dataclass(frozen=True, slots=True)

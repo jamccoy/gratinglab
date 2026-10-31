@@ -237,6 +237,53 @@ class TestResiduals:
         assert res.model.tolist() == [0.0]
         assert res.propagating.tolist() == [False]
 
+    def test_no_warning_when_every_measured_order_propagates(self):
+        data = self._synthetic(self.scalar, 0.0, 0.01)
+        res = align([data, self.scalar]).residuals("measured", "scalar")
+        assert res.evanescent_warning() is None
+        assert res.summary()["n_evanescent"] == 0
+
+    def test_stranded_points_are_counted_per_order_against_that_order(self):
+        """The count per order, out of that order's own points, is what
+        tells an edge-of-arc point from a whole order lost to a wrong mount."""
+        zero = self.scalar.order(0)
+        data = MeasuredEfficiency(
+            order=[0, 0, -2, -2],
+            wavelength=[self.grid[0], self.grid[1], self.grid[-1], self.grid[-2]],
+            value=[zero[0], zero[1], 0.01, 0.01],
+            sigma=[0.01] * 4,
+        )
+        res = align([data, self.scalar]).residuals("measured", "scalar")
+        # stored by order, then wavelength, so order -2 comes first
+        assert res.propagating.tolist() == [False, False, True, True]
+        assert res.summary()["n_evanescent"] == 2
+        message = res.evanescent_warning()
+        assert message.startswith(
+            "2 of 4 measured points in 'measured' fall on orders 'scalar' "
+            "does not propagate"
+        )
+        assert "m=-2 (2 of 2)" in message
+        assert "m=+0" not in message
+        assert "sign of alpha" in message
+
+    def test_the_wrong_sign_of_alpha_strands_whole_orders(self):
+        """The SCIL failure in miniature: order +2 measured at an alpha of
+        +30 degrees, where it propagates at every wavelength here, and the
+        model handed -30 degrees, where it propagates at none of them."""
+        mount = Illumination.offplane(graze=1.5, azimuth=30.0, polarization="unpolarized")
+        right = sweep(PROBLEM, mount, self.grid, ["scalar"])[0]
+        data = MeasuredEfficiency(
+            order=[2] * len(self.grid), wavelength=self.grid,
+            value=[0.01] * len(self.grid), sigma=[0.005] * len(self.grid),
+        )
+        assert align([data, right]).residuals("measured", "scalar").evanescent_warning() is None
+
+        flipped = mount.model_copy(update={"alpha_deg": -mount.alpha_deg})
+        wrong = sweep(PROBLEM, flipped, self.grid, ["scalar"])[0]
+        res = align([data, wrong]).residuals("measured", "scalar")
+        assert res.summary()["n_evanescent"] == len(self.grid)
+        assert "m=+2 (7 of 7)" in res.evanescent_warning()
+
     def test_off_grid_measurements_are_refused_not_interpolated(self):
         data = MeasuredEfficiency(order=[0], wavelength=[1.45], value=[0.4], sigma=[0.01])
         with pytest.raises(ValueError, match="wavelength_grid"):
