@@ -30,6 +30,91 @@ from gratinglab.solvers import scalar  # noqa: E402
 SOLVE_TIMEOUT_MS = 10_000
 
 
+class _SolveProbe:
+    """Counts the two signals a solve should produce, for the error message.
+
+    Connected before the wait, so a solve that somehow lands first is seen
+    rather than waited for. Disconnects on exit: `resolve` is called several
+    times in some tests and the counts belong to one wait.
+    """
+
+    def __init__(self, window):
+        self._window = window
+        self.solved = 0
+        self.worker_finished = 0
+
+    def __enter__(self):
+        self._window.solved.connect(self._count_solved)
+        self._window._worker.finished.connect(self._count_finished)
+        return self
+
+    def __exit__(self, *_exc):
+        self._window.solved.disconnect(self._count_solved)
+        self._window._worker.finished.disconnect(self._count_finished)
+        return False
+
+    def _count_solved(self):
+        self.solved += 1
+
+    def _count_finished(self, *_args):
+        self.worker_finished += 1
+
+
+def _why_no_solve(thread, probe, what) -> str:
+    """Name the cause of a solve that never signalled, from what did happen.
+
+    A bare `qtbot.waitSignal` produced one unexplained "Signal not emitted
+    after 10000 ms" in a full-suite run on 2026-10-31 and none in isolation,
+    and it could not say more than that. The timeout is about 140x the ~70 ms
+    this solve takes, so "was 10 s enough" was never the interesting question;
+    "did the worker run at all" is, and the three signals below separate the
+    candidates. 98 of this file's tests take the `win` fixture, so the error
+    also landed on an arbitrary test and sent the first investigation to the
+    wrong place -- hence naming `what` was waited for.
+    """
+    running = thread.isRunning() if thread is not None else None
+    finished = thread.isFinished() if thread is not None else None
+    if thread is None:
+        cause = ("no worker thread exists, so `_start_worker` never ran -- the "
+                 "window was not fully constructed")
+    elif not probe.worker_finished and not running and finished:
+        cause = "the worker thread exited without emitting `finished`"
+    elif not probe.worker_finished:
+        cause = ("the worker never emitted `finished`: it starved, or it died "
+                 "in the solve (see `_start_worker` on QThread stack size, "
+                 "which segfaults the process on a dense complex solve)")
+    else:
+        cause = ("the worker emitted `finished` but the window never emitted "
+                 "`solved`, which is what `_on_solved` does when `_tokens` "
+                 "calls the result stale -- a cancelled or superseded solve")
+    return (
+        f"{what} never signalled within {SOLVE_TIMEOUT_MS} ms.\n"
+        f"  worker thread exists:  {thread is not None}\n"
+        f"  worker thread running: {running}\n"
+        f"  worker thread done:    {finished}\n"
+        f"  SolveWorker.finished:  {probe.worker_finished} emission(s)\n"
+        f"  MainWindow.solved:     {probe.solved} emission(s)\n"
+        f"Most likely: {cause}."
+    )
+
+
+def _await_solve(qtbot, window, trigger=None, *, what):
+    """Wait for `window.solved`, and say why if it never comes.
+
+    `raising=False` so the timeout is ours to describe rather than an
+    anonymous `pytestqt.exceptions.TimeoutError`; see `_why_no_solve`.
+    """
+    with _SolveProbe(window) as probe:
+        with qtbot.waitSignal(
+            window.solved, timeout=SOLVE_TIMEOUT_MS, raising=False
+        ) as blocker:
+            if trigger is not None:
+                trigger()
+        landed = blocker.signal_triggered or probe.solved
+    if not landed:
+        raise AssertionError(_why_no_solve(getattr(window, "_thread", None), probe, what))
+
+
 @pytest.fixture
 def win(qtbot):
     """A constructed window with its first solve already drawn."""
@@ -37,15 +122,103 @@ def win(qtbot):
 
     window = MainWindow()
     qtbot.addWidget(window)  # closes and deletes it at teardown
-    with qtbot.waitSignal(window.solved, timeout=SOLVE_TIMEOUT_MS):
-        pass  # the solve the constructor started
+    _await_solve(qtbot, window, what="the solve the constructor started")
     return window
 
 
 def resolve(qtbot, window, name="scalar"):
     """Press Solve on the named tab and wait for the result to land."""
-    with qtbot.waitSignal(window.solved, timeout=SOLVE_TIMEOUT_MS):
-        window.solve(name)
+    _await_solve(qtbot, window, lambda: window.solve(name), what=f"the {name} solve")
+
+
+class _StubThread:
+    """Enough QThread for `_why_no_solve`, so its branches need no window."""
+
+    def __init__(self, *, running, finished):
+        self._running, self._finished = running, finished
+
+    def isRunning(self):
+        return self._running
+
+    def isFinished(self):
+        return self._finished
+
+
+class _StubProbe:
+    def __init__(self, *, worker_finished=0, solved=0):
+        self.worker_finished = worker_finished
+        self.solved = solved
+
+
+class TestTheSolveTimeoutDiagnostic:
+    """`_why_no_solve` itself, which is the part a recurrence depends on.
+
+    Tested against stubs rather than by provoking a real timeout: a real one
+    costs `SOLVE_TIMEOUT_MS` of wall time and cannot be steered onto a chosen
+    branch. The branches are what matter, because the 2026-10-31 occurrence
+    produced a bare "Signal not emitted after 10000 ms" that named neither a
+    cause nor even the right test.
+    """
+
+    def test_no_worker_thread_means_the_window_was_not_built(self):
+        message = _why_no_solve(None, _StubProbe(), "the first solve")
+        assert "`_start_worker` never ran" in message
+        assert "worker thread exists:  False" in message
+
+    def test_a_running_thread_with_no_finished_points_at_the_worker(self):
+        message = _why_no_solve(
+            _StubThread(running=True, finished=False), _StubProbe(), "the first solve"
+        )
+        assert "starved, or it died" in message
+        assert "QThread stack size" in message
+
+    def test_an_exited_thread_with_no_finished_is_distinguished(self):
+        message = _why_no_solve(
+            _StubThread(running=False, finished=True), _StubProbe(), "the first solve"
+        )
+        assert "exited without emitting `finished`" in message
+
+    def test_finished_without_solved_points_at_the_stale_token_path(self):
+        """`_on_solved` returns early when `_tokens.is_stale(token)`, so this
+        is the one cause that is a real code path rather than a malfunction."""
+        message = _why_no_solve(
+            _StubThread(running=True, finished=False),
+            _StubProbe(worker_finished=1),
+            "the first solve",
+        )
+        assert "calls the result stale" in message
+
+    def test_the_message_names_what_was_waited_for_and_the_counts(self):
+        """98 tests share the `win` fixture, so "which wait" is not obvious
+        from the test that happens to report the error."""
+        message = _why_no_solve(
+            _StubThread(running=True, finished=False),
+            _StubProbe(worker_finished=2, solved=0),
+            "the integral solve",
+        )
+        assert message.startswith("the integral solve never signalled within 10000 ms")
+        assert "SolveWorker.finished:  2 emission(s)" in message
+        assert "MainWindow.solved:     0 emission(s)" in message
+
+    def test_a_real_timeout_raises_this_and_not_pytestqts_anonymous_error(
+        self, qtbot, monkeypatch
+    ):
+        """End to end, because the unit tests above would still pass if
+        `raising=False` were dropped and pytest-qt's own TimeoutError came
+        back -- which is exactly the regression worth guarding.
+
+        One extra window, against this file's rule of sharing `win`: the
+        fixture builds 98 of them already, and a timeout cannot be provoked on
+        a window whose solve has landed. The 1 ms budget is 70x under the
+        ~70 ms solve, so it times out without waiting for one.
+        """
+        from gratinglab.gui.qt.main_window import MainWindow
+
+        monkeypatch.setitem(globals(), "SOLVE_TIMEOUT_MS", 1)
+        window = MainWindow()
+        qtbot.addWidget(window)
+        with pytest.raises(AssertionError, match="never signalled within 1 ms"):
+            _await_solve(qtbot, window, what="the probe solve")
 
 
 class TestToolchain:
