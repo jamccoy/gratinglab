@@ -26,6 +26,34 @@ entries under "Unreleased" into a section named for the new version;
   returned message rather than a Python warning, because the edge-of-arc case
   is legitimate: the TASTE campaign has two such points at its published mount.
 
+- **A solve that never signalls in the Qt tests now says why.** The shared
+  `win` fixture waited on `window.solved` with a bare `qtbot.waitSignal`, and
+  on 2026-10-31 a full-suite run produced one `Signal not emitted after
+  10000 ms` with no further information — and attributed it to
+  `TestRimFocusAndPresets::test_choosing_it_also_focuses_on_the_rim`, which has
+  no timing dependency of any kind. 98 of that file's 157 tests take the
+  fixture, so the blamed test was simply whichever one was in setup, and the
+  first investigation went to the wrong place.
+
+  The wait now takes `raising=False` and reports the state that explains it:
+  whether the worker thread exists, is running or has exited, and how many
+  `SolveWorker.finished` and `MainWindow.solved` emissions arrived. Those three
+  separate the real candidates — a window that never started a worker, a worker
+  that starved or died in the solve (`_start_worker` documents a QThread stack
+  size that segfaults the process on a dense complex solve), and a `finished`
+  that arrived but was dropped by `_on_solved` because `_tokens` called the
+  result stale, which is a genuine code path rather than a malfunction. The
+  message also names which wait timed out, since 98 tests share one.
+
+  The timeout itself is unchanged at 10 s, deliberately: it is about 140× the
+  ~70 ms this solve takes, so raising it would only make a hang slower to
+  report. The earlier claim that the test sat at the edge of a 10 s budget was
+  wrong — it conflated a single-test pytest invocation's 11.21 s of wall time
+  (process start, imports, Qt init, construction, teardown) with the signal
+  wait. A constructor/wait race was also ruled out by experiment: `solved` has
+  0 emissions before the wait begins, because nothing spins the event loop
+  between `MainWindow()` returning and `waitSignal` starting.
+
 ## 0.3.3 (2026-10-31)
 
 ### Added
