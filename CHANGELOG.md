@@ -64,6 +64,13 @@ entries under "Unreleased" into a section named for the new version;
   `integral-512` 1.23 s to 0.61 s, `integral-scan-8` 3.93 s to 2.65 s, with
   checksums equal to 4e-16. A scan gains less because it builds the geometry
   once. No result changes; the integral tests pass unchanged.
+- **The window solves a scan's wavelengths on several threads.** The integral
+  and RCWA solvers have taken `workers` since 0.2.0, but it defaults to 1 and
+  the window passed nothing, so every scan in the GUI ran on one core. Solves,
+  convergence sweeps and Compare now pass the core count less one, capped at
+  8, to any solver whose `solve` accepts it, and keep a `workers` already
+  given. A 32-wavelength integral scan on MC1 (16 cores): 5.05 s at 1, 1.69 s
+  at 4, 1.34 s at 8, 1.22 s at 12, each identical to the serial result.
 
 ## 0.3.3 (2026-10-31)
 
