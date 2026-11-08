@@ -278,6 +278,18 @@ class TestToolchain:
         assert matplotlib.get_backend() == before
 
 
+def _assert_same_solve(shown, direct):
+    """A rigorous tab's scan is the solver's own, to rounding.
+
+    Not bit for bit. The window solves on another thread from the direct call
+    in the test, and with threadpoolctl 3.8.0 LAPACK's answer on x86 can then
+    differ in the last place: 1e-15 here, and exactly 0 under 3.7.0. A tab
+    that computed or rescaled anything would be far outside this.
+    """
+    np.testing.assert_allclose(shown.efficiency, direct.efficiency, rtol=0, atol=1e-13)
+    np.testing.assert_allclose(shown.absorption, direct.absorption, rtol=0, atol=1e-13)
+
+
 class TestNotASecondSourceOfTruth:
     """The single most important property of this layer.
 
@@ -425,8 +437,7 @@ class TestTheIntegralTab:
         expected = integral.solve(
             parsed.problem, parsed.illumination, parsed.wavelengths, **options
         )
-        assert np.array_equal(tab._scan.efficiency, expected.efficiency)
-        assert np.array_equal(tab._scan.absorption, expected.absorption)
+        _assert_same_solve(tab._scan, expected)
 
     def test_the_panel_names_the_material_and_the_conserved_quantity(
         self, qtbot, win
@@ -513,8 +524,7 @@ class TestTheRcwaTab:
         expected = rcwa.solve(
             parsed.problem, parsed.illumination, parsed.wavelengths, **options
         )
-        assert np.array_equal(tab._scan.efficiency, expected.efficiency)
-        assert np.array_equal(tab._scan.absorption, expected.absorption)
+        _assert_same_solve(tab._scan, expected)
         shown = tab._provenance.toPlainText()
         assert "absolute (Au)" in shown
         assert "exact" in tab._profile_note.text()
