@@ -54,6 +54,17 @@ entries under "Unreleased" into a section named for the new version;
   0 emissions before the wait begins, because nothing spins the event loop
   between `MainWindow()` returning and `waitSignal` starting.
 
+### Changed
+
+- **The integral solver's Kummer tails are built in cache-sized blocks.** A
+  profile of one 512-point solve put 1.26 s of 1.7 s in the Horner loop of
+  `kernel_geometry`, which allocated a P-square temporary per term and
+  streamed it through memory 256 times. It now runs in place, 32 rows at a
+  time. `benchmarks/solver_speed.py --env single --repeat 2` on MC1:
+  `integral-512` 1.23 s to 0.61 s, `integral-scan-8` 3.93 s to 2.65 s, with
+  checksums equal to 4e-16. A scan gains less because it builds the geometry
+  once. No result changes; the integral tests pass unchanged.
+
 ## 0.3.3 (2026-10-31)
 
 ### Added
