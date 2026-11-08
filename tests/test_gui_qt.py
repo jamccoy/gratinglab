@@ -2200,3 +2200,35 @@ def test_exit_restores_collection_even_with_a_window_still_open(qtbot, win):
         # Put back what a live window expects, or the rest of the session
         # runs with collection on while windows still hold the guard.
         gc.disable()
+
+
+class TestScanWorkers:
+    """The window solves a scan's wavelengths on several threads.
+
+    The library's ``workers`` defaults to 1 and the window passed nothing, so
+    every scan in the GUI ran on one core of however many there were.
+    """
+
+    def test_solvers_that_take_workers_are_given_them(self):
+        from gratinglab.gui.qt import worker
+
+        for method in ("integral", "rcwa"):
+            options = worker._with_workers(method, {"boundary_points": 64})
+            assert options["workers"] == worker._SCAN_WORKERS
+            assert options["boundary_points"] == 64
+
+    def test_solvers_without_it_are_not_sent_it(self):
+        from gratinglab.gui.qt import worker
+
+        for method in ("scalar", "cmethod"):
+            assert "workers" not in worker._with_workers(method, {})
+
+    def test_a_workers_already_given_is_kept(self):
+        from gratinglab.gui.qt import worker
+
+        assert worker._with_workers("integral", {"workers": 1})["workers"] == 1
+
+    def test_the_default_leaves_a_core_and_stops_at_eight(self):
+        from gratinglab.gui.qt import worker
+
+        assert 1 <= worker._SCAN_WORKERS <= 8

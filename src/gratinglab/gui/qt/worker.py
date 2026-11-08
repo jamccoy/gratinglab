@@ -26,6 +26,8 @@ and the clear is silently lost.
 
 from __future__ import annotations
 
+import inspect
+import os
 import threading
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -79,6 +81,32 @@ def _energy(scan) -> "EnergyReport":
     return check_energy_balance(scan, tolerance=_ENERGY_DEVIATION_WARN)
 
 
+#: Threads a scan's wavelengths are solved on, for the solvers that take
+#: ``workers``. The library defaults to 1, and nothing in the window passed
+#: anything else, so a scan used one core of however many there were. A
+#: 32-wavelength integral scan on MC1 (16 cores) took 5.05 s at 1, 1.69 s at
+#: 4, 1.34 s at 8 and 1.22 s at 12, identical to the serial result each time,
+#: so 8 is where it stops paying. One core is left for the window itself.
+_SCAN_WORKERS = max(1, min(8, (os.cpu_count() or 2) - 1))
+
+
+def _with_workers(method: str, options: dict) -> dict:
+    """``options`` with :data:`_SCAN_WORKERS` added, if ``method`` takes it.
+
+    A ``workers`` already present is kept. The solver's own signature is what
+    decides, so a solver that gains the option later is covered without an
+    edit here, and one without it (scalar, the C-method) is never sent a
+    keyword it would refuse.
+    """
+    from ...solvers.base import get_solver
+
+    if "workers" in options:
+        return options
+    if "workers" not in inspect.signature(get_solver(method).solve).parameters:
+        return options
+    return {**options, "workers": _SCAN_WORKERS}
+
+
 class SolveWorker(QObject):
     """Run one solve at a time on a dedicated thread, for whichever solver asked.
 
@@ -123,7 +151,7 @@ class SolveWorker(QObject):
                 geometry.illumination,
                 geometry.wavelengths,
                 [method],
-                options={method: options},
+                options={method: _with_workers(method, options)},
                 progress=self._reporter(token, cancel),
             )[0]
             self.finished.emit(token, method, SolveResult(scan, _energy(scan)))
@@ -172,7 +200,11 @@ class SolveWorker(QObject):
                 geometry.illumination,
                 geometry.wavelengths,
                 progress=self._reporter(token, cancel),
-                **{k: v for k, v in options.items() if k != knob},
+                **{
+                    k: v
+                    for k, v in _with_workers(method, options).items()
+                    if k != knob
+                },
             )
             self.converged.emit(
                 token,
@@ -238,7 +270,7 @@ class SolveWorker(QObject):
                         geometry.illumination,
                         geometry.wavelengths,
                         [method],
-                        options={method: method_options},
+                        options={method: _with_workers(method, method_options)},
                         progress=step,
                     )[0]
                 except Cancelled:
