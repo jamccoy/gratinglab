@@ -314,7 +314,7 @@ class TestFluxObliquity:
 class TestFacetHandedness:
     r"""Which physical direction the profile parameter runs.
 
-    `Profile.height(t)` is a shape in `t`; `profiles.py` never says whether
+    `Profile.height(t)` is a shape in `t`; `gratinglab.profiles` never says whether
     `+t` points along `+d-hat` or `-d-hat`, and until something drew a groove
     and a ray in the same frame, nothing had to know -- every consumer takes
     :math:`\|G_m\|^2`, where the choice cancels.

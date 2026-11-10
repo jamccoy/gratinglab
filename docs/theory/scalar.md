@@ -105,7 +105,7 @@ The coefficient of order $m$ is therefore
 $$G_m = \frac{1}{p}\int_0^p G(x)\, e^{-imKx}\,dx$$
 
 Substituting $t = x/p$ (the normalised coordinate used by the
-[`Profile`](../../src/gratinglab/profiles.py) classes) gives the form that the
+[`Profile`](../../src/gratinglab/profiles/_types.py) classes) gives the form that the
 code evaluates:
 
 $$\boxed{\;G_m = \int_0^1 e^{i\Phi_m(t)}\, e^{-2\pi i m t}\,dt\;}

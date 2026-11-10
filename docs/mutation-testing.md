@@ -37,7 +37,7 @@ layout does not appear in the names.
 |---|---|
 | `gui/` | Computes nothing. A surviving mutant there means a misplaced button and not a wrong number, which is the reason that layer was arranged to be thin. |
 | `io/` | Pinned by round-trip and corpus-parsing tests, which a mutation operator does not reach usefully. |
-| `illumination.py`, `problem.py`, `profiles.py` | Excluded because of a tool limitation, not as a judgement about these modules. See below. |
+| `illumination.py`, `problem.py`, `profiles/` | Excluded because of a tool limitation, not as a judgement about these modules. See below. |
 
 Everything else (`geometry`, `checks`, `convergence`, `compare`, `result`,
 `solvers/`) is mutated, since that is where the physics resides.

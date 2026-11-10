@@ -1718,7 +1718,7 @@ for the conclusion drawn, which is that the angle is not 90°.
 
 ### What this changed
 
-[`Trapezoidal`](../src/gratinglab/profiles.py) was added: a binary groove with a
+[`Trapezoidal`](../src/gratinglab/profiles/_trapezoid.py) was added: a binary groove with a
 sidewall angle and a corner radius, which reduces to `Lamellar` exactly when the
 sidewall is vertical and the corners are sharp. `Lamellar` itself was left
 alone, because it is the idealisation the published benchmark tables are

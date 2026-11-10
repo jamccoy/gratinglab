@@ -241,7 +241,7 @@ do_not_mutate = [
     # are covered by tests/test_illumination.py and tests/test_profiles.py.
     "*/illumination.py",
     "*/problem.py",
-    "*/profiles.py",
+    "*/profiles/*",
 ]
 
 # corpus.toml, which the reference tests read.

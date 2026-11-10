@@ -146,7 +146,7 @@ the angles it uses, and all three resolve to the same internal representation.
 
 $$\hat{t} = -\hat{d}$$
 
-`Profile.height(t)` describes a shape in a normalised parameter `t`. `profiles.py` does
+`Profile.height(t)` describes a shape in a normalised parameter `t`. `gratinglab.profiles` does
 not state which physical direction `+t` points in, because nothing required it until a
 profile and a ray were drawn in the same frame. The wave conventions above determine
 it: `+t` runs along `-d̂`, that is, against the dispersion direction.
