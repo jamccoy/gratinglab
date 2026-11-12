@@ -1,16 +1,17 @@
 """``profiles.Trapezoidal`` through every solver, held against each other.
 
 The groove is OGRE-like: period 160 nm, 68 nm deep (depth fraction 0.425), a
-crest 0.30 of the period wide, 72 deg sidewalls, CXRO gold (the vendored
-``materials/data/Au.txt``), in an extreme off-plane mount at graze 1.5 deg,
+crest 0.30 of the period wide, 72 deg sidewalls, gold (the suite's synthetic
+``tests/data/materials/Au.txt``), in an extreme off-plane mount at graze 1.5 deg,
 1.5 to 4.5 nm. That is the shape the 2021 cross-sections show for the 160 nm
 laminar gratings, not a measurement of any one of them (``findings.md``,
 "What a cross-section shows that a scan cannot").
 
 Every tolerance here sits about three times above a number measured on
-2026-10-29 from a convergence ladder per solver: integral 400 / 800 / 1600
-boundary points, C-method truncation 16 to 128, RCWA truncation 10 / 20 / 40
-(staircase slices follow it). ``findings.md``, "Trapezoidal through the four
+2026-10-29, on the CXRO gold table the suite used until 2026-11-11, from a
+convergence ladder per solver: integral 400 / 800 / 1600 boundary points,
+C-method truncation 16 to 128, RCWA truncation 10 / 20 / 40 (staircase
+slices follow it). The synthetic table meets the same tolerances. ``findings.md``, "Trapezoidal through the four
 solvers", has the whole map across sidewall angle and corner radius; this
 file keeps the cases that are cheap enough to solve on every push.
 """

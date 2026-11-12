@@ -633,8 +633,8 @@ between them is deliberately left unassigned
 ([`fresnel.py`](../../src/gratinglab/materials/fresnel.py) refuses TE/TM labels
 for this reason). Resolving it here would be false precision in a model that
 already reports TE and TM as identical, and the size of what is being waived has
-been measured. The fractional intensity split $|R_s - R_p|/R_s$ on the vendored
-Au table is:
+been measured. The fractional intensity split $|R_s - R_p|/R_s$ on the CXRO
+Au table (vendored in the repository until 2026-11-11) is:
 
 | $\lambda$ (nm) | $\zeta = 0.5°$ | $1.25°$ | $2°$ | $5°$ |
 |---:|---:|---:|---:|---:|

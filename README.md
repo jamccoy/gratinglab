@@ -204,8 +204,9 @@ uv tool install "gratinglab[gui]"               # gratinglab-gui as a standalone
 
 From a checkout, use `pip install -e ".[dev,gui,metrology,refractiveindex]"` instead.
 
-No optical constant tables are distributed with the package, so absolute efficiencies
-require tables supplied by the user. A library is a directory of such tables, one
+Neither the package nor its repository carries optical constant tables, so absolute
+efficiencies, and the `coating="Au"` examples above, require tables supplied by the
+user. A library is a directory of such tables, one
 material per file, each named after its material:
 
 | File | From | Range |
@@ -219,7 +220,7 @@ Saving one as `~/.gratinglab/materials/Pt.yml` makes `coating="Pt"` available.
 `materials.from_cxro_file(path)` or `from_refractiveindex_file(path)` reads a single
 file without a library. The YAML files require the `refractiveindex` extra.
 [`SOURCES.md`](https://github.com/jamccoy/gratinglab/blob/master/src/gratinglab/materials/data/SOURCES.md)
-explains why no tables are distributed.
+explains why none are distributed.
 
 The core install does not include a plotting stack, so a user who only runs the solvers
 does not install one. A subpackage that needs an optional extra names it when it is
@@ -469,9 +470,11 @@ no such question.
 
 ### What this licence does not cover
 
-**Optical constant tables.** None are distributed with the package, and a table you
-add is governed by the terms of whoever published it, not by this licence. CXRO and
-refractiveindex.info each state their own, and a table exported from another program
+**Optical constant tables.** None are distributed with the package or kept in the
+repository: the suite runs on an invented gold-sized table of its own, and its
+refractiveindex.info reader fixtures are files that site dedicates CC0. A table you
+add is governed by the terms of whoever published it, not by this licence. refractiveindex.info
+dedicates its files CC0, CXRO states no terms at all, and a table exported from another program
 carries whatever that program's terms attach to it.
 [`SOURCES.md`](https://github.com/jamccoy/gratinglab/blob/master/src/gratinglab/materials/data/SOURCES.md)
 records where each kind comes from and why none ships here.

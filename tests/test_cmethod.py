@@ -640,13 +640,14 @@ def asymmetric_groove(steep: float, *, depth=0.3, facet=27.0, land=77 / 400) -> 
 OFF_PLANE = Illumination.offplane(graze=1.73, azimuth=0.0, polarization="TE")
 
 #: The integral solver on ``asymmetric_groove(80)`` at 1.55 nm, OFF_PLANE,
-#: CXRO gold, corner_grading=4: each propagating order, ascending. 1600
-#: points; 1200 agree to 6e-6. Pinned because the 1600-point solve took
-#: ten minutes (measured 2026-10-29).
+#: the suite's synthetic Au, corner_grading=4: each propagating order,
+#: ascending. 1600 points; 1200 agree to 4e-6. Pinned because the 1600-point
+#: solve takes minutes (re-measured 2026-11-11, 134 s on MC1, when the CXRO
+#: table this was first pinned on left the repository).
 STEEP_80_REFERENCE = (
-    0.007437, 0.006005, 0.007763, 0.026137, 0.003908, 0.060704, 0.021511,
-    0.021711, 0.068545, 0.064224, 0.035783, 0.008218, 0.002726, 0.262197,
-    0.049879,
+    0.007528, 0.006315, 0.007333, 0.027284, 0.004955, 0.066954, 0.021735,
+    0.023495, 0.071803, 0.068149, 0.038395, 0.008859, 0.002932, 0.276231,
+    0.052204,
 )
 
 
@@ -761,7 +762,7 @@ class TestSteepWalls:
     def test_off_plane_gold_inside_the_limit(self):
         """The issue's mount and groove with an 80 deg wall, which the method
         can resolve: the floor is 44, and at 128 harmonics every order is
-        within 1.3e-4 of the pinned integral answer (measured)."""
+        within 1.4e-4 of the pinned integral answer (measured 2026-11-11)."""
         problem = Problem(period=400.0, profile=asymmetric_groove(80.0), coating="Au")
         assert wall_floor(problem, OFF_PLANE, [1.55]).needed <= 64
         scan = cmethod.solve(problem, OFF_PLANE, [1.55], truncation=128, conductivity="tabulated")

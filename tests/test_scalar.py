@@ -1175,12 +1175,14 @@ class TestHorizonVisibility:
     def test_the_exit_side_is_where_the_blind_spot_was(self):
         """The blaze order at its blaze wavelength loses ~1/3 of its power to
         shadows the facet-normal test cannot see: the m=+3 exit direction
-        (beta = 39 deg) is cast-shadowed over 14.7% of the period. Pinned
-        loosely as the regression anchor for the measured impact."""
-        base = self._solve(self.TASTE, "facet-normal", [2.226])
-        horizon = self._solve(self.TASTE, "horizon", [2.226])
-        assert base.at(2.226)[3] == pytest.approx(0.514, abs=0.01)
-        assert horizon.at(2.226)[3] == pytest.approx(0.348, abs=0.01)
+        (beta = 39 deg) is cast-shadowed over 14.7% of the period. The ratio is
+        pinned, not the efficiencies, because it is the shadowing's and not the
+        coating's: 0.677 on CXRO gold (0.348 / 0.514, docs/findings.md) and on
+        the suite's synthetic Au alike (0.367 / 0.542, measured 2026-11-11)."""
+        base = self._solve(self.TASTE, "facet-normal", [2.226]).at(2.226)[3]
+        horizon = self._solve(self.TASTE, "horizon", [2.226]).at(2.226)[3]
+        assert horizon / base == pytest.approx(0.677, abs=0.005)
+        assert base > 0.4  # non-vacuity: the blaze order carries the power
 
     @pytest.mark.parametrize("coating", ["Au", None])
     def test_the_horizon_keeps_reciprocity(self, coating):

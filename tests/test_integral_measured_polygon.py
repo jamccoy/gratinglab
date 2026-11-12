@@ -166,9 +166,11 @@ class TestEnergyBalance:
         """The fault, kept visible: meshed as straight segments, the same
         groove misses unity by far more than the mesh's error. If this ever
         closes, the case has stopped exercising issue #6 and wants
-        replacing, not deleting."""
+        replacing, not deleting. The bound is ten times the smoothed ladder's
+        last rung (< 2e-4 above); the smallest miss, at 3.1 nm on the suite's
+        synthetic Au, is 3.7e-3 (measured 2026-11-11)."""
         scan = integral_scan(*key, 512, smoothing=None)
-        assert abs(reflected(scan)[0] + scan.absorption[0] - 1.0) > 5e-3
+        assert abs(reflected(scan)[0] + scan.absorption[0] - 1.0) > 2e-3
         assert scan.provenance.notes["profile"]["reason"] == "profile_smoothing=None"
 
 

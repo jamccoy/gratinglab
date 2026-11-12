@@ -9,17 +9,18 @@ order; scalar theory is held only to what it promises.
 
 The case is a shallow gold sinusoid in grazing incidence, the founding
 application's regime: period 40 nm, depth fraction 0.05, alpha = 80 deg, TE,
-2 to 6 nm, absolute efficiencies with absorption from the vendored CXRO table
-(``materials/data/Au.txt``, in the repository and therefore in CI, never in
-the wheel; see ``SOURCES.md``). Forty orders propagate at 2 nm and fourteen at
+2 to 6 nm, absolute efficiencies with absorption from the suite's synthetic
+gold-sized table (``tests/data/materials/Au.txt``; see ``make_au.py`` there). Forty orders propagate at 2 nm and fourteen at
 6 nm.
 
 How the tolerances were set
 ---------------------------
-From a convergence ladder, not from one run. Measured 2026-10-28 on MC1 as
-the largest difference over the five wavelengths against the C-method at
-truncation 80, which is converged: truncation 24, 40 and 80 agree to 2e-15,
-and the integral solver closes on it as its mesh is refined.
+From a convergence ladder, not from one run, on the CXRO gold table the suite
+used until 2026-11-11; the synthetic table meets them too. Measured
+2026-10-28 on MC1 as the largest difference over the five wavelengths
+against the C-method at truncation 80, which is converged: truncation 24, 40
+and 80 agree to 2e-15, and the integral solver closes on it as its mesh is
+refined.
 
 ==================  ==========  ==========  ==========  ==========
 knob                order 0     order 1     orders 2+   absorbed

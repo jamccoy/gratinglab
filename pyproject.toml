@@ -145,11 +145,11 @@ version = { attr = "gratinglab.__version__" }
 [tool.setuptools.packages.find]
 where = ["src"]
 
-# Optical constant TABLES do not ship: whether CXRO's may be redistributed is
-# not settled, so the wheel and sdist carry none and `available()` is empty on
-# install. That is the one place a checkout and an install differ on purpose,
-# and both halves are checked: the suite uses `data/Au.txt` from the checkout,
-# and release.yml asserts the wheel holds no table and that an install refuses
+# Optical constant TABLES do not ship, and the repository holds none: only
+# data that is ours or in the public domain is committed, and no published
+# table is clearly either. So `available()` is empty on install. The suite
+# uses an invented table from `tests/data/materials/` instead, and
+# release.yml asserts the wheel holds no table and that an install refuses
 # `lookup("Au")` with the message that says what to do instead. A missing table
 # raises rather than degrading, so the difference cannot pass for a result.
 # SOURCES.md ships, because it is how a user finds out where to get one.

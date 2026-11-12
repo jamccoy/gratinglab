@@ -1314,7 +1314,8 @@ measurements show that this simplification costs under half a percent in the
 working regime, so the mapping remains unimplemented, and the solver now
 quantifies the cost of the simplification instead of assuming it is small.
 
-The fractional intensity split |R_s − R_p|/R_s on the vendored Au table is:
+The fractional intensity split |R_s − R_p|/R_s on the CXRO Au table (vendored
+in the repository until 2026-11-11) is:
 
 | λ (nm) | ζ = 0.5° | 1.25° | 2° | 5° |
 |---:|---:|---:|---:|---:|
@@ -2753,7 +2754,7 @@ profile defect, and one known fault in a new place. All three are recorded
 here with the map itself.
 
 The case is OGRE-like: period 160 nm, depth 68 nm (0.425 of the period), a
-crest 0.30 of the period wide, CXRO gold (the vendored `Au.txt`), extreme
+crest 0.30 of the period wide, CXRO gold (the `Au.txt` vendored until 2026-11-11), extreme
 off-plane at graze 1.5° and azimuth 0, at 1.5, 3.0 and 4.5 nm. The sidewall
 ran from 90° to 58°; below about 50.5° that groove has no floor left. A second, 24 nm deep groove (0.15 of the period)
 reached 30°, which is 60° off vertical. Corner radius ran from 0 to the

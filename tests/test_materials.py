@@ -162,13 +162,16 @@ class TestAgainstPublishedValues:
     """Checked outside this repo, so the reader is not merely self-consistent."""
 
     def test_gold_at_1_nm(self, gold):
-        """Au at 1239.84 eV: Henke gives decrement ~1.46e-3, absorption
-        ~5.1e-4. Loose tolerances on purpose -- this is checking that the
-        columns are the right way round and the units are right, not
-        re-deriving the table."""
+        """At 1239.84 eV the suite's table is its generator's closed form,
+        decrement 0.0113 (E/200)^-1.2 and absorption 0.0095 (E/200)^-1.7
+        (tests/data/materials/make_au.py). Checked from the formula rather than
+        the file, so this catches the columns swapped or the energy-to-
+        wavelength conversion wrong. Real gold there is about 1.46e-3 and
+        5.1e-4 (Henke), which this table is near but does not claim to be."""
         decrement, absorption = gold.at(1.0)
-        assert decrement == pytest.approx(1.46e-3, rel=0.05)
-        assert absorption == pytest.approx(5.1e-4, rel=0.10)
+        energy = HC_EV_NM / 1.0
+        assert decrement == pytest.approx(0.0113 * (energy / 200) ** -1.2, rel=1e-4)
+        assert absorption == pytest.approx(0.0095 * (energy / 200) ** -1.7, rel=1e-4)
 
     def test_the_index_is_just_below_one(self, gold):
         r"""The defining property of X-ray optics: :math:`n = 1 - \delta + i\beta`
@@ -317,34 +320,31 @@ class TestUserLibraries:
         assert "Pt.txt" in message and materials.LIBRARY_ENV in message
 
 
-class TestEveryVendoredTable:
-    """Each file in `data/` is a claim made in `SOURCES.md`, so each is held to
-    it rather than Au alone standing in for any that arrive later."""
+class TestTheRepositoryCarriesNoTable:
+    """Only data that is ours or in the public domain is committed, and no
+    published optical constants table is clearly either, so the package's own
+    `data/` holds `SOURCES.md` and nothing a reader would load. The suite's
+    stand-in lives under `tests/data/materials/` instead."""
 
-    @pytest.mark.parametrize("name", materials.available())
-    def test_it_loads_as_a_cxro_table(self, name):
-        table = materials.lookup(name)
-        assert "CXRO" in table.source
+    def test_the_package_data_directory_has_no_table(self):
+        package_data = Path(materials.__file__).parent / "data"
+        tables = [
+            p.name for p in package_data.iterdir()
+            if p.suffix.lower() in materials._READERS
+        ]
+        assert tables == []
+        assert (package_data / "SOURCES.md").is_file()
+
+    def test_the_suite_s_gold_is_the_synthetic_stand_in(self):
+        """Every `coating="Au"` in the suite resolves here, so check that it is
+        the invented table and that it spans what the solver tests assume."""
+        table = materials.lookup("Au")
+        assert "tests" in table.source and "materials" in table.source
         assert len(table.wavelength_nm) == 500
-
-    @pytest.mark.parametrize("name", materials.available())
-    def test_it_spans_200_ev_to_2_kev(self, name):
-        low, high = materials.lookup(name).range_nm
+        low, high = table.range_nm
         assert low == pytest.approx(0.6199, abs=1e-3)
         assert high == pytest.approx(6.199, abs=1e-3)
-
-    @pytest.mark.parametrize("name", materials.available())
-    def test_its_index_is_close_to_one_and_lossy(self, name):
-        """Close to one, not below it everywhere: just under an absorption edge
-        the decrement goes negative, so the bound is two-sided."""
-        table = materials.lookup(name)
-        assert (np.abs(table.decrement) < 0.05).all()
-        assert (table.absorption > 0).all()
-
-    @pytest.mark.parametrize("name", materials.available())
-    def test_it_has_a_row_in_sources(self, name):
-        sources = (materials.data_dir() / "SOURCES.md").read_text(encoding="utf-8")
-        assert f"| `{name}.txt` |" in sources
+        assert (table.decrement > 0).all() and (table.absorption > 0).all()
 
 
 #: A synthetic CXRO export with a negative decrement at 572.7 eV, the shape

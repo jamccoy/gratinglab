@@ -72,6 +72,30 @@ entries under "Unreleased" into a section named for the new version;
   given. A 32-wavelength integral scan on MC1 (16 cores): 5.05 s at 1, 1.69 s
   at 4, 1.34 s at 8, 1.22 s at 12, each identical to the serial result.
 
+### Removed
+
+- **The CXRO gold table, `materials/data/Au.txt`, is gone from the
+  repository.** gratinglab now commits only data that is its own or in the
+  public domain, and CXRO's site states no data licence. The table never
+  shipped in a wheel or sdist, so no install changes; it stays in the git
+  history and in GitHub's source archives for 0.1.0 to 0.3.3. A checkout no
+  longer resolves `coating="Au"` by itself: add a gold table to
+  `~/.gratinglab/materials` or a directory named in `GRATINGLAB_MATERIALS`,
+  as an install always needed (`SOURCES.md` says where to get one).
+
+  The test suite runs on `tests/data/materials/Au.txt` instead, an invented
+  table with gold-sized power laws and no absorption edges, written by
+  `make_au.py` beside it. Without the CXRO file 192 tests failed; on the
+  stand-in all but four passed unchanged, and those four were pins of gold's
+  own numbers. The C-method's steep-wall reference was re-solved on it (1600
+  boundary points, 1200 agreeing to 4e-6); the horizon test now pins the
+  fraction shadowing removes, 0.677 on either table, rather than gold's
+  efficiencies; the unclosed-polygon bound fell from 5e-3 to 2e-3, still ten
+  times the mesh error, because the stand-in misses by 3.7e-3 where gold
+  missed by more; and the reader's published-value check now tests the
+  generator's formula. Numbers in `docs/findings.md` and `docs/theory/` were
+  measured on CXRO gold and are left as that record.
+
 ## 0.3.3 (2026-10-31)
 
 ### Added

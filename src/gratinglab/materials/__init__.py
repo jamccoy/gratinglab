@@ -13,8 +13,9 @@ A library is a directory of tables, one material per file, named for it:
 ultraviolet to infrared) or `Pt.ari` (PCGrate) is `coating="Pt"`. Yours is
 `~/.gratinglab/materials`, or whatever `GRATINGLAB_MATERIALS` names, and it is
 searched before the tables bundled with a checkout, so your own replaces a
-bundled one of the same name. The release packages bundle none, because CXRO's
-terms for redistributing its tables are not settled; `data/SOURCES.md` says so.
+bundled one of the same name. Neither the repository nor a release bundles
+any, because no published table is clearly public domain; `data/SOURCES.md`
+says so.
 
 Lookup is by name, because that is what a
 :class:`~gratinglab.problem.Problem` carries: `coating="Au"` keeps a benchmark
@@ -66,8 +67,8 @@ __all__ = [
     "write_ari",
 ]
 
-#: Tables bundled with a checkout live here. The release packages ship none;
-#: see ``data/SOURCES.md``.
+#: Bundled tables would live here, and there are none, in a checkout or a
+#: release; see ``data/SOURCES.md``. The test suite points this elsewhere.
 _DATA = Path(__file__).parent / "data"
 
 #: Names your own library directories, separated by ``os.pathsep``. When set it

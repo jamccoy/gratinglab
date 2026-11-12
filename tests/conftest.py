@@ -35,6 +35,14 @@ from corpus import DATA, DEFAULT_REF_DIR, reference_dir  # noqa: F401
 # sets the variable itself with monkeypatch, which restores this afterwards.
 os.environ["GRATINGLAB_MATERIALS"] = tempfile.mkdtemp(prefix="gratinglab-no-library-")
 
+# The repository carries no real optical constants, so the bundled library the
+# suite searches is `data/materials/`, whose `Au.txt` is an invented gold-sized
+# X-ray table (see `make_au.py` there). `coating="Au"` means that table in every
+# test. Set at import for the same collection-time reason as above.
+from gratinglab import materials  # noqa: E402
+
+materials._DATA = DATA / "materials"
+
 # The same for the GUI's settings (gui/qt/theming.py): an INI file of the
 # suite's own, pinned to the light theme, so no test reads or writes the
 # user's settings and none depends on whether this machine is in dark mode.

@@ -193,9 +193,9 @@ code changes. Or load a table from anywhere without adding it:
 
 {citations}
 
-The package ships no tables: CXRO's terms for redistributing them inside a
-BSD-3 package have not been confirmed, and `SOURCES.md` beside the bundled
-directory records why. Each table's source names the file it was read from,
+The package ships no tables: it carries only data that is its own or in the
+public domain, and no published table is clearly either. `SOURCES.md` beside
+the bundled directory records why. Each table's source names the file it was read from,
 so a result's provenance says which library answered.
 
 ## Surface roughness
