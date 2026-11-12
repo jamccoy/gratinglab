@@ -14,6 +14,19 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- **`materials.typical()`, and `coating="typical:Au"`: an X-ray index from
+  physical facts rather than a table**, 30 eV to 30 keV, for Au, Pt, Ni, C, Si
+  and O and compounds of them (`typical:SiO2`, `typical:C@2.0` for a density).
+  Each core shell absorbs by Kramers' law normalised by its own sum rule, and
+  the Kramers-Kronig relation gives the decrement in closed form, so gold at
+  1 nm is not the free-electron value 1.5 times too large. Measured against
+  CXRO (not committed), the decrement is within a few percent where the model
+  gives no caveat and the absorption within a factor of two;
+  `docs/typical-materials.md` has the table. It is never a fallback: a plain
+  `"Au"` with no table still refuses. Near an edge, above a heavy atom's 4d or
+  4f levels, or below 100 eV, each solver adds a provenance warning, through a
+  new `OpticalConstants.caveats()` that a table answers with nothing.
+
 - **`Residuals.evanescent_warning()`, and `n_evanescent` in
   `Residuals.summary()`.** A measured point on an order the model does not
   propagate reads a model value of exactly 0 and is folded into every other

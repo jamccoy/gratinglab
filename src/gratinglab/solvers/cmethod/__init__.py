@@ -344,9 +344,12 @@ class CMethodSolver:
         material: str | None = None
         indices = None
         lossless = np.zeros(len(wavelengths), dtype=bool)
+        material_caveats: tuple[str, ...] = ()
         if conductivity == "tabulated":
             material, constants = _resolve_index(problem)
             indices = np.asarray(constants.n(wavelengths), dtype=np.complex128)
+            # A model (materials.typical) names the bands it cannot answer for.
+            material_caveats = constants.caveats(wavelengths)
             if (indices.imag < 0.0).any():
                 raise ValueError(
                     f"material {material!r} tabulates a negative absorption (gain)"
@@ -449,7 +452,7 @@ class CMethodSolver:
         if progress is not None:
             progress(len(wavelengths), len(wavelengths))
 
-        warnings: list[str] = []
+        warnings: list[str] = list(material_caveats)
         if anomalous:
             span = f"{min(anomalous):.6g}-{max(anomalous):.6g} nm"
             warnings.append(

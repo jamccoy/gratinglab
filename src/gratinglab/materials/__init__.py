@@ -6,6 +6,7 @@ from gratinglab import materials
 materials.available()          # every material in every library
 pt = materials.lookup("Pt")    # ~/.gratinglab/materials/Pt.txt, say
 mine = materials.from_cxro_file("Ni_CXRO.txt")   # any file, no library
+au = materials.typical("Au")   # a model, not a table: see typical.py
 ```
 
 A library is a directory of tables, one material per file, named for it:
@@ -16,6 +17,11 @@ searched before the tables bundled with a checkout, so your own replaces a
 bundled one of the same name. Neither the repository nor a release bundles
 any, because no published table is clearly public domain; `data/SOURCES.md`
 says so.
+
+A name beginning `typical:` (`coating="typical:Au"`) is not looked up in any
+library: it is the X-ray model in :mod:`.typical`, built from physical facts,
+approximate, and named so that a result says it used a model. A plain `"Au"`
+with no table still refuses rather than falling back to it.
 
 Lookup is by name, because that is what a
 :class:`~gratinglab.problem.Problem` carries: `coating="Au"` keeps a benchmark
@@ -46,11 +52,14 @@ from .optical import (
     write_ari,
 )
 from .refractiveindex import read_refractiveindex
+from .typical import PREFIX as TYPICAL_PREFIX
+from .typical import TypicalConstants, from_name, typical
 
 __all__ = [
     "HC_EV_NM",
     "LIBRARY_ENV",
     "OpticalConstants",
+    "TypicalConstants",
     "UnknownMaterial",
     "available",
     "data_dir",
@@ -63,6 +72,7 @@ __all__ = [
     "read_ari",
     "read_cxro",
     "read_refractiveindex",
+    "typical",
     "user_dir",
     "write_ari",
 ]
@@ -169,7 +179,12 @@ def available() -> tuple[str, ...]:
 
 
 def lookup(name: str) -> OpticalConstants:
-    """A material by name, e.g. ``"Au"``, from the first library that has it."""
+    """A material by name, e.g. ``"Au"``, from the first library that has it.
+
+    ``typical:<formula>[@<density>]`` is the model in :mod:`.typical` instead.
+    """
+    if name.startswith(TYPICAL_PREFIX):
+        return from_name(name)
     for directory in library_dirs():
         path = _tables(directory).get(name)
         if path is not None:

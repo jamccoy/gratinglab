@@ -239,14 +239,21 @@ class RcwaSolver:
         from ...materials import lookup
 
         names = [material] + [layer.material for layer in problem.layers]
+        layer_constants = [lookup(layer.material) for layer in problem.layers]
         table = np.stack(
             [indices]
             + [
-                np.asarray(lookup(layer.material).n(wavelengths), dtype=np.complex128)
-                for layer in problem.layers
+                np.asarray(each.n(wavelengths), dtype=np.complex128)
+                for each in layer_constants
             ],
             axis=1,
         )
+        # A model (materials.typical) names the bands it cannot answer for.
+        material_caveats = [
+            caveat
+            for each in (constants, *layer_constants)
+            for caveat in each.caveats(wavelengths)
+        ]
         for name, column in zip(names, table.T):
             if (column.imag < 0.0).any():
                 raise ValueError(
@@ -360,6 +367,7 @@ class RcwaSolver:
         conditioning_warning = conditioning.warning("rcwa", ill_conditioned, _WARN_KAPPA)
         if conditioning_warning is not None:
             warnings.append(conditioning_warning)
+        warnings.extend(material_caveats)
         if (
             problem.coating is not None
             and problem.substrate is not None

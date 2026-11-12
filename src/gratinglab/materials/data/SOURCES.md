@@ -15,7 +15,11 @@ an invented gold-sized table, `tests/data/materials/Au.txt`, written by
 the tests.
 
 An install therefore starts with no materials, and `lookup` refuses with a
-message naming the way out. Nothing in `gratinglab` requires a table to exist;
+message naming the way out. The one exception is not a table:
+`coating="typical:Au"` and its siblings are an approximate X-ray model computed
+from physical facts (atomic numbers and weights, core-level binding energies
+from the X-ray Data Booklet, first ionization energies, densities), each stated
+with its source in `materials/typical.py`. See `docs/typical-materials.md`. Nothing in `gratinglab` requires a table to exist;
 `test_an_empty_data_directory_is_a_supported_state` holds it to that, and
 `test_the_package_data_directory_has_no_table` holds this directory empty.
 

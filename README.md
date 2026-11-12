@@ -222,6 +222,13 @@ file without a library. The YAML files require the `refractiveindex` extra.
 [`SOURCES.md`](https://github.com/jamccoy/gratinglab/blob/master/src/gratinglab/materials/data/SOURCES.md)
 explains why none are distributed.
 
+Without a table, `coating="typical:Au"` (or `typical:SiO2`, `typical:C@2.0` with
+a density) uses an approximate X-ray model built from physical facts, 30 eV to
+30 keV, for Au, Pt, Ni, C, Si and O. Where it cannot answer for its index, near
+an absorption edge or at low energy, the result's provenance says so.
+[`docs/typical-materials.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/typical-materials.md)
+has the model and how far it agrees with real tables.
+
 The core install does not include a plotting stack, so a user who only runs the solvers
 does not install one. A subpackage that needs an optional extra names it when it is
 missing, instead of failing with a bare `ModuleNotFoundError`.
@@ -348,6 +355,7 @@ gratinglab` regenerates the icon from the artwork in `gratinglab.gui.icon`.
 | [`docs/theory/scalar.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/theory/scalar.md) | The derivation of the scalar solver, its closed-form results and its limits |
 | [`docs/theory/integral.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/theory/integral.md) | The boundary-integral solver: conical formulation, perfect and finite conductivity |
 | [`docs/theory/metrology.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/theory/metrology.md) | The assumptions of the AFM pipeline, what it measures and what it does not, including what tip erosion can recover |
+| [`docs/typical-materials.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/typical-materials.md) | The X-ray index model used without a table, what it is checked against, and its measured accuracy |
 | [`docs/findings.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/findings.md) | Empirical results, each with the evidence for it |
 | [`docs/references.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/references.md) | The literature each part of the package is based on |
 | [`docs/mutation-testing.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/mutation-testing.md) | What is mutated, what is not, and how to interpret a surviving mutant |

@@ -221,6 +221,15 @@ class OpticalConstants:
         """
         return self._near_unity(self.n(wavelength_nm))
 
+    def caveats(self, wavelength_nm: ArrayLike) -> tuple[str, ...]:
+        """Provenance warnings this material asks for at these wavelengths.
+
+        A table answers for its whole range, so it has none; a model may not
+        (``typical.TypicalConstants``). Every solver adds these to its
+        warnings, so a material can say where it should not be relied on.
+        """
+        return ()
+
     @staticmethod
     def _near_unity(n: NDArray[np.complex128]) -> NDArray[np.bool_]:
         return np.abs(n - 1.0) <= NEAR_UNITY

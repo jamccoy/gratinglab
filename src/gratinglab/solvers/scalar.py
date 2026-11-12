@@ -603,6 +603,10 @@ class ScalarSolver:
                 "theory neglects polarization; TE and TM are identical here"
             )
 
+        if coating is not None:
+            # A model (materials.typical) names the bands it cannot answer for.
+            warnings.extend(coating.caveats(wavelengths))
+
         # Report, never rescale. How far an approximate theory strays from a
         # conservation law is information, not something to hide -- and
         # renormalising by the sum (thesis Appendix D) would destroy exactly

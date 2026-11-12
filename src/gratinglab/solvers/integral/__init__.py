@@ -412,9 +412,12 @@ class IntegralSolver:
         indices = None
         metal_cone = 0
         metal_reduced_min = np.inf
+        material_caveats: tuple[str, ...] = ()
         if conductivity == "tabulated":
             material, constants = _resolve_index(problem)
             indices = np.asarray(constants.n(wavelengths), dtype=np.complex128)
+            # A model (materials.typical) names the bands it cannot answer for.
+            material_caveats = constants.caveats(wavelengths)
             if (indices.imag < 0.0).any():
                 raise ValueError(
                     f"material {material!r} tabulates a negative absorption "
@@ -523,7 +526,7 @@ class IntegralSolver:
         # Transmitted orders per row, for a lossless material: {order: value}.
         transmitted_rows: list[dict[int, float]] = [{} for _ in wavelengths]
         propagating = np.zeros_like(efficiency, dtype=bool)
-        warnings: list[str] = []
+        warnings: list[str] = list(material_caveats)
         anomalous: list[float] = []
         conditioning = ConditionLog()
         ill_conditioned: list[float] = []
