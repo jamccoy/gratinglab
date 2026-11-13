@@ -20,6 +20,8 @@ pytest.importorskip(
     "PySide6", reason='Qt not installed; pip install -e ".[dev,gui]"'
 )
 
+from PySide6.QtCore import QObject, Slot  # noqa: E402
+
 from gratinglab.gui.scalar_options import ScalarOptionsState, build_options  # noqa: E402
 from gratinglab.gui.state import FormState, build  # noqa: E402
 from gratinglab.solvers import scalar  # noqa: E402
@@ -30,15 +32,25 @@ from gratinglab.solvers import scalar  # noqa: E402
 SOLVE_TIMEOUT_MS = 10_000
 
 
-class _SolveProbe:
+class _SolveProbe(QObject):
     """Counts the two signals a solve should produce, for the error message.
 
     Connected before the wait, so a solve that somehow lands first is seen
     rather than waited for. Disconnects on exit: `resolve` is called several
     times in some tests and the counts belong to one wait.
+
+    A QObject so that Qt, not Python, owns its slots. The worker emits
+    `finished` from its own thread, so each emission is queued for the main
+    thread, and one queued before the disconnect can be delivered after it.
+    A plain object's bound method was then called on freed memory: on
+    2026-11-13 a macOS run reported "'_UnhashDict' object has no attribute
+    'worker_finished'", a matplotlib object occupying the address of a probe
+    from an earlier test. Qt drops the events posted to a QObject when it is
+    destroyed, so a late `finished` now goes nowhere.
     """
 
     def __init__(self, window):
+        super().__init__()
         self._window = window
         self.solved = 0
         self.worker_finished = 0
@@ -53,9 +65,11 @@ class _SolveProbe:
         self._window._worker.finished.disconnect(self._count_finished)
         return False
 
+    @Slot()
     def _count_solved(self):
         self.solved += 1
 
+    @Slot(int, str, object)
     def _count_finished(self, *_args):
         self.worker_finished += 1
 
