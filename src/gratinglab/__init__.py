@@ -22,7 +22,7 @@ from .measured import MeasuredEfficiency, MeasurementProvenance
 from .resolution import ResolvingPower, resolving_power
 from .result import EfficiencyScan, OrderEfficiency, Provenance
 
-__version__ = "0.3.7"
+__version__ = "0.3.8"
 
 #: The day this version was released, ISO 8601. It sits beside the version
 #: rather than being read from CHANGELOG.md at run time because the changelog
