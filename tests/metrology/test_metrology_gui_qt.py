@@ -20,6 +20,7 @@ pytest.importorskip(
 from gratinglab.metrology.analyzer import analyze_single_file          # noqa: E402
 from gratinglab.metrology.gui.qt.main_window import MainWindow         # noqa: E402
 from scans import SYNTHETIC, real_scan                                 # noqa: E402
+from PySide6.QtGui import QKeySequence                                 # noqa: E402
 
 #: Drives a real Qt window: the expensive half of the suite, and the half
 #: an older machine feels. `pytest -m "not gui"` leaves it out.
@@ -330,18 +331,28 @@ class TestBoundaryTab:
             assert handle.readline().strip() == "t,y,x_nm,y_nm"
         assert metrics and os.path.exists(metrics)
 
-    def test_send_to_efficiency_opens_the_groove_with_its_period(self, qtbot, window):
-        from gratinglab.gui.qt.main_window import MainWindow
+    @pytest.fixture
+    def launcher(self):
+        """The launcher's window registry, emptied before and after."""
+        from gratinglab.gui.qt import launcher as qt_launcher
+        qt_launcher._OPEN_WINDOWS.clear()
+        yield qt_launcher
+        import shiboken6
+        for opened in list(qt_launcher._OPEN_WINDOWS):
+            if shiboken6.isValid(opened):
+                opened.close()
+        qt_launcher._OPEN_WINDOWS.clear()
+
+    def test_send_to_efficiency_opens_the_groove_with_its_period(
+            self, qtbot, window, launcher):
+        from gratinglab.gui.launcher import mode
         window.load(SAMPLE)
-        efficiency = MainWindow()
-        qtbot.addWidget(efficiency)
+        efficiency = launcher.open_window(mode("efficiency"))
         with qtbot.waitSignal(efficiency.solved, timeout=60_000):
             pass  # the solve its constructor starts
-        window.boundary._efficiency_window = efficiency
-        efficiency.destroyed.connect(window.boundary._forget_efficiency_window)
         with qtbot.waitSignal(efficiency.solved, timeout=60_000):
             opened = window.boundary.send_to_efficiency()
-        assert opened is efficiency
+        assert opened is efficiency, "the window the Go menu opened is reused"
         form = efficiency.geometry.read_form()
         assert form.profile_kind == "From file"
         assert float(form.period) == pytest.approx(window.boundary.profile.period_nm, rel=1e-5)
@@ -349,9 +360,10 @@ class TestBoundaryTab:
         with qtbot.waitSignal(efficiency.solved, timeout=60_000):
             again = window.boundary.send_to_efficiency()
         assert again is efficiency, "a second send reuses the window"
+        assert len(launcher._OPEN_WINDOWS) == 1
 
-    def test_a_destroyed_efficiency_window_is_forgotten(self, qtbot, window):
-        """Closing and deleting it must not leave a dead reference behind."""
+    def test_a_destroyed_efficiency_window_is_replaced(self, qtbot, window, launcher):
+        """Closing and deleting it must not leave a dead window to send to."""
         from PySide6.QtCore import QCoreApplication, QEvent
         window.load(SAMPLE)
         opened = window.boundary.send_to_efficiency()
@@ -360,7 +372,16 @@ class TestBoundaryTab:
         opened.close()
         opened.deleteLater()
         QCoreApplication.sendPostedEvents(None, QEvent.Type.DeferredDelete)
-        qtbot.waitUntil(lambda: window.boundary._efficiency_window is None, timeout=5000)
+        fresh = window.boundary.send_to_efficiency()
+        solved = []
+        fresh.solved.connect(lambda: solved.append(True))
+        qtbot.waitUntil(lambda: bool(solved), timeout=60_000)
+        assert fresh is not opened
+        assert launcher._OPEN_WINDOWS == [fresh]
+
+    def test_ctrl_o_opens_a_scan(self, window):
+        assert window._open_action.shortcut().matches(
+            QKeySequence(QKeySequence.StandardKey.Open)) == QKeySequence.SequenceMatch.ExactMatch
 
     def test_panel_matches_a_direct_build(self, qtbot, window):
         """The window must show what the pipeline computes"""

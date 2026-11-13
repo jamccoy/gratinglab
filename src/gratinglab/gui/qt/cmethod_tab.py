@@ -47,7 +47,7 @@ from .. import orders as orders_module
 from .. import provenance
 from ..efficiency_plot import draw_efficiency
 from ..theme import provenance_colors, style_figure
-from . import theming
+from . import recent, theming
 from ..cmethod_options import (
     CONDUCTIVITY_MODES,
     CONDUCTIVITY_NOTES,
@@ -448,10 +448,12 @@ class CMethodTab(QWidget):
             QMessageBox.information(self, "Nothing to export", "Solve first.")
             return
         path, _ = QFileDialog.getSaveFileName(
-            self, "Export efficiencies", "efficiency.csv", "CSV (*.csv)"
+            self, "Export efficiencies",
+            recent.start_in("exports", "efficiency.csv"), "CSV (*.csv)"
         )
         if not path:
             return
+        recent.remember("exports", path)
         rows = self._scan.to_records()
         with open(path, "w", newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=list(rows[0]))

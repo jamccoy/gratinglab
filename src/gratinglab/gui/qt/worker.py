@@ -34,6 +34,8 @@ from typing import TYPE_CHECKING, NamedTuple
 from endstation.progress import Cancelled, cancelling, throttled
 from PySide6.QtCore import QObject, Signal, Slot
 
+from ..failures import describe_failure
+
 if TYPE_CHECKING:  # pragma: no cover - imports for type checkers only
     from ...checks import EnergyReport
     from ...result import EfficiencyScan
@@ -166,7 +168,7 @@ class SolveWorker(QObject):
             # version and excepthook state it prints a traceback and aborts
             # the process. Turning any failure into a signal keeps the window
             # alive and able to say what went wrong.
-            self.failed.emit(token, method, f"{type(exc).__name__}: {exc}")
+            self.failed.emit(token, method, describe_failure(exc))
 
     @Slot(int, str, object, dict, object)
     def run_convergence(
@@ -215,7 +217,7 @@ class SolveWorker(QObject):
         except Cancelled:
             self.cancelled.emit(token, method)
         except Exception as exc:  # noqa: BLE001 - see `run`
-            self.failed.emit(token, method, f"{type(exc).__name__}: {exc}")
+            self.failed.emit(token, method, describe_failure(exc))
 
     @Slot(int, object, object, dict, dict, object)
     def run_comparison(
@@ -278,7 +280,7 @@ class SolveWorker(QObject):
                 except UnsupportedConfiguration as exc:
                     refused[method] = str(exc)
                 except Exception as exc:  # noqa: BLE001 - see `run`
-                    failed[method] = f"{type(exc).__name__}: {exc}"
+                    failed[method] = describe_failure(exc)
                 else:
                     scans.append(scan)
                     energies[method] = _energy(scan)
@@ -295,7 +297,7 @@ class SolveWorker(QObject):
         except Cancelled:
             self.cancelled.emit(token, "compare")
         except Exception as exc:  # noqa: BLE001 - see `run`
-            self.failed.emit(token, "compare", f"{type(exc).__name__}: {exc}")
+            self.failed.emit(token, "compare", describe_failure(exc))
 
     def _reporter(self, token: int, cancel: threading.Event):
         """The callback handed to the solver, which emits progress and stops if asked.

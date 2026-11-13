@@ -20,6 +20,7 @@ import threading
 from functools import partial
 from importlib import import_module
 
+import shiboken6
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
@@ -82,6 +83,9 @@ def window_for(chosen):
     metrology window holds a loaded scan and its settings, so a "switch" that
     quietly produced an empty second copy would look like losing the work.
     """
+    # A window Qt has deleted is dropped here, so the next open builds a
+    # fresh one instead of touching a dead C++ object.
+    _OPEN_WINDOWS[:] = [w for w in _OPEN_WINDOWS if shiboken6.isValid(w)]
     for window in _OPEN_WINDOWS:
         if getattr(window, "_gratinglab_mode", None) == chosen.key:
             return window

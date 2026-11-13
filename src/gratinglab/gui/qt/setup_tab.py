@@ -41,6 +41,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..docs import TheoryPage
+from . import recent
 from .theory_viewer import ReadingBrowser, render_into
 
 #: What each reader's ``source`` string starts with, and what to cite for it.
@@ -342,9 +343,10 @@ class SetupTab(QWidget):
         path, _filter = QFileDialog.getOpenFileName(
             self,
             "Add material",
-            str(Path.home()),
+            recent.start_in("tables", fallback=str(Path.home())),
             "Optical constants (*.txt *.yml *.yaml *.ari);;All files (*)",
         )
+        recent.remember("tables", path)
         return path
 
     def _choose_name(self, default: str) -> str:

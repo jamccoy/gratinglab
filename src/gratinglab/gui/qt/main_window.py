@@ -39,7 +39,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..state import FieldError, FormErrors, build, validate
-from . import theming
+from . import recent, theming
 from .cmethod_tab import CMethodTab
 from .compare_tab import CompareTab
 from .geometry_panel import GeometryPanel
@@ -161,6 +161,7 @@ class MainWindow(QMainWindow):
         # the View menu, so the dock has to exist by then.
         self._build_layout()
         self._build_menu()
+        recent.restore_layout(self, "efficiency")
         self._start_worker()
         # Geometry first: it needs no solver, so it can be right before any
         # result exists rather than showing an empty panel until one does.
@@ -279,7 +280,11 @@ class MainWindow(QMainWindow):
         return self._tab_widget
 
     def _build_menu(self) -> None:
-        """Build the two menus, View and Help.
+        """Build the menus: File, View and Help.
+
+        File holds the two actions worth a shortcut: Ctrl+O loads a boundary
+        profile and Ctrl+Return solves whichever tab is showing (or runs the
+        comparison on the Compare tab), the same as Enter in a geometry field.
 
         Help is the original menu and remains the main one. This is not a
         general-purpose application with File/Edit concerns, and the one thing
@@ -315,7 +320,16 @@ class MainWindow(QMainWindow):
         # should navigate back down from the menu bar to get at it.
         self._menu_bar = self.menuBar()
 
-        # View first, so the bar reads View | Help.
+        # File first, so the bar reads File | View | Help.
+        self._file_menu = self._menu_bar.addMenu("&File")
+        load = self._file_menu.addAction("&Open boundary profile…")
+        load.setShortcut(QKeySequence.StandardKey.Open)
+        load.triggered.connect(self.geometry.load_profile)
+        solve = self._file_menu.addAction("&Solve this tab")
+        solve.setShortcut(QKeySequence("Ctrl+Return"))
+        solve.triggered.connect(self._solve_active_tab)
+        self._file_actions = {"open": load, "solve": solve}
+
         self._view_menu = self._menu_bar.addMenu("&View")
         toggle = self.geometry_dock.toggleViewAction()
         toggle.setText("&Geometry inputs")
@@ -649,6 +663,7 @@ class MainWindow(QMainWindow):
         running" and aborts intermittently, most visibly in the offscreen CI
         runs, where windows are created and destroyed in quick succession.
         """
+        recent.save_layout(self, "efficiency")
         self._redraw_timer.stop()  # a redraw firing into a closing window
         self._thread.quit()
         self._thread.wait(5000)

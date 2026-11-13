@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
-from gratinglab.gui.qt import theming
+from gratinglab.gui.qt import recent, theming
 from gratinglab.gui.theme import set_titles, style_figure
 
 from .layout import controls_beside
@@ -408,15 +408,15 @@ class ImportView(QWidget):
     # ── Loading ──────────────────────────────────────────────────────────────
 
     def _browse(self):
-        start = os.path.join(PROJECT_ROOT, 'data')
-        if not os.path.isdir(start):
-            start = ""
+        data = os.path.join(PROJECT_ROOT, 'data')
+        start = recent.start_in("scans", fallback=data if os.path.isdir(data) else "")
         path, _ = QFileDialog.getOpenFileName(
             self, "Open AFM File", start,
             "AFM data (*.txt *.dat *.asc *.spm *.ibw);;"
             "Nanoscope (*.spm);;Asylum (*.ibw);;Text export (*.txt);;"
             "All files (*)")
         if path:
+            recent.remember("scans", path)
             self.load(path)
 
     def _reload(self):

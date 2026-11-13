@@ -1942,12 +1942,12 @@ class TestHelpMenu:
             if separators or not action.isSeparator()
         ]
 
-    def test_the_menu_bar_holds_exactly_view_and_help(self, win):
-        """Two menus, and only two. View exists solely because the geometry
-        dock is closable and a control with no way back is a trap; Help is
-        still the one that matters."""
+    def test_the_menu_bar_holds_exactly_file_view_and_help(self, win):
+        """Three menus. File holds the two shortcuts (open a profile, solve),
+        View exists because the geometry dock is closable and a control with
+        no way back is a trap, and Help is the one that matters."""
         titles = [action.text() for action in win._menu_bar.actions()]
-        assert titles == ["&View", "&Help"]
+        assert titles == ["&File", "&View", "&Help"]
 
     def test_lists_every_registered_solver_and_general_page(self, win):
         from gratinglab.gui.docs import general_pages, theory_pages

@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from . import recent
 from ..state import ANGLE_LABELS, MOUNTS, PROFILE_FIELDS, PROFILE_KINDS, FormState
 
 __all__ = ["GeometryPanel"]
@@ -293,12 +294,13 @@ class GeometryPanel(QWidget):
 
     def load_profile(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
-            self, "Load boundary profile", "",
+            self, "Load boundary profile", recent.start_in("profiles"),
             "Boundary profiles (*.json *.ggp);;"
             "gratinglab boundary, with period (*.json);;"
             "PCGrate boundary (*.ggp);;All files (*)",
         )
         if path:
+            recent.remember("profiles", path)
             self.load_boundary_file(path)
 
     def load_boundary_file(self, path: "str | Path") -> None:

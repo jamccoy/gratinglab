@@ -203,7 +203,8 @@ class TestRefusedOnTheForm:
         win.solve("cmethod")
         qtbot.waitUntil(lambda: not win._running, timeout=SOLVE_TIMEOUT_MS)
         shown = tab._provenance.toPlainText()
-        assert "UnsupportedConfiguration" in shown
+        assert "cannot take this problem" in shown
+        assert "UnsupportedConfiguration" not in shown, "a refusal is not a crash"
         assert "too steep" in shown
         assert "89 deg" in shown
 

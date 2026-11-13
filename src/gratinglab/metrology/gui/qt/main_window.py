@@ -16,7 +16,7 @@ from . import *  # noqa: F401,F403 - sets QT_API before matplotlib's shim loads
 
 from endstation.qt.tokens import StaleGuard
 from PySide6.QtCore import Qt, QThread, Signal
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QKeySequence
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QLabel, QMainWindow, QPushButton, QSpinBox, QStatusBar, QTabWidget, QVBoxLayout, QWidget,
 )
@@ -78,6 +78,9 @@ class MainWindow(QMainWindow):
         self._thread.start()
 
     def closeEvent(self, event):
+        from gratinglab.gui.qt import recent
+
+        recent.save_layout(self, "metrology")
         self._tokens.invalidate()
         self._thread.quit()
         self._thread.wait(3000)
@@ -150,10 +153,19 @@ class MainWindow(QMainWindow):
         from gratinglab.gui.qt.theming import ThemeMenu
 
         self._menu_bar = self.menuBar()
+        # File carries the action worth a shortcut: Ctrl+O opens a scan.
+        self._file_menu = self._menu_bar.addMenu("&File")
+        self._open_action = self._file_menu.addAction("&Open AFM file…")
+        self._open_action.setShortcut(QKeySequence.StandardKey.Open)
+        self._open_action.triggered.connect(self.importer._browse)
         self._view_menu = self._menu_bar.addMenu("&View")
         self._theme_menu = ThemeMenu(self)
         self._view_menu.addMenu(self._theme_menu)
         self._help_menu = install_help_menu(self, self._menu_bar)
+
+        from gratinglab.gui.qt import recent
+
+        recent.restore_layout(self, "metrology")
 
     def _build_analysis_group(self):
         group = QGroupBox("Analysis parameters")

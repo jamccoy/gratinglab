@@ -32,7 +32,7 @@ from PySide6.QtWidgets import (
 
 from .. import diagram3d
 from ..theme import style_axes, style_figure
-from . import theming
+from . import recent, theming
 
 #: How far the cube is zoomed inside its canvas. matplotlib's default leaves
 #: a wide margin around a 3D box; this fills the panel without clipping the
@@ -211,10 +211,12 @@ class Scene3DPanel(QWidget):
     def save_image(self) -> None:
         """Save the figure, the one toolbar function worth offering on its own."""
         path, _ = QFileDialog.getSaveFileName(
-            self, "Save 3D view", "geometry.png", "PNG (*.png);;PDF (*.pdf)"
+            self, "Save 3D view", recent.start_in("exports", "geometry.png"),
+            "PNG (*.png);;PDF (*.pdf)",
         )
         if not path:
             return
+        recent.remember("exports", path)
         self._figure.savefig(path, dpi=200)
         QMessageBox.information(self, "Saved", f"Wrote {path}")
 

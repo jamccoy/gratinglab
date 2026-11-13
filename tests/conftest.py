@@ -51,6 +51,26 @@ _settings.write_text("[appearance]\ntheme=light\n", encoding="utf-8")
 os.environ["GRATINGLAB_SETTINGS"] = str(_settings)
 
 
+@pytest.fixture(autouse=True)
+def _no_remembered_layout_or_folders():
+    """Start every test with no saved window layout and no last folder.
+
+    The windows save both on close (gui/qt/recent.py), and the INI above is
+    shared by the whole session, so without this one test's closed window
+    would set the size and starting folder of the next.
+    """
+    try:
+        from PySide6.QtCore import QSettings
+    except ImportError:
+        yield
+        return
+    store = QSettings(str(_settings), QSettings.Format.IniFormat)
+    store.remove("windows")
+    store.remove("folders")
+    store.sync()
+    yield
+
+
 #: The PCGrate corpus, or a skip that names GRATINGLAB_REF_DIR. Session-scoped.
 ref_dir = data_dir_fixture("GRATINGLAB_REF_DIR", DEFAULT_REF_DIR)
 

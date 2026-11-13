@@ -12,6 +12,17 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+### Added
+
+- **A File menu with shortcuts.** In the efficiency window, Ctrl+O (Cmd+O on
+  macOS) loads a boundary profile and Ctrl+Return solves the tab on screen,
+  or runs the comparison on the Compare tab. In the metrology window, Ctrl+O
+  opens an AFM file.
+- **The windows remember where you were.** Each file dialog starts in the
+  folder last used for that kind of file (scans, boundary profiles, optical
+  constant tables, exports), and both windows reopen at the size and
+  position they were closed at, the geometry dock included.
+
 ### Changed
 
 - **The name is written gratinglab**, all lower case, as the package and
@@ -30,6 +41,12 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Fixed
 
+- **"Send to efficiency window" reuses the efficiency window the Go menu
+  opens.** It built a window of its own, so sending a profile and then
+  switching with Go could leave two efficiency windows open.
+- **A solver refusing a problem no longer reads like a crash.** The tab shows
+  the solver's own explanation without the Python exception name; an
+  unexpected error keeps the name and says where to report it.
 - `docs/theory/integral.md` said the default mesh was equal-arc and told the
   reader to pass `corner_grading=4`, which has been the default since 0.2.7.
 

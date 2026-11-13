@@ -170,7 +170,6 @@ class BoundaryView(QWidget):
             "show how much the shape varies down the scan.")
         self.swaths_btn.clicked.connect(self.show_swaths)
         layout.addWidget(self.swaths_btn)
-        self._efficiency_window = None
         return group
 
     def _build_metrics_group(self):
@@ -450,22 +449,21 @@ class BoundaryView(QWidget):
             write_profile_metrics(metrics_path, self._profile.metrics)
         return path, metrics_path
 
-    def _forget_efficiency_window(self, *_):
-        self._efficiency_window = None
-
     def send_to_efficiency(self):
         """Open this groove in the main efficiency window, period included.
 
         The groove is written to a gratinglab .json in the temporary directory
         first, because the efficiency window's form takes a profile file. That
         also leaves the user a file the period travels with, should they want
-        to keep it. The same window is reused on a second send instead of
-        stacking copies.
+        to keep it. The window is the one the Go menu opens
+        (:func:`gratinglab.gui.qt.launcher.open_window`), so sending and
+        switching never leave two efficiency windows open.
         """
         if self._profile is None:
             return
         try:
-            from gratinglab.gui.qt.main_window import MainWindow
+            from gratinglab.gui.launcher import mode
+            from gratinglab.gui.qt.launcher import open_window
         except ImportError as exc:
             QMessageBox.warning(
                 self, "Efficiency window unavailable",
@@ -480,15 +478,6 @@ class BoundaryView(QWidget):
         os.makedirs(folder, exist_ok=True)
         path, _ = self.write_profile(os.path.join(folder, f"{stem}_boundary.json"))
 
-        if self._efficiency_window is None:
-            self._efficiency_window = MainWindow()
-            # Forget it once Qt destroys it, so a later send opens a fresh one
-            # rather than touching a deleted C++ object, and no dangling
-            # wrapper outlives the window into interpreter shutdown.
-            self._efficiency_window.destroyed.connect(self._forget_efficiency_window)
-        window = self._efficiency_window
+        window = open_window(mode("efficiency"))
         window.open_boundary(path)
-        window.show()
-        window.raise_()
-        window.activateWindow()
         return window
