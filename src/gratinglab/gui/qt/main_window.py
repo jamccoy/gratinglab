@@ -129,7 +129,7 @@ class MainWindow(QMainWindow):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self.setWindowTitle("GratingLab")
+        self.setWindowTitle("gratinglab")
         self.resize(1180, 820)
         # Before any widget exists, so every figure is born in the theme.
         from PySide6.QtWidgets import QApplication

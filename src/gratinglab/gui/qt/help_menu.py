@@ -36,7 +36,7 @@ def show_about(parent=None) -> None:
 
     QMessageBox.about(
         parent,
-        "About GratingLab",
+        "About gratinglab",
         provenance.about_text(__version__, __version_date__),
     )
 
@@ -70,7 +70,7 @@ def install_help_menu(window, menu_bar=None):
 
     bar = window.menuBar() if menu_bar is None else menu_bar
     menu = bar.addMenu(HELP_MENU_TITLE)
-    menu.addAction("About GratingLab", lambda: show_about(window))
+    menu.addAction("About gratinglab", lambda: show_about(window))
     menu.addSeparator()
 
     # Foundational, solver-independent reference first -- the generalized

@@ -337,7 +337,7 @@ class TestAbout:
         text = about_text(__version__)
         assert __version__ in text
         assert "BSD-3-Clause" in text
-        assert "GratingLab" in text
+        assert "gratinglab" in text
 
     def test_credits_both_authors(self):
         text = about_text("0.0.0")

@@ -1977,7 +1977,7 @@ class TestHelpMenu:
             lambda parent, title, text: seen.update(title=title, text=text),
         )
         win.show_about()
-        assert seen["title"] == "About GratingLab"
+        assert seen["title"] == "About gratinglab"
         assert __version__ in seen["text"]
 
 

@@ -157,7 +157,7 @@ class TestTheChooser:
         titles = [action.text() for action in window._menu_bar.actions()]
         assert titles == ['&View', HELP_MENU_TITLE]
         assert window._theme_menu.title() == '&Theme'
-        assert window._help_menu.actions()[0].text() == 'About GratingLab'
+        assert window._help_menu.actions()[0].text() == 'About gratinglab'
 
     def test_the_themes_offered_here_are_every_theme(self, qtbot):
         from gratinglab.gui.theme import SYSTEM, THEMES

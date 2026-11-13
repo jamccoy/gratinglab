@@ -238,14 +238,14 @@ class LauncherWindow(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("GratingLab")
+        self.setWindowTitle("gratinglab")
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 24, 28, 24)
         layout.setSpacing(18)
         layout.setMenuBar(self._build_menu())
 
-        heading = QLabel("GratingLab")
+        heading = QLabel("gratinglab")
         font = heading.font()
         font.setPointSize(font.pointSize() + 8)
         font.setBold(True)

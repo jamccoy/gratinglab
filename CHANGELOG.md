@@ -10,6 +10,16 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- **The name is written gratinglab**, all lower case, as the package and
+  the command already were: in window titles, the chooser's heading, Help ->
+  About gratinglab, and the macOS bundle names (`gratinglab.app`,
+  `gratinglab Efficiency`, `gratinglab AFM`). Bundle identifiers are
+  unchanged, so macOS treats a rebuilt bundle as the same app.
+
 ## 0.3.7 (2026-11-13)
 
 ### Added

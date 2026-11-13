@@ -8,7 +8,7 @@ same text.
 
 Markdown is rendered by Qt itself (`QTextBrowser.setMarkdown`), which handles
 headings, tables, lists, code spans and emphasis, covering everything these
-pages use. GratingLab carries a LaTeX rasteriser for its theory pages because
+pages use. gratinglab carries a LaTeX rasteriser for its theory pages because
 diffraction algebra needs typesetting; the formulas here are one-liners and
 read well as text, so that machinery would not justify the ~670 lines it would
 add here.

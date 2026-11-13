@@ -35,13 +35,13 @@ def _bring_to_front(window) -> None:
     ============================  =============  ==============
     Launched from                 with the hack  without it
     ============================  =============  ==============
-    ``GratingLab.app``            front          front
+    ``gratinglab.app``            front          front
     ``gratinglab-gui`` in a shell not front      not front
     ============================  =============  ==============
 
     The bundle brings the window forward. It carries a real
     `CFBundleIdentifier`, so macOS treats the process as an application
-    named "GratingLab" instead of "python", and LaunchServices activates it.
+    named "gratinglab" instead of "python", and LaunchServices activates it.
     Launched from a bare shell, the process has no such identity and stays
     behind. The AppleScript does not bring it forward either, because driving
     System Events requires Accessibility permission, which the launching

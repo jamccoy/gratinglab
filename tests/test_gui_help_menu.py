@@ -56,7 +56,7 @@ class TestEveryWindowOffersIt:
         assert "&View" in titles
 
     def test_about_comes_first(self, window):
-        assert labels_of(window._help_menu)[0] == "About GratingLab"
+        assert labels_of(window._help_menu)[0] == "About gratinglab"
 
     def test_every_page_is_listed(self, window):
         """The same pages in both windows: the menu is built from
@@ -75,7 +75,7 @@ class TestEveryWindowOffersIt:
             lambda parent, title, text: seen.update(title=title, text=text),
         )
         window._help_menu.actions()[0].trigger()
-        assert seen["title"] == "About GratingLab"
+        assert seen["title"] == "About gratinglab"
         assert __version__ in seen["text"]
 
     def test_about_credits_the_authors_and_dates_the_release(self, window, monkeypatch):

@@ -9,7 +9,7 @@ it, which depicts the measurement this software performs. It uses few, thick
 elements so that it stays legible at 16 px, the size at which most icons
 become illegible.
 
-The sibling project GratingLab uses a sawtooth with diffracted orders fanning
+The sibling project gratinglab uses a sawtooth with diffracted orders fanning
 out of it. Showing the tip here in place of the orders is what distinguishes
 the two in a Dock at small sizes: this one measures the groove, and the other
 models what the groove does to light.

@@ -290,7 +290,7 @@ def about_text(version: str, released: str | None = None) -> str:
     """
     when = f", released {released}" if released else ""
     return (
-        "GratingLab\n"
+        "gratinglab\n"
         f"Version {version}{when}\n\n"
         "An open comparison platform for grating efficiency analysis: "
         "scalar, RCWA, C-method and integral-method solvers driven from "
