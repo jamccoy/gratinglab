@@ -198,8 +198,8 @@ class CMethodTab(QWidget):
 
         self._converge_button = QPushButton("Check convergence…")
         self._converge_button.setToolTip(
-            "Sweep truncation (up to 256) until the answer stops moving, and "
-            "report the coarsest setting that can be defended."
+            "Sweep truncation (up to 256) and report the smallest value at "
+            "which the efficiencies stop changing."
         )
         self._converge_button.clicked.connect(self.convergence_requested)
 

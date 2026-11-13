@@ -236,8 +236,8 @@ class EfficiencyDialog(QDialog):
                 f"\n\nResolving power from the {self._problem.n_grooves} "
                 f"averaged grooves, at {midpoint:g} nm:\n{resolving}")
         self.status.setText(
-            f"Scalar solver, not convergence-checked -- a preview, not a "
-            f"defensible result.\n\n{graze}{resolving}")
+            f"Scalar solver, not checked for convergence: a preview only."
+            f"\n\n{graze}{resolving}")
 
     # ── Draw ─────────────────────────────────────────────────────────────────
 

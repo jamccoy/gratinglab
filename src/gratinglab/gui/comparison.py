@@ -54,9 +54,9 @@ _STYLES = ("-", "--", "-.", ":")
 #: panel says so where agreement is shown, dimmed because it is a fact about
 #: the methods, not a fault in this run.
 VERIFICATION_NOTE = (
-    "\nagreement between solvers is not verification: they share the problem, "
-    "the optical constants and the conventions, so check against measurement "
-    "or a published benchmark\n"
+    "\nAgreement between solvers does not verify a result: they share the "
+    "problem, the optical constants and the conventions. Check against "
+    "measurement or a published benchmark.\n"
 )
 
 #: More legend entries than this and the order legend takes a second column,

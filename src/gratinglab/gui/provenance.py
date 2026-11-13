@@ -292,9 +292,8 @@ def about_text(version: str, released: str | None = None) -> str:
     return (
         "gratinglab\n"
         f"Version {version}{when}\n\n"
-        "An open comparison platform for grating efficiency analysis: "
-        "scalar, RCWA, C-method and integral-method solvers driven from "
-        "one problem spec, with AFM groove metrology in the same package.\n\n"
+        "Diffraction efficiency of gratings from scalar, RCWA, C-method "
+        "and integral-method solvers, with AFM groove metrology.\n\n"
         f"{_and_list(AUTHORS)}.\n\n"
         "BSD-3-Clause."
     )

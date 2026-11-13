@@ -140,7 +140,7 @@ class TestThePanel:
         lines = comparison_lines(_outcome(), "cmethod")
         note = next(line for line in lines if line.text == VERIFICATION_NOTE)
         assert note.tag == "dim"
-        assert "not verification" in note.text
+        assert "does not verify" in note.text
 
     def test_a_solvers_own_warnings_are_shown_word_for_word(self):
         """The verdict says something is wrong; the solver's warning says why

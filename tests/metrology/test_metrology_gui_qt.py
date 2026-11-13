@@ -442,12 +442,12 @@ class TestEfficiencyDialog:
         dialog.blaze_spin.setValue(29.5)
         assert dialog._to_problem().profile.blaze_angle == pytest.approx(29.5)
 
-    def test_it_says_the_result_is_not_defensible(self, qtbot, window):
+    def test_it_says_the_result_is_not_convergence_checked(self, qtbot, window):
         """No convergence check runs here, and the panel must not imply one."""
         dialog = self._dialog(qtbot, window)
         dialog.count_spin.setValue(8)
         dialog.compute()
-        assert "not convergence-checked" in dialog.status.text()
+        assert "not checked for convergence" in dialog.status.text()
 
     def test_it_reports_the_resolving_power_of_the_measured_grooves(
             self, qtbot, window):

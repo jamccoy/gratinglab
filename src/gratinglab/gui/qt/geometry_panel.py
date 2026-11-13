@@ -142,12 +142,12 @@ class GeometryPanel(QWidget):
         # a different question, not a missing input.
         coating = QComboBox()
         coating.setToolTip(
-            "No coating gives relative efficiency -- a correct answer to a "
-            "different question, not a missing input. Naming a material "
-            "makes the result absolute: the Scalar tab applies its Fresnel "
+            "With no coating, efficiencies are relative to a perfect "
+            "reflector. Naming a material makes them absolute: the Scalar "
+            "tab applies its Fresnel "
             "reflectivity, and the Integral tab reads its complex index when "
             'Conductivity is "tabulated" (and ignores it when "perfect"). '
-            "The provenance panel says which you got."
+            "The provenance panel shows which applies."
         )
         coating.activated.connect(lambda _i: self.changed.emit())
         self._fields["coating"] = coating
@@ -164,8 +164,8 @@ class GeometryPanel(QWidget):
             "surface beneath it as its true offset, so convex corners are\n"
             "rounded and concave ones stay sharp. The grating itself is cut\n"
             "into the Coating material.\n"
-            "Only the RCWA tab models layers; the others refuse a problem\n"
-            "that has any rather than solve the bare grating beneath them."
+            "Only the RCWA tab models layers; the other solvers report an\n"
+            "error if any are set."
         )
 
         scan = QGroupBox("Wavelengths (nm)")

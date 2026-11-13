@@ -126,9 +126,9 @@ class BoundaryView(QWidget):
         self.min_half_spin.setValue(self._defaults.ggp_min_half_width)
         self.min_half_spin.setToolTip(
             "Grooves sampled at or below this many points per half period are\n"
-            "skipped. A groove the scan edge cuts into is always skipped,\n"
-            "whatever this says: it would narrow the window every groove\n"
-            "shares, and normalisation would then stretch the profile.")
+            "skipped. Grooves cut by the scan edge are always skipped,\n"
+            "because they would narrow the window shared by every groove\n"
+            "and stretch the normalised profile.")
         self.min_half_spin.valueChanged.connect(self.refresh)
         layout.addWidget(self.min_half_spin)
 

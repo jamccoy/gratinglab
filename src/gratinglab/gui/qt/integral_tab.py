@@ -233,8 +233,8 @@ class IntegralTab(QWidget):
 
         self._converge_button = QPushButton("Check convergence…")
         self._converge_button.setToolTip(
-            "Sweep boundary_points until the answer stops moving, and report "
-            "the coarsest setting that can be defended."
+            "Sweep boundary_points and report the smallest value at which the "
+            "efficiencies stop changing."
         )
         self._converge_button.clicked.connect(self.convergence_requested)
 

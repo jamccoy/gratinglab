@@ -144,7 +144,7 @@ class ImportView(QWidget):
         self.direction_combo.setEnabled(False)
         self.direction_combo.setToolTip(
             "Which pass of the tip to analyse. A Nanoscope file records both.\n"
-            "Retrace matches the project's existing Gwyddion exports.\n"
+            "Retrace matches the Gwyddion exports of earlier analyses.\n"
             "Disabled for text exports, which contain a single plane.")
         self.direction_combo.currentTextChanged.connect(self._reload)
         layout.addWidget(self.direction_combo)
@@ -166,9 +166,9 @@ class ImportView(QWidget):
         self.image_method_combo.setToolTip(
             "Applied to the whole image, before rows are averaged.\n\n"
             "These correct scan lines relative to one another and make the\n"
-            "image readable. They do NOT change the measured blaze angle:\n"
-            "the profile flattening below removes any constant or linear\n"
-            "term again. Measured at 0.0000° across all samples.")
+            "image readable. They do not change the measured blaze angle,\n"
+            "because the profile flattening below removes any constant or\n"
+            "linear term again (0.0000° difference on every sample).")
         self.image_method_combo.currentTextChanged.connect(self._reflatten)
         layout.addWidget(self.image_method_combo)
 
@@ -270,9 +270,9 @@ class ImportView(QWidget):
         self.profile_method_combo.addItems(list(VALID_FLATTEN_METHODS))
         self.profile_method_combo.setCurrentText(self._defaults.flatten_method)
         self.profile_method_combo.setToolTip(
-            "Across the four methods the mean blaze angle varies by about\n"
-            "0.49°, which is comparable to the differences between samples.\n"
-            "The preview draws the background each one would remove.")
+            "The four methods give mean blaze angles up to about 0.49°\n"
+            "apart, comparable to the differences between samples.\n"
+            "The preview draws the background each one removes.")
         self.profile_method_combo.currentTextChanged.connect(self._redraw)
         layout.addWidget(self.profile_method_combo)
 

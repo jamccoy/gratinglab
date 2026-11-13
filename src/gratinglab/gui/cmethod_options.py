@@ -97,8 +97,8 @@ def build_options(
             FieldError(
                 "truncation",
                 f"at most {_MAX_TRUNCATION}: the eigenproblem is dense and its "
-                "cost grows as N^3, so a sweep that has not settled by then is "
-                "the answer",
+                "cost grows as N^3; a sweep that has not converged by then "
+                "should be reported as unconverged",
             )
         )
     if form.conductivity not in CONDUCTIVITY_MODES:

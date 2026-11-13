@@ -444,8 +444,7 @@ def captions3d(
         lines.append(
             Line(
                 "The orders differ in azimuth, never in polar angle: they all "
-                "sit on this one cone. That is why a cone this narrow can still "
-                "carry a wide fan.\n",
+                "sit on this one cone.\n",
                 "dim",
             )
         )
@@ -453,8 +452,7 @@ def captions3d(
     lines.append(
         Line(
             "The groove profile has no z dependence, so the surface drawn is "
-            "the cross-section extruded exactly along ẑ. That is not an "
-            "approximation.\n",
+            "the cross-section extruded exactly along ẑ.\n",
             "dim",
         )
     )

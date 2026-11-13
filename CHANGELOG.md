@@ -19,6 +19,14 @@ entries under "Unreleased" into a section named for the new version;
   About gratinglab, and the macOS bundle names (`gratinglab.app`,
   `gratinglab Efficiency`, `gratinglab AFM`). Bundle identifiers are
   unchanged, so macOS treats a rebuilt bundle as the same app.
+- **Plainer wording on screen.** The chooser, the About box, the tooltips,
+  the comparison note and the Setup tab's Materials page say what a control
+  does without arguing for it. The chooser now names all four solvers.
+
+### Fixed
+
+- `docs/theory/integral.md` said the default mesh was equal-arc and told the
+  reader to pass `corner_grading=4`, which has been the default since 0.2.7.
 
 ## 0.3.7 (2026-11-13)
 

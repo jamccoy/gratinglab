@@ -333,9 +333,9 @@ visible-light metals (|n| of a few), which is why that regime costs nodes here
 
 - Smooth profiles: convergence is fast, and the harness typically certifies P in
   the low hundreds.
-- Cornered profiles + TM: on the default equal-arc mesh the energy-balance
-  deviation shrinks only linearly. Pass `corner_grading=4`, which reaches 1e-5
-  at P ≈ 256 on the perfectly conducting profiles in §5 and 2e-5 to 2e-4 on the
+- Cornered profiles + TM: on an equal-arc mesh (`corner_grading=0`) the
+  energy-balance deviation shrinks only linearly. The default
+  `corner_grading=4` reaches 1e-5 at P ≈ 256 on the perfectly conducting profiles in §5 and 2e-5 to 2e-4 on the
   finite-conductivity ones, against 7e-3 to 0.15 on equal arc. Either way,
   `check_convergence` (which sweeps this knob) should be left to pick the
   plateau, in preference to trusting a single run. On a graded mesh the

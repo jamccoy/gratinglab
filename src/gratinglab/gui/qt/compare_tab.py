@@ -163,9 +163,8 @@ class CompareTab(QWidget):
 
         self._log_difference = QCheckBox("log |Δ|")
         self._log_difference.setToolTip(
-            "Plot the size of the difference on a log scale, so an agreement\n"
-            "to 1e-7 between rigorous solvers is visible beside a scalar\n"
-            "result that is off by 0.1."
+            "Plot |Δ| on a log scale, so a 1e-7 agreement between rigorous\n"
+            "solvers shows beside a scalar result that is off by 0.1."
         )
         self._log_difference.toggled.connect(self._redraw)
         form.addRow("Difference", self._log_difference)

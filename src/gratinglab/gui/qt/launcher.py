@@ -253,8 +253,8 @@ class LauncherWindow(QWidget):
         layout.addWidget(heading)
 
         subtitle = QLabel(
-            "Groove metrology and diffraction efficiency. Both halves are this "
-            "one package; pick where to start."
+            "Measure a grating's grooves from an AFM scan, or compute its "
+            "diffraction efficiency."
         )
         subtitle.setWordWrap(True)
         subtitle.setStyleSheet("color: palette(mid);")
@@ -267,10 +267,9 @@ class LauncherWindow(QWidget):
         layout.addStretch(1)
 
         hint = QLabel(
-            "Either window's <b>Go</b> menu switches to the other and comes "
-            "back here, so this is not a one-way door. Each is also a command "
-            "of its own: "
-            + ", ".join(f"<code>{m.script}</code>" for m in MODES)
+            "The <b>Go</b> menu in either window switches to the other window "
+            "or back to this one. To open a window directly, run "
+            + " or ".join(f"<code>{m.script}</code>" for m in MODES)
             + "."
         )
         hint.setWordWrap(True)

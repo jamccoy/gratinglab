@@ -84,10 +84,9 @@ def library_page() -> str:
     kinds: set[str] = set()
     if not names:
         listing = unlisted + (
-            "**No tables are installed.** That is what an install starts with, "
-            "not a broken one: the package ships none, and any CXRO/Henke "
-            "export you download becomes a coating when you add it to a "
-            "library, below.\n"
+            "**No tables are installed.** The package ships none. Download "
+            "a CXRO/Henke export and add it to a library below to use it as "
+            "a coating.\n"
         )
     else:
         rows = ["| Material | Range | Points | Source |", "|---|---|---|---|"]
@@ -121,14 +120,12 @@ def library_page() -> str:
 
 Optical constants for the **Coating** dropdown in the geometry panel. On the
 Scalar tab, naming one applies its Fresnel reflectivity and makes the result
-*absolute*; leaving it empty gives *relative* efficiency, which is a correct
-answer to a different question rather than a missing input. The provenance
-panel on each solver tab says which you got.
+*absolute*; leaving it empty gives efficiency *relative* to a perfect
+reflector. The provenance panel on each solver tab shows which applies.
 
 {listing}
-Asking for a wavelength outside a table's range **raises** rather than
-extrapolating. An extrapolated optical constant is a plausible number with
-nothing behind it, and every efficiency computed from one would inherit that.
+Asking for a wavelength outside a table's range **raises** an error;
+optical constants are never extrapolated.
 
 ## What the coating means to the integral solver
 
@@ -137,20 +134,18 @@ is read at all, because there the material is the boundary condition rather
 than a factor applied afterwards.
 
 - **perfect** (default) is a perfectly conducting boundary. It has no material
-  in it, so a named coating is *ignored*, and the provenance panel says so rather
-  than letting the setting look consulted. Efficiencies are relative to a
-  perfect reflector and sum to 1, which is a theorem, so the summed deviation
-  is a direct read on discretisation error.
+  in it, so a named coating is *ignored*, and the provenance panel says so.
+  Efficiencies are relative to a perfect reflector and sum to 1, so the
+  deviation of the sum measures the discretisation error.
 - **tabulated** reads the coating's complex index at every wavelength and
   solves the coupled system of Goray & Schmidt (2010). Efficiencies are
   absolute, the absorbed fraction is computed independently, and `R + A = 1`
-  is the theorem that replaces the sum rule. It needs a coating: without one
-  there is nothing rigorous to compute, and the form says so instead of
-  quietly defaulting.
+  replaces the sum rule. It needs a coating, and the form reports an error
+  without one.
 
 Folding a Fresnel reflectivity onto a perfect-conductivity result is **not**
-equivalent to either of these, which is why the integral tab offers no
-reflectivity model.
+equivalent to either of these, so the integral tab offers no reflectivity
+model.
 
 Tabulated costs roughly twice as much per wavelength, and demands a finer
 mesh: the field oscillates and decays inside the material on the scale
@@ -200,8 +195,7 @@ so a result's provenance says which library answered.
 ## Surface roughness
 
 The **Roughness σ** field damps the reflectivity through the Névot–Croce
-factor. It does nothing without a coating, because there is no reflectivity to
-damp, and the solver does not pretend otherwise. Debye–Waller is offered
+factor. It has no effect without a coating. Debye–Waller is offered
 alongside it in the **Roughness** selector on the Scalar tab; the two differ by
 about 1% near the critical angle, reverse order well below it, and converge far
 above it.
@@ -209,7 +203,7 @@ above it.
 ## Reflectivity across the groove
 
 The **Reflectivity** selector on the Scalar tab chooses how much of the groove
-the reflection calculation looks at, and also does nothing without a coating.
+the reflection calculation looks at, and also has no effect without a coating.
 
 - **local** (default) evaluates the Fresnel amplitude at every quadrature point
   from the local facet tilt and carries it inside the diffraction integral. A
@@ -217,14 +211,13 @@ the reflection calculation looks at, and also does nothing without a coating.
   well as a phase grating, so reflectivity becomes order-dependent.
 - **average** takes the groove-cycle mean of the intensity: one factor per
   wavelength, but one that sees the shadowing.
-- **facet** is the older treatment: a single reflectivity at the active-facet
-  angle. Kept so an earlier run can be reproduced; it breaks reciprocity, so it
-  is not the default.
+- **facet**: a single reflectivity at the active-facet angle, kept for
+  reproducing earlier runs. It breaks reciprocity.
 
 A facet turned away from the beam contributes nothing under the two resolved
 models. On a blazed groove that can be a sixth of the period, and it can drive
-a weak order to exactly zero, which the provenance panel names, so it is never
-mistaken for an order passing off.
+a weak order to exactly zero; the provenance panel flags such an order so it
+is not mistaken for one passing off.
 """
 
 

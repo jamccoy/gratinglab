@@ -158,7 +158,7 @@ class ScalarTab(QWidget):
             "  inside the integral, so reflectivity is order-dependent.\n"
             "average: groove-cycle mean of the intensity, one factor per\n"
             "  wavelength.\n"
-            "facet: one R at the active-facet angle (the pre-M16 model,\n"
+            "facet: one R at the active-facet angle (the original model,\n"
             "  kept for reproducing earlier runs).\n"
             "Only has an effect when a coating is set."
         )
@@ -237,8 +237,8 @@ class ScalarTab(QWidget):
         # push past it -- which is that test doing its job, not an obstacle.
         self._converge_button = QPushButton("Check convergence…")
         self._converge_button.setToolTip(
-            "Sweep quadrature_points until the answer stops moving, and report "
-            "the coarsest setting that can be defended."
+            "Sweep quadrature_points and report the smallest value at which the "
+            "efficiencies stop changing."
         )
         self._converge_button.clicked.connect(self.convergence_requested)
 

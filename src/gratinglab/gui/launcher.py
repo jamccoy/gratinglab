@@ -65,9 +65,9 @@ MODES = (
     Mode(
         key="efficiency",
         title="Compute efficiency",
-        blurb="Set the grating and the illumination, then run the scalar and "
-              "integral solvers on that one problem and compare what they "
-              "return.",
+        blurb="Set the grating and the illumination, solve with the scalar, "
+              "RCWA, C-method and integral solvers, and compare their "
+              "results.",
         window="gratinglab.gui.qt.main_window:MainWindow",
         script="gratinglab-gui",
     ),
