@@ -171,7 +171,7 @@ def _resolve_index(problem: Problem) -> "tuple[str, OpticalConstants]":
     that material. Naming neither is refused, since there is no rigorous
     answer without an index. An unknown name raises ``UnknownMaterial``,
     listing what is available (the same policy as
-    ``scalar._resolve_coating``).
+    ``_scalar_groove._resolve_coating``).
     """
     from ...materials import lookup
 

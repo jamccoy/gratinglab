@@ -164,7 +164,7 @@ class FromProfileData(_BaseProfile):
     it has on :class:`Blazed`. There it is a definition: the facet has that
     angle because it was specified so. Here it is a measurement, obtained by
     fitting a line to a real facet, and it carries an uncertainty. Both feed
-    ``solvers.scalar._reflecting_graze`` identically, and the provenance string
+    ``solvers._scalar_groove._reflecting_graze`` identically, and the provenance string
     records which kind was used, because a reader deciding whether to trust an
     absolute efficiency needs to know.
 

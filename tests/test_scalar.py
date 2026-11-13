@@ -15,7 +15,8 @@ from gratinglab.illumination import Illumination
 from gratinglab.problem import Problem
 from gratinglab.profiles import Blazed, FromProfileData, Lamellar, Sinusoidal
 from gratinglab.solvers import UnsupportedConfiguration, get_solver, scalar
-from gratinglab.solvers.scalar import _reflecting_graze, interference_factor
+from gratinglab.solvers._scalar_groove import _reflecting_graze
+from gratinglab.solvers.scalar import interference_factor
 
 UNPOL = "unpolarized"
 
@@ -1064,7 +1065,7 @@ class TestGrooveCycleResolvedReflectivity:
         from gratinglab.materials import lookup
         from gratinglab.materials.fresnel import amplitude
         from gratinglab.geometry import sin_facet_graze
-        from gratinglab.solvers.scalar import _facet_tilt
+        from gratinglab.solvers._scalar_groove import _facet_tilt
 
         t = np.linspace(0.0, 1.0, 4096, endpoint=False)
         tilt = _facet_tilt(self.TASTE, t)
