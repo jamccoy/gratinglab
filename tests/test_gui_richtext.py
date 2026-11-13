@@ -376,6 +376,31 @@ class TestMathDpi:
         assert math_dpi(0.0) >= 1
 
 
+class TestInlineAlignment:
+    def test_inline_math_is_middle_aligned_and_given_the_metrics(self):
+        calls = []
+
+        def spy(latex, **kwargs):
+            calls.append(kwargs)
+            return fake_render(latex, dpi=kwargs["dpi"], color=kwargs["color"])
+
+        html = render_markdown(
+            "a $x$ b\n\n$$y$$", render=spy, axis_pt=1.5, min_height_pt=15.0
+        ).html
+        inline, display = calls
+        assert inline["axis_pt"] == 1.5 and inline["min_height_pt"] == 15.0
+        assert "axis_pt" not in display
+        assert html.count("vertical-align:middle") == 1
+
+    def test_without_an_axis_nothing_is_aligned(self):
+        html = render_markdown("a $x$ b", render=fake_render).html
+        assert "vertical-align" not in html
+
+    def test_metrics_are_in_points_of_the_ten_point_render(self):
+        metrics = richtext.inline_metrics(20.0, 10.0)
+        assert metrics == {"axis_pt": 1.25, "min_height_pt": 15.0}
+
+
 class TestMenuLabel:
     def test_an_ampersand_is_escaped_for_qt(self):
         """Qt reads `&` as 'underline the next character', so the real page

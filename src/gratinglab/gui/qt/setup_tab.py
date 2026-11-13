@@ -36,13 +36,12 @@ from PySide6.QtWidgets import (
     QLabel,
     QMessageBox,
     QPushButton,
-    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
 
 from ..docs import TheoryPage
-from .theory_viewer import render_into
+from .theory_viewer import ReadingBrowser, render_into
 
 #: What each reader's ``source`` string starts with, and what to cite for it.
 _CITATIONS = {
@@ -242,7 +241,7 @@ class SetupTab(QWidget):
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        self._browser = QTextBrowser()
+        self._browser = ReadingBrowser()
         self._browser.setOpenExternalLinks(False)
         self._browser.setOpenLinks(False)
         # Links leave for the system browser; the page itself never navigates.

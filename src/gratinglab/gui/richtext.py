@@ -60,6 +60,7 @@ __all__ = [
     "to_html",
     "png_size",
     "math_dpi",
+    "inline_metrics",
     "menu_label",
     "INLINE_DPI",
     "DISPLAY_DPI",
@@ -130,13 +131,23 @@ class _Collector:
     device_pixel_ratio: float
     color: str
     render: Callable[..., bytes | None]
+    axis_pt: float | None = None
+    min_height_pt: float = 0.0
     images: list[MathImage] = field(default_factory=list)
 
     def add(self, latex: str, *, display: bool) -> str:
         """Render one math span; return the HTML that stands for it."""
         base = self.display_dpi if display else self.inline_dpi
         dpi = max(1, round(base * self.device_pixel_ratio))
-        png = self.render(latex, dpi=dpi, color=self.color)
+        # Only inline math is set against a line of text. A display
+        # equation sits on its own line, so there is no baseline to meet.
+        centred = not display and self.axis_pt is not None
+        extra = (
+            {"axis_pt": self.axis_pt, "min_height_pt": self.min_height_pt}
+            if centred
+            else {}
+        )
+        png = self.render(latex, dpi=dpi, color=self.color, **extra)
 
         if png is None:
             delimiter = "$$" if display else "$"
@@ -156,7 +167,11 @@ class _Collector:
                 height=max(1, round(height / self.device_pixel_ratio)),
             )
         )
-        image = f'<img src="{key}" width="{self.images[-1].width}" height="{self.images[-1].height}">'
+        align = ' style="vertical-align:middle"' if centred else ""
+        image = (
+            f'<img src="{key}" width="{self.images[-1].width}" '
+            f'height="{self.images[-1].height}"{align}>'
+        )
         return f"<br>{image}<br>" if display else image
 
 
@@ -168,6 +183,8 @@ def render_markdown(
     device_pixel_ratio: float = 1.0,
     color: str = "black",
     render: Callable[..., bytes | None] | None = None,
+    axis_pt: float | None = None,
+    min_height_pt: float = 0.0,
 ) -> RichPage:
     """Convert markdown with `$...$` math to Qt-displayable HTML.
 
@@ -176,6 +193,11 @@ def render_markdown(
     ``None``. It defaults to a cached
     :func:`~gratinglab.gui.mathtext.render_math_png`. A page carries roughly
     forty equations, and the cache allows the viewer to reopen immediately.
+
+    ``axis_pt`` and ``min_height_pt`` put inline math on the text's
+    baseline; see :func:`~gratinglab.gui.mathtext.render_math_png` and
+    :func:`inline_metrics`. Left ``None``, an inline equation's bottom edge
+    sits on the baseline instead.
     """
     collector = _Collector(
         inline_dpi=inline_dpi,
@@ -183,6 +205,8 @@ def render_markdown(
         device_pixel_ratio=device_pixel_ratio,
         color=color,
         render=render if render is not None else _cached_render,
+        axis_pt=axis_pt,
+        min_height_pt=min_height_pt,
     )
     parts = [_block_html(block, collector) for block in _blocks(markdown)]
     return RichPage(html="\n".join(p for p in parts if p), images=tuple(collector.images))
@@ -439,6 +463,19 @@ def png_size(data: bytes) -> tuple[int, int] | None:
     )
 
 
+def inline_metrics(font_pixel_size: float, x_height: float) -> dict[str, float]:
+    """``axis_pt`` and ``min_height_pt`` for inline math beside this font.
+
+    Qt puts a middle-aligned image's centre a quarter of the x-height above
+    the baseline, provided the image is at least three x-heights tall. Both
+    are returned in points of the math render: mathtext renders at 10 pt and
+    :func:`math_dpi` scales that to the font's pixel size, so a pixel of the
+    text is ``10 / font_pixel_size`` points.
+    """
+    points = 10.0 / font_pixel_size
+    return {"axis_pt": x_height / 4.0 * points, "min_height_pt": 3.0 * x_height * points}
+
+
 def math_dpi(font_pixel_size: float, *, display: bool = False) -> int:
     """DPI at which mathtext output matches text of the given size.
 
@@ -464,9 +501,18 @@ def menu_label(title: str, suffix: str = "") -> str:
 
 
 @lru_cache(maxsize=512)
-def _cached_render(latex: str, *, dpi: int, color: str) -> bytes | None:
+def _cached_render(
+    latex: str,
+    *,
+    dpi: int,
+    color: str,
+    axis_pt: float | None = None,
+    min_height_pt: float = 0.0,
+) -> bytes | None:
     """Rasterise with caching.
 
     Without the cache, reopening the viewer would re-render every equation on
     the page, roughly forty of them, and more at 2x."""
-    return mathtext.render_math_png(latex, dpi=dpi, color=color)
+    return mathtext.render_math_png(
+        latex, dpi=dpi, color=color, axis_pt=axis_pt, min_height_pt=min_height_pt
+    )

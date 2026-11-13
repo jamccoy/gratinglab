@@ -130,6 +130,62 @@ class TestRenderMathPng:
         assert a == b
 
 
+def _alpha(png):
+    """The PNG's alpha channel as rows of floats."""
+    import io
+
+    from matplotlib.image import imread
+
+    return imread(io.BytesIO(png), format="png")[..., 3]
+
+
+def _baseline_below_centre(png):
+    """How far the bottom of an 'x' in the image sits below its centre, in px.
+
+    Every expression measured here starts with an x, whose bottom is on the
+    baseline; its first few columns are read so later glyphs cannot reach.
+    """
+    alpha = _alpha(png)
+    first = alpha[:, : max(2, alpha.shape[1] // 8)]
+    bottom = [i for i, row in enumerate(first) if row.max() > 0.4][-1] + 1
+    return bottom - alpha.shape[0] / 2
+
+
+class TestInlinePadding:
+    """Inline math is padded so Qt's middle alignment puts it on the baseline."""
+
+    DPI = 101
+    AXIS_PT = 1.3
+    MIN_PT = 15.6
+
+    def render(self, latex):
+        return render_math_png(
+            latex, dpi=self.DPI, axis_pt=self.AXIS_PT, min_height_pt=self.MIN_PT
+        )
+
+    def test_the_background_is_transparent(self):
+        assert _alpha(self.render("x"))[0, 0] == 0
+
+    def test_the_image_is_at_least_the_minimum_height(self):
+        assert _alpha(self.render("x")).shape[0] >= round(self.MIN_PT * self.DPI / 72)
+
+    def test_the_baseline_sits_the_axis_below_the_centre(self):
+        axis_px = self.AXIS_PT * self.DPI / 72
+        assert _baseline_below_centre(self.render("x")) == pytest.approx(axis_px, abs=1)
+
+    def test_every_expression_puts_its_baseline_in_the_same_place(self):
+        """mathtext's box depth is not the glyphs' baseline, and trusting it put
+        `x = 0` a pixel or two higher than `x` beside the same text."""
+        offsets = {
+            latex: _baseline_below_centre(self.render(latex))
+            for latex in ["x", "x = 0", r"x_{y,m}", r"x = 2\pi/\lambda", r"x \frac{a}{b}"]
+        }
+        assert max(offsets.values()) - min(offsets.values()) <= 1, offsets
+
+    def test_an_unsupported_macro_still_returns_none(self):
+        assert self.render(r"\definitelynotarealmacro{x}") is None
+
+
 THEORY_ROOT = find_theory_root()
 requires_theory_docs = pytest.mark.skipif(
     THEORY_ROOT is None, reason="docs/theory not found from this checkout"

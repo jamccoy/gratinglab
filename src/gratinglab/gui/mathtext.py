@@ -173,7 +173,12 @@ def strip_boxed(latex: str) -> str:
 
 
 def render_math_png(
-    latex: str, *, dpi: int = 140, color: str = "black"
+    latex: str,
+    *,
+    dpi: int = 140,
+    color: str = "black",
+    axis_pt: float | None = None,
+    min_height_pt: float = 0.0,
 ) -> bytes | None:
     r"""Rasterize a LaTeX string (no `$` delimiters) to PNG bytes.
 
@@ -192,6 +197,20 @@ def render_math_png(
     confirmed that mathtext's parser does not tolerate an embedded ``\n``. Any
     run of whitespace is therefore collapsed to a single space before parsing,
     which matches what plain LaTeX would do with the same source.
+
+    ``axis_pt`` is for an equation set inside a line of text. Qt places an
+    image aligned ``vertical-align: middle`` with its centre a quarter of the
+    font's x-height above the baseline, so given that height in points of the
+    10 pt render, space is added above or below until the image's centre lands
+    there exactly when the equation's own baseline sits on the text's. Without
+    it the image's bottom edge sits on the baseline, and every symbol with a
+    descender rides above the line.
+
+    That rule holds only for an image at least about three x-heights tall;
+    Qt sets a shorter one higher, by an amount that depends on its height
+    (measured with PySide6 6.11 on 2026-11-12, by scanning solid images from
+    8 to 32 px against a 14 px font). ``min_height_pt`` pads the image evenly
+    above and below up to that height, which keeps the centre where it was.
     """
     import io
     import re
@@ -205,7 +224,69 @@ def render_math_png(
 
     buffer = io.BytesIO()
     try:
-        math_to_image(f"${normalized}$", buffer, dpi=dpi, format="png", color=color)
+        if axis_pt is None:
+            math_to_image(f"${normalized}$", buffer, dpi=dpi, format="png", color=color)
+            return buffer.getvalue()
+        return _inline_png(normalized, dpi, color, axis_pt, min_height_pt)
     except ValueError:
         return None
+
+
+def _inline_png(
+    latex: str, dpi: int, color: str, axis_pt: float, min_height_pt: float
+) -> bytes:
+    """An inline equation as a transparent PNG, padded about its baseline.
+
+    The baseline is measured rather than taken from mathtext's box depth,
+    which is the layout box and not where the glyphs land: rasterised at
+    101 dpi the two differ by a pixel in either direction depending on the
+    expression. So the expression is rendered a second time with an upright
+    ``x`` after it, which sits on the baseline, and the bottom of that ``x``
+    is read off. The two renders share one vertical frame whenever the ``x``
+    is no taller and no deeper than the expression, which is any expression
+    holding a letter or digit; otherwise the box depth is used.
+    """
+    import io
+
+    import numpy as np
+    from matplotlib.colors import to_rgb
+    from matplotlib.image import imsave
+    from matplotlib.mathtext import MathTextParser
+
+    parser = MathTextParser("agg")
+    ink = np.asarray(parser.parse(f"${latex}$", dpi=dpi).image)
+    probe = parser.parse(f"${latex}" + r"\mathrm{x}$", dpi=dpi)
+    probe_ink = np.asarray(probe.image)
+    rows = ink.shape[0]
+    if probe_ink.shape[0] == rows:
+        # The rightmost couple of points of the x: its right leg ends on
+        # the baseline, and nothing of the expression reaches that far.
+        columns = np.flatnonzero(probe_ink.max(axis=0))
+        leg = probe_ink[:, columns[-1] - max(1, round(2 * dpi / 72)) + 1 : columns[-1] + 1]
+        baseline = int(np.flatnonzero(leg.max(axis=1) > 100)[-1]) + 1
+    else:
+        rendered = parser.parse(f"${latex}$", dpi=dpi)
+        baseline = int(rendered.height - rendered.depth) - 1
+
+    # Centre on the axis: (above - below) / 2 must equal the axis height.
+    scale = dpi / 72.0
+    above, below = float(baseline), float(rows - baseline)
+    excess = (above - below) - 2 * axis_pt * scale
+    if excess > 0:
+        below += excess
+    else:
+        above -= excess
+    short = min_height_pt * scale - (above + below)
+    if short > 0:
+        above += short / 2
+        below += short / 2
+    top = round(above) - baseline
+    bottom = round(below) - (rows - baseline)
+
+    alpha = np.pad(ink, ((top, bottom), (0, 0))).astype(float) / 255.0
+    rgba = np.empty(alpha.shape + (4,))
+    rgba[..., :3] = to_rgb(color)
+    rgba[..., 3] = alpha
+    buffer = io.BytesIO()
+    imsave(buffer, rgba, format="png")
     return buffer.getvalue()

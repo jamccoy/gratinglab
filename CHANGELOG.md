@@ -10,6 +10,26 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- **The Help pages and the Setup tab read as pages.** The text sits in a
+  centred column about a hundred characters wide, in a font slightly larger
+  than the controls, with a little more space between lines; a wide window
+  adds margin rather than longer lines. Equations are sized from that font,
+  so a symbol in a sentence is the size of the words beside it rather than
+  half again as large.
+
+### Fixed
+
+- **Math in a sentence sits on the line.** An equation's image used to rest
+  its bottom edge on the baseline, so anything with a descender, and most
+  things without, rode a few pixels above the words around it. The image is
+  now padded about its own baseline, which is measured from the rendered
+  glyphs rather than taken from mathtext's box depth: that depth is the
+  layout box, and trusting it left `x = 0` higher than `x`.
+
 ## 0.3.4 (2026-11-12)
 
 ### Added
