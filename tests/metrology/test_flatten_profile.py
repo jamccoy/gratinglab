@@ -30,7 +30,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-from gratinglab.metrology.analyzer import _aggregate_flattening
+from gratinglab.metrology._analyzer_summary import _aggregate_flattening
 from gratinglab.metrology.core.processing import (
     FlatteningReport,
     flatten_profile,
