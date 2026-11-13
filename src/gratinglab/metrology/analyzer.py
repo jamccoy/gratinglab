@@ -26,6 +26,8 @@ from .visualization.diagnostics import plot_analyzed_regions_overlay, plot_flatt
 from .visualization.statistics import plot_summary_statistics
 
 
+# ============ ENTRY POINTS: ONE FILE, IN EITHER MODE ============
+
 def analyze_single_file(filename, show_plots=True, settings=None):
     """
     Analyze a single AFM file and extract blaze angles
@@ -114,6 +116,7 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
     all_groove_positions = []  # x position (um) of each accepted measurement
     all_groove_groups = []     # row group index of each accepted measurement
 
+    # ------------ each row group: flatten, find grooves, fit facets ------------
     for group_idx, raw_y in enumerate(profiles_list):
         print(f"\n  Processing row group {group_idx + 1}/{settings.n_row_groups}...")
 
@@ -228,6 +231,7 @@ def analyze_single_file_with_row_groups(filename, show_plots=True, settings=None
             'flatten_report': flat_report,
         })
     
+    # ------------ across all groups: periods, statistics, report ------------
     # Check if we got any measurements
     if len(all_blaze_angles) == 0:
         print("Could not extract any blaze angles from any row group!")
@@ -413,6 +417,8 @@ def _orientation_dict(report):
     return None if report is None else report.as_dict()
 
 
+# ============ LOADING AND FLATTENING ============
+
 def _load_and_validate(filename, settings):
     """
     Load AFM data, flatten the image, and validate it.
@@ -547,6 +553,8 @@ def _print_flattening_info(raw_x, background, settings):
     print(f"  Background range: {np.max(background) - np.min(background):.2f} nm")
 
 
+# ============ PERIODS AND BLAZE ANGLES ============
+
 def _calculate_periods(raw_x, groove_centers, period_nm_est, profile=None):
     """
     Calculate groove periods from detected positions
@@ -648,6 +656,8 @@ def _extract_all_angles(raw_x, flat_y, groove_centers, period_nm, local_periods,
     
     return blaze_angles, quality, all_local_angles, angle_uncertainties
 
+
+# ============ STATISTICS ============
 
 def _calculate_statistics(blaze_angles, quality, all_local_angles, angle_uncertainties):
     """
@@ -828,6 +838,8 @@ def _plot_row_group_variation(group_results, all_blaze_angles, all_quality):
     
     plt.tight_layout()
 
+
+# ============ PRINTED SUMMARY AND RESULT DICTS ============
 
 def _print_summary(filename, blaze_angles, stats, period_nm, period_std, quality,
                    settings):

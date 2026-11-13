@@ -288,6 +288,7 @@ class ScalarSolver:
                 f"quadrature_points must be at least 16, got {quadrature_points}"
             )
 
+        # ------------ geometry shared by every wavelength ------------
         started = time.perf_counter()
 
         sin_alpha = illumination.sin_alpha
@@ -321,6 +322,7 @@ class ScalarSolver:
         # One scale factor per wavelength for the two order-independent models.
         scale = np.ones(len(wavelengths))
 
+        # ------------ one wavelength at a time ------------
         for row, wavelength in enumerate(wavelengths):
             if progress is not None:
                 # At the *top* of the row it is about to compute, so `row` is
@@ -397,6 +399,7 @@ class ScalarSolver:
             efficiency[row, live] = values
             propagating[row, live] = True
 
+        # ------------ order-independent reflectivity, then the result ------------
         if progress is not None:
             progress(len(wavelengths), len(wavelengths))
 
@@ -679,6 +682,9 @@ class ScalarSolver:
         )
 
 
+# ============ THE GROOVE'S GEOMETRY, BUILT ONCE PER SOLVE ============
+
+
 @dataclass
 class _Reflection:
     r"""Everything the reflectivity treatment knows about one solve.
@@ -851,6 +857,9 @@ def _build_reflection(
     else:  # pragma: no cover - needs a groove the beam cannot see at all
         reflection.basis = "groove cycle resolved, fully shadowed"
     return reflection
+
+
+# ============ EFFICIENCY UNDER EACH REFLECTION MODEL ============
 
 
 def _groove_average_reflectivity(
@@ -1037,6 +1046,9 @@ def _shadow_masked_efficiency(
     return np.abs(np.mean(np.where(visible, integrand, 0.0) * coverage, axis=1)) ** 2
 
 
+# ============ CHECKS THE PROVENANCE REPORTS ============
+
+
 def _sp_split(
     coating: "OpticalConstants",
     graze: float,
@@ -1078,6 +1090,9 @@ def _brewster_crossing(r_p: NDArray[np.complex128]) -> bool:
         return False
     magnitude = np.abs(r_p)
     return bool(magnitude.min() < 0.05 * magnitude.max())
+
+
+# ============ SETUP: GRAZE, COATING AND ORDERS ============
 
 
 def _reflecting_graze(problem: Problem, illumination: Illumination):
