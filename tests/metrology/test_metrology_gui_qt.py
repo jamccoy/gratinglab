@@ -213,7 +213,7 @@ class TestBoundaryTab:
         assert len(window.boundary.profile.x_norm) == 500
 
     def test_export_writes_a_valid_ggp(self, qtbot, window, tmp_path, monkeypatch):
-        """Points only by default, the form PCGrate's border-profile import takes"""
+        """With the header and the 0 0 / 1 0 endpoints, the form PCGrate 6.7.1 loads"""
         from PySide6.QtWidgets import QFileDialog
         window.load(SAMPLE)
         target = str(tmp_path / "out.ggp")
@@ -224,9 +224,12 @@ class TestBoundaryTab:
                                               "warning": staticmethod(lambda *a: None)}))
         window.boundary.export()
 
-        with open(target, encoding="utf-8") as handle:
-            lines = handle.read().splitlines()
-        assert len(lines[0].split()) == 2 and not lines[0].startswith("3 0")
+        with open(target, "rb") as handle:
+            raw = handle.read()
+        lines = raw.decode("utf-8").split("\r\n")
+        assert lines[:2] == ["3 0 - Polygonal type", "Period: 1 PSC: 1"]
+        assert lines[2] == "0 0" and lines[-2] == "1 0" and lines[-1] == ""
+        assert b"\n" not in raw.replace(b"\r\n", b"")
         assert os.path.exists(str(tmp_path / "out_metrics.txt"))
 
     def test_the_file_is_named_once_in_the_window_title(self, qtbot, window):
