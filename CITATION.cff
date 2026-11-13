@@ -5,6 +5,8 @@ title: "gratinglab: an open platform for diffraction grating groove metrology an
 authors:
   - family-names: McCoy
     given-names: Jake
+  - family-names: Gangadharan
+    given-names: Aditi
 version: 0.3.4
 license: BSD-3-Clause
 repository-code: "https://github.com/jamccoy/gratinglab"
