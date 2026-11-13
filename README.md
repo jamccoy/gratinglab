@@ -11,15 +11,14 @@ gratinglab is a Python package for measuring the groove profiles of diffraction
 gratings from atomic force microscope (AFM) scans and for computing the diffraction
 efficiency of a grating from such a profile.
 
-The AFM metrology is the part of the package in regular use. It measures blaze angles
+The AFM metrology is the part of the package used day to day. It measures blaze angles
 from a scan, averages the grooves into a single profile, reports how much that profile
 varies down the scan, corrects for the shape of the AFM tip where the data allow it,
 and exports the averaged groove as a boundary profile. The three rigorous
 efficiency solvers left experimental status in 0.3, after agreeing with one
-another and with a measured campaign whose groove was measured too (the TASTE
-comparison in `docs/findings.md`). Their known limits are stated in the table
-under Status, and a number from any of them is still evidence to check rather
-than a result to rely on.
+another and with measured efficiencies from a grating whose groove was also
+measured by AFM (the TASTE comparison in `docs/findings.md`). Their known limits
+are stated in the table under Status.
 
 Rigorous methods for computing grating efficiency are well established, and open codes
 exist for several of them, although each carries its own conventions and
@@ -72,17 +71,17 @@ backends sit beside them, both written in-house: a rigorous coupled-wave analysi
 (RCWA), which also models coated gratings through conformal layers, and the
 C-method (Chandezon). Each has a tab in the efficiency window since 0.2.1.
 
-**Since 0.3 the three rigorous solvers are no longer experimental.** The
-criterion was use on a real problem: on the December 2018 TASTE campaign, 296
-measured efficiencies against the grating's own AFM groove, the integral method,
-the C-method and RCWA agree with one another to 2e-4 RMS and with the
-measurement to 0.038, so the residual is measured not to be the solver. The two
-defects that comparison found are dealt with. The C-method refuses a wall too
-steep for its truncation. The integral solver's absorption on a measured polygon
-under `conductivity="tabulated"` is fixed by `profile_smoothing="auto"`, which is
-opt-in because it moves finely sampled profiles at long wavelengths; with the
-default the polygon is solved as given, and the energy-balance warning names the
-option when it fires. A tightly rounded valley remains a recorded limitation.
+The three rigorous solvers are out of experimental status as of 0.3. On the
+December 2018 TASTE campaign (296 measured efficiencies, computed on the
+grating's own AFM groove), the integral method, the C-method and RCWA agree with
+one another to 2e-4 RMS and with the measurement to 0.038, so the 0.038 residual
+does not come from the solvers. Two limits apply. The C-method refuses a wall too
+steep for its truncation. On a measured polygon under
+`conductivity="tabulated"`, the integral solver needs `profile_smoothing="auto"`
+for a correct absorption. It is opt-in because it moves finely sampled profiles
+at long wavelengths; with the default the polygon is solved as given, and the
+energy-balance warning names the option when it fires. A tightly rounded valley
+is a known limitation.
 The scalar solver is an approximation and is described as one.
 
 **Every modelling method here still needs verification**, the rigorous ones
@@ -118,11 +117,10 @@ the materials layer, and a calculation of the resolving power implied by the num
 of grooves measured.
 
 The aim is gratings in general: reflection and transmission, metallic and
-dielectric, bare and coated, from X-rays to the infrared. Every mount between the
-two extremes is supported, not only the extremes: any half-cone angle γ from 90°
-(in-plane, classical) through general conical incidence down to extreme off-plane at
-grazing incidence (γ of a degree or two), the soft X-ray spectroscopy regime the
-project began with, where the integral method is the established approach and
+dielectric, bare and coated, from X-rays to the infrared. Any half-cone angle γ is
+supported, from 90° (in-plane, classical) through general conical incidence to
+extreme off-plane at grazing incidence (γ of a degree or two). That last is the soft
+X-ray spectroscopy regime, where the integral method is the established approach and
 general-purpose RCWA codes are least reliable. `Illumination.classical`,
 `Illumination.conical(theta, phi)` and `Illumination.offplane(graze, azimuth)` all
 build the same object, and every solver accepts any of them. Which method serves which regime, and what is not yet covered
@@ -134,9 +132,9 @@ The method backends, in order of development:
 | Method | Status |
 |---|---|
 | Scalar (Kirchhoff, x-ray blaze form) | an approximation; checked against closed-form results |
-| Integral method (boundary integral, conical, undercut-capable) | since 0.3 not experimental; perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with the absorbed fraction recorded; a corner-graded mesh for profiles with corners (`corner_grading=4`, the default since 0.2.7; `0` is the equal-arc mesh), under either boundary condition; checked against published benchmark tables (Maystre & Popov; Goray & Schmidt), energy balance and reciprocity |
-| RCWA (in-plane, conical, off-plane; Li factorization, S-matrix, layer stacks) | since 0.2.0, not experimental since 0.3; lamellar gratings exact and other profiles staircased, transmitted orders, and coatings through conformal layers (`Problem.layers`); checked against Fresnel, the Airy film formula, reciprocity, the integral solver, and published lamellar values (Granet; Lalanne & Hugonin; Gralak; Goray & Schmidt's conical tables). Not yet checked: staircase accuracy in metallic TM, and layers of a second material against an independent code |
-| C-method (Chandezon) | since 0.2.0, not experimental since 0.3; perfect conductor in any mount, and one interface into an absorbing or lossless material, conical and coupled; checked against Goray & Schmidt's Table 3, Fresnel and the integral solver. Refuses vertical facets, undercuts, and walls too steep for the scan (the harmonics a wall needs grow with its slope times P sin γ / λ; measured against the integral solver, see the method note); converges slowly on sawtooth corners, and loses precision at high truncation on profiles deeper than about half the period, both reported in provenance. No coatings |
+| Integral method (boundary integral, conical, undercut-capable) | perfect and finite conductivity (`conductivity="tabulated"`, Goray & Schmidt 2010), absolute efficiencies with the absorbed fraction recorded; a corner-graded mesh for profiles with corners (`corner_grading=4`, the default; `0` is the equal-arc mesh), under either boundary condition; checked against published benchmark tables (Maystre & Popov; Goray & Schmidt), energy balance and reciprocity |
+| RCWA (in-plane, conical, off-plane; Li factorization, S-matrix, layer stacks) | lamellar gratings exact and other profiles staircased, transmitted orders, and coatings through conformal layers (`Problem.layers`); checked against Fresnel, the Airy film formula, reciprocity, the integral solver, and published lamellar values (Granet; Lalanne & Hugonin; Gralak; Goray & Schmidt's conical tables). Not yet checked: staircase accuracy in metallic TM, and layers of a second material against an independent code |
+| C-method (Chandezon) | perfect conductor in any mount, and one interface into an absorbing or lossless material, conical and coupled; checked against Goray & Schmidt's Table 3, Fresnel and the integral solver. Refuses vertical facets, undercuts, and walls too steep for the scan (the harmonics a wall needs grow with its slope times P sin γ / λ; measured against the integral solver, see the method note); converges slowly on sawtooth corners, and loses precision at high truncation on profiles deeper than about half the period, both reported in provenance. No coatings |
 
 The comparison harness also accepts an efficiency table already computed by an
 external program as one of its methods, so that comparison plots can be made without
@@ -165,9 +163,9 @@ resolving_power(problem, illumination, wavelength=2.0, order=3).r
 The resolving power follows from the Rayleigh criterion as `R = |m|·N`, and
 `line_profile` gives the line shape for a finite number of grooves from which that
 result is derived. A problem whose `n_grooves` is not set is refused rather than
-treated as having infinitely many grooves. Resolving power degraded by errors in groove
-placement is planned; until it is implemented, the ideal formula is not used as an
-approximation for it.
+treated as having infinitely many grooves. Resolving power that includes
+groove-placement errors is not implemented yet, and the ideal formula is not offered
+in its place.
 
 ### Correcting for the AFM tip
 
@@ -179,7 +177,8 @@ Bruker's ScanAsyst-Air can be represented. No method can recover the bottom of a
 trough the tip did not enter, and the correction leaves such regions as upper bounds
 instead of filling them in.
 
-On one real scan, the groove depth and the fitted facet angle disagree by 7.6°.
+On one real scan, the blaze angle implied by the groove depth and the fitted facet
+angle disagree by 7.6°.
 Erosion with the probe at its nominal radius recovers none of that difference, and
 reproducing it by simulation requires an apex worn to about 80 nm, which excludes the
 nominal tip as the cause
@@ -268,20 +267,15 @@ gratinglab-gui                 # straight to geometry, solvers, comparison
 gratinglab-metrology-gui       # straight to AFM import, blaze angles, boundary profiles
 ```
 
-There are two windows, and `gratinglab-app` is the front door that asks which one
-you want. Neither is a dead end: each carries a **Go** menu that switches to the other
-and returns to the chooser (`Ctrl+Shift+M`), and switching reuses a window that is
-already open rather than starting a second empty copy of it. The chooser itself carries
-the same **View → Theme** and **Help** menus the two windows do, so the theme — a
-setting for the whole application — and the theory pages are reachable without opening
-a window first. While it is on screen it imports both windows on a background thread,
-so the first open is a fifth of a second rather than the several seconds of matplotlib
-and scipy imports it used to be. Both halves are this one package — the metrology measures a groove and the
-solvers compute an efficiency from the result — but the desktop layer used to ship
-them as two commands and two application bundles, the AFM one still named after the
-repository it was merged from, which made the half in regular use the half that was
-hardest to find. The two direct commands above are unchanged, for a shortcut or a
-habit.
+`gratinglab-app` opens a chooser for the two windows. Each window has a **Go** menu
+that switches to the other window or back to the chooser (`Ctrl+Shift+M`), and
+switching reuses a window that is already open. The chooser has the same
+**View → Theme** and **Help** menus as the windows, so the theme, which applies to the
+whole application, and the theory pages can be reached without opening a window
+first. While the chooser is on screen it imports both windows on a background thread,
+so the first window opens in about a fifth of a second; the matplotlib and scipy
+imports otherwise take several seconds. `gratinglab-gui` and
+`gratinglab-metrology-gui` open one window directly.
 
 The windows are built with Qt (PySide6), so `pip install "gratinglab[gui]"` needs no
 system toolkit to be installed first. PySide6 is licensed under the LGPLv3 and is an
@@ -323,8 +317,7 @@ hides it), and the window has one tab for each task:
   *Four solvers on one problem: a 40 nm gold sinusoid, 5% deep, at 80° incidence,
   unpolarized. The lower panel is each solver's difference from the C-method on a
   log scale: the integral method and RCWA agree with it to within 2e-6, and the
-  scalar one is off by up to 0.018. That agreement is a consistency check between
-  methods, not a verification of any of them; see Status.*
+  scalar one is off by up to 0.018.*
 - **Setup:** the material library, showing which optical constants are installed, the
   range each covers, where each came from, and how to add others. The coating itself is
   chosen in the geometry dock, because it is a `Problem` field, like the period, and the
@@ -334,9 +327,9 @@ Each registered solver receives a tab generated from the solver registry, so a
 new backend appears in the window once it is registered.
 
 The **Help** menu contains the theory pages, rendered with typeset equations and
-tables. It is on every window: the conventions page fixes the angles a measured
-profile is reported in, and `theory/metrology.md` describes the metrology window's
-own analysis, so the AFM window needs those pages at least as much as this one does.
+tables. It is on every window, including the metrology window, whose results are
+reported in the angles the conventions page defines and whose analysis
+`theory/metrology.md` describes.
 **Help → About gratinglab** names the authors and states which version is running and
 when it was released, so a bug report can say which copy it came from.
 **View → Theme** switches between System (following the operating system), Light,
@@ -347,14 +340,12 @@ list.
 
 A macOS `.app` is built with `python tools/apps.py bundle --app gratinglab`, on macOS
 13 or later, the minimum supported by the PySide6 wheels. That is one `gratinglab.app`
-opening the chooser, which is what you want installed; `--app metrology` and `--app
-efficiency` build bundles that skip the chooser and open one window directly, for
-anyone who would rather have that in the Dock. `--dest ~/Applications` puts it where Finder will list it. The bundle
-is a stub that execs the console script in this checkout's virtualenv rather than a
+opening the chooser; `--app metrology` and `--app efficiency` build bundles that open
+one window directly. `--dest ~/Applications` puts it where Finder will list it. The
+bundle is a stub that execs the console script in this checkout's virtualenv, not a
 frozen application, so it is not portable to another machine; `python tools/apps.py
-check --app gratinglab` reports when that virtualenv has moved, which is the one
-failure a bundle cannot show from the outside. `python tools/apps.py icon --app
-gratinglab` regenerates the icon from the artwork in `gratinglab.gui.icon`.
+check --app gratinglab` reports when that virtualenv has moved. `python tools/apps.py
+icon --app gratinglab` regenerates the icon from the artwork in `gratinglab.gui.icon`.
 
 ## Documentation
 
@@ -465,11 +456,8 @@ separately forbids using the author's or contributors' names to endorse or promo
 derived product without prior written permission.
 
 **What you do not get.** The software is provided as is, without warranty of any kind,
-and the author is not liable for any use of it. That disclaimer carries more weight
-here than it does for most packages, because the efficiency solvers are young and
-validated on few gratings (see Status): a number this software produces is evidence
-to be checked against another method, not a result to be relied on because a
-computer printed it.
+and the author is not liable for any use of it. The efficiency solvers are young and
+validated on few gratings (see Status).
 
 Contributions are accepted under the same licence. A pull request is taken as agreement
 that the contribution may be distributed under BSD-3-Clause.
@@ -496,9 +484,9 @@ and `Provenance` records what a run actually used.
 | `[gui]` | PySide6-Essentials | LGPL-3.0 |
 | `[refractiveindex]` | PyYAML | MIT |
 
-A solver-only install is permissive throughout. The `gui` extra is the one worth
-knowing about: Qt for Python is LGPL-3.0, which is the reason this project depends on
-PySide6 and not on PyQt6, whose licence is GPL and would reach your own code.
+A solver-only install is permissive throughout. The `gui` extra installs PySide6,
+which is LGPL-3.0. PyQt6 is not used because its GPL licence would extend to code
+that imports it.
 Importing an LGPL library dynamically does not change the licence of what you write,
 but redistributing a bundled application that ships Qt inside it brings LGPL
 obligations for that component — chiefly your users' right to substitute their own
@@ -510,11 +498,11 @@ no such question.
 **Optical constant tables.** None are distributed with the package or kept in the
 repository: the suite runs on an invented gold-sized table of its own, and its
 refractiveindex.info reader fixtures are files that site dedicates CC0. A table you
-add is governed by the terms of whoever published it, not by this licence. refractiveindex.info
-dedicates its files CC0, CXRO states no terms at all, and a table exported from another program
-carries whatever that program's terms attach to it.
+add is governed by the terms of whoever published it, not by this licence. CXRO states
+no terms at all, and a table exported from another program carries whatever that
+program's terms attach to it.
 [`SOURCES.md`](https://github.com/jamccoy/gratinglab/blob/master/src/gratinglab/materials/data/SOURCES.md)
-records where each kind comes from and why none ships here.
+records where each kind of table comes from.
 
 **Measurement data.** AFM scans and the reference efficiency corpus are the research
 group's data and are deliberately absent from the repository, as described above under

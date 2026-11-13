@@ -32,7 +32,7 @@ the scan lines relative to each other.
 
 | Method | What it does |
 |---|---|
-| `none` | Leave the image alone. The behaviour before August 2026. |
+| `none` | Leave the image alone. |
 | `plane` | Subtract one tilted plane fitted to the whole image. Corrects the sample sitting at an angle. |
 | `align_rows` | Subtract each row's median, putting every scan line on a common level. **The default.** |
 
@@ -47,16 +47,12 @@ ranges over 0.44–2.74 nm, against groove depths near 100 nm.
 
 ### Why it doesn't change the answer
 
-This result is stated explicitly because it could otherwise be mistaken for a
-bug.
-
 On `20250820_280C_00004.txt`, the scan with the largest row-offset spread in the
 dataset, `none`, `plane` and `align_rows` all give 30.8524°, agreeing to within
 5×10⁻¹⁵. Across all eight compare-mode samples, enabling `align_rows` changed
 the mean by 0.0000°.
 
-The reason is structural, and it is worth following through, because it is what
-makes the default free.
+The reason is structural:
 
 1. Rows are averaged into a profile. `align_rows` removes a constant from each
    row, so after averaging a band it has removed **one constant**. `plane`
@@ -107,9 +103,8 @@ check first.
   grating.
 - **Methods that aren't affine.** As above: the registry is the place for one,
   and the invariance result does not extend to it.
-- **Being explicit.** The step is now performed in a named and recorded place.
-  Previously it was done in Gwyddion before export, and nothing recorded that it
-  had been done.
+- **Being explicit.** The step is performed in a named place and recorded with
+  the result, which a levelling done in Gwyddion before export is not.
 
 ## Profile flattening (1-D)
 
@@ -214,10 +209,9 @@ instead. If the feature set is too small for the order even then, the order is
 reduced to what those features support, rather than fitting a polynomial the
 data cannot determine. Both are announced.
 
-Each fallback raises a `UserWarning` naming what it did and why. It used to be
-printed to standard output, where it scrolled past in a batch run with nothing
-to catch it; a warning can be turned into an error, counted, or routed to a log
-by the code calling the pipeline. Python shows a given warning once per call
+Each fallback raises a `UserWarning` naming what it did and why, so the code
+calling the pipeline can turn it into an error, count it, or route it to a
+log. Python shows a given warning once per call
 site by default, so `python -W always` is what makes every row group's fallback
 visible, and the test suite runs with warnings as errors, which means no test
 can pass on a background fitted by a method it did not ask for.
@@ -274,6 +268,5 @@ The reason is that a `.ggp` profile is one period, repeated by the solver. A
 background fitted the way the blaze-angle path fits one leaves the two ends at
 slightly different heights, which on repetition is a step at every period
 boundary. That step makes the computed efficiency curve wrong while the file
-still looks entirely reasonable, which is the worst combination. Substituting
-one kind of flattening for the other here is a known way to produce a confidently
-wrong answer, and the boundary-export path keeps them apart deliberately.
+still looks entirely reasonable. The boundary-export path therefore always
+uses endpoint flattening and never the blaze-angle path's background fit.

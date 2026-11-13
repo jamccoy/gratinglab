@@ -107,16 +107,15 @@ numbers refer to M&P §4.6.
   corner is a polygon vertex turning by more than `CORNER_TURN_DEGREES` (10°),
   no node sits on one, and every node lies on a straight piece with its exact
   normal. A profile with no corner keeps the equal-arc mesh, so on one the
-  result is bit-identical whatever is passed. It was opt-in until 0.2.7: on
-  the GUI's default blaze (Au, off-plane at 1.5° graze, 3.5 nm, 400 points)
-  the equal-arc mesh gave a summed efficiency plus absorption of 2.95 and
-  order +2 at 0.4948, where p = 4 closes to unity and gives 0.5854, the
+  result is bit-identical whatever is passed. On the GUI's default blaze (Au,
+  off-plane at 1.5° graze, 3.5 nm, 400 points) the equal-arc mesh gives a
+  summed efficiency plus absorption of 2.95 and order +2 at 0.4948, where
+  p = 4 closes to unity and gives 0.5854, the
   C-method's value. `corner_grading=0` reproduces the equal-arc mesh.
 
   Every quadrature is written in τ, with node weights `w_j = s'(τ_j)/P`, and
   reduces term by term to the equal-arc formulas when `s' = L`. Three places
-  needed more than swapping the weights in, and each was wrong at first in a way
-  only a solve exposed (`docs/findings.md`):
+  need more than swapping the weights in (`docs/findings.md`):
 
   - the single layer's logarithmic comparison moves into τ, which changes its
     diagonal to `w_j[R(0,0) + ln(2π s'_j/d)/2π − S̃] − s'_j/π`;
@@ -252,9 +251,9 @@ The measured behaviour is as follows.
   5e-3, and the X-ray lamellar read 1.2 at P = 256, worse than the equal-arc
   mesh. Without the
   composition `D_t (V⁻ w)` the conical cases converged erratically, and at
-  order 5 the X-ray lamellar stalled near 7e-3 from P = 256 to 768. The
-  previous version of this section blamed oscillatory corner singularities from
-  the negative permittivity. They are not the cause: the TM corner exponent at
+  order 5 the X-ray lamellar stalled near 7e-3 from P = 256 to 768.
+  Oscillatory corner singularities from the negative permittivity are not the
+  cause: the TM corner exponent at
   ε = n² ≈ −12.2 + 1.4i is ν = 0.600 − 0.009i at the lamellar's corners and
   0.564 − 0.010i at the blaze apex (against 2/3 and 0.643 for a perfect
   conductor), real to two decimals, and the grading resolves it like any other.
@@ -346,10 +345,8 @@ visible-light metals (|n| of a few), which is why that regime costs nodes here
   few `(P, 2M+1)·(2M+1, P)` GEMMs per wavelength plus a one-time O(P²·M)
   geometry pass (the cached Kummer tails) amortised over the scan. Measured at
   P = 400, a solve takes ~100 ms per wavelength unpolarized, so the default 400
-  at 200 wavelengths takes ~20 s. (The kernels were previously evaluated
-  pointwise over `(P, P, M)` broadcasts at ~14 s per wavelength. Contrary to what
-  this document used to claim, the O(P³) dense LU was never the bottleneck: it
-  takes milliseconds at any realistic P, ~0.1% of the old runtime.) The GUI runs
+  at 200 wavelengths takes ~20 s. The O(P³) dense LU takes milliseconds at
+  any realistic P. The GUI runs
   the solve on the worker thread with a live progress bar and a Cancel button
   that stops the solve itself. The tabulated mode costs ~2× the perfect one per
   wavelength: it needs more kernels and operator products, although the
@@ -450,9 +447,8 @@ The absorption is a pointwise product of a trace and a normal derivative, which
 does not. With `conductivity="tabulated"` that put R + A at 1.0001 to 1.0827
 across the TASTE campaign, while R agreed with the C-method to 2e-5. The edge
 singularity vanishes as the contrast does, so the error scales with how far |n|
-is from 1. Every validation before it ran near |n| = 1 (gold at 2 nm closed to
-1.2e-4), and the clean analytic grooves close at any |n|, which is why nothing
-caught it.
+is from 1: gold at 2 nm, near |n| = 1, closes to 1.2e-4, and the clean analytic
+grooves close at any |n|.
 
 Measured 2026-10-29 on the AFM average of a TASTE scan (2018, A205, 2000
 points, through `metrology.boundary` at its defaults), period 400 nm, TE,
@@ -474,7 +470,7 @@ and the solver's polygon answer is a discretisation fault rather than physics.
 On the same polygon with the CXRO gold table the error tracks |n|: 7.8e-5 at
 |n| = 0.997 (3.1 nm), 5.4e-4 at 0.989 (6.2 nm), 2.4e-2 at 0.888.
 
-Two repairs that do not work, recorded so they are not tried again. Correcting
+Two repairs do not work. Correcting
 the absorption integral alone, by writing it in its transposed form (`K⁻` at
 `−α₀` acting on the continuous trace, since `W_i L_ij(α₀) = W_j K_ji(−α₀)` off
 the diagonal to rounding) and corner-subtracting that at every vertex, moves A
@@ -539,8 +535,7 @@ source).
 
 **With real corners, each side between them is smoothed.** A measured blazed
 groove usually has a sharp valley, a corner above the threshold, and with one
-present the whole groove used to be graded at it with every other vertex left
-a straight segment. Now `profiles.smoothed_polygon_sides` filters each side
+present `profiles.smoothed_polygon_sides` filters each side
 between consecutive corners on its own: its departure from the chord joining
 its corners is extended oddly about both ends and convolved with the same
 Gaussian, so the corners do not move and each side keeps its slope into them,
@@ -672,7 +667,7 @@ graded nodes against RCWA's 0.13170, and both differ from the published
 - J. A. McCoy, PhD thesis, Chapter 2 §2.2 (read with `conventions.md` §10;
   §2.2.3 is superseded, see item 5 there).
 - L. I. Goray and G. Schmidt, JOSA A 27, 585 (2010): the finite-conductivity
-  formulation (§8), implemented at M19.
+  formulation (§8).
 - L. Li, JOSA A 10, 2581 (1993): the coordinate-transformation results behind
   G&S's comparison tables, the external anchor of §6.
 - H. A. Kalhor and A. R. Neureuther, JOSA 61, 43 (1971): an early

@@ -17,8 +17,7 @@ under the tip, where "left" or "right" would depend on it. A scan taken with the
 grating rotated 180° requires no change.
 
 Any other value raises a `ValueError`, so that the wrong face is never measured
-without warning. Older documentation for this project referred to `'left'` and
-`'right'`, which were never valid values.
+without warning.
 
 ## The split
 

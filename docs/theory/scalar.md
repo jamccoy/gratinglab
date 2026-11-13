@@ -20,14 +20,11 @@ assumptions, which this page states explicitly.
 | Fraunhofer (far-field) observation | Valid for a telescope focal plane, but not for near-field work. |
 | Reflectivity is resolved across the groove cycle and carried inside the diffraction integral | When a `coating` is named, efficiencies are absolute; when it is left unset, they are relative, which is a correct answer to a different question and not a deficiency. §9 describes the three models and the cost of each. |
 
-> Before M16 the fifth row of this table read "reflectivity applied
-> separately, as one scale factor per wavelength", on the grounds that "scalar
-> theory has no mechanism by which one order could reflect differently from its
-> neighbour". Such a mechanism exists, and the row was wrong. A groove whose
-> reflectivity varies across the cycle is an amplitude grating as well as a
-> phase grating; the two Fourier-transform together, and the result is
-> order-dependent. On the reference geometry the effect ranges from −51% to
-> +12% order by order. See §9.
+> A groove whose reflectivity varies across the cycle is an amplitude grating
+> as well as a phase grating; the two Fourier-transform together, and the
+> result is order-dependent. Against one reflectivity scale factor per
+> wavelength, the effect on the reference geometry ranges from −51% to +12%
+> order by order. See §9.
 
 Because polarization is neglected, the solver advertises `rigorous=False` in
 its [`Capabilities`](../../src/gratinglab/solvers/base.py) and records a
@@ -356,7 +353,7 @@ because mapping where the model breaks down is a deliverable in its own right.
 |---|---|
 | $\lambda / (p \sin\gamma) \lesssim 0.1$ | Kirchhoff theory assumes structure ≫ wavelength, measured at the reduced wavelength $\lambda/\sin\gamma$, because that is the wavelength of the transverse problem the grooves pose (M&P eq. 4.65). In-plane this is the familiar $\lambda/p$. The distinction matters in practice: the flagship off-plane geometry reads $\lambda/p \approx 0.007$ but has a reduced ratio of $0.32$, and there the disagreement between the scalar and integral methods is catastrophic order by order. `tests/test_cross_method.py` holds $\lambda/p$ fixed and closes the cone to show the discrepancy growing along exactly this axis. Order positions and the blaze envelope remain useful past the threshold; per-order numbers need a rigorous cross-check. |
 | $\zeta < \theta_c = \arccos(1 - \text{decrement})$ | The facet graze must stay below the critical angle for total external reflection, or the reflectivity collapses. This is the exact lossless edge, of which $\sqrt{2\,\text{decrement}}$ is the leading term (short by a relative decrement/12, about 1e-4 in the soft X-ray). It is evaluated when a `coating` is named, and only where the complex $n$ lies within 0.2 of 1 (`NEAR_UNITY`), which is the X-ray and EUV regime in which a critical angle exists at all. From the UV to the IR there is usually none: a glass has $n' > 1$, and a visible metal has $k$ of order 1 and reflects about as well at normal incidence as at grazing, so a near-normal design there is ordinary and the check does not apply. Inside the regime, a real part of $n$ at or above 1, as occurs just below an absorption edge, gives $\theta_c = 0$ and produces a warning at any graze. Without optical constants there is nothing to compare against, so in that case the check also does not apply and no warning is issued. |
-| $\lambda > 32 \sin(\zeta)\,\sigma$ | Fraunhofer smoothness: below this limit the facet is not optically smooth and scatter dominates. The condition is checked for every profile; it was once gated on the presence of a blaze angle, so a rough sinusoid was never checked. |
+| $\lambda > 32 \sin(\zeta)\,\sigma$ | Fraunhofer smoothness: below this limit the facet is not optically smooth and scatter dominates. The condition is checked for every profile. |
 | No order fully shadowed | With reflectivity resolved across the groove (§9), an order into which no lit facet can radiate comes out at exactly zero. That is the answer of the model and not the physical one, and it is reported by name so that it is not mistaken for passing-off. |
 | $r_p$ stays away from zero on the lit groove | At Brewster's angle the p amplitude changes sign and its phase jumps by $\pi$, and the geometric-mean symmetrisation of §9 does not carry that cleanly. The condition is reachable only with steep grooves near normal incidence. |
 | $R_s \approx R_p$ at the guarded graze (split $\lesssim 2\%$) | The 50/50 s/p average of §9 stands in for a mapping from groove TE/TM to facet s/p that the model does not carry, and any basis rotation can move the result by at most half the split. At the grazes this project runs, the split is under 1% (see §9); a steep groove near normal incidence raises it to tens of percent, and in that case the waiver is reported instead of being left silently priced at zero. |
@@ -474,8 +471,7 @@ $$\mathscr{E}_m = \frac{O_m}{2}\left(
 
 with the complex Fresnel amplitude carried inside the integral. Because $r(t)$
 varies, the groove is an amplitude grating as well as a phase grating, and the
-reflectivity becomes order-dependent, which §1 formerly stated to be
-impossible.
+reflectivity becomes order-dependent.
 
 The weight is a geometric mean for the following reason. The obvious weight
 $r(\zeta_i(t))$ depends on $\alpha$ alone, which destroys the
@@ -634,7 +630,7 @@ between them is deliberately left unassigned
 for this reason). Resolving it here would be false precision in a model that
 already reports TE and TM as identical, and the size of what is being waived has
 been measured. The fractional intensity split $|R_s - R_p|/R_s$ on the CXRO
-Au table (vendored in the repository until 2026-11-11) is:
+Au table is:
 
 | $\lambda$ (nm) | $\zeta = 0.5°$ | $1.25°$ | $2°$ | $5°$ |
 |---:|---:|---:|---:|---:|
@@ -651,9 +647,7 @@ accounted for at exactly the point at which it ceases to be negligible. Under
 defensible place to combine them.
 
 Roughness is treated with Névot–Croce by default, with Debye–Waller and `none`
-available on request, and both are intensity factors; M16-B fixed a Névot–Croce
-implementation that returned the amplitude form and was being multiplied into a
-reflectivity. The limit that pins it is $n \to 1$, where $k_{tz} \to k_{iz}$
+available on request, and both are intensity factors. The limit that pins it is $n \to 1$, where $k_{tz} \to k_{iz}$
 and the two models must become the same expression. Near and above $\theta_c$
 Debye–Waller over-damps by $\sim10^{-2}$; deep below it the ordering reverses
 and Debye–Waller retains marginally more; far above $\theta_c$ the two converge

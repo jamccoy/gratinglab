@@ -22,6 +22,11 @@ entries under "Unreleased" into a section named for the new version;
 - **Plainer wording on screen.** The chooser, the About box, the tooltips,
   the comparison note and the Setup tab's Materials page say what a control
   does without arguing for it. The chooser now names all four solvers.
+- **The README, the Help pages and the metrology wiki describe the package
+  as it is.** Accounts of earlier versions, of past drafts of a page and of
+  bugs since fixed are gone (this changelog keeps them), along with internal
+  milestone names and a caveat the README repeated four times. Every
+  measured number stays.
 
 ### Fixed
 

@@ -2,14 +2,12 @@
 
 Implemented in [`solvers/rcwa/`](../../src/gratinglab/solvers/rcwa/__init__.py).
 Symbols and sign conventions follow [`conventions.md`](../conventions.md). This
-page is the design note the backend was written against (2026-10-27) and the
-record of what has been validated so far; the section numbers are for citing.
+page describes the backend and records what has been validated so far; the
+section numbers are for citing.
 
-The roadmap's requirements for this backend are not negotiable and each has a
-section here: Li's factorization rules from the start (§3), S-matrix
-propagation and never a plain transmittance matrix (§4), a fully vectorial
-conical formulation (§2), and layer stacks above and below the grating region
-in the data model from the start (§6).
+The backend uses Li's factorization rules (§3), S-matrix propagation and never a
+plain transmittance matrix (§4), a fully vectorial conical formulation (§2), and
+layer stacks above and below the grating region in the data model (§6).
 
 ---
 
@@ -442,13 +440,13 @@ and the one case past it is the exact anomaly. The answer there was still right
 amplitude, so the warning means "unusual", not "wrong".
 
 The table was measured on the coupled `2N` system. Since in-plane mounts are
-solved as two decoupled systems, in-plane TE no longer meets that singularity
+solved as two decoupled systems, in-plane TE does not meet that singularity
 at all: its external region's `V` is `(kx^2 - eps) / kz = -kz`, which goes to
 zero at grazing, so the same exact-grazing case reads 27. TM's `V` is
 `eps / kz` and still crosses the threshold there, which is what
-`tests/test_conditioning.py` now holds; conical mounts are still coupled.
+`tests/test_conditioning.py` holds; conical mounts are still coupled.
 
-## 9. Not yet validated, and decisions to make
+## 9. Not yet validated
 
 Not yet validated:
 
@@ -496,16 +494,3 @@ than dropped:
   (§4). That is an inference from this project's two solvers, not a statement
   of the chapter's; the dielectric companion table (12.2) is matched to its
   printed digits, which rules out a convention fault common to both.
-
-Decisions for the project rather than for this backend:
-
-1. ~~**How `Problem` describes a layer stack.**~~ Decided 2026-10-27: a coated
-   grating means a layer that follows the groove, `Problem.layers` of
-   `ConformalLayer`, its surface the true offset with rounded convex corners
-   (§6).
-2. ~~**Whether a staircase is acceptable by default.**~~ Decided 2026-10-27:
-   yes, with the TM warning. RCWA can represent nothing but slabs, so the
-   choice was only ever how many and when to warn.
-3. ~~**Whether transmitted orders belong in `EfficiencyScan`.**~~ Decided
-   2026-10-27: yes, as `EfficiencyScan.transmission`, filled by this backend
-   and the integral solver (§4).

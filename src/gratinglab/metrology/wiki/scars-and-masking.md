@@ -1,8 +1,8 @@
 # Scars and masking
 
-Two things used to send a scan back to Gwyddion before it could be analysed
-here: scan lines the tip got wrong, and a patch of the surface that is not
-grating at all. Both are now settings, set in the Import tab and carried in
+Two kinds of defect can be handled here without going back to Gwyddion: scan
+lines the tip got wrong, and a patch of the surface that is not grating at all.
+Both are settings, set in the Import tab and carried in
 `AnalysisSettings`, so a batch or command-line run reproduces exactly what was
 chosen in the window, and both are recorded in every summary file they affect.
 

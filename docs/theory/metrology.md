@@ -83,16 +83,15 @@ expects is a question about the *mount* and lies outside this package; see
 Step 2 divides by the *averaged window width*, and the output of step 3 spans
 exactly `[0, 1]` whatever that width was. If a groove near the scan edge narrows
 the window that every groove shares, the profile is consequently stretched to
-fill a period it never occupied. This effect is real and was found empirically:
-`test_edge_rule_reduces_x_stretch` was written because of it, and
-`ggp_min_half_width` mitigates it by discarding clipped grooves.
+fill a period it never occupied. `ggp_min_half_width` limits this by discarding
+clipped grooves, and `test_edge_rule_reduces_x_stretch` covers it.
 
 A stretched profile does not look obviously wrong in a plot. Its error appears in
 the efficiency, because the facet angle it implies is wrong.
 
 ---
 
-## 3. Why the period is load-bearing
+## 3. Why the period matters
 
 The exported profile is dimensionless. Physical depth is `y_norm × period`, and
 that depth enters the scalar phase term directly:
@@ -314,10 +313,6 @@ these steps the pipeline divides into two branches:
 - **Boundary profile.** `boundary.build_boundary_profile` averages the grooves
   into one and normalises it.
 
-The two branches were once separate scripts with their own copies of the
-front-end, and these copies drifted apart until a bug fixed in one persisted in
-the other. The front-end is shared for that reason.
-
 The two branches do not exchange results. `build_boundary_profile` does not run
 the facet fit, so `to_problem(blaze_angle=...)` takes the angle as an argument
 instead of obtaining it. Connecting them would require substantial work and has
@@ -358,10 +353,9 @@ turned into a number.
    pixel apart, each row between them is crossed horizontally too, so a steep
    wall is located to a fraction of a pixel across as well as down. Below its
    crossing a column is treated as solid, but only a pixel reading *below* the
-   level is raised to the material level. Raising every pixel there also
-   lifted the partly covered pixel at the wall and moved each wall 0.17 nm
-   into the vacuum on a clean render; that was found by the synthetic tests and
-   is why the rule is as narrow as it is.
+   level is raised to the material level. (Raising every pixel there would
+   also lift the partly covered pixel at the wall and move each wall 0.17 nm
+   into the vacuum on a clean render.)
 4. **Grooves.** A first period comes from the strongest spatial frequency of
    the traced height. Each ridge's centre is the midpoint of its two
    half-height crossings, found with hysteresis at a quarter and three quarters
@@ -395,10 +389,10 @@ turned into a number.
    not where it does not: an asymmetric groove came back from one pass with its
    steep wall twice as wide as rendered, and the repeated passes restore it.
    The averaged groove is therefore model-free, and its distance from the
-   fitted trapezoid (`mean_profile_rms_nm`, `mean_profile_max_nm`) is the
-   honest statement of how well a trapezoid describes the grating.
+   fitted trapezoid (`mean_profile_rms_nm`, `mean_profile_max_nm`) measures
+   how well a trapezoid describes the grating.
 
-### Inputs that are inputs, not guesses
+### Inputs the file cannot supply
 
 | Input | Why the file cannot decide it |
 |---|---|

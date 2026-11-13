@@ -127,8 +127,8 @@ not a free choice.
   for example, every ray lies 1.5000° from `+ẑ` and 178.5000° from `ĝ`, so the cone
   opens along `−ĝ` and not along `ĝ`. A drawing that opens it along `ĝ` places every
   ray 180° out. Code that consumes γ only through the scalars `sin γ` / `cos γ` cannot
-  detect the difference, which is why this convention went unstated until something had
-  to draw the cone (see `docs/findings.md`).
+  detect the difference, so a drawing is the first place it matters (see
+  `docs/findings.md`).
 
   In operational terms, `k_z = k cos γ` is conserved, and `sin γ = 1` (γ = 90°) is the
   in-plane case. Extreme off-plane mounts have small γ, and the soft-X-ray work uses
@@ -147,9 +147,8 @@ the angles it uses, and all three resolve to the same internal representation.
 $$\hat{t} = -\hat{d}$$
 
 `Profile.height(t)` describes a shape in a normalised parameter `t`. `gratinglab.profiles` does
-not state which physical direction `+t` points in, because nothing required it until a
-profile and a ray were drawn in the same frame. The wave conventions above determine
-it: `+t` runs along `-d̂`, that is, against the dispersion direction.
+not itself state which physical direction `+t` points in. The wave conventions above
+determine it: `+t` runs along `-d̂`, that is, against the dispersion direction.
 
 Two independent derivations give this result.
 
@@ -169,8 +168,7 @@ vectors above give `∫ e^{-iΦ_m(t)} e^{-2πimt} dx/p` when `t ↔ +x`. Substit
 `t ↔ -x` maps one integral onto the complex conjugate of the other.
 
 No numerical result depends on this choice. Conjugation leaves `|G_m|²`, the only
-quantity any caller consumes, bit-identical, which is why the convention remained
-consistent but unstated for so long. It matters only where a drawing places a facet
+quantity any caller consumes, bit-identical. It matters only where a drawing places a facet
 relative to a ray. If the direction is reversed, the incident beam strikes the
 anti-blaze facet and the blaze arrow leaves through the back of the active facet.
 
@@ -182,9 +180,8 @@ omission is itself the finding. The behaviour is pinned by
 `tests/test_geometry.py::TestFacetHandedness`; see also `docs/findings.md`.
 
 Not every consumer takes only `|G_m|²`. The integral solver places the curve
-itself, and through 0.1.12 it placed it at `x = t P`, solving every asymmetric
-groove as its mirror image. It now places it at `x = (1 − t) P`
-(`solvers/integral/_boundary.py`), and
+itself, at `x = (1 − t) P` (`solvers/integral/_boundary.py`); placing it at
+`x = t P` would solve every asymmetric groove as its mirror image. And
 `tests/test_cross_method.py::TestAgreementOnAnAsymmetricGroove` holds both
 solvers to the same blaze order. Files that run along `+d̂`, PCGrate's `.ggp`
 and the metrology pipeline's `x_norm`, cross into `t` in one place,
@@ -255,8 +252,7 @@ $$\left|\frac{m\lambda}{p\,\sin\gamma} - \sin\alpha\right| \leq 1$$
 which is `|sin β_m| ≤ 1` with `sin β_m` taken from the equation above, and is what
 `geometry.is_propagating(geometry.sin_beta(...))` computes. Mind the sign on
 `sin α`: the mirrored form `|sin α + mλ/(p sin γ)| ≤ 1` describes a different
-mount, and stood here until 2026-10-30 (`findings.md`, "The June 2017 SCIL
-campaign", for what it cost). `tests/test_geometry.py::TestTheDocumentedPropagationTest`
+mount (`findings.md`, "The June 2017 SCIL campaign"). `tests/test_geometry.py::TestTheDocumentedPropagationTest`
 pins the prose and the code together.
 
 Orders that fail this condition are evanescent. They are retained in the record with
@@ -335,9 +331,9 @@ correct counterpart and the other does not:
 | renormalise so `Σ_m E_m = 1` | thesis Appendix-D.tex:420 | removed as an error |
 
 The two factors differ in their symmetry. Appendix D's `cos β_m / cos α` is asymmetric
-under `α ↔ β_m` and does violate Lorentz reciprocity, which is why it was rejected. The
-conclusion that was then drawn, that the efficiency is the norm-squared Fourier
-coefficient alone, went one step too far. `O_m` is symmetric, so reciprocity is
+under `α ↔ β_m` and violates Lorentz reciprocity. Dropping every factor, so that the
+efficiency is the norm-squared Fourier coefficient alone, is also wrong: `O_m` is
+symmetric, so reciprocity is
 unaffected by it, and it is the factor that brings the shallow-groove limit into
 agreement with a theory derived from the boundary condition instead of from a
 transmittance function. See [`theory/scalar.md`](theory/scalar.md) §3 and

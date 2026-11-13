@@ -18,8 +18,8 @@ of a single measurement. If all 20 bands are essentially re-imaging the same
 five grooves, however, the real information content is closer to that of five
 carefully measured grooves than to that of 100 independent draws.
 
-The measurements are clearly correlated, so the relevant question is the degree
-of correlation, since that determines whether it matters.
+The measurements are clearly correlated; the question is how strongly, since
+that determines whether it matters.
 
 ## Measuring it: the intraclass correlation
 
@@ -85,9 +85,7 @@ No conclusion changed. On the bundled samples every comparison kept its verdict:
   null afterwards. The 215 °C vs 280 °C comparison went from p = 0.61 to
   p = 0.74.
 
-This is the expected outcome for a correction that is real but moderate: it
-widens the error bars without altering the findings. Had it reversed a result,
-that reversal would itself have been reported as a finding.
+The correction widens the error bars without altering any of the findings.
 
 ## Two details worth knowing
 

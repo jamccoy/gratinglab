@@ -27,10 +27,8 @@ AFM scan file (.txt)
   → statistics, CSV          → .json, .csv or .ggp
 ```
 
-Every step above the fork is shared code, and this is deliberate. The two
-outputs were once produced by separate scripts, each with its own copy of the
-loading and detection logic, and the copies drifted apart until a bug fixed in
-one remained in the other.
+Every step above the fork is shared code, so the blaze angles and the
+boundary profile come from the same processed scan.
 
 ## What a "measurement" is
 
@@ -39,8 +37,7 @@ default). Each band is averaged into its own profile and analysed separately, so
 that one image yields 80–100 blaze-angle measurements, where averaging the whole
 image into a single profile would yield 4–10.
 
-The statistical treatment of these measurements is where most of the care in
-this project has gone. The measurements are not independent of one another,
+The measurements are not independent of one another,
 because every band re-measures the same physical grooves; this is discussed in
 "The correlation correction".
 

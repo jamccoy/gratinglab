@@ -34,7 +34,7 @@ What it refuses, with `UnsupportedConfiguration`, rather than approximating:
 |---|---|
 | an undercut profile | the coordinate `u = y − a(x)` needs `a` to be a function |
 | a vertical facet or sidewall: `Lamellar`, `Blazed(antiblaze_angle=90)`, a `FromProfileData` with two heights at one `t`, or ends that differ in height | `a'` is infinite there; any finite stand-in would be a smoothed facet, the failure `solvers/base.py` names |
-| a wall too steep for the scan: one whose floor (§6, "Steep walls") exceeds the largest truncation accepted, 256 | the answer is wrong at every truncation the solver takes. Issue #7: an 88.8° wall at 1.55 nm off-plane returned efficiencies of 11 at N = 128 |
+| a wall too steep for the scan: one whose floor (§6, "Steep walls") exceeds the largest truncation accepted, 256 | the answer is wrong at every truncation the solver takes (an 88.8° wall at 1.55 nm off-plane gives efficiencies of 11 at N = 128) |
 | a truncation below a steep wall's floor (`ValueError`, naming the floor) | measured wrong by 3.5e-3 to 6e2 there |
 | any `conductivity` other than the two above | as for the integral solver |
 

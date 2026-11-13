@@ -102,8 +102,8 @@ be entered again for a profile loaded from one.
 
 This is the file PCGrate reads: two control strings, then one `x y` pair per
 line, with the first and last points written
-`0 0` and `1 0`. It copies, byte for byte, the file Aditi has loading in
-PCGrate 6.7.1 (2026-11-12), because PCGrate's border import is sensitive to
+`0 0` and `1 0`. It matches, byte for byte, a file known to load in
+PCGrate 6.7.1, because PCGrate's border import is sensitive to
 small differences:
 
 ```
@@ -125,10 +125,7 @@ therefore a third as deep as the grating's period is wide, whatever that period
 is in nanometres.
 
 The header must not be commented. Writing this file with
-`np.savetxt(header=...)` prepends `# `, which PCGrate rejects. Three different
-header variants were found among the hand-made files before this step was
-automated: the correct one, a `#`-commented one, and one carrying only the numpy
-header with no PCGrate lines at all.
+`np.savetxt(header=...)` prepends `# `, which PCGrate rejects.
 
 The endpoints are forced to exactly zero so that successive periods tile without
 a step. A seam at the period boundary is a defect that makes an efficiency curve
@@ -157,12 +154,11 @@ skips any groove whose full period does not fit inside the scan, independently
 of the edge-exclusion setting. The summary's "n of m grooves averaged" counts
 the skipped grooves.
 
-Before this check was added, edge exclusion was the only protection, and edge
-exclusion is a user setting. On the TASTE scan the last groove sits 38 samples
-from the edge against a half-width of 40, which stretched the exported profile
-horizontally by 5.5%. On the synthetic sawtooth, one partial groove narrowed the
-window to 0.66 of a period, turned a 70° anti-blaze facet into 58° and reduced
-the depth by 13%. A change of this size in the groove's shape is a real change
+Edge exclusion alone is not enough, because it is a user setting. On the TASTE
+scan the last groove sits 38 samples from the edge against a half-width of 40,
+which without this check stretches the exported profile horizontally by 5.5%.
+On the synthetic sawtooth, one partial groove narrows the window to 0.66 of a
+period, turns a 70° anti-blaze facet into 58° and reduces the depth by 13%. A change of this size in the groove's shape is a real change
 in the efficiency it predicts, and nothing in the file would reveal it.
 
 ### Controls worth understanding

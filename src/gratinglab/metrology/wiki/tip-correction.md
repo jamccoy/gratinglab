@@ -123,8 +123,7 @@ to the tip.
 
 ## What it found on a real scan
 
-This scan is the reason the correction was implemented. A TASTE grating scan
-gives a blaze angle of 27.9° from its facet fit and 20.3° from its depth. On a
+A TASTE grating scan gives a blaze angle of 27.9° from its facet fit and 20.3° from its depth. On a
 sharp groove a 7.6° disagreement of this kind is impossible, since depth and
 facet angle are geometrically linked, and tip rounding was the obvious suspect.
 

@@ -30,8 +30,7 @@ the image, or the average Gwyddion took along it, so it carries less
 information than the image it came from: orientation correction and scar
 repair have nothing to work with. Prefer the image when you have it.
 
-Until recently this was the only supported input, and every file in `data/` is
-a text export. Its drawback is that the export is an untracked manual step:
+Every file in `data/` is a text export. The drawback of the format is that the export is an untracked manual step:
 nothing in the file records which channel was exported, which scan direction was
 used, or what processing was applied beforehand. The `_flatten` in those
 filenames is the only indication that any processing was applied.
@@ -87,11 +86,11 @@ So a Gwyddion export is upside down against the plane as stored, and since
 every measurement this project has made came through such an export, the
 reader follows Gwyddion rather than the file.
 
-Reading the plane as stored, which is what this did until 0.3.2, left the two
-routes mirror images of each other. A flip does not move the blaze angle, so
-nothing showed until `groove_orientation` began measuring the groove rotation:
-the same grating then read -0.3722° as a `.spm` and +0.3721° as the Gwyddion
-export of that scan. Both routes now report +0.372°.
+Reading the plane as stored would leave the two routes mirror images of each
+other. A flip does not move the blaze angle, but it reverses the sign of the
+groove rotation `groove_orientation` measures: the same grating would read
+-0.3722° as a `.spm` and +0.3721° as the Gwyddion export of that scan. Both
+routes report +0.372°.
 
 With the rows the right way up, the plane and the export agree to 0.00027 nm
 rms on a scan 115 nm deep, which is the five significant digits the text export
@@ -180,17 +179,10 @@ The underlying arrays agree to 0.00027 nm RMS on a scan 115 nm deep, which is
 the five significant digits the text export writes and nothing else: no per-row
 offset (0.00001 nm), no plane, and no scale difference. The export is the plane.
 
-That is not what this page said until 0.3.2. It reported a 7 nm RMS difference
-and explained it as Gwyddion's flattening, which the pipeline's own row-group
-flattening then removed. Both the figure and the explanation were artefacts of
-reading the plane upside down (see "Which way up"): comparing a grating with
-its own mirror image is what produced the 7 nm. Together with the finding
-below, the `_flatten` in that filename appears to describe nothing that was
-ever done to the data.
-
-A further finding was made during this verification: the `_flatten.0_00003`
-companion file beside the raw scan is byte-identical to it. Gwyddion never wrote
-modified data, and on the evidence above the text export carries none either.
+The `_flatten.0_00003` companion file beside the raw scan is byte-identical to
+it. Gwyddion never wrote modified data, and on the evidence above the text
+export carries none either, so the `_flatten` in that filename appears to
+describe nothing that was ever done to the data.
 
 ## Practical notes
 
