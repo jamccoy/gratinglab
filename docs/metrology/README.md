@@ -347,19 +347,26 @@ GGP_SMOOTHING_WINDOW = 5
 - `results/groove_analysis_metrics_<sample>.txt`: depth, RMS slope, maximum
   sidewall angle and curvature of the normalised profile
 
-The `.ggp` format is one `x y` pair per line, with no header and no line
-break after the last point. Both coordinates are normalised: x runs from 0 to 1
+The `.ggp` format is two control strings, then one `x y` pair per line,
+with the first and last points written `0 0` and `1 0` and a line break
+after every point. Both coordinates are normalised: x runs from 0 to 1
 across exactly one period, and y is the height as a fraction of that period.
 
 ```
-0.000000 0.000000
+3 0 - 20 harmonics - Polygonal type
+Period: 1 PSC: 1
+0 0
 0.000500 0.000001
+...
+1 0
 ```
 
-PCGrate's border-profile import takes the points alone (Aditi, 2026-10-29).
-A script that needs the legacy `3 0 - Polygonal type` / `Period: 1 PSC: 1`
-lines can call `gratinglab.io.ggp.write_ggp(..., header=True)`; the GUI and
-the CLI never write them. Never write these files with
+That is the shape of the file Aditi has loading in PCGrate 6.7.1
+(2026-11-12); a file with the points alone was refused with a file type
+error. A script that needs the
+points alone can call `gratinglab.io.ggp.write_ggp(..., header=False)`,
+which PCGrate accepts only through its Border Profile Editor. Never write
+these files with
 `np.savetxt(header=...)`, which prepends `# `.
 
 ---

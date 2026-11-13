@@ -160,17 +160,13 @@ class TestRejection:
 
 
 class TestWriting:
-    def test_writes_no_header_by_default(self, tmp_path):
-        """Aditi: PCGrate's border-profile import does not want one (2026-10-29)."""
+    def test_writes_the_documented_header_by_default(self, tmp_path):
+        """PCGrate 6.7.1 refused a headerless file with a file type error
+        (Aditi, 2026-11-12)."""
         path = write_ggp(tmp_path / "out.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.3, 0.0])
-        assert path.read_text(encoding="utf-8").startswith("0.000000 0.000000\n")
-        assert read_ggp(path).header_variant == "none"
-
-    def test_writes_the_documented_header_on_request(self, tmp_path):
-        path = write_ggp(tmp_path / "out.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.3, 0.0],
-                         header=True)
         assert path.read_text(encoding="utf-8").startswith(GGP_HEADER + "\n")
         assert not path.read_text(encoding="utf-8").startswith("#")
+        assert read_ggp(path).header_variant == "canonical"
 
     def test_round_trip_preserves_points(self, tmp_path):
         profile = FromProfileData(t=(0.0, 0.3, 0.6, 1.0), y=(0.0, 0.2, 0.35, 0.0))
@@ -208,26 +204,35 @@ class TestWriting:
             write_ggp(tmp_path / "x.ggp", t=[0, 1], y=[0, 1, 2])
 
     def test_writes_the_exact_pcgrate_line_format(self, tmp_path):
-        """Six decimals, one space, no break after the last point.
+        """Six decimals and one space, the endpoints as integers, and a line
+        break after every point, the last included.
 
-        PCGrate rejects a file ending in a line break (found by Aditi, 2026-10-27),
-        which is why the last point is not followed by one.
-
-        This began as a byte-compatibility check against `afm_blaze_meas`,
-        which shipped a second `write_ggp`. That copy is gone and this module
-        is now the only implementation, so there is no longer another writer
-        to agree with. The assertion outlives the reason for it: the format
-        is still a fact about PCGrate, and still worth pinning.
+        This is the form of Aditi's file that PCGrate 6.7.1 loads
+        (2026-11-12). The module docstring has why the endpoints are written
+        `0 0` and `1 0`; all 35 of PCGrate's own polygonal files end in a line
+        break.
         """
-        path = write_ggp(tmp_path / "fmt.ggp", t=[0.0, 0.5], y=[0.0, 0.25])
-        assert path.read_text(encoding="utf-8") == "0.000000 0.000000\n0.500000 0.250000"
-        assert not path.read_bytes().endswith((b"\n", b"\r"))
+        path = write_ggp(tmp_path / "fmt.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.25, 0.0])
+        assert path.read_text(encoding="utf-8") == \
+            GGP_HEADER + "\n0 0\n0.500000 0.250000\n1 0\n"
+
+    def test_endpoints_are_written_as_integers_only_when_they_are_the_endpoints(
+            self, tmp_path):
+        """A rounding residue still counts, `-0.000000` included; a groove
+        that does not start at height 0 keeps its decimals."""
+        path = write_ggp(tmp_path / "near.ggp", t=[1e-9, 0.5, 1.0 - 1e-9],
+                         y=[-1e-9, 0.25, 1e-9], header=False)
+        assert path.read_text(encoding="utf-8").splitlines() == \
+            ["0 0", "0.500000 0.250000", "1 0"]
+        path = write_ggp(tmp_path / "off.ggp", t=[0.0, 0.5, 1.0],
+                         y=[0.7, 1.0, 0.7], header=False)
+        assert path.read_text(encoding="utf-8").splitlines() == \
+            ["0.000000 0.700000", "0.500000 1.000000", "1.000000 0.700000"]
 
     def test_header_can_be_left_out_explicitly(self, tmp_path):
         path = write_ggp(tmp_path / "bare.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.25, 0.0],
                          header=False)
-        assert path.read_text(encoding="utf-8") == \
-            "0.000000 0.000000\n0.500000 0.250000\n1.000000 0.000000"
+        assert path.read_text(encoding="utf-8") == "0 0\n0.500000 0.250000\n1 0\n"
         ggp = read_ggp(path)
         assert ggp.header_variant == "none"
         assert list(ggp.t) == [0.0, 0.5, 1.0]
@@ -455,14 +460,16 @@ class TestWrittenFilesObeyTheDocumentedGeometry:
     def test_a_single_space_separates_the_two_numbers(self, tmp_path):
         """10.2.2: "to separate X and Y values in strings use the space key"."""
         x, y = self.groove(50)
-        text = write_ggp(tmp_path / "g.ggp", t=x, y=y).read_text(encoding="utf-8")
+        text = write_ggp(tmp_path / "g.ggp", t=x, y=y, header=False).read_text(
+            encoding="utf-8")
         assert all(line.count(" ") == 1 for line in text.splitlines())
         assert "\t" not in text
 
     def test_at_most_sixteen_digits_a_piece(self, tmp_path):
         """10.2.2 caps a number at 16 digits including the decimal point."""
         x, y = self.groove(50)
-        text = write_ggp(tmp_path / "g.ggp", t=x, y=y).read_text(encoding="utf-8")
+        text = write_ggp(tmp_path / "g.ggp", t=x, y=y, header=False).read_text(
+            encoding="utf-8")
         assert max(len(field) for line in text.splitlines()
                    for field in line.split()) <= 16
 

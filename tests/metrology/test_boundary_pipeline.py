@@ -212,8 +212,10 @@ def test_a_requested_header_is_the_uncommented_two_line_form():
     assert len(lines) == 102, "two header lines plus one per point"
 
 
-def test_the_cli_export_writes_no_header_by_default(tmp_path, monkeypatch):
-    """Aditi: PCGrate's border-profile import does not want one (2026-10-29)."""
+def test_the_cli_export_writes_a_file_pcgrate_loads(tmp_path, monkeypatch):
+    """The form PCGrate 6.7.1 loads: the header, `0 0` and `1 0` as integers,
+    and a final line break (Aditi, 2026-11-12). A headerless export, the
+    default until then, was refused with a file type error."""
     import gratinglab.metrology.workflows as workflows
     from gratinglab.io.ggp import read_ggp
 
@@ -223,8 +225,15 @@ def test_the_cli_export_writes_no_header_by_default(tmp_path, monkeypatch):
         out = workflows.run_boundary_profile_export(settings, filename=SOURCE)
 
     ggp = read_ggp(out['ggp_path'])
-    assert ggp.header_variant == "none"
+    assert ggp.header_variant == "canonical"
     assert len(ggp.t) == len(out['x'])
+
+    with open(out['ggp_path'], encoding="utf-8") as handle:
+        text = handle.read()
+    lines = text.splitlines()
+    assert lines[:2] == GGP_HEADER.splitlines()
+    assert (lines[2], lines[-1]) == ("0 0", "1 0")
+    assert text.endswith("1 0\n")
 
 
 if __name__ == '__main__':

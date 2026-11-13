@@ -100,17 +100,24 @@ be entered again for a profile loaded from one.
 
 ### `averaged_groove_profile_<sample>.ggp`
 
-This is the file PCGrate reads. It is one `x y` pair per line, with no header,
-which is what PCGrate's border-profile import takes:
+This is the file PCGrate reads: the two control strings PCGrate's own files
+carry, then one `x y` pair per line, with the first and last points written
+`0 0` and `1 0`. That is the shape of the file Aditi has loading in
+PCGrate 6.7.1 (2026-11-12):
 
 ```
-0.000000 0.000000
+3 0 - 20 harmonics - Polygonal type
+Period: 1 PSC: 1
+0 0
 0.000500 0.000001
+...
+1 0
 ```
 
-Files written before 0.3.0 may start with the legacy
-`3 0 - Polygonal type` / `Period: 1 PSC: 1` lines; they still load. A script
-that needs those lines can call `write_ggp(..., header=True)`.
+Files from 0.3.0 to 0.3.4 have no control strings, and older files may
+start with the legacy `3 0 - Polygonal type` lines; both still load here. A script that needs the points alone can call
+`write_ggp(..., header=False)`, which PCGrate accepts only through its
+Border Profile Editor.
 
 Both columns are normalised: x runs from 0 to 1 across exactly one period, and
 y is the height as a fraction of that period. A groove 0.33 deep in this file is

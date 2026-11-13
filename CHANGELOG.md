@@ -21,6 +21,13 @@ entries under "Unreleased" into a section named for the new version;
   so a symbol in a sentence is the size of the words beside it rather than
   half again as large.
 
+- **`write_ggp` writes a header by default.** The two control strings
+  PCGrate's own polygonal files carry now start every `.ggp` the GUI, the CLI
+  and `write_ggp` write. PCGrate 6.7.1 refused a headerless export from the
+  metrology GUI with a file type error, which the guide explains: a file with
+  no control strings is legal only through the Border Profile Editor (10.2.3).
+  `write_ggp(header=False)` still writes the points alone.
+
 ### Fixed
 
 - **Math in a sentence sits on the line.** An equation's image used to rest
@@ -29,6 +36,17 @@ entries under "Unreleased" into a section named for the new version;
   now padded about its own baseline, which is measured from the rendered
   glyphs rather than taken from mathtext's box depth: that depth is the
   layout box, and trusting it left `x = 0` higher than `x`.
+
+- **A `.ggp` written here takes the shape of one PCGrate 6.7.1 loads**,
+  from Aditi's working file (2026-11-12). The first and last points are written `0 0` and `1 0`,
+  the exact text the guide asks for, rather than `0.000000 0.000000` and
+  `1.000000 0.000000`: her file with a header and a final line break was
+  refused on 2026-10-27 and loads now, and that is what changed in between.
+  The file also ends in a line break again, as all 35 of PCGrate's own
+  polygonal files do. Leaving it out, from her 2026-10-27 report, was a
+  reading of a test that changed more than one thing at once. Her file
+  carries the legacy first line `3 0 - Polygonal type`; the one written
+  here is PCGrate's own, and a load of it in 6.7.1 is what confirms this.
 
 ## 0.3.4 (2026-11-12)
 

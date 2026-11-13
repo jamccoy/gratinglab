@@ -15,11 +15,14 @@ points through :meth:`~gratinglab.profiles.FromProfileData.along_dispersion`
 and its inverse. The PCGrate corpus is what fixes the file's direction: the
 TASTE run matches only with ``x`` along ``+d-hat``.
 
-Default form, points only::
+Default form::
 
-    0.000000 0.000000
+    3 0 - 20 harmonics - Polygonal type
+    Period: 1 PSC: 1
+    0 0
     0.012346 0.000808
     ...
+    1 0
 
 The shared convention allows a scalar calculation and a PCGrate run to be
 driven from identical geometry, which isolates the method difference from any
@@ -30,9 +33,9 @@ Five control-string variants exist on disk:
 =====================================================  =========================
 Control strings                                        Seen in
 =====================================================  =========================
-none, points only                                      Aditi's, and the default
-``3 0 - 20 harmonics - Polygonal type`` + ``Period:``  PCGrate's own exports
-``3 0 - Polygonal type`` + ``Period:``                 legacy files written here
+none, points only                                      ``write_ggp(header=False)``
+``3 0 - 20 harmonics - Polygonal type`` + ``Period:``  PCGrate's own, the default
+``3 0 - Polygonal type`` + ``Period:``                 legacy files, and Aditi's
 ``# 3 0 - Polygonal type`` (hashed)                    ``*_fix6/7.ggp``
 ``# X(normalized...)`` only                            ``*_fix{,2,3,4}.ggp``
 =====================================================  =========================
@@ -54,14 +57,14 @@ segment and therefore fails the documented check on the first control string;
 :data:`GGP_HEADER` is now the documented pair.
 
 A file with no control strings at all, or with control strings in another
-format, is explicitly legal input (10.2.3, closing paragraph) -- but through
-the Border Profile Editor, which exports it into the program, rather than a
-direct load. That is why Aditi's practice works: she loads these through
-PCGrate's border-profile import and reports that it does not want a header,
-which is why the writer leaves one out unless asked.
+format, is legal input only through the Border Profile Editor, which exports
+it into the program (10.2.3, closing paragraph); a direct load needs them.
+PCGrate 6.7.1 refused a headerless file from the metrology GUI with a file
+type error (Aditi, 2026-11-12), so the writer starts with
+:data:`GGP_HEADER` unless told not to.
 
-The geometry rules are a closed list (10.2.3), and what :func:`write_ggp`
-produces already satisfies every one of them:
+The geometry rules are a closed list (10.2.3), and :func:`write_ggp`
+satisfies every one of them:
 
 * exactly two numbers per data string, separated by a space, with any
   fractional part after a decimal point rather than a comma -- at most 16
@@ -70,15 +73,18 @@ produces already satisfies every one of them:
   0.0001 .. 100;
 * every x within 0 .. 1 and never less than its predecessor;
 * every y within 0 .. 100;
-* the first point exactly ``0 0``, the last exactly ``1 0``;
+* the first point exactly ``0 0``, the last exactly ``1 0``. The writer
+  prints those two as integers. Aditi's file with a header and a final line
+  break was refused on 2026-10-27 and loads in PCGrate 6.7.1 on 2026-11-12,
+  and the endpoints written ``0 0`` and ``1 0`` rather than to six decimals
+  are what changed in between, so "exactly" is taken to mean the text;
 * between 2 and 5000 data strings, the upper bound ``ggp_n_points`` in
   :mod:`gratinglab.metrology.settings` is validated against.
 
 Twenty-four of the 35 separate their columns with a tab rather than the space
 10.2.2 asks for, so the program reads more separators than it documents; this
-module reads either. All 35 also end in a line break, which is worth knowing
-beside the note in :func:`write_ggp` that a trailing one was reported
-rejected.
+module reads either. All 35 also end in a line break, and so does what
+:func:`write_ggp` writes.
 
 This module reads all five variants. ``np.savetxt(header=...)`` is what
 produces the hashed ones, so it must not be used here.
@@ -180,7 +186,7 @@ __all__ = [
     "to_profile",
 ]
 
-#: The documented two control strings, written only on request. Never prefix
+#: The documented two control strings, written by default. Never prefix
 #: these lines with ``#``: a hashed control string is one "in another format",
 #: which the guide accepts only through the Border Profile Editor.
 GGP_HEADER = "3 0 - 20 harmonics - Polygonal type\nPeriod: 1 PSC: 1"
@@ -772,7 +778,7 @@ def write_ggp(
     t: ArrayLike | None = None,
     y: ArrayLike | None = None,
     fmt: str = "%f",
-    header: bool = False,
+    header: bool = True,
 ) -> Path:
     """Write a profile as ``x y`` points for PCGrate.
 
@@ -782,17 +788,18 @@ def write_ggp(
     file coordinates already, as the metrology pipeline's ``x_norm`` is.
 
     Values are written to six decimals, single-space separated, one point per
-    line, with no line break after the last point. PCGrate rejects a file
-    that ends in one, as ``np.savetxt`` output does. The format is pinned by
-    ``tests/test_ggp.py``; PCGrate rejects variations on it.
+    line, and the file ends in a line break, as all 35 of PCGrate's own
+    polygonal files do. A first point that rounds to ``(0, 0)`` is written
+    ``0 0`` and a last point that rounds to ``(1, 0)`` is written ``1 0``,
+    the exact text the guide asks for (10.2.3); the module docstring has the
+    evidence that PCGrate 6.7.1 reads it as text. The format is pinned by
+    ``tests/test_ggp.py``.
 
-    The points are written alone by default, with no control strings: Aditi
-    reports that PCGrate's border-profile import does not want one
-    (2026-10-29), and the guide confirms a file without control strings is
-    legal input through the Border Profile Editor (10.2.3). ``header=True``
-    starts the file with the two documented :data:`GGP_HEADER` lines instead,
-    the first of which is byte-for-byte the one PCGrate's own exports carry.
-    Reading a headerless file back reports ``header_variant == "none"``.
+    The file starts with the two documented :data:`GGP_HEADER` lines, the
+    first of which is byte-for-byte the one PCGrate's own files carry.
+    ``header=False`` writes the points alone, which only the Border Profile
+    Editor accepts (10.2.3) and which reads back as
+    ``header_variant == "none"``.
     """
     if (profile is None) == (t is None):
         raise ValueError("pass either a profile or both t and y, not both or neither")
@@ -814,11 +821,18 @@ def write_ggp(
 
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    points = (f"{fmt % x_value} {fmt % height}"
-              for x_value, height in zip(t_values, y_values))
+    points = [f"{fmt % x_value} {fmt % height}"
+              for x_value, height in zip(t_values, y_values)]
+    if points and _rounds_to(fmt, t_values[0], 0.0) and _rounds_to(fmt, y_values[0], 0.0):
+        points[0] = "0 0"
+    if points and _rounds_to(fmt, t_values[-1], 1.0) and _rounds_to(fmt, y_values[-1], 0.0):
+        points[-1] = "1 0"
+    lines = [GGP_HEADER, *points] if header else points
     with path.open("w", encoding="utf-8") as handle:
-        # No line break after the last point: PCGrate reads a trailing one as
-        # an extra, empty point and rejects the file (found by Aditi,
-        # 2026-10-27).
-        handle.write("\n".join([GGP_HEADER, *points] if header else points))
+        handle.write("\n".join(lines) + "\n")
     return path
+
+
+def _rounds_to(fmt: str, value: float, target: float) -> bool:
+    """Whether ``value`` prints as ``target`` in ``fmt``, ``-0.000000`` included."""
+    return float(fmt % value) == target
