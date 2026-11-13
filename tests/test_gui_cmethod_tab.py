@@ -21,6 +21,10 @@ from gratinglab.gui.cmethod_options import (  # noqa: E402
 from gratinglab.gui.state import FormState, build  # noqa: E402
 from gratinglab.solvers.cmethod import cmethod  # noqa: E402
 
+#: Drives a real Qt window: the expensive half of the suite, and the half
+#: an older machine feels. `pytest -m "not gui"` leaves it out.
+pytestmark = pytest.mark.gui
+
 SOLVE_TIMEOUT_MS = 30_000
 
 #: Smooth, classical, two wavelengths: solves in well under a second and

@@ -26,6 +26,10 @@ from gratinglab.gui.scalar_options import ScalarOptionsState, build_options  # n
 from gratinglab.gui.state import FormState, build  # noqa: E402
 from gratinglab.solvers import scalar  # noqa: E402
 
+#: Drives a real Qt window: the expensive half of the suite, and the half
+#: an older machine feels. `pytest -m "not gui"` leaves it out.
+pytestmark = pytest.mark.gui
+
 #: Generous, because it covers a whole solve plus a redraw on a loaded CI
 #: runner -- but finite, because a hung worker should fail rather than hang the
 #: suite. The default scalar solve takes about 70 ms.

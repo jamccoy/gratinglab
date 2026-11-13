@@ -21,6 +21,10 @@ from gratinglab.metrology.analyzer import analyze_single_file          # noqa: E
 from gratinglab.metrology.gui.qt.main_window import MainWindow         # noqa: E402
 from scans import SYNTHETIC, real_scan                                 # noqa: E402
 
+#: Drives a real Qt window: the expensive half of the suite, and the half
+#: an older machine feels. `pytest -m "not gui"` leaves it out.
+pytestmark = pytest.mark.gui
+
 SAMPLE = str(SYNTHETIC)
 
 

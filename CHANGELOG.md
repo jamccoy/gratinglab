@@ -10,6 +10,31 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- **A `gui` marker, and `tools/test_fast.py`.** A full run is about 2750
+  tests and, on the macOS CI runner, just under seven minutes; on an older
+  laptop it is longer and holds every core at full tilt throughout. The ten
+  slowest tests are only about a quarter of that, so there is no hot spot to
+  carve out: the cost is thousands of small solves, each asking LAPACK for a
+  thread per core when the run already has work enough to fill them.
+
+  The tests that build a real Qt window -- the slowest part, and the part a
+  thermally-limited machine feels first -- now carry `pytest.mark.gui`, so
+  `pytest -m "not gui"` is one flag rather than a list of `--ignore` paths.
+  The marker sits per class where a file's pure half is tested without a
+  toolkit (`test_gui_compare_tab.py`, `test_gui_launcher.py`,
+  `test_gui_theme.py`), so those keep running in the quick pass.
+
+  `tools/test_fast.py` is that deselection plus the two things a wrapper can
+  do and a fixture cannot: the BLAS thread variables, which must be set
+  before NumPy is imported, and a lower scheduling priority. It passes its
+  remaining arguments to pytest, and `--gui` puts the Qt tests back. Neither
+  changes what is asserted, and neither replaces the full suite: CI runs
+  everything on four legs, and that is still what a push is judged by.
+
 ## 0.3.6 (2026-11-13)
 
 ### Changed

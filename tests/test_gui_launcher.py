@@ -114,6 +114,7 @@ def _no_leaked_windows():
     qt_launcher._CHOOSER.clear()
 
 
+@pytest.mark.gui
 class TestTheWindowsItNames:
     """The paths in the table have to resolve, without building a window."""
 
@@ -125,6 +126,7 @@ class TestTheWindowsItNames:
             f"{chosen.key} names {chosen.window}, which is not a class")
 
 
+@pytest.mark.gui
 class TestTheChooser:
     def test_there_is_a_button_per_mode(self, qtbot):
         window = qt_launcher.LauncherWindow()
@@ -210,6 +212,7 @@ class TestTheChooser:
             qt_launcher._OPEN_WINDOWS.remove(opened)
 
 
+@pytest.mark.gui
 class TestItReallyOpensTheRealWindows:
     """
     The integration the rest of this file stubs out.
@@ -269,6 +272,7 @@ class TestItReallyOpensTheRealWindows:
             opened.close()
 
 
+@pytest.mark.gui
 class TestGettingBackAndSwitching:
     """
     The chooser was a one-way door: pick a mode and there was no route to the

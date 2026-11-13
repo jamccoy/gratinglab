@@ -183,6 +183,15 @@ select = ["E4", "E7", "E9", "F"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Registered so `--strict-markers` stays meaningful and `-m` has something to
+# select on. `gui` is the Qt half: every test under it builds a real window,
+# which is both the slowest part of a run and the part an older or a
+# thermally-limited machine feels first. `pytest -m "not gui"` is the quick
+# pass; `tools/test_fast.py` is that plus a cap on the BLAS pools. CI runs
+# everything, so nothing here is a reason to skip the Qt tests before a push.
+markers = [
+    "gui: builds a real Qt window (deselect with -m 'not gui')",
+]
 # Relative to rootdir, so a run driven from a copied tree imports *that*
 # tree's package. Without it, mutation testing silently imports the real
 # source and reports every mutant as surviving -- a useless green run rather

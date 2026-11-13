@@ -118,6 +118,7 @@ def light_again():
         found.set_choice("light")
 
 
+@pytest.mark.gui
 class TestSwitching:
     @pytest.fixture
     def win(self, qtbot, light_again):

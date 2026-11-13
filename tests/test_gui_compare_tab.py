@@ -277,6 +277,7 @@ def compare(qtbot, win, *names):
         win.compare()
 
 
+@pytest.mark.gui
 class TestItAppears:
     def test_it_is_the_last_tab_and_not_a_solver(self, win, tab):
         bar = win._tab_widget
@@ -303,6 +304,7 @@ class TestItAppears:
         assert tab._compare_button.isEnabled()
 
 
+@pytest.mark.gui
 class TestItCompares:
     def test_the_plotted_scans_are_a_direct_sweep(self, qtbot, win, tab):
         """Not a second source of truth: what the tab holds is what
@@ -377,6 +379,7 @@ class TestItCompares:
         assert tab._outcome.comparison.methods == ("scalar",)
 
 
+@pytest.mark.gui
 class TestRefusals:
     def test_a_solver_that_cannot_model_the_profile_is_named_and_the_rest_run(
         self, qtbot, win, tab
@@ -434,6 +437,7 @@ class TestRefusals:
         assert "need attention" in tab._panel.toPlainText()
 
 
+@pytest.mark.gui
 class TestRunning:
     def test_every_solve_button_is_disabled_while_it_runs(self, win, tab):
         tab.set_selected(("scalar",))
@@ -509,6 +513,7 @@ class TestRunning:
         win.cancel()
 
 
+@pytest.mark.gui
 class TestTheme:
     def test_a_theme_change_restyles_the_drawn_comparison(self, qtbot, win, tab):
         from matplotlib.colors import to_hex

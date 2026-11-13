@@ -386,6 +386,25 @@ git clone https://github.com/jamccoy/gratinglab.wiki.git ../gratinglab.wiki
 .venv/bin/ruff check .
 ```
 
+A full run is about 2750 tests and some minutes of every core, most of it
+thousands of small solves rather than a few long ones. For the loop before a
+push there is a quicker pass, which leaves out the tests that build a real Qt
+window, caps the BLAS pools at one thread and runs at a lower priority:
+
+```bash
+.venv/bin/python tools/test_fast.py
+```
+
+It takes pytest's own arguments (`-k`, `-x`, a path), and `--gui` puts the Qt
+tests back. The deselection is a marker, so plain pytest can do it too:
+
+```bash
+.venv/bin/python -m pytest -m "not gui"
+```
+
+Neither replaces the full suite, which CI runs on four platform and version
+legs; they are for keeping an older machine usable between pushes.
+
 The test suite relies on three practices in particular:
 
 - **Physical self-checks.** `checks.check_reciprocity` and `checks.check_energy_balance`
