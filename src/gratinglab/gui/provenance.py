@@ -33,6 +33,7 @@ __all__ = [
     "provenance_lines",
     "error_lines",
     "to_html",
+    "AUTHORS",
     "about_text",
 ]
 
@@ -270,16 +271,41 @@ def alarming_text(lines: Sequence[Line]) -> str:
     return "".join(line.text for line in lines if line.tag in ALARM_TAGS)
 
 
-def about_text(version: str) -> str:
-    """The About box, as a string so it can be asserted without a dialog."""
+#: Who wrote it, in the order CITATION.cff and pyproject.toml give. Named
+#: here rather than in the widget so that the three places a reader can learn
+#: this -- the citation file, the package metadata and the About box -- cannot
+#: say three different things without a test noticing.
+AUTHORS = ("Jake McCoy", "Aditi Gangadharan")
+
+
+def about_text(version: str, released: str | None = None) -> str:
+    """The About box, as a string so it can be asserted without a dialog.
+
+    ``released`` is the version's release date, which the caller passes as
+    :data:`gratinglab.__version_date__`. It is optional because the date is
+    about the release and this function is about the text, and a caller with
+    no date to hand (a test of the wording, a future entry point) should get
+    the box rather than a TypeError. Omitting it drops the clause; it never
+    invents one, since a wrong date is worse than no date.
+    """
+    when = f", released {released}" if released else ""
     return (
         "GratingLab\n"
-        f"Version {version}\n\n"
+        f"Version {version}{when}\n\n"
         "An open comparison platform for grating efficiency analysis: "
         "scalar, RCWA, C-method and integral-method solvers driven from "
-        "one problem spec.\n\n"
+        "one problem spec, with AFM groove metrology in the same package.\n\n"
+        f"{_and_list(AUTHORS)}.\n\n"
         "BSD-3-Clause."
     )
+
+
+def _and_list(names: Sequence[str]) -> str:
+    """``"A"``, ``"A and B"``, ``"A, B and C"``: the credits, as a sentence."""
+    names = list(names)
+    if len(names) < 2:
+        return "".join(names)
+    return f"{', '.join(names[:-1])} and {names[-1]}"
 
 
 def _milliseconds(wall_time_s: Any) -> str:

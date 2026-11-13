@@ -78,6 +78,22 @@ class TestEveryWindowOffersIt:
         assert seen["title"] == "About GratingLab"
         assert __version__ in seen["text"]
 
+    def test_about_credits_the_authors_and_dates_the_release(self, window, monkeypatch):
+        """The wording is tested headlessly in `test_gui_provenance.py`; what
+        this checks is that the window hands the date over at all, which is
+        the one thing a caller can get wrong."""
+        from gratinglab import __version_date__
+        from gratinglab.gui.provenance import AUTHORS
+
+        seen = {}
+        monkeypatch.setattr(
+            "PySide6.QtWidgets.QMessageBox.about",
+            lambda parent, title, text: seen.update(text=text),
+        )
+        window._help_menu.actions()[0].trigger()
+        assert all(author in seen["text"] for author in AUTHORS)
+        assert __version_date__ in seen["text"]
+
 
 @pytest.mark.gui
 class TestOpeningAPageFromTheAfmWindow:

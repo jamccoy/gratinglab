@@ -332,6 +332,8 @@ The **Help** menu contains the theory pages, rendered with typeset equations and
 tables. It is on every window: the conventions page fixes the angles a measured
 profile is reported in, and `theory/metrology.md` describes the metrology window's
 own analysis, so the AFM window needs those pages at least as much as this one does.
+**Help → About GratingLab** names the authors and states which version is running and
+when it was released, so a bug report can say which copy it came from.
 **View → Theme** switches between System (following the operating system), Light,
 Dark, Solarized Light, Solarized Dark and High contrast; the choice is remembered and
 applies to the metrology window too. Diffraction orders are coloured by sign, cool for

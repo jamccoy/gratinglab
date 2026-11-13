@@ -19,6 +19,12 @@ def _sections():
     return re.findall(r"^## (\S+)", text, re.M)
 
 
+def _dates():
+    """Every released section's date, keyed by version."""
+    text = CHANGELOG.read_text(encoding="utf-8")
+    return dict(re.findall(r"^## (\S+) \((\d{4}-\d{2}-\d{2})\)", text, re.M))
+
+
 def test_the_current_version_has_a_section():
     assert gratinglab.__version__ in _sections(), (
         f"CHANGELOG.md has no '## {gratinglab.__version__}' section; move the "
@@ -86,3 +92,30 @@ def test_groups_follow_the_keep_a_changelog_order():
         known = [g for g in groups if g in order]
         assert known == sorted(known, key=order.index), (
             f"{version} has {known}, expected Keep a Changelog order")
+
+
+def test_the_release_date_matches_the_changelog():
+    """
+    `gratinglab.__version_date__` is the date on this version's heading.
+
+    The About box states when the release it is running was made. That date
+    cannot be read from this file at run time, because CHANGELOG.md is not in
+    the wheel -- only `docs/` is copied in -- so it is a constant beside
+    `__version__`, and this test is what stops it rotting. It fails on the
+    bump commit, which is where both are edited anyway and where a mismatch
+    costs one line to fix.
+    """
+    version = gratinglab.__version__
+    dated = _dates()
+    assert version in dated, (
+        f"'## {version}' carries no (YYYY-MM-DD) date; the About box reads it")
+    assert gratinglab.__version_date__ == dated[version], (
+        f"gratinglab.__version_date__ is {gratinglab.__version_date__} but "
+        f"CHANGELOG.md dates {version} {dated[version]}")
+
+
+def test_every_released_section_is_dated():
+    """The one above only checks the current version; a section with no date
+    would otherwise go unnoticed until it became the current one."""
+    undated = set(_sections()) - set(_dates()) - {"Unreleased"}
+    assert not undated, f"CHANGELOG.md sections with no date: {sorted(undated)}"

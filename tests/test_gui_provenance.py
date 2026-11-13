@@ -5,14 +5,18 @@ correctness question -- it decides whether a user reads a valid run as broken
 -- so it is tested here rather than by walking tag ranges in a live window.
 """
 
+import re
+
 import numpy as np
 import pytest
 
 from gratinglab.checks import check_energy_balance
 from gratinglab.gui.provenance import (
     ALARM_TAGS,
+    AUTHORS,
     TAG_COLORS,
     Line,
+    _and_list,
     about_text,
     alarming_text,
     error_lines,
@@ -318,6 +322,15 @@ class TestHtml:
 
 
 class TestAbout:
+    """Who wrote it, which version this is, and when that version was made.
+
+    The box is the only place in the running application that credits anyone,
+    and the only place that says how old the copy in front of you is. Both
+    facts are stated elsewhere too -- in CITATION.cff and pyproject.toml, and
+    on the changelog heading -- so what these tests mostly guard is that the
+    several copies cannot drift apart silently.
+    """
+
     def test_reports_the_real_version_and_licence(self):
         from gratinglab import __version__
 
@@ -325,6 +338,58 @@ class TestAbout:
         assert __version__ in text
         assert "BSD-3-Clause" in text
         assert "GratingLab" in text
+
+    def test_credits_both_authors(self):
+        text = about_text("0.0.0")
+        for author in AUTHORS:
+            assert author in text, author
+
+    def test_the_authors_are_the_ones_the_package_declares(self):
+        """CITATION.cff, pyproject.toml and the About box name the same two
+        people, in the same order. Three hand-maintained copies of one fact is
+        what this test exists for."""
+        import tomllib
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parent.parent
+        declared = tomllib.loads(
+            (root / "pyproject.toml").read_text(encoding="utf-8")
+        )["project"]["authors"]
+        assert [a["name"] for a in declared] == list(AUTHORS)
+
+        citation = (root / "CITATION.cff").read_text(encoding="utf-8")
+        given = re.findall(r"given-names:\s*(\S+)", citation)
+        family = re.findall(r"family-names:\s*(\S+)", citation)
+        assert [f"{g} {f}" for g, f in zip(given, family)] == list(AUTHORS)
+
+    def test_the_release_date_is_shown_when_it_is_given(self):
+        from gratinglab import __version__, __version_date__
+
+        text = about_text(__version__, __version_date__)
+        assert f"released {__version_date__}" in text
+
+    def test_no_date_is_better_than_a_wrong_one(self):
+        """`released` is optional, and omitting it drops the clause rather
+        than guessing at today."""
+        assert "released" not in about_text("0.0.0")
+
+    def test_the_metrology_half_is_named(self):
+        """The box opens from the AFM window too now, and a description that
+        mentions only solvers would read there as the wrong application."""
+        assert "metrology" in about_text("0.0.0").lower()
+
+    @pytest.mark.parametrize(
+        "names, expected",
+        [
+            ((), ""),
+            (("A",), "A"),
+            (("A", "B"), "A and B"),
+            (("A", "B", "C"), "A, B and C"),
+        ],
+    )
+    def test_the_credit_line_reads_as_a_sentence(self, names, expected):
+        """A third author should need no edit here."""
+        assert _and_list(names) == expected
 
 
 class TestAbsorption:

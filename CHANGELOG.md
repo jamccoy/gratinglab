@@ -14,6 +14,20 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- **The About box credits both authors and dates the release.** It named
+  neither the people who wrote the package nor when the copy in front of you
+  was made, which is the first thing a bug report needs. It now reads
+  "Version 0.3.6, released 2026-11-13", followed by Jake McCoy and Aditi
+  Gangadharan, in the order `CITATION.cff` and `pyproject.toml` give; a test
+  asserts those three copies of the author list agree.
+
+  The date is `gratinglab.__version_date__`, a constant beside `__version__`
+  rather than something read from this file at run time, because CHANGELOG.md
+  is not in the wheel -- only `docs/` is copied in -- so an installed copy
+  would have nothing to read. `tests/test_changelog.py` asserts it matches the
+  date on the `## <version>` heading, so a release commit that forgets to move
+  it fails where it is cheapest to fix.
+
 - **The Help menu is on every window.** The theory pages were reachable only
   from the efficiency window, because that is where they were written. The AFM
   window, merged in later from a project that had none, offered no route to any

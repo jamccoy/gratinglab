@@ -24,6 +24,16 @@ from .result import EfficiencyScan, OrderEfficiency, Provenance
 
 __version__ = "0.3.6"
 
+#: The day this version was released, ISO 8601. It sits beside the version
+#: rather than being read from CHANGELOG.md at run time because the changelog
+#: is not in the wheel -- only `docs/` is -- so an installed copy would have
+#: nothing to read and the About box would be blank for everyone but a
+#: developer. `tests/test_changelog.py` asserts that it matches the date on
+#: the `## <version>` heading, so the release commit that forgets to move it
+#: fails at the point where it is cheapest to fix, the same arrangement as
+#: the version's own section.
+__version_date__ = "2026-11-13"
+
 __all__ = [
     "Illumination",
     "Polarization",
@@ -35,4 +45,5 @@ __all__ = [
     "ResolvingPower",
     "resolving_power",
     "__version__",
+    "__version_date__",
 ]

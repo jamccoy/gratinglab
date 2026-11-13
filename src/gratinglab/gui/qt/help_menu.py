@@ -31,10 +31,14 @@ HELP_MENU_TITLE = "&Help"
 def show_about(parent=None) -> None:
     """The About box. Its text is :func:`gratinglab.gui.provenance.about_text`,
     which is a plain string so it can be asserted without a dialog."""
-    from ... import __version__
+    from ... import __version__, __version_date__
     from .. import provenance
 
-    QMessageBox.about(parent, "About GratingLab", provenance.about_text(__version__))
+    QMessageBox.about(
+        parent,
+        "About GratingLab",
+        provenance.about_text(__version__, __version_date__),
+    )
 
 
 def show_theory(page, parent=None):
