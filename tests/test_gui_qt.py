@@ -219,24 +219,33 @@ class TestTheSolveTimeoutDiagnostic:
         assert "MainWindow.solved:     0 emission(s)" in message
 
     def test_a_real_timeout_raises_this_and_not_pytestqts_anonymous_error(
-        self, qtbot, monkeypatch
+        self, qtbot, win, monkeypatch
     ):
         """End to end, because the unit tests above would still pass if
         `raising=False` were dropped and pytest-qt's own TimeoutError came
         back -- which is exactly the regression worth guarding.
 
-        One extra window, against this file's rule of sharing `win`: the
-        fixture builds 98 of them already, and a timeout cannot be provoked on
-        a window whose solve has landed. The 1 ms budget is 70x under the
-        ~70 ms solve, so it times out without waiting for one.
-        """
-        from gratinglab.gui.qt.main_window import MainWindow
+        It waits on `win`, whose solve has landed, and triggers nothing, so
+        there is no solve in flight and nothing that can emit `solved`. The
+        wait therefore has to time out, on any machine, at any speed.
 
+        It used to build a 99th window and race that window's first solve
+        against a 1 ms budget, on the reasoning that 1 ms is 70x under a
+        ~70 ms solve. That was not the race it was in. `SolveWorker.finished`
+        reaches the window as a *queued* event, so a solve that lands while
+        the main thread is busy -- between the constructor returning and the
+        wait starting -- leaves its event in the queue, and the 1 ms wait is
+        itself the event loop that delivers it. `solved` then fires inside the
+        budget however small the budget is made. Measured on macOS on
+        2026-11-13: block the main thread for 100 ms in that gap and the old
+        form stops timing out, every time, while 0 ms and 50 ms still time
+        out. It did fail, on the Windows leg of CI run 43473869751, where that
+        gap is widest; both Ubuntu legs passed the same commit, which is what
+        a race this shape looks like.
+        """
         monkeypatch.setitem(globals(), "SOLVE_TIMEOUT_MS", 1)
-        window = MainWindow()
-        qtbot.addWidget(window)
         with pytest.raises(AssertionError, match="never signalled within 1 ms"):
-            _await_solve(qtbot, window, what="the probe solve")
+            _await_solve(qtbot, win, what="the probe solve")
 
 
 class TestToolchain:

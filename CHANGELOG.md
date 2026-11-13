@@ -76,6 +76,22 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Fixed
 
+- **A GUI test that raced the worker thread rather than the clock.**
+  `test_a_real_timeout_raises_this_and_not_pytestqts_anonymous_error` built a
+  window and raced its first solve against a 1 ms wait, reasoning that 1 ms is
+  70x under a ~70 ms solve. That was not the race it was in:
+  `SolveWorker.finished` reaches the window as a queued event, so a solve that
+  lands while the main thread is busy -- between the constructor returning and
+  the wait starting -- leaves its event in the queue, and the 1 ms wait is
+  itself the event loop that delivers it. `solved` then fires inside the
+  budget however small the budget is. Measured: block the main thread for
+  100 ms in that gap and it stops timing out, every time, while 0 ms and 50 ms
+  still do. It failed on the Windows leg, where that gap is widest, and passed
+  on both Ubuntu legs of the same commit. It now waits on the shared `win`,
+  whose solve has landed, and triggers nothing, so nothing can emit `solved`
+  and the wait has to time out on any machine at any speed -- which also lets
+  it share `win` like the rest of the file instead of building a 99th window.
+
 - **Opening a window for the first time no longer freezes the application.**
   Reported on Windows as "almost made the software non-responsive", and
   reproduced on macOS: `open_window` imported the chosen window's module and
