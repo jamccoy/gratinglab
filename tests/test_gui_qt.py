@@ -2007,6 +2007,29 @@ class TestTheoryViewer:
         assert not page.rigorous  # the case this test needs
         assert "Approximate method" in self._open(qtbot, win)._browser.toPlainText()
 
+    def test_a_link_to_another_page_opens_it(self, qtbot, win):
+        from PySide6.QtCore import QUrl
+
+        viewer = self._open(qtbot, win)
+        viewer._browser.anchorClicked.emit(QUrl("../conventions.md"))
+        assert viewer.opened is not None
+        qtbot.addWidget(viewer.opened)
+        assert viewer.opened.windowTitle() == "Grating Geometry & Conventions"
+        assert "Conventions" in viewer.opened._browser.toPlainText()
+
+    def test_a_link_to_a_source_file_goes_to_the_browser(self, qtbot, win, monkeypatch):
+        from PySide6.QtCore import QUrl
+
+        opened = []
+        monkeypatch.setattr(
+            "gratinglab.gui.qt.theory_viewer.QDesktopServices.openUrl",
+            lambda url: opened.append(url.toString()),
+        )
+        viewer = self._open(qtbot, win)
+        viewer._browser.anchorClicked.emit(QUrl("../../src/gratinglab/solvers/scalar.py"))
+        assert opened and opened[0].endswith("/src/gratinglab/solvers/scalar.py")
+        assert viewer.opened is None
+
     def test_a_page_that_does_not_exist_yet_explains_itself(self, qtbot, win):
         from gratinglab.gui.docs import TheoryPage
 

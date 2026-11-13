@@ -10,6 +10,20 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Fixed
+
+- **Help works in an installed package.** The theory pages and the
+  conventions lived only in the repository's `docs/`, so every Help page in a
+  `pip install` read "Documentation is not bundled with this installation".
+  The build now copies them into the package, and `docs/` stays the one copy.
+- **Links on a Help page go somewhere.** A link to another Help page opens
+  it in a window beside the first, as the menu does. A link to a source file,
+  a test or another doc opens that file on GitHub at the installed version,
+  and a web link opens in the browser. They were drawn as links and did
+  nothing.
+
 ## 0.3.5 (2026-11-13)
 
 ### Changed

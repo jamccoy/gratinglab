@@ -4,13 +4,16 @@ This module is pure and independent of any toolkit, like
 :mod:`gratinglab.gui.state`, because the logic that matches pages to solvers
 is worth testing on its own.
 
-``docs/theory/`` lives at the repository root, outside ``src/gratinglab/``, so
-it ships in a development checkout but not in a built wheel. This is a real
-limitation of a pre-alpha tool that is run locally. It is not worked around by
-duplicating the markdown into package data, since there is not yet a second
-solver to justify that. When the directory cannot be found,
-:func:`theory_pages` returns an unavailable entry with an explanation instead
-of raising.
+``docs/theory/`` lives at the repository root, outside ``src/gratinglab/``,
+because so much of the tree names the pages by that path. ``setup.py`` copies
+the pages the menu shows into ``gratinglab/_docs/`` when a wheel is built, in
+the same layout, so an install finds them there and a checkout finds
+``docs/`` by walking up. When neither is found, :func:`theory_pages` returns
+an unavailable entry with an explanation instead of raising.
+
+A link on a page is resolved by :func:`resolve_link`: to another page the
+menu shows, opened in the viewer, or else to the file on GitHub at the
+installed version's tag, so the page and the code it names are one release.
 
 Every registered solver receives an entry, whether or not its page is
 available, so the Help menu always reflects which solvers exist. A solver
@@ -27,9 +30,11 @@ continues to hold; a test asserts it.
 
 from __future__ import annotations
 
+import posixpath
 from dataclasses import dataclass
 from pathlib import Path
 
+from .. import __version__
 from ..solvers.base import available_solvers, get_solver
 
 __all__ = [
@@ -38,7 +43,15 @@ __all__ = [
     "theory_pages",
     "general_pages",
     "display_title",
+    "resolve_link",
+    "REPOSITORY",
 ]
+
+#: Where the Help pages are in an installed package; setup.py puts them there.
+_BUNDLED_THEORY = Path(__file__).resolve().parents[1] / "_docs" / "theory"
+
+#: The repository a link to anything but a Help page opens in.
+REPOSITORY = "https://github.com/jamccoy/gratinglab"
 
 #: Human-readable titles for known solvers. Falls back to the bare registry
 #: name for anything not listed here, so a new solver still gets a menu entry
@@ -119,12 +132,16 @@ def short_title(name: str) -> str:
 
 
 def find_theory_root(start: Path | None = None) -> Path | None:
-    """Search upward from ``start`` for a ``docs/theory`` directory.
+    """The directory holding the theory pages.
 
-    Returns ``None`` instead of raising if none is found within
-    :data:`_MAX_SEARCH_DEPTH` levels, as happens when running from an installed
-    wheel, where ``docs/`` was never packaged.
+    With no ``start``, the copy bundled into an installed package, if there
+    is one. Otherwise, or failing that, search upward from ``start`` (or
+    this file) for a ``docs/theory`` directory, which is where a checkout
+    keeps them. Returns ``None`` instead of raising if neither is found
+    within :data:`_MAX_SEARCH_DEPTH` levels.
     """
+    if start is None and _BUNDLED_THEORY.is_dir():
+        return _BUNDLED_THEORY
     here = (start or Path(__file__)).resolve()
     for candidate in [here, *here.parents][: _MAX_SEARCH_DEPTH + 1]:
         theory = candidate / "docs" / "theory"
@@ -201,3 +218,36 @@ def general_pages() -> tuple[TheoryPage, ...]:
         )
         for name, title, filename in _GENERAL_PAGES
     )
+
+
+def resolve_link(
+    page: TheoryPage, href: str, pages: tuple[TheoryPage, ...] | None = None
+) -> TheoryPage | str | None:
+    """What following ``href`` on ``page`` should do.
+
+    Returns another of ``pages`` (by default every page the menu shows) to
+    open in the viewer, or a URL for the browser: a web link as written, and
+    any other file, a source file, a test or a doc the menu does not show, as
+    its page on GitHub at this version's tag. ``None`` when there is nothing
+    to follow: an anchor on the same page, which the viewer does not mark, or
+    a link from a page with no file behind it.
+    """
+    if "://" in href or href.startswith("mailto:"):
+        return href
+    target, _, fragment = href.partition("#")
+    if not target or page.path is None:
+        return None
+
+    resolved = (page.path.parent / target).resolve()
+    for candidate in pages if pages is not None else (*general_pages(), *theory_pages()):
+        if candidate.path is not None and candidate.path.resolve() == resolved:
+            return candidate
+
+    # The pages sit in docs/ and docs/theory/, in a checkout and bundled alike,
+    # so the link's place in the repository follows from the page's.
+    folder = "docs/theory" if page.path.parent.name == "theory" else "docs"
+    in_repository = posixpath.normpath(f"{folder}/{target}")
+    if in_repository.startswith(".."):
+        return None
+    anchor = f"#{fragment}" if fragment else ""
+    return f"{REPOSITORY}/blob/v{__version__}/{in_repository}{anchor}"

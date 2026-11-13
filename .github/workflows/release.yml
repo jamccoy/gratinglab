@@ -52,13 +52,18 @@ jobs:
           names = zipfile.ZipFile(glob.glob("dist/*.whl")[0]).namelist()
           tables = sorted(n for n in names if n.startswith("gratinglab/materials/data/") and n.endswith(".txt"))
           wiki = [n for n in names if n.startswith("gratinglab/metrology/wiki/") and n.endswith(".md")]
+          help_pages = [n for n in names if n.startswith("gratinglab/_docs/") and n.endswith(".md")]
           print("tables:", tables)
           print("metrology wiki pages:", len(wiki))
+          print("Help pages:", len(help_pages))
           # No optical constant tables ship, or are in the repository at all;
           # see materials/data/SOURCES.md. This guards against one returning.
           assert not tables, f"the wheel must carry no tables: {tables}"
           assert "gratinglab/materials/data/SOURCES.md" in names
           assert wiki, "metrology wiki missing from the wheel"
+          # setup.py copies these in from docs/; see its docstring.
+          assert "gratinglab/_docs/conventions.md" in names
+          assert "gratinglab/_docs/theory/scalar.md" in names, help_pages
           PY
           tar -tzf dist/*.tar.gz | grep -E 'materials/data/.*\.txt$' && { echo "::error::the sdist carries a table"; exit 1; } || true
 

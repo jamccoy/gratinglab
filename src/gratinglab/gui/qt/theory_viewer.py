@@ -22,6 +22,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, QUrl
 from PySide6.QtGui import (
+    QDesktopServices,
     QFontMetricsF,
     QImage,
     QTextBlockFormat,
@@ -32,6 +33,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QTextBrowser, QVBoxLayout, QWidget
 
 from .. import richtext
+from ..docs import resolve_link
 
 __all__ = ["ReadingBrowser", "TheoryViewer", "render_into"]
 
@@ -171,9 +173,12 @@ class TheoryViewer(QWidget):
 
         self._browser = ReadingBrowser()
         self._browser.setOpenExternalLinks(False)
-        # Relative links between doc pages point at files on disk that this
-        # viewer has no route to open. Following them would empty the window.
+        # QTextBrowser would load a relative link as a file in this window and
+        # show raw markdown, so links are followed here instead.
         self._browser.setOpenLinks(False)
+        self._browser.anchorClicked.connect(self._follow)
+        #: The last page a link opened, held so its window is not collected.
+        self.opened: TheoryViewer | None = None
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -185,6 +190,16 @@ class TheoryViewer(QWidget):
         # Equations are images rasterised in the text colour, so a theme
         # change re-renders the page rather than only repainting it.
         theming.subscribe(self._on_theme)
+
+    def _follow(self, url: QUrl) -> None:
+        """Open a linked Help page in a window of its own, beside this one,
+        the way the Help menu opens them; anything else goes to the browser."""
+        target = resolve_link(self._page, url.toString())
+        if isinstance(target, str):
+            QDesktopServices.openUrl(QUrl(target))
+        elif target is not None:
+            self.opened = TheoryViewer(target, parent=self.parentWidget())
+            self.opened.show()
 
     def _on_theme(self, _theme) -> None:
         # A bound method so Qt disconnects it with the window (see SetupTab).

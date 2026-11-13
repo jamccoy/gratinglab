@@ -6,7 +6,15 @@ of "which page goes with which solver."
 
 
 
-from gratinglab.gui.docs import find_theory_root, general_pages, theory_pages
+from gratinglab import __version__
+from gratinglab.gui import docs
+from gratinglab.gui.docs import (
+    TheoryPage,
+    find_theory_root,
+    general_pages,
+    resolve_link,
+    theory_pages,
+)
 from gratinglab.solvers.base import Capabilities, available_solvers, register
 
 
@@ -29,6 +37,83 @@ class TestFindTheoryRoot:
         deep = tmp_path / "src" / "pkg" / "gui"
         deep.mkdir(parents=True)
         assert find_theory_root(deep) == tmp_path / "docs" / "theory"
+
+
+class TestBundledPages:
+    """An installed package carries the pages in gratinglab/_docs/."""
+
+    def test_the_bundled_copy_is_preferred(self, tmp_path, monkeypatch):
+        bundled = tmp_path / "_docs" / "theory"
+        bundled.mkdir(parents=True)
+        monkeypatch.setattr(docs, "_BUNDLED_THEORY", bundled)
+        assert find_theory_root() == bundled
+
+    def test_a_start_still_searches_upward(self, tmp_path, monkeypatch):
+        """An explicit start is a question about that place, not the install."""
+        bundled = tmp_path / "_docs" / "theory"
+        bundled.mkdir(parents=True)
+        monkeypatch.setattr(docs, "_BUNDLED_THEORY", bundled)
+        elsewhere = tmp_path / "x"
+        elsewhere.mkdir()
+        assert find_theory_root(elsewhere) is None
+
+    def test_pages_load_from_the_bundled_layout(self, tmp_path, monkeypatch):
+        """The layout setup.py writes: conventions beside theory/."""
+        bundled = tmp_path / "_docs" / "theory"
+        bundled.mkdir(parents=True)
+        (bundled / "scalar.md").write_text("# Scalar\n", encoding="utf-8")
+        (bundled.parent / "conventions.md").write_text("# Conventions\n", encoding="utf-8")
+        monkeypatch.setattr(docs, "_BUNDLED_THEORY", bundled)
+        scalar = next(p for p in theory_pages() if p.name == "scalar")
+        conventions = next(p for p in general_pages() if p.name == "conventions")
+        assert scalar.available and scalar.text == "# Scalar\n"
+        assert conventions.available and conventions.text == "# Conventions\n"
+
+
+class TestResolveLink:
+    def _page(self, name):
+        return next(p for p in (*general_pages(), *theory_pages()) if p.name == name)
+
+    def test_a_link_to_another_help_page_opens_it(self):
+        assert resolve_link(self._page("scalar"), "../conventions.md").name == "conventions"
+        assert resolve_link(self._page("scalar"), "integral.md").name == "integral"
+
+    def test_and_from_the_top_level_into_theory(self):
+        page = TheoryPage("conventions", "C", True, docs.find_theory_root().parent / "conventions.md", "", True)
+        assert resolve_link(page, "theory/scalar.md").name == "scalar"
+
+    def test_a_source_file_opens_on_github_at_this_version(self):
+        url = resolve_link(self._page("scalar"), "../../src/gratinglab/solvers/scalar.py")
+        assert url == (
+            f"https://github.com/jamccoy/gratinglab/blob/v{__version__}"
+            "/src/gratinglab/solvers/scalar.py"
+        )
+
+    def test_a_doc_the_menu_does_not_show_keeps_its_anchor(self):
+        url = resolve_link(self._page("scalar"), "../findings.md#a-heading")
+        assert url.endswith(f"/blob/v{__version__}/docs/findings.md#a-heading")
+
+    def test_a_web_link_is_left_alone(self):
+        assert resolve_link(self._page("scalar"), "https://example.org/a") == "https://example.org/a"
+
+    def test_nothing_to_follow(self):
+        page = self._page("scalar")
+        assert resolve_link(page, "#same-page") is None
+        assert resolve_link(page, "../../../../outside") is None
+        unwritten = TheoryPage("future", "Future", False, None, "", True)
+        assert resolve_link(unwritten, "../conventions.md") is None
+
+    def test_every_link_on_every_page_resolves(self):
+        """No link on a shipped page should be a dead end: each is a page or
+        a URL. A link that climbs out of the repository would come back None."""
+        import re
+
+        dead = []
+        for page in (*general_pages(), *theory_pages()):
+            for href in re.findall(r"\]\(([^)\s]+)\)", page.text):
+                if not href.startswith("#") and resolve_link(page, href) is None:
+                    dead.append((page.name, href))
+        assert not dead, dead
 
 
 class TestTheoryPages:

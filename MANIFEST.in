@@ -1,0 +1,4 @@
+# The Help pages, which setup.py copies into the wheel. A wheel is built from
+# the sdist, so they have to be in it.
+include docs/conventions.md
+recursive-include docs/theory *.md

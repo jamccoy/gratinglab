@@ -156,8 +156,9 @@ where = ["src"]
 [tool.setuptools.package-data]
 "gratinglab.materials" = ["data/SOURCES.md"]
 # The metrology wiki ships too, for the same reason: pages that exist in a
-# checkout and vanish on install are worse than no pages. This is also the
-# model `docs/theory/` should adopt -- see docs/roadmap.md.
+# checkout and vanish on install are worse than no pages. The Help menu's
+# pages ship as well, but stay in docs/ and are copied in by setup.py, since
+# so much of the tree names them by that path.
 "gratinglab.metrology.wiki" = ["*.md"]
 
 [tool.setuptools.exclude-package-data]
