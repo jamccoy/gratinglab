@@ -29,6 +29,8 @@ extra and this module must not.
 
 from __future__ import annotations
 
+from endstation.files import atomic_write
+
 import dataclasses
 import json
 import math
@@ -138,7 +140,7 @@ def write_boundary_json(
         "provenance": _provenance(profile, source, settings),
     }
     text = json.dumps(document, indent=1, allow_nan=False) + "\n"
-    path.write_bytes(text.encode("utf-8"))
+    atomic_write(path, text.encode("utf-8"))
     return path
 
 
@@ -216,7 +218,7 @@ def write_boundary_csv(
     lines.append(
         "# t and y are fractions of one period; x_nm and y_nm are the same points times the period")
     lines += [f"{ti!r},{yi!r},{ti * period!r},{yi * period!r}" for ti, yi in zip(t, y)]
-    path.write_bytes(("\n".join(lines) + "\n").encode("utf-8"))
+    atomic_write(path, ("\n".join(lines) + "\n").encode("utf-8"))
     return path
 
 

@@ -10,6 +10,23 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- **The themes, the settings store, the remembered folders and layout, and
+  the Help menu's frame now come from endstation 0.3.0**, which took them from
+  here so other endstation applications share them. Nothing changes on screen
+  and saved settings carry over: the store is still `gratinglab`, the theme
+  key is the same, and every theme's colours are identical, checked field by
+  field. gratinglab keeps its order and diagram colours, its theory pages and
+  its About text. Requires `endstation>=0.3.0`.
+- **Exports are written whole or not at all.** The `.ggp`, boundary `.json`
+  and `.csv`, metrics sidecar and the solver tabs' CSV are written to a
+  temporary file and moved into place when complete
+  (`endstation.files.atomic_open`), so a failure part-way leaves the previous
+  file instead of a truncated one.
+
 ## 0.3.8 (2026-11-13)
 
 ### Added

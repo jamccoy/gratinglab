@@ -176,6 +176,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import numpy as np
+from endstation.files import atomic_open
 from numpy.typing import ArrayLike
 
 from ..profiles import FromProfileData
@@ -834,7 +835,7 @@ def write_ggp(
     if points and _rounds_to(fmt, t_values[-1], 1.0) and _rounds_to(fmt, y_values[-1], 0.0):
         points[-1] = "1 0"
     lines = [GGP_HEADER, *points] if header else points
-    with path.open("w", encoding="utf-8", newline="\r\n") as handle:
+    with atomic_open(path, encoding="utf-8", newline="\r\n") as handle:
         handle.write("\n".join(lines) + "\n")
     return path
 

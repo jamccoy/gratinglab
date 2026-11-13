@@ -20,6 +20,7 @@ import dataclasses
 from pathlib import Path
 from typing import Sequence
 
+from endstation.files import atomic_open
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -442,7 +443,7 @@ class RcwaTab(QWidget):
             return
         recent.remember("exports", path)
         rows = self._scan.to_records()
-        with open(path, "w", newline="", encoding="utf-8") as handle:
+        with atomic_open(path, newline="", encoding="utf-8") as handle:
             writer = csv.DictWriter(handle, fieldnames=list(rows[0]))
             writer.writeheader()
             writer.writerows(rows)

@@ -11,12 +11,14 @@ parses it back. The numbers that a solver needs travel through
 :meth:`~gratinglab.metrology.boundary.BoundaryProfile.to_problem`.
 """
 
+from endstation.files import atomic_open
+
 from ..core.tip import format_angles
 
 
 def write_profile_metrics(path, metrics):
     """Write the slope/curvature summary that accompanies a boundary profile"""
-    with open(path, 'w', encoding="utf-8") as f:
+    with atomic_open(path, encoding="utf-8") as f:
         f.write("=== Groove Profile Analysis (Final Phase-Shifted Data) ===\n")
         f.write(f"Period: {metrics['period_nm']:.2f} nm\n")
         f.write(f"Grooves averaged: {metrics['n_grooves']}\n")

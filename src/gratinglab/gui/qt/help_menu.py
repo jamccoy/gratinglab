@@ -16,29 +16,30 @@ at once.
 ``menu_bar`` exists because the chooser is a plain ``QWidget`` and has no
 ``menuBar()`` of its own; it hands in the one it put in its layout. The
 windows pass nothing and get theirs.
+
+The menu itself is built by :func:`endstation.qt.help_menu.install_help_menu`;
+what this module supplies is the About text and the pages.
 """
 
 from __future__ import annotations
 
+from endstation.qt.help_menu import HELP_MENU_TITLE
+from endstation.qt.help_menu import install_help_menu as _install
 from PySide6.QtWidgets import QMessageBox
 
 __all__ = ["HELP_MENU_TITLE", "install_help_menu", "show_about", "show_theory"]
 
-#: Title of the menu. One constant, so a test and both windows agree.
-HELP_MENU_TITLE = "&Help"
+def _about_text() -> str:
+    from ... import __version__, __version_date__
+    from .. import provenance
+
+    return provenance.about_text(__version__, __version_date__)
 
 
 def show_about(parent=None) -> None:
     """The About box. Its text is :func:`gratinglab.gui.provenance.about_text`,
     which is a plain string so it can be asserted without a dialog."""
-    from ... import __version__, __version_date__
-    from .. import provenance
-
-    QMessageBox.about(
-        parent,
-        "About gratinglab",
-        provenance.about_text(__version__, __version_date__),
-    )
+    QMessageBox.about(parent, "About gratinglab", _about_text())
 
 
 def show_theory(page, parent=None):
@@ -68,26 +69,23 @@ def install_help_menu(window, menu_bar=None):
     from ..docs import general_pages, theory_pages
     from ..richtext import menu_label
 
-    bar = window.menuBar() if menu_bar is None else menu_bar
-    menu = bar.addMenu(HELP_MENU_TITLE)
-    menu.addAction("About gratinglab", lambda: show_about(window))
-    menu.addSeparator()
+    def entry(page, suffix):
+        return (menu_label(page.title, suffix), lambda: show_theory(page, window))
+
+    def missing(page):
+        return "" if page.available else " (not written yet)"
 
     # Foundational, solver-independent reference first -- the generalized
     # grating equation and the angle conventions -- then one page per method.
-    for page in general_pages():
-        suffix = "" if page.available else " (not written yet)"
-        menu.addAction(
-            menu_label(page.title, suffix),
-            lambda p=page: show_theory(p, window),
-        )
-    menu.addSeparator()
-    for page in theory_pages():
-        suffix = " Theory" + ("" if page.available else " (not written yet)")
-        menu.addAction(
-            menu_label(page.title, suffix),
-            lambda p=page: show_theory(p, window),
-        )
-
+    menu = _install(
+        window,
+        about_title="About gratinglab",
+        about_text=_about_text,
+        pages=[
+            [entry(page, missing(page)) for page in general_pages()],
+            [entry(page, " Theory" + missing(page)) for page in theory_pages()],
+        ],
+        menu_bar=menu_bar,
+    )
     window._gratinglab_help_menu = menu
     return menu
