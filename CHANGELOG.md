@@ -25,6 +25,12 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Changed
 
+- **The plot gets the room under it.** On the four solver tabs the
+  provenance panel is now one row: the solver and its settings, and a count
+  of warnings in the warning colour. Click it to read the full text; the
+  choice holds for every tab and between sessions. A solve that fails, or a
+  form that needs a field, opens the panel by itself. The plot gains about
+  190 px of height at the default window size.
 - **The name is written gratinglab**, all lower case, as the package and
   the command already were: in window titles, the chooser's heading, Help ->
   About gratinglab, and the macOS bundle names (`gratinglab.app`,

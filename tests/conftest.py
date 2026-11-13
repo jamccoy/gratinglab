@@ -53,7 +53,7 @@ os.environ["GRATINGLAB_SETTINGS"] = str(_settings)
 
 @pytest.fixture(autouse=True)
 def _no_remembered_layout_or_folders():
-    """Start every test with no saved window layout and no last folder.
+    """Start every test with no saved window layout, last folder or panel state.
 
     The windows save both on close (gui/qt/recent.py), and the INI above is
     shared by the whole session, so without this one test's closed window
@@ -67,6 +67,7 @@ def _no_remembered_layout_or_folders():
     store = QSettings(str(_settings), QSettings.Format.IniFormat)
     store.remove("windows")
     store.remove("folders")
+    store.remove("panels")
     store.sync()
     yield
 

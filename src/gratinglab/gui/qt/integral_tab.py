@@ -38,7 +38,6 @@ from PySide6.QtWidgets import (
     QPushButton,
     QScrollArea,
     QSplitter,
-    QTextEdit,
     QVBoxLayout,
     QWidget,
 )
@@ -272,20 +271,11 @@ class IntegralTab(QWidget):
         return panel
 
     def _build_provenance(self) -> QWidget:
-        panel = QWidget()
-        layout = QVBoxLayout(panel)
-        layout.setContentsMargins(8, 4, 8, 8)
-        heading = QLabel("Provenance")
-        # Bold by font, not stylesheet: a stylesheet freezes the label's
-        # palette at polish time, and it would keep the old theme's colour.
-        bold = heading.font()
-        bold.setBold(True)
-        heading.setFont(bold)
-        self._provenance = QTextEdit()
-        self._provenance.setReadOnly(True)
-        layout.addWidget(heading)
-        layout.addWidget(self._provenance)
-        return panel
+        from .provenance_panel import ProvenancePanel
+
+        self._provenance_panel = ProvenancePanel()
+        self._provenance = self._provenance_panel.text
+        return self._provenance_panel
 
     def _check_fields_match_integral_options(self) -> None:
         declared = {f.name for f in dataclasses.fields(IntegralOptionsState)}
@@ -456,8 +446,8 @@ class IntegralTab(QWidget):
 
     def _paint(self, lines) -> None:
         self._lines = tuple(lines)
-        self._provenance.setHtml(
-            provenance.to_html(self._lines, provenance_colors(theming.current()))
+        self._provenance_panel.show_lines(
+            self._lines, provenance_colors(theming.current())
         )
 
     def _on_theme(self, theme) -> None:

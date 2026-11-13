@@ -33,6 +33,7 @@ __all__ = [
     "provenance_lines",
     "error_lines",
     "to_html",
+    "summary",
     "AUTHORS",
     "about_text",
 ]
@@ -259,6 +260,52 @@ def to_html(lines: Sequence[Line], colors: "dict[str, str] | None" = None) -> st
         color = palette.get(line.tag) if line.tag else None
         parts.append(f'<span style="color:{color}">{body}</span>' if color else body)
     return f'<div style="white-space:pre-wrap">{"".join(parts)}</div>'
+
+
+#: Worst first, for picking the tag a whole row reads as.
+_SEVERITY = {"bad": 4, "warn": 3, "ok": 2, "dim": 1, None: 0}
+
+
+def _rows(lines: Sequence[Line]) -> list[tuple[str, str | None]]:
+    """The panel's visual rows, each with the most severe tag among its runs."""
+    rows: list[tuple[str, str | None]] = []
+    text, tag = "", None
+    for line in lines:
+        pieces = line.text.split("\n")
+        for index, piece in enumerate(pieces):
+            if piece:
+                text += piece
+                if _SEVERITY.get(line.tag, 0) > _SEVERITY.get(tag, 0):
+                    tag = line.tag
+            if index < len(pieces) - 1:
+                rows.append((text, tag))
+                text, tag = "", None
+    if text:
+        rows.append((text, tag))
+    return [(row.strip(), row_tag) for row, row_tag in rows if row.strip()]
+
+
+def summary(lines: Sequence[Line]) -> tuple[Line, ...]:
+    """One row standing for the whole panel, as Lines to render like the panel.
+
+    The collapsed provenance strip shows this. A failure is shown itself,
+    since it is the only thing that matters about that run. Otherwise the
+    panel's first row (the solver and its settings) is shown, followed by a
+    count of warnings in the warning colour, so a collapsed panel never hides
+    that there are some.
+    """
+    rows = _rows(lines)
+    if not rows:
+        return ()
+    for row, tag in rows:
+        if tag == "bad":
+            return (Line(row, "bad"),)
+    warnings = sum(1 for _, tag in rows if tag == "warn")
+    head = Line(rows[0][0])
+    if warnings:
+        noun = "warning" if warnings == 1 else "warnings"
+        return (head, Line(f"  ·  {warnings} {noun}", "warn"))
+    return (head,)
 
 
 def alarming_text(lines: Sequence[Line]) -> str:
