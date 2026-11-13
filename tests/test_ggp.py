@@ -166,7 +166,7 @@ class TestWriting:
         path = write_ggp(tmp_path / "out.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.3, 0.0])
         assert path.read_text(encoding="utf-8").startswith(GGP_HEADER + "\n")
         assert not path.read_text(encoding="utf-8").startswith("#")
-        assert read_ggp(path).header_variant == "canonical"
+        assert read_ggp(path).header_variant == "short-type-line"
 
     def test_round_trip_preserves_points(self, tmp_path):
         profile = FromProfileData(t=(0.0, 0.3, 0.6, 1.0), y=(0.0, 0.2, 0.35, 0.0))
@@ -207,14 +207,14 @@ class TestWriting:
         """Six decimals and one space, the endpoints as integers, and a line
         break after every point, the last included.
 
-        This is the form of Aditi's file that PCGrate 6.7.1 loads
-        (2026-11-12). The module docstring has why the endpoints are written
-        `0 0` and `1 0`; all 35 of PCGrate's own polygonal files end in a line
-        break.
+        Byte for byte the form of Aditi's file that PCGrate 6.7.1 loads
+        (2026-11-12): her header, CRLF line endings, `0 0` and `1 0`, and a
+        final line break.
         """
         path = write_ggp(tmp_path / "fmt.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.25, 0.0])
-        assert path.read_text(encoding="utf-8") == \
-            GGP_HEADER + "\n0 0\n0.500000 0.250000\n1 0\n"
+        assert path.read_bytes() == (
+            b"3 0 - Polygonal type\r\nPeriod: 1 PSC: 1\r\n"
+            b"0 0\r\n0.500000 0.250000\r\n1 0\r\n")
 
     def test_endpoints_are_written_as_integers_only_when_they_are_the_endpoints(
             self, tmp_path):
@@ -359,17 +359,18 @@ class TestPcgrateOwnFiles:
                 wrong[path.name] = (ggp.header_variant, ggp.format_valid)
         assert not wrong
 
-    def test_the_first_control_string_is_the_one_we_write(self, tmp_path):
-        """Byte for byte, and identical across all 35."""
+    def test_the_first_control_string_is_identical_across_all_35(self, tmp_path):
+        """Byte for byte. It is not the one `write_ggp` writes, which copies
+        Aditi's file that PCGrate 6.7.1 loads (2026-11-12); the module
+        docstring has why."""
         firsts = {
             path.read_bytes().split(b"\n")[0].rstrip(b"\r")
             for path in vendor_polygonal_files()
         }
         assert firsts == {b"3 0 - 20 harmonics - Polygonal type"}
 
-        path = write_ggp(tmp_path / "ours.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.3, 0.0],
-                         header=True)
-        assert path.read_bytes().split(b"\n")[0] == firsts.pop()
+        path = write_ggp(tmp_path / "ours.ggp", t=[0.0, 0.5, 1.0], y=[0.0, 0.3, 0.0])
+        assert path.read_bytes().split(b"\r\n")[0] == b"3 0 - Polygonal type"
 
     def test_the_second_control_string_always_carries_a_period(self):
         """With or without the PSC, which 4 of the 35 leave out."""

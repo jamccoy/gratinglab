@@ -17,7 +17,7 @@ TASTE run matches only with ``x`` along ``+d-hat``.
 
 Default form::
 
-    3 0 - 20 harmonics - Polygonal type
+    3 0 - Polygonal type
     Period: 1 PSC: 1
     0 0
     0.012346 0.000808
@@ -34,8 +34,8 @@ Five control-string variants exist on disk:
 Control strings                                        Seen in
 =====================================================  =========================
 none, points only                                      ``write_ggp(header=False)``
-``3 0 - 20 harmonics - Polygonal type`` + ``Period:``  PCGrate's own, the default
-``3 0 - Polygonal type`` + ``Period:``                 legacy files, and Aditi's
+``3 0 - 20 harmonics - Polygonal type`` + ``Period:``  PCGrate's own exports
+``3 0 - Polygonal type`` + ``Period:``                 Aditi's, and the default
 ``# 3 0 - Polygonal type`` (hashed)                    ``*_fix6/7.ggp``
 ``# X(normalized...)`` only                            ``*_fix{,2,3,4}.ggp``
 =====================================================  =========================
@@ -51,17 +51,23 @@ The first control string is ``3 0 - 20 harmonics - Polygonal type``, verbatim
 (10.2.2, step 2). All 35 polygonal files in the installation's own
 ``BorderProfiles/`` carry exactly that line, with no variation. The second
 carries the period, in relative units or as any positive real, and the profile
-scaling coefficient: ``Period: 1 PSC: 1``. Until 2026-10-30 this module wrote
-and recognised ``3 0 - Polygonal type``, which lacks the ``- 20 harmonics -``
-segment and therefore fails the documented check on the first control string;
-:data:`GGP_HEADER` is now the documented pair.
+scaling coefficient: ``Period: 1 PSC: 1``.
+
+:data:`GGP_HEADER` is nonetheless ``3 0 - Polygonal type``, which lacks the
+``- 20 harmonics -`` segment and so is not the documented first line. It is
+the line in the one file known to load in PCGrate 6.7.1, Aditi's of
+2026-11-12, and in ``panter1.ggp``, which a real PCGrate run used. PCGrate's
+border import is sensitive to small differences, so the writer copies that
+file exactly rather than the guide; the reader still classifies the line as
+``short-type-line``, because ``format_valid`` records what the guide says.
 
 A file with no control strings at all, or with control strings in another
 format, is legal input only through the Border Profile Editor, which exports
 it into the program (10.2.3, closing paragraph); a direct load needs them.
 PCGrate 6.7.1 refused a headerless file from the metrology GUI with a file
 type error (Aditi, 2026-11-12), so the writer starts with
-:data:`GGP_HEADER` unless told not to.
+:data:`GGP_HEADER` unless told not to. It ends every line in CRLF, as her
+script does on the Windows machine PCGrate runs on.
 
 The geometry rules are a closed list (10.2.3), and :func:`write_ggp`
 satisfies every one of them:
@@ -186,17 +192,18 @@ __all__ = [
     "to_profile",
 ]
 
-#: The documented two control strings, written by default. Never prefix
+#: The two control strings of Aditi's working file, written by default; see
+#: the module docstring for why these and not the documented pair. Never prefix
 #: these lines with ``#``: a hashed control string is one "in another format",
 #: which the guide accepts only through the Border Profile Editor.
-GGP_HEADER = "3 0 - 20 harmonics - Polygonal type\nPeriod: 1 PSC: 1"
+GGP_HEADER = "3 0 - Polygonal type\nPeriod: 1 PSC: 1"
 
 #: The first control string the guide specifies (10.2.2, step 2), and the one
 #: every polygonal file in PCGrate's own ``BorderProfiles/`` carries.
 _CANONICAL_FIRST = "3 0 - 20 harmonics - Polygonal type"
 
-#: The first control string this module wrote until 2026-10-30. It lacks the
-#: ``- 20 harmonics -`` segment, so a direct load rejects it.
+#: The first control string of :data:`GGP_HEADER`. It lacks the guide's
+#: ``- 20 harmonics -`` segment, and PCGrate 6.7.1 loads it all the same.
 _SHORT_FIRST = "3 0 - Polygonal type"
 
 #: The period in the second control string. The guide requires that string to
@@ -261,8 +268,8 @@ class GgpFile:
     input: the documented pair, or none at all. It is False for control
     strings in some other format -- the two hashed variants, which
     ``np.savetxt(header=...)`` produces by accident, and the short type line
-    this module wrote until 2026-10-30 -- which PCGrate reads only through the
-    Border Profile Editor. Neither field is a test against PCGrate; both
+    :func:`write_ggp` writes -- which the guide says PCGrate reads only
+    through the Border Profile Editor; 6.7.1 loads the short one directly. Neither field is a test against PCGrate; both
     record what the guide says about the form the file is in. See the module
     docstring.
     """
@@ -788,15 +795,14 @@ def write_ggp(
     file coordinates already, as the metrology pipeline's ``x_norm`` is.
 
     Values are written to six decimals, single-space separated, one point per
-    line, and the file ends in a line break, as all 35 of PCGrate's own
-    polygonal files do. A first point that rounds to ``(0, 0)`` is written
+    line, every line ends in CRLF, and the file ends in a line break, as
+    Aditi's working file does. A first point that rounds to ``(0, 0)`` is written
     ``0 0`` and a last point that rounds to ``(1, 0)`` is written ``1 0``,
     the exact text the guide asks for (10.2.3); the module docstring has the
-    evidence that PCGrate 6.7.1 reads it as text. The format is pinned by
-    ``tests/test_ggp.py``.
+    evidence that PCGrate 6.7.1 reads it as text. The format copies her
+    file byte for byte and is pinned by ``tests/test_ggp.py``.
 
-    The file starts with the two documented :data:`GGP_HEADER` lines, the
-    first of which is byte-for-byte the one PCGrate's own files carry.
+    The file starts with the two :data:`GGP_HEADER` lines of her file.
     ``header=False`` writes the points alone, which only the Border Profile
     Editor accepts (10.2.3) and which reads back as
     ``header_variant == "none"``.
@@ -828,7 +834,7 @@ def write_ggp(
     if points and _rounds_to(fmt, t_values[-1], 1.0) and _rounds_to(fmt, y_values[-1], 0.0):
         points[-1] = "1 0"
     lines = [GGP_HEADER, *points] if header else points
-    with path.open("w", encoding="utf-8") as handle:
+    with path.open("w", encoding="utf-8", newline="\r\n") as handle:
         handle.write("\n".join(lines) + "\n")
     return path
 

@@ -194,9 +194,10 @@ def test_a_requested_header_is_the_uncommented_two_line_form():
     """
     A hashed header is what np.savetxt(header=...) writes by accident. Three
     different header variants were found among the hand-made files before
-    this was automated. The first line is the one the User's Guide of
-    PCGrate-S(X) 6.1 specifies in 10.2.2 (p. 63) and that every polygonal file
-    PCGrate ships carries.
+    this was automated. The first line is the one in Aditi's file that
+    PCGrate 6.7.1 loads (2026-11-12), not the longer one the User's Guide of
+    PCGrate-S(X) 6.1 specifies in 10.2.2 (p. 63); see the module docstring of
+    `gratinglab.io.ggp`.
     """
     p = _profile(ggp_n_points=100)
     with tempfile.TemporaryDirectory() as scratch:
@@ -205,16 +206,15 @@ def test_a_requested_header_is_the_uncommented_two_line_form():
         with open(path, encoding="utf-8") as handle:
             lines = handle.read().splitlines()
 
-    assert lines[0] == GGP_HEADER.splitlines()[0] == \
-        "3 0 - 20 harmonics - Polygonal type"
+    assert lines[0] == GGP_HEADER.splitlines()[0] == "3 0 - Polygonal type"
     assert lines[1] == "Period: 1 PSC: 1"
     assert not lines[0].startswith('#')
     assert len(lines) == 102, "two header lines plus one per point"
 
 
 def test_the_cli_export_writes_a_file_pcgrate_loads(tmp_path, monkeypatch):
-    """The form PCGrate 6.7.1 loads: the header, `0 0` and `1 0` as integers,
-    and a final line break (Aditi, 2026-11-12). A headerless export, the
+    """The form PCGrate 6.7.1 loads, copied from Aditi's file of 2026-11-12:
+    her header, `0 0` and `1 0` as integers, and a final line break. A headerless export, the
     default until then, was refused with a file type error."""
     import gratinglab.metrology.workflows as workflows
     from gratinglab.io.ggp import read_ggp
@@ -225,15 +225,16 @@ def test_the_cli_export_writes_a_file_pcgrate_loads(tmp_path, monkeypatch):
         out = workflows.run_boundary_profile_export(settings, filename=SOURCE)
 
     ggp = read_ggp(out['ggp_path'])
-    assert ggp.header_variant == "canonical"
+    assert ggp.header_variant == "short-type-line"
     assert len(ggp.t) == len(out['x'])
 
-    with open(out['ggp_path'], encoding="utf-8") as handle:
+    with open(out['ggp_path'], encoding="utf-8", newline="") as handle:
         text = handle.read()
     lines = text.splitlines()
     assert lines[:2] == GGP_HEADER.splitlines()
+    assert "\n" not in text.replace("\r\n", "")
     assert (lines[2], lines[-1]) == ("0 0", "1 0")
-    assert text.endswith("1 0\n")
+    assert text.endswith("1 0\r\n")
 
 
 if __name__ == '__main__':
