@@ -1,5 +1,6 @@
 [build-system]
-requires = ["setuptools>=68"]
+# 77 for `license` as an SPDX expression and `license-files`.
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -12,7 +13,8 @@ dynamic = ["version"]
 description = "Open platform for diffraction grating groove metrology and efficiency analysis"
 readme = "README.md"
 requires-python = ">=3.11"
-license = { text = "BSD-3-Clause" }
+license = "BSD-3-Clause"
+license-files = ["LICENSE"]
 authors = [{ name = "Jake McCoy" }, { name = "Aditi Gangadharan" }]
 # Wavelength-neutral on purpose. The off-plane work this package grew out of is
 # soft x-ray, and that band is still named, but nothing in the solvers or the
@@ -30,11 +32,12 @@ keywords = ["diffraction", "grating", "diffraction grating", "diffraction effici
 # that there is no `Topic :: Scientific/Engineering :: Optics`; Physics is the
 # nearest, with Information Analysis for the metrology and Visualization for
 # the windows. No Qt environment classifier: a classifier cannot be made
-# conditional on an extra, and a default install pulls no toolkit at all.
+# conditional on an extra, and a default install pulls no toolkit at all. No
+# licence classifier either: `license` above is the SPDX expression, and
+# setuptools refuses the two together.
 classifiers = [
     "Development Status :: 2 - Pre-Alpha",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: BSD License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",

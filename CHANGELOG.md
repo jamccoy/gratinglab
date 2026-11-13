@@ -24,6 +24,14 @@ entries under "Unreleased" into a section named for the new version;
   and a web link opens in the browser. They were drawn as links and did
   nothing.
 
+### Changed
+
+- **The licence is declared as an SPDX expression**, `license =
+  "BSD-3-Clause"` with `license-files`, in place of the table form and the
+  licence classifier, which setuptools deprecates and stops building after
+  2027-02-18. The licence itself is unchanged. Building now needs setuptools
+  77 or later.
+
 ## 0.3.5 (2026-11-13)
 
 ### Changed
