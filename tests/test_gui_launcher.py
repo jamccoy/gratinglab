@@ -107,7 +107,11 @@ def _no_leaked_windows():
     """
     qt_launcher._OPEN_WINDOWS.clear()
     qt_launcher._CHOOSER.clear()
+    qt_launcher._PREWARM.clear()
     yield
+    for thread in qt_launcher._PREWARM:
+        thread.join(10)
+    qt_launcher._PREWARM.clear()
     for window in list(qt_launcher._OPEN_WINDOWS) + list(qt_launcher._CHOOSER):
         window.close()
     qt_launcher._OPEN_WINDOWS.clear()
@@ -461,3 +465,146 @@ class TestGettingBackAndSwitching:
         opened = qt_launcher._OPEN_WINDOWS[-1]
         qtbot.addWidget(opened)
         assert isinstance(opened, MetrologyWindow)
+
+
+@pytest.mark.gui
+class TestPrewarming:
+    """Opening a window for the first time used to freeze the application.
+
+    Measured on macOS: the metrology window blocks the GUI thread for 1.7 s
+    warm and 8.8 s on a machine that has not built matplotlib's font cache,
+    which is once per machine and so is precisely the first open. The
+    efficiency window costs 6.6 s on that same cold cache. All of it is
+    import, and import needs no GUI thread, so the chooser starts it on one of
+    its own while the user is still reading the chooser. Through the real
+    chooser with a cold cache, the click then costs 0.18 s instead of 8.80 s.
+
+    The thread is stubbed here. What is under test is that one is started,
+    that it covers every mode, that starting it does not block, and that a
+    failure inside it stays inside it -- not matplotlib's font cache.
+    """
+
+    def _slow_modes(self, monkeypatch, delay=0.0):
+        """Two modes naming modules that are not imported, and never will be:
+        `import_module` is replaced, so nothing here touches the filesystem."""
+        import time
+
+        imported = []
+
+        def fake_import(name):
+            time.sleep(delay)
+            imported.append(name)
+            return object()
+
+        stubs = tuple(
+            Mode(key=k, title=f'Stub {k}', blurb='x' * 50,
+                 window=f'gratinglab._not_a_real_module_{k}:Window',
+                 script='gratinglab-app')
+            for k in ('one', 'two')
+        )
+        monkeypatch.setattr(qt_launcher, 'MODES', stubs)
+        monkeypatch.setattr(qt_launcher, 'import_module', fake_import)
+        return imported
+
+    def test_it_imports_every_mode(self, monkeypatch):
+        imported = self._slow_modes(monkeypatch)
+
+        thread = qt_launcher.prewarm()
+        assert thread is not None
+        thread.join(10)
+
+        assert imported == ['gratinglab._not_a_real_module_one',
+                            'gratinglab._not_a_real_module_two'], (
+            'the half in regular use is imported first, and both are imported')
+
+    def test_it_returns_at_once_rather_than_doing_the_work(self, monkeypatch):
+        """The whole point: the caller is the GUI thread."""
+        import time
+
+        self._slow_modes(monkeypatch, delay=0.3)
+
+        start = time.perf_counter()
+        thread = qt_launcher.prewarm()
+        elapsed = time.perf_counter() - start
+        assert elapsed < 0.2, f'prewarm blocked the caller for {elapsed:.3f} s'
+        thread.join(10)
+
+    def test_nothing_is_imported_twice(self, monkeypatch):
+        """One thread per process. A second chooser, or "Main Menu" coming
+        back to the first, must not start the work again."""
+        imported = self._slow_modes(monkeypatch)
+
+        first = qt_launcher.prewarm()
+        first.join(10)
+        assert qt_launcher.prewarm() is None
+        assert len(imported) == 2
+
+    def test_an_already_imported_window_is_not_prewarmed(self):
+        """In this test run both windows are imported already, so there is
+        nothing to do and no thread to start."""
+        from importlib import import_module
+
+        for chosen in MODES:
+            import_module(chosen.window.partition(':')[0])
+        assert qt_launcher.prewarm() is None
+
+    def test_a_failure_stays_in_the_thread(self, monkeypatch):
+        """A module that cannot be imported has to raise from the click, where
+        the user asked for it, not from a thread nobody started."""
+        def explode(name):
+            raise ImportError('no such thing')
+
+        self._slow_modes(monkeypatch)
+        monkeypatch.setattr(qt_launcher, 'import_module', explode)
+
+        thread = qt_launcher.prewarm()
+        thread.join(10)  # must not propagate, and must not hang
+
+    def test_the_chooser_starts_it(self, qtbot, monkeypatch):
+        started = []
+        monkeypatch.setattr(qt_launcher, 'prewarm',
+                            lambda: started.append(True))
+
+        chooser = qt_launcher.show_chooser()
+        qtbot.addWidget(chooser)
+
+        assert started == [True], 'the chooser did not prewarm'
+        assert chooser.isVisible(), 'and it is up before the import begins'
+
+    def test_opening_still_works_after_a_prewarm(self, qtbot):
+        """The integration: a module imported on another thread still yields a
+        window that builds on this one. Qt objects are created only by the
+        constructor, which stays here, but the check is worth its cost."""
+        from gratinglab.metrology.gui.qt.main_window import (
+            MainWindow as MetrologyWindow,
+        )
+
+        qt_launcher.prewarm()
+        for thread in qt_launcher._PREWARM:
+            thread.join(60)
+
+        window = qt_launcher.open_window(mode('metrology'))
+        qtbot.addWidget(window)
+        try:
+            assert isinstance(window, MetrologyWindow)
+            assert window.isVisible()
+        finally:
+            qt_launcher._OPEN_WINDOWS.remove(window)
+            window.close()
+
+    def test_the_wait_cursor_is_always_put_back(self, qtbot, monkeypatch):
+        """An override cursor left behind would make the whole application
+        look busy for the rest of the session, so the restore is in a
+        `finally` and this is the test that keeps it there."""
+        from PySide6.QtWidgets import QApplication
+
+        def explode(name):
+            raise ImportError('no such thing')
+
+        monkeypatch.setattr(qt_launcher, 'import_module', explode)
+        broken = Mode(key='broken', title='Broken', blurb='x' * 50,
+                      window='nope:Window', script='gratinglab-app')
+
+        with pytest.raises(ImportError):
+            qt_launcher.open_window(broken)
+        assert QApplication.overrideCursor() is None

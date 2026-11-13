@@ -74,6 +74,33 @@ entries under "Unreleased" into a section named for the new version;
   changes what is asserted, and neither replaces the full suite: CI runs
   everything on four legs, and that is still what a push is judged by.
 
+### Fixed
+
+- **Opening a window for the first time no longer freezes the application.**
+  Reported on Windows as "almost made the software non-responsive", and
+  reproduced on macOS: `open_window` imported the chosen window's module and
+  built the window on the GUI thread, with the chooser up and no events being
+  pumped. Measured here, the metrology window blocked the GUI thread for 1.7 s
+  warm and **8.8 s** on a machine that had not yet built matplotlib's font
+  cache -- which happens once per machine, and so is exactly the first open.
+  The efficiency window costs 6.6 s on that same cold cache, so this was never
+  only the metrology half. Windows adds a multiplier the numbers do not show,
+  because Defender scans each of scipy's and matplotlib's binaries the first
+  time it is touched, and it paints "Not Responding" over a window that stops
+  pumping events for about five seconds.
+
+  None of that work needs the GUI thread. The chooser now imports both window
+  modules on a thread of its own while the user is reading it, which is the
+  several seconds the measurement needs. Through the real chooser with a cold
+  font cache, the click then costs **0.18 s** instead of 8.80 s. A click
+  part-way through the import is no worse than before -- the GUI thread waits
+  on Python's own per-module import lock, which is the wait it used to do
+  itself -- and `open_window` shows a wait cursor for whatever remains.
+
+  Not addressed: `gratinglab-gui` and `gratinglab-metrology-gui` pay the same
+  cost with nothing on screen at all, there being no chooser to import behind.
+  That wants a splash screen rather than this.
+
 ## 0.3.6 (2026-11-13)
 
 ### Changed

@@ -274,7 +274,9 @@ and returns to the chooser (`Ctrl+Shift+M`), and switching reuses a window that 
 already open rather than starting a second empty copy of it. The chooser itself carries
 the same **View → Theme** and **Help** menus the two windows do, so the theme — a
 setting for the whole application — and the theory pages are reachable without opening
-a window first. Both halves are this one package — the metrology measures a groove and the
+a window first. While it is on screen it imports both windows on a background thread,
+so the first open is a fifth of a second rather than the several seconds of matplotlib
+and scipy imports it used to be. Both halves are this one package — the metrology measures a groove and the
 solvers compute an efficiency from the result — but the desktop layer used to ship
 them as two commands and two application bundles, the AFM one still named after the
 repository it was merged from, which made the half in regular use the half that was
