@@ -14,6 +14,19 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- **The chooser carries the View and Help menus.** It is where a session
+  starts and, after "Main Menu", where it returns, and it was the one place
+  from which the theme could not be changed and no page could be read: both
+  meant opening a window for the sake of its menu bar and then coming back.
+  The theme especially, since one manager serves the whole application and the
+  setting is not a property of whichever window happens to be open.
+
+  The chooser is a plain `QWidget` and has no `menuBar()`, so it builds a
+  `QMenuBar` and hands it to its layout; `install_help_menu` takes one for
+  that reason. It installs the theme manager as the efficiency window does,
+  so a chooser built any other way does not show a Theme menu that silently
+  does nothing.
+
 - **The About box credits both authors and dates the release.** It named
   neither the people who wrote the package nor when the copy in front of you
   was made, which is the first thing a bug report needs. It now reads

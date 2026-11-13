@@ -136,6 +136,72 @@ class TestTheChooser:
         for chosen in MODES:
             assert window.buttons[chosen.key].text() == chosen.title
 
+    def test_the_theme_and_the_pages_are_reachable_from_here(self, qtbot):
+        """The chooser had neither.
+
+        It is where a session starts and, after "Main Menu", where it pauses,
+        so changing the theme meant opening a window for the sake of its menu
+        and coming back -- and the theme is a setting for the application, not
+        for whichever window happens to be open. The same two menus the
+        windows carry, built by the same code.
+        """
+        from gratinglab.gui.qt.help_menu import HELP_MENU_TITLE
+
+        window = qt_launcher.LauncherWindow()
+        qtbot.addWidget(window)
+
+        titles = [action.text() for action in window._menu_bar.actions()]
+        assert titles == ['&View', HELP_MENU_TITLE]
+        assert window._theme_menu.title() == '&Theme'
+        assert window._help_menu.actions()[0].text() == 'About GratingLab'
+
+    def test_the_themes_offered_here_are_every_theme(self, qtbot):
+        from gratinglab.gui.theme import SYSTEM, THEMES
+
+        window = qt_launcher.LauncherWindow()
+        qtbot.addWidget(window)
+
+        assert set(window._theme_menu.actions_by_key()) == {SYSTEM, *THEMES}
+
+    def test_choosing_a_theme_here_applies_it_everywhere(self, qtbot):
+        """One manager per application, so the chooser's menu is not a second
+        copy of the setting: it is the same one, and the windows' menus
+        re-check themselves when it changes."""
+        from gratinglab.gui.qt import theming
+
+        window = qt_launcher.LauncherWindow()
+        qtbot.addWidget(window)
+        found = window._themes
+        assert found is theming.manager(), 'the chooser made a second manager'
+        before = found.choice
+        try:
+            window._theme_menu.actions_by_key()['dark'].trigger()
+            assert theming.current().key == 'dark'
+            checked = [a.data() for a in window._theme_menu._group.actions()
+                       if a.isChecked()]
+            assert checked == ['dark']
+        finally:
+            found.set_choice(before)
+
+    def test_a_page_opens_from_the_chooser(self, qtbot):
+        """No window needed first, which was the whole complaint."""
+        from gratinglab.gui.docs import general_pages
+        from gratinglab.gui.qt.theory_viewer import TheoryViewer
+        from gratinglab.gui.richtext import menu_label
+
+        window = qt_launcher.LauncherWindow()
+        qtbot.addWidget(window)
+
+        wanted = menu_label(general_pages()[0].title)
+        action = next(a for a in window._help_menu.actions()
+                      if a.text() == wanted)
+        action.trigger()
+
+        viewers = window.findChildren(TheoryViewer)
+        assert len(viewers) == 1, 'the menu entry opened no page'
+        qtbot.addWidget(viewers[0])
+        assert viewers[0].isVisible()
+
     def test_both_halves_are_named_in_the_window(self, qtbot):
         """
         Whatever else changes, the word AFM has to be on this window.

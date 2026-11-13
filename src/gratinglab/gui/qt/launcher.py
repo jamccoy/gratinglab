@@ -3,6 +3,11 @@
 Thin, by the rule for this package: it draws a button per mode and imports the
 chosen window. The one piece of real behaviour is keeping a reference to each
 window it opens -- see :data:`_OPEN_WINDOWS`.
+
+It also carries the View and Help menus the two windows carry, built by the
+same code. The chooser is where a session starts and where it returns, and it
+was the one place from which the theme -- an application-wide setting -- could
+not be changed and no page could be read.
 """
 
 from __future__ import annotations
@@ -16,6 +21,7 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
+    QMenuBar,
     QPushButton,
     QSizePolicy,
     QVBoxLayout,
@@ -23,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..launcher import MODES
+from . import theming
 
 __all__ = [
     "LauncherWindow",
@@ -130,7 +137,19 @@ def show_chooser():
 
 
 class LauncherWindow(QWidget):
-    """Two buttons and a sentence each, so neither half can be missed."""
+    """Two buttons and a sentence each, so neither half can be missed.
+
+    It carries the same View and Help menus the two windows do. The chooser
+    is where a session starts and, after "Main Menu", where it pauses, so it
+    was the one place from which the theme could not be changed and no page
+    could be read -- both of which had to be done by opening a window first
+    and then coming back. The theme in particular is a setting for the whole
+    application, not for whichever window happens to be open.
+
+    A plain ``QWidget`` has no ``menuBar()``, so the bar is built here and put
+    at the top of the layout. `install_help_menu` takes one for exactly this
+    reason.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -139,6 +158,7 @@ class LauncherWindow(QWidget):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(28, 24, 28, 24)
         layout.setSpacing(18)
+        layout.setMenuBar(self._build_menu())
 
         heading = QLabel("GratingLab")
         font = heading.font()
@@ -174,6 +194,32 @@ class LauncherWindow(QWidget):
         layout.addWidget(hint)
 
         self.setMinimumWidth(460)
+
+    def _build_menu(self):
+        """View > Theme and Help, held on the instance and returned.
+
+        Held for the reason the windows hold theirs: under PySide6 a QMenu
+        reached back through the menu bar is not reliably usable, so whatever
+        builds one keeps it. Returned because the caller has to hand the bar
+        to the layout, which is how a QWidget gets a menu bar at all.
+        """
+        from PySide6.QtWidgets import QApplication
+
+        from .help_menu import install_help_menu
+
+        # Install the manager here as well as in `gui.launcher.main`, for the
+        # same reason the efficiency window does: a chooser built any other
+        # way -- a test, an embedding, a future entry point -- would otherwise
+        # show a Theme menu that silently did nothing. It is idempotent, so
+        # the normal path still installs exactly one.
+        self._themes = theming.install(QApplication.instance())
+
+        self._menu_bar = QMenuBar(self)
+        self._view_menu = self._menu_bar.addMenu("&View")
+        self._theme_menu = theming.ThemeMenu(self)
+        self._view_menu.addMenu(self._theme_menu)
+        self._help_menu = install_help_menu(self, self._menu_bar)
+        return self._menu_bar
 
     def _card(self, chosen):
         """One mode: its button, and the sentence saying what it is for."""
