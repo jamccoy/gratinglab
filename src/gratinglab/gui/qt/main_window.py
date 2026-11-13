@@ -33,13 +33,11 @@ from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QDockWidget,
     QMainWindow,
-    QMessageBox,
     QScrollArea,
     QTabWidget,
     QWidget,
 )
 
-from .. import provenance
 from ..state import FieldError, FormErrors, build, validate
 from . import theming
 from .cmethod_tab import CMethodTab
@@ -286,7 +284,10 @@ class MainWindow(QMainWindow):
         Help is the original menu and remains the main one. This is not a
         general-purpose application with File/Edit concerns, and the one thing
         that merits a menu is the explanation of the mathematics, which the
-        window itself never gives.
+        window itself never gives. It is built by
+        :func:`gratinglab.gui.qt.help_menu.install_help_menu`, which the AFM
+        window and the chooser call too, so the pages are reachable from
+        wherever the user happens to be.
 
         View began with a single purpose and a single action, and now holds
         a second: the Theme submenu, which is about how the window looks and
@@ -301,8 +302,7 @@ class MainWindow(QMainWindow):
         synchronisation as soon as the user clicks the dock's own close
         button.
         """
-        from ..docs import general_pages, theory_pages
-        from ..richtext import menu_label
+        from .help_menu import install_help_menu
 
         # Both the bar and the menus are held on the instance rather than
         # merely added. Under PySide6 6.11 a QMenu reached back through
@@ -330,24 +330,7 @@ class MainWindow(QMainWindow):
         self._view_menu.addMenu(self._theme_menu)
         self._theme_actions = self._theme_menu._group
 
-        menu = self._help_menu = self._menu_bar.addMenu("&Help")
-        menu.addAction("About GratingLab", self.show_about)
-        menu.addSeparator()
-
-        # Foundational, solver-independent reference first -- the generalized
-        # grating equation and the angle conventions -- then one page per
-        # method.
-        for page in general_pages():
-            suffix = "" if page.available else " (not written yet)"
-            menu.addAction(
-                menu_label(page.title, suffix), lambda p=page: self.show_theory(p)
-            )
-        menu.addSeparator()
-        for page in theory_pages():
-            suffix = " Theory" + ("" if page.available else " (not written yet)")
-            menu.addAction(
-                menu_label(page.title, suffix), lambda p=page: self.show_theory(p)
-            )
+        self._help_menu = install_help_menu(self, self._menu_bar)
 
     def set_theme(self, choice: str) -> None:
         """Switch theme by key, or ``"system"``; the menu calls this."""
@@ -645,17 +628,17 @@ class MainWindow(QMainWindow):
             tab.show_progress()
 
     def show_about(self) -> None:
-        from ... import __version__
+        """The About box. The menu calls `help_menu.show_about` directly; this
+        stays as the window's own way in, which is what a test drives."""
+        from .help_menu import show_about
 
-        QMessageBox.about(self, "About GratingLab", provenance.about_text(__version__))
+        show_about(self)
 
-    def show_theory(self, page) -> None:
+    def show_theory(self, page):
         """Open the read-only viewer for one theory or reference page."""
-        from .theory_viewer import TheoryViewer
+        from .help_menu import show_theory
 
-        viewer = TheoryViewer(page, parent=self)
-        viewer.show()
-        return viewer
+        return show_theory(page, self)
 
     # -- shutdown --------------------------------------------------------
 

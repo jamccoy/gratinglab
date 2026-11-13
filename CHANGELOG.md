@@ -14,6 +14,18 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Added
 
+- **The Help menu is on every window.** The theory pages were reachable only
+  from the efficiency window, because that is where they were written. The AFM
+  window, merged in later from a project that had none, offered no route to any
+  of them -- including the two it needs most: `docs/conventions.md`, which fixes
+  the angle conventions a measured profile is reported in, and
+  `docs/theory/metrology.md`, which is about that window's own analysis. The
+  user measuring a scan was the one user who could not read either.
+
+  The menu now lives in `gratinglab.gui.qt.help_menu` and each window installs
+  it, the same arrangement as the Go menu: neither window knows the other has
+  one, and a page added to `gratinglab.gui.docs` appears in both at once.
+
 - **A `gui` marker, and `tools/test_fast.py`.** A full run is about 2750
   tests and, on the macOS CI runner, just under seven minutes; on an older
   laptop it is longer and holds every core at full tilt throughout. The ten

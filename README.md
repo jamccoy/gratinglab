@@ -328,7 +328,10 @@ hides it), and the window has one tab for each task:
 Each registered solver receives a tab generated from the solver registry, so a
 new backend appears in the window once it is registered.
 
-The Help menu contains the theory pages, rendered with typeset equations and tables.
+The **Help** menu contains the theory pages, rendered with typeset equations and
+tables. It is on every window: the conventions page fixes the angles a measured
+profile is reported in, and `theory/metrology.md` describes the metrology window's
+own analysis, so the AFM window needs those pages at least as much as this one does.
 **View → Theme** switches between System (following the operating system), Light,
 Dark, Solarized Light, Solarized Dark and High contrast; the choice is remembered and
 applies to the metrology window too. Diffraction orders are coloured by sign, cool for

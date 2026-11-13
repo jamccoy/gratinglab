@@ -135,14 +135,25 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.status)
         self._set_status("Ready. Open an AFM file to begin.")
 
-        # View > Theme, the same menu the efficiency window carries. Held on
-        # the instance: a QMenu reached back through the menu bar is not
-        # reliably alive under PySide6 (see the efficiency window's note).
+        # View > Theme and Help, the same two menus the efficiency window
+        # carries, built by the same code so neither window has to know the
+        # other exists. Help matters more here than the page count suggests:
+        # `docs/conventions.md` fixes the angle conventions a measured profile
+        # is reported in, and `docs/theory/metrology.md` is about this window's
+        # own analysis, yet until now this was the one window from which
+        # neither could be opened.
+        #
+        # Both menus are held on the instance: a QMenu reached back through the
+        # menu bar is not reliably alive under PySide6 (see the efficiency
+        # window's note).
+        from gratinglab.gui.qt.help_menu import install_help_menu
         from gratinglab.gui.qt.theming import ThemeMenu
 
-        self._view_menu = self.menuBar().addMenu("&View")
+        self._menu_bar = self.menuBar()
+        self._view_menu = self._menu_bar.addMenu("&View")
         self._theme_menu = ThemeMenu(self)
         self._view_menu.addMenu(self._theme_menu)
+        self._help_menu = install_help_menu(self, self._menu_bar)
 
     def _build_analysis_group(self):
         group = QGroupBox("Analysis parameters")
