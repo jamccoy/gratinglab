@@ -1484,8 +1484,10 @@ class TestGeometryTab:
         assert hero.width() > side.width()
         assert hero.width() * hero.height() > 2 * side.width() * side.height()
 
-    def test_the_hero_is_a_real_3d_axes(self, win):
-        assert win.geometry_tab._scene3d._axes.name == "3d"
+    def test_the_hero_is_the_painted_view(self, win):
+        from gratinglab.gui.qt.scene3d_panel import SceneCanvas
+
+        assert isinstance(win.geometry_tab._scene3d._canvas, SceneCanvas)
 
     def test_the_3d_scene_matches_what_the_pure_module_returns(self, win):
         """TestNotASecondSourceOfTruth, extended to 3D. If the panel ever
@@ -1500,10 +1502,10 @@ class TestGeometryTab:
         wanted = {r.order: r.direction for r in expected.rays if r.order is not None}
         assert drawn == wanted
 
-    def test_the_3d_view_offers_no_pan_or_zoom(self, win):
-        """A NavigationToolbar2QT zoom rescales an Axes3D's data limits, which
-        breaks the cube box aspect the true angles depend on. A control that
-        can make the picture lie must not be offered."""
+    def test_the_3d_view_carries_no_matplotlib_toolbar(self, win):
+        """It is not a matplotlib figure any more. Its own zoom and pan are
+        similarity transforms (see test_gui_camera3d), which is what makes
+        offering them honest where the Axes3D zoom was not."""
         from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
 
         assert win.geometry_tab._scene3d.findChildren(NavigationToolbar2QT) == []
@@ -1515,13 +1517,6 @@ class TestGeometryTab:
 
         assert win.geometry_tab.profile_panel.findChildren(NavigationToolbar2QT)
 
-    def test_the_3d_box_is_a_cube(self, win):
-        """Without equal box aspect every angle in the view is a lie."""
-        tab = win.geometry_tab
-        tab._scene3d.show_scene(tab._scene)
-        aspect = tab._scene3d._axes.get_box_aspect()
-        assert aspect[0] == pytest.approx(aspect[1]) == pytest.approx(aspect[2])
-
     def test_the_captions_reach_the_panel(self, win):
         text = win.geometry_tab._captions.toPlainText()
         assert "groove axis" in text
@@ -1529,30 +1524,32 @@ class TestGeometryTab:
 
 
 class TestRimFocusAndPresets:
-    """M13-G. All on the shared `win` fixture -- test_gui_qt.py is already 76%
-    of suite wall time, so no test here builds its own window."""
+    """M13-G, on the painted view. All on the shared `win` fixture --
+    test_gui_qt.py is already most of the suite's wall time, so no test here
+    builds its own window."""
 
     def _panel(self, win):
-        """The tab defers `_paint` to `showEvent` and the shared fixture never
-        shows it, so paint once on demand rather than making the tab current
-        (which would cost every test in this class a full relayout)."""
         panel = win.geometry_tab._scene3d
-        if not panel._artists["fine"]:
-            panel.show_scene(win.geometry_tab._scene)
+        panel.resize(900, 640)
+        panel.show_scene(win.geometry_tab._scene)
+        panel._preset_box.setCurrentText("Oblique")
+        panel._rim_slider.setValue(0)
         return panel
 
-    def test_the_preset_round_trips_back_to_the_physical_direction(self, win):
-        """`_view_angles` inverts `diagram3d.view_direction` after the display
-        permutation. Setting the preset and reading the camera back recovers
-        the vector the pure module declared."""
-        from gratinglab.gui import diagram3d
-        from gratinglab.gui.qt.scene3d_panel import _display
+    def _frame(self, panel):
+        canvas = panel._canvas
+        return canvas._frame_for(canvas.width(), canvas.height())
+
+    def test_the_preset_looks_along_the_physical_direction(self, win):
+        """`orbit_for` inverts the camera's forward vector, so the preset
+        that names a direction is the direction the camera looks along."""
+        from gratinglab.gui import camera3d, diagram3d
 
         panel = self._panel(win)
         panel._preset_box.setCurrentText(diagram3d.RIM_PRESET)
-        looking = diagram3d.view_direction(panel._axes.elev, panel._axes.azim)
-        wanted = np.asarray(_display(diagram3d.PRESET_VIEWS[diagram3d.RIM_PRESET]))
-        assert looking == pytest.approx(wanted, abs=1e-9)
+        cam = panel._canvas.camera
+        _right, _up, fwd = camera3d.basis(cam.yaw, cam.pitch, cam.roll)
+        assert fwd == pytest.approx(diagram3d.PRESET_VIEWS[diagram3d.RIM_PRESET], abs=1e-9)
 
     def test_and_that_direction_is_the_groove_axis(self, win):
         """Non-vacuity: the round-trip above would pass on any preset, so pin
@@ -1563,76 +1560,106 @@ class TestRimFocusAndPresets:
             diagram3d.G_HAT, abs=1e-12
         )
 
-    def test_choosing_it_also_focuses_on_the_rim(self, win):
+    def test_choosing_it_also_zooms_to_the_rim(self, win):
         """The pairing is the entire point; separating them would make the one
         useful combination a two-step discovery."""
         from gratinglab.gui import diagram3d
 
         panel = self._panel(win)
-        panel._focus_button.setChecked(False)
         panel._preset_box.setCurrentText(diagram3d.RIM_PRESET)
-        assert panel._focus_button.isChecked()
-        assert panel._focus == "rim"
+        assert panel._rim_slider.value() == 1000
+        assert panel._canvas.camera.rim == 1.0
 
     def test_another_preset_does_not(self, win):
         """Non-vacuity for the test above."""
         panel = self._panel(win)
-        panel._focus_button.setChecked(False)
-        panel._preset_box.setCurrentText("Oblique")
-        assert not panel._focus_button.isChecked()
+        panel._preset_box.setCurrentText("Along d̂")
+        assert panel._rim_slider.value() == 0
 
-    def test_focusing_shrinks_the_frame_by_the_stated_magnification(self, win):
+    def test_the_slider_zooms_in_and_says_by_how_much(self, win):
         panel = self._panel(win)
+        whole = self._frame(panel)
+        panel._rim_slider.setValue(1000)
+        rim = self._frame(panel)
+        assert whole.magnification == pytest.approx(1.0)
+        assert rim.magnification > 5.0
+        assert panel._magnification.text() == f"{rim.magnification:.1f}×"
+
+    def test_at_full_rim_the_rim_fills_the_stated_share_of_the_frame(self, win):
+        """The rim circle, radius sin(gamma), spans RIM_FILL of the short
+        side. Read back off the projection rather than recomputed."""
+        from gratinglab.gui import camera3d
+
+        panel = self._panel(win)
+        panel._rim_slider.setValue(1000)
+        frame = self._frame(panel)
+        canvas = panel._canvas
+        diameter = 2 * np.sin(win.geometry_tab._scene.gamma) * frame.scale
+        short = min(canvas.width(), canvas.height())
+        assert diameter == pytest.approx(camera3d.RIM_FILL * short, rel=1e-9)
+
+    def test_dragging_paints_the_coarse_meshes(self, qtbot, win):
+        """Both levels of detail come from `build_scene`; a drag paints the
+        coarse one and the release goes back, resampling nothing."""
+        from PySide6.QtCore import QPoint, Qt
+
+        panel = self._panel(win)
+        canvas = panel._canvas
+        qtbot.mousePress(canvas, Qt.MouseButton.LeftButton, pos=QPoint(200, 200))
+        assert canvas.lod == "coarse"
+        qtbot.mouseRelease(canvas, Qt.MouseButton.LeftButton, pos=QPoint(200, 200))
+        assert canvas.lod == "fine"
+
+    def test_and_the_two_meshes_are_different(self, win):
+        """Companion: without this the swap test would pass on a scene that
+        had one mesh under two names."""
         scene = win.geometry_tab._scene
-
-        panel._focus_button.setChecked(False)
-        wide = panel._axes.get_xlim3d()
-        panel._focus_button.setChecked(True)
-        close = panel._axes.get_xlim3d()
-
-        assert (wide[1] - wide[0]) / (close[1] - close[0]) == pytest.approx(
-            scene.rim_magnification, rel=1e-9
-        )
-
-    def test_and_says_so_on_the_canvas(self, win):
-        panel = self._panel(win)
-        panel._focus_button.setChecked(True)
-        assert "27" in panel._magnification.text()
-
-    def test_dragging_swaps_in_the_coarse_artists(self, win):
-        """Both levels of detail are built once by `build_scene`; the drag
-        flips visibility and resamples nothing."""
-        from matplotlib.backend_bases import MouseButton, MouseEvent
-
-        panel = self._panel(win)
-        panel._focus_button.setChecked(False)
-        assert panel._lod == "fine"
-
-        press = MouseEvent(
-            "button_press_event", panel._canvas, 200, 200, MouseButton.LEFT
-        )
-        press.inaxes = panel._axes
-        panel._on_press(press)
-        assert panel._lod == "coarse"
-        assert any(a.get_visible() for a in panel._artists["coarse"])
-        assert not any(a.get_visible() for a in panel._artists["fine"])
-
-        panel._on_release(None)
-        assert panel._lod == "fine"
-        assert any(a.get_visible() for a in panel._artists["fine"])
-
-    def test_the_two_artist_groups_are_different_objects(self, win):
-        """Companion: without this the swap test would pass on an
-        implementation that swapped nothing."""
-        panel = self._panel(win)
-        fine, coarse = panel._artists["fine"], panel._artists["coarse"]
+        fine = [s for s in scene.surfaces if s.lod == "fine"]
+        coarse = [s for s in scene.surfaces if s.lod == "coarse"]
         assert fine and coarse
-        assert not (set(map(id, fine)) & set(map(id, coarse)))
+        assert all(f.x.shape[0] > c.x.shape[0] for f, c in zip(fine, coarse))
+
+    def test_no_two_labels_overlap(self, win):
+        """The reason this view was rebuilt: at grazing incidence every order
+        tip is within 1.5 degrees of one point, and the matplotlib labels sat
+        on top of each other."""
+        panel = self._panel(win)
+        panel.render_image()
+        boxes = [box for _text, box in panel._canvas.label_boxes]
+        assert len(boxes) >= 5
+        for i, a in enumerate(boxes):
+            for b in boxes[i + 1:]:
+                assert not a.intersects(b) or a.intersected(b).isEmpty()
+
+    def test_every_propagating_order_is_named(self, win):
+        """The scene names m = 0 only; this view names the rest from each
+        ray's own order, so the names are the scene's numbers."""
+        panel = self._panel(win)
+        panel.render_image()
+        named = {text for text, _box in panel._canvas.label_boxes}
+        orders = [r.order for r in win.geometry_tab._scene.rays if r.order not in (None, 0)]
+        assert {f"{m:+d}" for m in orders} <= named
+
+    def test_a_theme_change_repaints_in_the_new_colours(self, qtbot, win):
+        """The background is the theme's plot surface, so switching themes
+        must change the painted pixels."""
+        from gratinglab.gui.qt import theming
+
+        panel = self._panel(win)
+        manager = theming.manager()
+        was = manager.choice
+        try:
+            manager.set_choice("light")
+            light = panel.render_image().pixelColor(3, 3).name()
+            manager.set_choice("dark")
+            dark = panel.render_image().pixelColor(3, 3).name()
+        finally:
+            manager.set_choice(was)
+        assert light != dark
 
     def test_rim_focus_is_offered_at_grazing_incidence(self, win):
         panel = self._panel(win)
-        assert panel._focus_button.isEnabled()
-        assert panel._focus_button.toolTip() == ""
+        assert panel._rim_slider.isEnabled()
 
     def test_and_refused_with_a_reason_in_plane(self, win):
         """The `blaze_jump` contract: a disabled control explains itself. At
@@ -1648,14 +1675,14 @@ class TestRimFocusAndPresets:
             600.0,
         )
         panel.show_scene(scene)
-        assert not panel._focus_button.isEnabled()
-        assert panel._focus_button.toolTip()
+        assert not panel._rim_slider.isEnabled()
+        assert panel._rim_slider.toolTip() == scene.rim_reason
 
         # Back to the real scene, so a failure above is reported against the
         # geometry the rest of this class assumes rather than against a
         # leftover in-plane one.
         panel.show_scene(tab._scene)
-        assert panel._focus_button.isEnabled()
+        assert panel._rim_slider.isEnabled()
 
 
 class TestLiveGeometry:

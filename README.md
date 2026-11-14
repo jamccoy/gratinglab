@@ -287,10 +287,11 @@ hides it), and the window has one tab for each task:
 - **Grating Geometry:** a rotatable 3D view of the diffraction cone, in which every wave
   vector is drawn as an exact unit vector. In the reference off-plane geometry the
   orders separate in azimuth rather than in polar angle (93.8° of azimuthal spread at
-  0.0° of polar spread), so the view looking down the cone axis, combined with a uniform
-  27× zoom, makes them distinguishable at true scale. The grazing angle γ is not
-  exaggerated: a uniform zoom preserves every angle in the view, and the magnification
-  is stated on the canvas. Alongside it are the cross-section in the dispersion plane, a
+  0.0° of polar spread), so the view looking down the cone axis, zoomed to the cone rim,
+  makes them distinguishable at true scale. The grazing angle γ is not exaggerated: the
+  view is orthographic and every zoom, pan and roll is uniform, so every angle in it
+  stays true, and the magnification is stated beside it. Drag to orbit, Shift+drag to
+  pan, Alt+drag to roll, and the wheel zooms about the cursor. Alongside it are the cross-section in the dispersion plane, a
   `sin β` diagram that includes the evanescent orders, and the groove profile. The view
   updates as values are typed.
 - **Scalar (Kirchhoff):** the scalar solution, the efficiency of each order with

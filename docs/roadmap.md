@@ -743,9 +743,13 @@ lights the whole card.
 
 **4. 3D, extending what exists.** The efficiency window already has a 3D
 conical-diffraction view (`gui/diagram3d.py`, `gui/qt/scene3d_panel.py`), and
-the app has its *sky* view. Compare the two before adding anything: the work
-may be no more than carrying over what the app shows that this panel does not,
-beside the modeler's extrusion in step 2.
+the app has its *sky* view. Compared on 2026-11-14 and the first half done the
+same day: the panel was a matplotlib `Axes3D` and is now the app's
+arrangement, an orthographic camera (`gui/camera3d.py`) over QPainter, with
+the app's framing, labels, rim slider and gestures. Still to carry over: the
+app's efficiency encoding (ray width and the strongest order picked out),
+which needs a solved result the Geometry tab does not hold; and the
+modeler's extrusion in step 2, which the same widget can host.
 
 **What is a person's to decide**, so that none of it is settled by default:
 

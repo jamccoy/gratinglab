@@ -14,6 +14,17 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Changed
 
+- **The Grating Geometry tab's 3D view is painted rather than plotted.** It
+  was a matplotlib `Axes3D`; it is now the gratinglab app's arrangement, an
+  orthographic camera of its own over QPainter, drawing the same
+  `diagram3d.Scene`. The scene fills the view instead of sitting in a cube of
+  panes and ticks; twenty grooves, lit from one side so a blaze facet and its
+  anti-blaze face read as two tones; rays and grooves overlap in the right
+  order; every propagating order is named, with no label covering another;
+  a *Zoom to rim* slider replaces the two-state focus button; and the view
+  orbits, pans, rolls and zooms about the cursor, by mouse or keyboard,
+  keeping every angle true. Colours follow the theme. `build_scene` draws 20
+  periods by default rather than 2, centred on the strike point.
 - **Plot toolbars follow a theme switched while the window is open.**
   matplotlib before 3.11 colours a toolbar's icons only when it builds
   them, so after View > Theme they stayed dark on dark, or pale on light,

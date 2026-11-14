@@ -165,7 +165,9 @@ RIM_PRESET = "Down the cone axis"
 #: Mesh resolutions. Both surfaces are *ruled* -- the grating patch is the
 #: cross-section extruded along ẑ, and every generator of a cone is straight --
 #: so the second dimension is 2 and that is exact, not a sampling choice.
-_PATCH_NX = {"fine": 241, "coarse": 61}
+#: The patch is sampled per PERIOD, so a vertex at an integer t lands on a
+#: sample whatever the number of periods drawn.
+_PATCH_PER_PERIOD = {"fine": 120, "coarse": 30}
 _CONE_NPHI = {"fine": 289, "coarse": 73}
 
 
@@ -213,7 +215,7 @@ class Ray3D:
 
 @dataclass(frozen=True, slots=True)
 class Surface3D:
-    """A ruled surface, as ``(n, 2)`` meshgrid arrays for ``plot_surface``."""
+    """A ruled surface, as ``(n, 2)`` arrays: column 0 one rule's end, column 1 the other's."""
 
     x: NDArray[np.float64]
     y: NDArray[np.float64]
@@ -464,7 +466,10 @@ def captions3d(
 
 def _grating_patch(problem: "Problem", scale_nm: float, periods: int, lod: str):
     """The cross-section extruded along ẑ; it is ruled, so two rows are exact."""
-    t = np.linspace(-periods, 0.0, _PATCH_NX[lod])
+    # Centred on the strike point, so the bundle leaves from the middle of
+    # the patch rather than its edge.
+    left = periods // 2
+    t = np.linspace(-left, periods - left, _PATCH_PER_PERIOD[lod] * periods + 1)
     strike = np.asarray(strike_point(problem))
     px = (x_nm(t, problem.period) - strike[0]) / scale_nm
     py = (np.asarray(problem.height_nm(t)) - strike[1]) / scale_nm
@@ -515,7 +520,7 @@ def build_scene(
     illumination: "Illumination",
     wavelength: float,
     *,
-    periods: int = 2,
+    periods: int = 20,
     pad_orders: int = 2,
 ) -> Scene:
     """Build every primitive of one 3D drawing."""
@@ -564,9 +569,9 @@ def build_scene(
             Ray3D(
                 origin, tuple(k), 1.0,
                 "zero" if mark.order == 0 else "order",
-                # 3D text cannot dodge its neighbours, and every order tip is
-                # within 1.5 deg of the same point. Only m=0 is labelled here;
-                # the ladder beside this view names them all.
+                # Only m=0 carries a name here. The painted view names the
+                # others from `order` and moves each label clear of the rest;
+                # the ladder beside it names them all too.
                 label=f"m={mark.order:+d}" if mark.order == 0 else None,
                 order=mark.order,
             )
