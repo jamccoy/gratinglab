@@ -27,6 +27,16 @@ pytestmark = pytest.mark.gui
 
 SOLVE_TIMEOUT_MS = 30_000
 
+
+def watch(window, **slots):
+    """Connect ``slots`` to the raw signals of every job the window starts;
+    see the same helper in test_gui_qt.py."""
+    def wire(job):
+        for name, slot in slots.items():
+            getattr(job.signals, name).connect(slot)
+
+    window._runner.started.connect(wire)
+
 #: Smooth, classical, two wavelengths: solves in well under a second and
 #: plateaus inside the sweep's ladder.
 SMOOTH = dict(
@@ -229,9 +239,9 @@ class TestItCancels:
         """The default scan is 200 wavelengths at about 0.1 s each, so a
         Cancel after the first progress report lands well inside it."""
         reached, events = [], []
-        win._worker.progress.connect(lambda t, d, n: reached.append(d))
-        win._worker.cancelled.connect(lambda t, m: events.append("cancelled"))
-        win._worker.failed.connect(lambda t, m, msg: events.append("failed"))
+        watch(win, progress=lambda d, n: reached.append(d),
+              cancelled=lambda: events.append("cancelled"),
+              failed=lambda msg: events.append("failed"))
 
         win.solve("cmethod")
         qtbot.waitUntil(lambda: any(d > 0 for d in reached), timeout=SOLVE_TIMEOUT_MS)

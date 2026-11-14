@@ -19,8 +19,13 @@ entries under "Unreleased" into a section named for the new version;
   LAPACK needs, which the efficiency window was given after a segfault on
   macOS and this window never had. A run started while another is in flight
   still supersedes it, and the earlier result is still never drawn; the
-  runner does that now, not a token in the window. Requires
-  `endstation>=0.5.0`.
+  runner does that now, not a token in the window.
+- **So does the efficiency window**, for a solve, a convergence sweep and a
+  comparison alike. Nothing changes on screen: one solve at a time across
+  the window, Cancel stops the solver at its next wavelength, a result
+  that arrives after Cancel is never drawn, and Solve works again straight
+  after Cancel. Requires `endstation>=0.5.1`, whose runner lets go of a
+  window's callbacks once a solve is settled, so a closed window is freed.
 
 ## 0.3.10 (2026-11-14)
 

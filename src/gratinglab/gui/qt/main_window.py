@@ -25,10 +25,10 @@ slow solver to justify concurrent workers per tab.
 
 from __future__ import annotations
 
-import threading
+from functools import partial
 
-from endstation.qt.tokens import StaleGuard
-from PySide6.QtCore import Qt, QThread, QTimer, Signal
+from endstation.qt.jobs import JobRunner
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QDockWidget,
@@ -38,6 +38,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ..failures import describe_failure
 from ..state import FieldError, FormErrors, build, validate
 from . import recent, theming
 from .cmethod_tab import CMethodTab
@@ -49,13 +50,13 @@ from .rcwa_tab import RcwaTab
 from .scalar_tab import ScalarTab
 from .setup_tab import SetupTab
 from .sizing import fit_width_to_contents
-from .worker import SolveWorker
+from . import worker
 
 __all__ = ["MainWindow"]
 
 #: Stack for the solve thread, matching the platform's own main-thread default.
 #: Not a tuning knob: a rigorous solver factors dense matrices through LAPACK,
-#: and LAPACK expects the stack the main thread has. See `_start_worker`.
+#: and LAPACK expects the stack the main thread has. See `__init__`.
 _WORKER_STACK_BYTES = 8 * 1024 * 1024
 
 #: A solve faster than this never shows a progress bar. The scalar solver takes
@@ -114,19 +115,6 @@ class MainWindow(QMainWindow):
     #: sleeping, which is what keeps the widget suite fast and deterministic.
     solved = Signal()
 
-    #: How work reaches the worker. It must be a signal, not a method call:
-    #: `moveToThread` only redirects *signal* delivery, so calling
-    #: `worker.run(...)` directly would run the solve on the UI thread and
-    #: freeze the window -- the exact thing this design exists to prevent.
-    _requested = Signal(int, str, object, dict, object)
-    #: The same payload, routed to the worker's sweep slot instead. A second
-    #: signal rather than a mode flag: `moveToThread` dispatches per slot, and
-    #: a flag would put the branch on the worker thread instead of here.
-    _convergence_requested = Signal(int, str, object, dict, object)
-    #: A comparison: token, geometry, the ticked solvers in run order, their
-    #: options, the ones the window already refused, and the cancel event.
-    _comparison_requested = Signal(int, object, object, dict, dict, object)
-
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("gratinglab")
@@ -141,12 +129,18 @@ class MainWindow(QMainWindow):
         guard(self)
 
         self._parsed = None
-        self._tokens = StaleGuard()
         self._running = False
         self._active_name: str | None = None
-        # Replaced per solve rather than reused, so a Cancel clicked between
-        # the request and the worker picking it up cannot be lost to a clear().
-        self._cancel = threading.Event()
+        # One worker thread, shared by every tab, since only one solve is ever
+        # in flight in the window. Its stack is the main thread's: a QThread's
+        # default is far smaller, and LAPACK's dense complex solve overran it,
+        # so `np.linalg.solve` on a few-hundred-square matrix segfaulted the
+        # process and the integral tab returned nothing in the real window
+        # while every headless test passed. The runner drops a cancelled job's
+        # late result, and words a refusal as a refusal rather than a bug.
+        self._runner = JobRunner(
+            self, stack_size=_WORKER_STACK_BYTES, describe=describe_failure
+        )
 
         # Coalesces a burst of keystrokes into one redraw. Restartable and
         # single-shot, parented to the window so it dies with it -- a bare
@@ -162,7 +156,6 @@ class MainWindow(QMainWindow):
         self._build_layout()
         self._build_menu()
         recent.restore_layout(self, "efficiency")
-        self._start_worker()
         # Geometry first: it needs no solver, so it can be right before any
         # result exists rather than showing an empty panel until one does.
         self._refresh_geometry_tab()
@@ -350,32 +343,6 @@ class MainWindow(QMainWindow):
         """Switch theme by key, or ``"system"``; the menu calls this."""
         self._themes.set_choice(choice)
 
-    def _start_worker(self) -> None:
-        self._thread = QThread(self)
-        # A QThread starts with a much smaller stack than the main thread's,
-        # and LAPACK's dense complex solve overruns it: `np.linalg.solve` on a
-        # few-hundred-square matrix segfaults the *process* here while running
-        # fine on the main thread and on a plain `threading.Thread`. That made
-        # the integral tab unusable in the real window -- both boundary
-        # conditions -- while every headless test passed, because nothing but
-        # the GUI ran a solve off the main thread. The scalar solver never
-        # tripped it: it factors nothing.
-        self._thread.setStackSize(_WORKER_STACK_BYTES)
-        self._worker = SolveWorker()
-        self._worker.moveToThread(self._thread)
-        # Cross-thread, so both directions are queued automatically: requests
-        # arrive on the worker's thread, results back on this one.
-        self._requested.connect(self._worker.run)
-        self._worker.finished.connect(self._on_solved)
-        self._worker.failed.connect(self._on_failed)
-        self._worker.cancelled.connect(self._on_cancelled)
-        self._worker.progress.connect(self._on_progress)
-        self._worker.converged.connect(self._on_converged)
-        self._convergence_requested.connect(self._worker.run_convergence)
-        self._comparison_requested.connect(self._worker.run_comparison)
-        self._worker.compared.connect(self._on_compared)
-        self._thread.start()
-
     # -- actions ---------------------------------------------------------
 
     def open_boundary(self, path) -> None:
@@ -441,10 +408,10 @@ class MainWindow(QMainWindow):
         it contained.
 
         ``sweep`` runs the convergence harness instead of a single solve. It
-        shares all of the machinery below (one token, one cancel event, and
-        the rule that only one solve runs in the window at a time), because a
-        sweep is the same kind of operation, only longer. Only the destination
-        slot differs.
+        shares all of the machinery below (the one runner, Cancel, and the
+        rule that only one solve runs in the window at a time), because a
+        sweep is the same kind of operation, only longer. Only the function
+        the runner calls differs.
         """
         if self._running:
             return
@@ -462,8 +429,6 @@ class MainWindow(QMainWindow):
 
         self._active_name = name
         self._parsed = geometry
-        token = self._tokens.issue()
-        self._cancel = threading.Event()
         self._set_running(True)
         tab.show_solving(len(geometry.wavelengths))
         # `tab` as the context object, not a bare singleShot: Qt then cancels
@@ -475,8 +440,12 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(
             _PROGRESS_DELAY_MS, tab, lambda: self._show_progress_if_still_running(tab)
         )
-        signal = self._convergence_requested if sweep else self._requested
-        signal.emit(token, name, geometry, options, self._cancel)
+        if sweep:
+            self._start(worker.converge, name, geometry, options,
+                        on_done=partial(self._on_converged, name))
+        else:
+            self._start(worker.solve, name, geometry, options,
+                        on_done=partial(self._on_solved, name))
 
     def compare(self) -> None:
         """Solve the geometry with every solver ticked on the Compare tab.
@@ -488,10 +457,10 @@ class MainWindow(QMainWindow):
         refusals with the reason, its tab shows the error on the field, and
         the others still run. A refusal only the solver itself can detect
         (the C-method on a vertical facet) is caught the same way on the
-        worker; see `SolveWorker.run_comparison`.
+        worker; see `worker.compare`.
 
-        It is one operation to the rest of the window: one token, one cancel
-        event, every Solve button disabled until it ends.
+        It is one operation to the rest of the window: one job, one Cancel,
+        every Solve button disabled until it ends.
         """
         if self._running:
             return
@@ -523,20 +492,30 @@ class MainWindow(QMainWindow):
 
         self._active_name = tab.name
         self._parsed = geometry
-        token = self._tokens.issue()
-        self._cancel = threading.Event()
         self._set_running(True)
         tab.show_solving(tuple(options), len(geometry.wavelengths))
         QTimer.singleShot(
             _PROGRESS_DELAY_MS, tab, lambda: self._show_progress_if_still_running(tab)
         )
-        self._comparison_requested.emit(
-            token, geometry, names, options, refused, self._cancel
+        self._start(worker.compare, geometry, names, options, refused,
+                    on_done=self._on_compared)
+
+    def _start(self, fn, *args, on_done) -> None:
+        """Hand one piece of work to the runner, with the window's handlers.
+
+        A failure is reported against the tab that asked, which is the
+        active one. A solve started straight after a Cancel queues behind the
+        cancelled one while it unwinds.
+        """
+        self._runner.start(
+            fn, *args,
+            on_done=on_done,
+            on_fail=partial(self._on_failed, self._active_name),
+            on_progress=self._on_progress,
+            on_cancel=self._on_cancelled,
         )
 
-    def _on_compared(self, token: int, outcome) -> None:
-        if self._tokens.is_stale(token):
-            return
+    def _on_compared(self, outcome) -> None:
         self._set_running(False)
         self.geometry_tab.show_geometry(self._parsed)
         self.compare_tab.show_outcome(outcome)
@@ -551,29 +530,22 @@ class MainWindow(QMainWindow):
     def cancel(self) -> None:
         """Stop the running solve.
 
-        Setting the event stops it: the solver checks the event at every
-        wavelength and raises out of its own loop (see `worker.py`).
-
-        Incrementing the token as well is not redundant. The worker may
-        already have finished when Cancel is clicked, in which case a result
-        is already in flight and the event will never be read; the token
-        marks that result as stale when it arrives. The two mechanisms handle
-        two different situations.
+        The runner's progress callback raises at the solver's next
+        wavelength, so the work itself stops (see `worker.py`). A result that
+        was already on its way when Cancel landed is dropped by the runner
+        rather than drawn.
 
         There is only ever one thing that could be running, so it does not
         matter which tab's Cancel button was clicked.
         """
         if not self._running:
             return
-        self._cancel.set()
-        self._tokens.invalidate()
+        self._runner.cancel()
         self._set_running(False)
         if self._active_name is not None:
             self._tab_for(self._active_name).show_cancelled()
 
-    def _on_solved(self, token: int, method: str, result) -> None:
-        if self._tokens.is_stale(token):
-            return  # cancelled or superseded; the window has moved on
+    def _on_solved(self, method: str, result) -> None:
         self._set_running(False)
         # No `profile_panel.draw` here any more: the groove's shape owes
         # nothing to a solver, so redrawing it on solve completion was a false
@@ -584,30 +556,28 @@ class MainWindow(QMainWindow):
         )
         self.solved.emit()
 
-    def _on_progress(self, token: int, done: int, total: int) -> None:
+    def _on_progress(self, done: int, total: int) -> None:
         """Advance the originating tab's bar, and nobody else's.
 
-        A stale token means that a cancelled solve is still reporting while it
-        leaves its own loop. This lasts a few wavelengths at most, but it would
-        be enough to move a bar backwards over a result the window has already
-        replaced.
+        A cancelled solve's last reports, from the wavelength it was in, never
+        arrive here: the runner drops them, so they cannot walk the bar over a
+        result the window has moved on from.
         """
-        if self._tokens.is_stale(token) or self._active_name is None:
+        if self._active_name is None:
             return
         self._tab_for(self._active_name).show_progress_value(done, total)
 
-    def _on_cancelled(self, token: int, method: str) -> None:
+    def _on_cancelled(self) -> None:
         """Acknowledge that the solve has stopped.
 
         There is nothing to show: `cancel()` has already updated the panel and
         re-enabled the buttons, and the previous result is still on screen.
-        This slot exists so that the worker can report somewhere other than
-        `failed`, since a stop that the user requested is not an error.
+        This handler exists so that a cancelled job reports somewhere other
+        than `on_fail`, since a stop that the user requested is not an error.
         """
 
-    def _on_converged(self, token: int, method: str, result, report) -> None:
-        if self._tokens.is_stale(token):
-            return
+    def _on_converged(self, method: str, outcome) -> None:
+        result, report = outcome
         self._set_running(False)
         self.geometry_tab.show_geometry(self._parsed)
         self.tabs[method].show_convergence(
@@ -615,9 +585,7 @@ class MainWindow(QMainWindow):
         )
         self.solved.emit()
 
-    def _on_failed(self, token: int, method: str, message: str) -> None:
-        if self._tokens.is_stale(token):
-            return
+    def _on_failed(self, method: str, message: str) -> None:
         self._set_running(False)
         self._tab_for(method).show_error(message)
 
@@ -657,14 +625,14 @@ class MainWindow(QMainWindow):
     # -- shutdown --------------------------------------------------------
 
     def closeEvent(self, event) -> None:  # noqa: N802 - Qt's spelling
-        """Join the worker thread.
+        """Stop the solve in flight and wait for the worker to finish.
 
-        Without this Qt reports "QThread: Destroyed while thread is still
-        running" and aborts intermittently, most visibly in the offscreen CI
-        runs, where windows are created and destroyed in quick succession.
+        A solve still running when the window goes would deliver into widgets
+        that no longer exist, most visibly in the offscreen CI runs, where
+        windows are created and destroyed in quick succession.
         """
         recent.save_layout(self, "efficiency")
         self._redraw_timer.stop()  # a redraw firing into a closing window
-        self._thread.quit()
-        self._thread.wait(5000)
+        self._runner.cancel()
+        self._runner.wait(5000)
         super().closeEvent(event)

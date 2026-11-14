@@ -36,6 +36,21 @@ pytestmark = pytest.mark.gui
 SOLVE_TIMEOUT_MS = 10_000
 
 
+def watch(window, **slots):
+    """Connect ``slots`` to the raw signals of every job the window starts.
+
+    ``progress``, ``finished``, ``failed`` and ``cancelled`` are the job's own
+    signals, emitted on the worker thread and queued here, before the runner
+    decides what reaches the window. That is what a test of the worker wants:
+    a cancelled solve's progress still shows here, though never on the bar.
+    """
+    def wire(job):
+        for name, slot in slots.items():
+            getattr(job.signals, name).connect(slot)
+
+    window._runner.started.connect(wire)
+
+
 class _SolveProbe(QObject):
     """Counts the two signals a solve should produce, for the error message.
 
@@ -43,74 +58,88 @@ class _SolveProbe(QObject):
     rather than waited for. Disconnects on exit: `resolve` is called several
     times in some tests and the counts belong to one wait.
 
-    A QObject so that Qt, not Python, owns its slots. The worker emits
-    `finished` from its own thread, so each emission is queued for the main
-    thread, and one queued before the disconnect can be delivered after it.
-    A plain object's bound method was then called on freed memory: on
-    2026-11-13 a macOS run reported "'_UnhashDict' object has no attribute
+    A QObject so that Qt, not Python, owns its slots. A job emits `finished`
+    from the worker thread, so each emission is queued for the main thread,
+    and one queued before the disconnect can be delivered after it. A plain
+    object's bound method was then called on freed memory: on 2026-11-13 a
+    macOS run reported "'_UnhashDict' object has no attribute
     'worker_finished'", a matplotlib object occupying the address of a probe
     from an earlier test. Qt drops the events posted to a QObject when it is
     destroyed, so a late `finished` now goes nowhere.
+
+    The job already in flight is watched as well as any started during the
+    wait: the `win` fixture waits on the solve the constructor started.
     """
 
     def __init__(self, window):
         super().__init__()
         self._window = window
+        self._jobs = []
         self.solved = 0
         self.worker_finished = 0
 
     def __enter__(self):
         self._window.solved.connect(self._count_solved)
-        self._window._worker.finished.connect(self._count_finished)
+        self._window._runner.started.connect(self._watch)
+        if self._window._runner.job is not None:
+            self._watch(self._window._runner.job)
         return self
 
     def __exit__(self, *_exc):
         self._window.solved.disconnect(self._count_solved)
-        self._window._worker.finished.disconnect(self._count_finished)
+        self._window._runner.started.disconnect(self._watch)
+        for job in self._jobs:
+            try:
+                job.signals.finished.disconnect(self._count_finished)
+            except (RuntimeError, TypeError):
+                pass  # the job's signals object is already gone
         return False
+
+    @Slot(object)
+    def _watch(self, job):
+        self._jobs.append(job)
+        job.signals.finished.connect(self._count_finished)
 
     @Slot()
     def _count_solved(self):
         self.solved += 1
 
-    @Slot(int, str, object)
+    @Slot(object)
     def _count_finished(self, *_args):
         self.worker_finished += 1
 
 
-def _why_no_solve(thread, probe, what) -> str:
+def _why_no_solve(runner, probe, what) -> str:
     """Name the cause of a solve that never signalled, from what did happen.
 
     A bare `qtbot.waitSignal` produced one unexplained "Signal not emitted
     after 10000 ms" in a full-suite run on 2026-10-31 and none in isolation,
     and it could not say more than that. The timeout is about 140x the ~70 ms
     this solve takes, so "was 10 s enough" was never the interesting question;
-    "did the worker run at all" is, and the three signals below separate the
-    candidates. 98 of this file's tests take the `win` fixture, so the error
+    "did the job run at all" is, and the signals below separate the
+    candidates. Most of this file's tests take the `win` fixture, so the error
     also landed on an arbitrary test and sent the first investigation to the
     wrong place -- hence naming `what` was waited for.
     """
-    running = thread.isRunning() if thread is not None else None
-    finished = thread.isFinished() if thread is not None else None
-    if thread is None:
-        cause = ("no worker thread exists, so `_start_worker` never ran -- the "
-                 "window was not fully constructed")
-    elif not probe.worker_finished and not running and finished:
-        cause = "the worker thread exited without emitting `finished`"
+    busy = runner.busy() if runner is not None else None
+    if runner is None:
+        cause = ("no runner exists, so the window was not fully constructed")
+    elif not probe.worker_finished and busy:
+        cause = ("the job never emitted `finished`: it starved, or it died in "
+                 "the solve (see the runner's stack size, which segfaults the "
+                 "process on a dense complex solve if it is too small)")
     elif not probe.worker_finished:
-        cause = ("the worker never emitted `finished`: it starved, or it died "
-                 "in the solve (see `_start_worker` on QThread stack size, "
-                 "which segfaults the process on a dense complex solve)")
+        cause = ("the runner is idle and the job never emitted `finished`: "
+                 "it failed or was cancelled")
     else:
-        cause = ("the worker emitted `finished` but the window never emitted "
-                 "`solved`, which is what `_on_solved` does when `_tokens` "
-                 "calls the result stale -- a cancelled or superseded solve")
+        cause = ("the job emitted `finished` but the window never emitted "
+                 "`solved`, which is what happens when the runner drops a "
+                 "cancelled job's result -- a cancelled or superseded solve")
     return (
         f"{what} never signalled within {SOLVE_TIMEOUT_MS} ms.\n"
-        f"  worker thread exists:  {thread is not None}\n"
-        f"  worker thread running: {running}\n"
-        f"  worker thread done:    {finished}\n"
-        f"  SolveWorker.finished:  {probe.worker_finished} emission(s)\n"
+        f"  runner exists:         {runner is not None}\n"
+        f"  runner busy:           {busy}\n"
+        f"  job finished:          {probe.worker_finished} emission(s)\n"
         f"  MainWindow.solved:     {probe.solved} emission(s)\n"
         f"Most likely: {cause}."
     )
@@ -130,7 +159,7 @@ def _await_solve(qtbot, window, trigger=None, *, what):
                 trigger()
         landed = blocker.signal_triggered or probe.solved
     if not landed:
-        raise AssertionError(_why_no_solve(getattr(window, "_thread", None), probe, what))
+        raise AssertionError(_why_no_solve(getattr(window, "_runner", None), probe, what))
 
 
 @pytest.fixture
@@ -149,17 +178,14 @@ def resolve(qtbot, window, name="scalar"):
     _await_solve(qtbot, window, lambda: window.solve(name), what=f"the {name} solve")
 
 
-class _StubThread:
-    """Enough QThread for `_why_no_solve`, so its branches need no window."""
+class _StubRunner:
+    """Enough JobRunner for `_why_no_solve`, so its branches need no window."""
 
-    def __init__(self, *, running, finished):
-        self._running, self._finished = running, finished
+    def __init__(self, *, busy):
+        self._busy = busy
 
-    def isRunning(self):
-        return self._running
-
-    def isFinished(self):
-        return self._finished
+    def busy(self):
+        return self._busy
 
 
 class _StubProbe:
@@ -178,44 +204,38 @@ class TestTheSolveTimeoutDiagnostic:
     cause nor even the right test.
     """
 
-    def test_no_worker_thread_means_the_window_was_not_built(self):
+    def test_no_runner_means_the_window_was_not_built(self):
         message = _why_no_solve(None, _StubProbe(), "the first solve")
-        assert "`_start_worker` never ran" in message
-        assert "worker thread exists:  False" in message
+        assert "the window was not fully constructed" in message
+        assert "runner exists:         False" in message
 
-    def test_a_running_thread_with_no_finished_points_at_the_worker(self):
-        message = _why_no_solve(
-            _StubThread(running=True, finished=False), _StubProbe(), "the first solve"
-        )
+    def test_a_busy_runner_with_no_finished_points_at_the_job(self):
+        message = _why_no_solve(_StubRunner(busy=True), _StubProbe(), "the first solve")
         assert "starved, or it died" in message
-        assert "QThread stack size" in message
+        assert "stack size" in message
 
-    def test_an_exited_thread_with_no_finished_is_distinguished(self):
-        message = _why_no_solve(
-            _StubThread(running=False, finished=True), _StubProbe(), "the first solve"
-        )
-        assert "exited without emitting `finished`" in message
+    def test_an_idle_runner_with_no_finished_is_distinguished(self):
+        message = _why_no_solve(_StubRunner(busy=False), _StubProbe(), "the first solve")
+        assert "it failed or was cancelled" in message
 
-    def test_finished_without_solved_points_at_the_stale_token_path(self):
-        """`_on_solved` returns early when `_tokens.is_stale(token)`, so this
-        is the one cause that is a real code path rather than a malfunction."""
+    def test_finished_without_solved_points_at_the_dropped_result(self):
+        """The runner drops a cancelled job's result, so this is the one
+        cause that is a real code path rather than a malfunction."""
         message = _why_no_solve(
-            _StubThread(running=True, finished=False),
-            _StubProbe(worker_finished=1),
-            "the first solve",
+            _StubRunner(busy=False), _StubProbe(worker_finished=1), "the first solve"
         )
-        assert "calls the result stale" in message
+        assert "drops a cancelled job's result" in message
 
     def test_the_message_names_what_was_waited_for_and_the_counts(self):
-        """98 tests share the `win` fixture, so "which wait" is not obvious
+        """Most tests share the `win` fixture, so "which wait" is not obvious
         from the test that happens to report the error."""
         message = _why_no_solve(
-            _StubThread(running=True, finished=False),
+            _StubRunner(busy=True),
             _StubProbe(worker_finished=2, solved=0),
             "the integral solve",
         )
         assert message.startswith("the integral solve never signalled within 10000 ms")
-        assert "SolveWorker.finished:  2 emission(s)" in message
+        assert "job finished:          2 emission(s)" in message
         assert "MainWindow.solved:     0 emission(s)" in message
 
     def test_a_real_timeout_raises_this_and_not_pytestqts_anonymous_error(
@@ -231,7 +251,7 @@ class TestTheSolveTimeoutDiagnostic:
 
         It used to build a 99th window and race that window's first solve
         against a 1 ms budget, on the reasoning that 1 ms is 70x under a
-        ~70 ms solve. That was not the race it was in. `SolveWorker.finished`
+        ~70 ms solve. That was not the race it was in. A job's `finished`
         reaches the window as a *queued* event, so a solve that lands while
         the main thread is busy -- between the constructor returning and the
         wait starting -- leaves its event in the queue, and the 1 ms wait is
@@ -733,26 +753,26 @@ class TestBehaviour:
 
 class TestBackgroundSolve:
     def test_the_solve_does_not_run_on_the_ui_thread(self, qtbot, win):
-        """`moveToThread` only redirects signal delivery, so calling the
-        worker's method directly would quietly solve on the UI thread and
-        freeze the window -- the exact failure this design exists to avoid."""
+        """Calling the solve directly would quietly run it on the UI thread
+        and freeze the window -- the exact failure the runner exists to
+        avoid."""
         import threading
 
         seen = {}
 
         from gratinglab.gui.qt import worker as worker_module
 
-        original_run = worker_module.SolveWorker.run
+        original = worker_module.solve
 
-        def record(self, token, method, geometry, options, cancel):
+        def record(*args, **kwargs):
             seen["thread"] = threading.current_thread().ident
-            return original_run(self, token, method, geometry, options, cancel)
+            return original(*args, **kwargs)
 
         with pytest.MonkeyPatch.context() as patch:
-            patch.setattr(worker_module.SolveWorker, "run", record)
+            patch.setattr(worker_module, "solve", record)
             resolve(qtbot, win)
 
-        assert "thread" in seen, "the worker slot never ran"
+        assert "thread" in seen, "the solve never ran"
         assert seen["thread"] != threading.current_thread().ident
 
     def test_a_two_sided_theorem_is_not_checked_at_machine_precision(self):
@@ -795,7 +815,7 @@ class TestBackgroundSolve:
         from gratinglab.gui.qt.main_window import _WORKER_STACK_BYTES
 
         assert _WORKER_STACK_BYTES >= 8 * 1024 * 1024
-        assert win._thread.stackSize() == _WORKER_STACK_BYTES
+        assert win._runner.stack_size == _WORKER_STACK_BYTES
 
     def test_solve_is_disabled_while_one_is_running(self, win):
         win.solve("scalar")
@@ -808,9 +828,9 @@ class TestBackgroundSolve:
         threads; queueing would surprise the user with a stale-then-fresh
         double redraw."""
         win.solve("scalar")
-        token = win._tokens.current
+        job = win._runner.job
         win.solve("scalar")
-        assert win._tokens.current == token
+        assert win._runner.job is job
 
     def test_cancel_keeps_the_previous_result_on_screen(self, win):
         scalar_tab = win.tabs["scalar"]
@@ -830,23 +850,37 @@ class TestBackgroundSolve:
         assert "the calculation stopped" in text
         assert "still finishing" not in text
 
-    def test_a_cancelled_result_is_dropped_when_it_arrives(self, win):
-        from gratinglab.gui.qt.worker import SolveResult
-
+    def test_a_cancelled_result_is_dropped_when_it_arrives(self, qtbot, win):
+        """The worker can finish between the click and its next progress
+        report, so a result can still arrive after Cancel. The runner hands
+        it to `_on_cancelled`, never `_on_solved`."""
+        scalar_tab = win.tabs["scalar"]
+        previous = scalar_tab._scan
+        drawn = []
+        win.solved.connect(lambda: drawn.append(True))
         win.solve("scalar")
-        stale = win._tokens.current
+        job = win._runner.job
         win.cancel()
-        # would crash if accepted
-        win._on_solved(stale, "scalar", SolveResult(None, None))
-        assert win.tabs["scalar"]._scan is not None
+        win._runner.wait(SOLVE_TIMEOUT_MS)
+        # The job's result, if it finished first, is queued; let it land.
+        job.signals.finished.emit(object())  # would crash if drawn
+        qtbot.wait(50)
+        assert drawn == []
+        assert scalar_tab._scan is previous
+
+    def test_a_solve_right_after_cancel_queues_and_lands(self, qtbot, win):
+        """The next solve does not wait for the cancelled one to notice."""
+        win.solve("scalar")
+        win.cancel()
+        resolve(qtbot, win)
+        assert not win._running
 
     def test_a_solver_exception_becomes_a_message_not_a_crash(self, win):
         """A Python exception escaping a slot under PySide6 can abort the
         process rather than surfacing."""
-        win._tokens.invalidate()
         win._active_name = "scalar"
         win._set_running(True)
-        win._on_failed(win._tokens.current, "scalar", "ValueError: contrived")
+        win._on_failed("scalar", "ValueError: contrived")
         scalar_tab = win.tabs["scalar"]
         assert "solve failed" in scalar_tab._provenance.toPlainText()
         assert scalar_tab._solve_button.isEnabled()
@@ -872,10 +906,10 @@ class TestBackgroundSolve:
         win.cancel()
         assert all(t._solve_button.isEnabled() for t in win.tabs.values())
 
-    def test_closing_joins_the_worker_thread(self, qtbot):
-        """Otherwise Qt reports 'QThread: Destroyed while thread is still
-        running' and aborts -- most visibly under offscreen CI, where windows
-        are built and torn down back to back.
+    def test_closing_waits_for_the_worker(self, qtbot):
+        """Otherwise a solve still running delivers into a closed window --
+        most visibly under offscreen CI, where windows are built and torn
+        down back to back.
 
         Constructed without qtbot.addWidget so that closing it here is the
         only close, and the assertion is about closeEvent rather than about
@@ -884,9 +918,10 @@ class TestBackgroundSolve:
         from gratinglab.gui.qt.main_window import MainWindow
 
         window = MainWindow()
-        assert window._thread.isRunning()
+        window.solve("scalar")
+        assert window._runner.busy() or window._runner.job is not None
         window.close()
-        assert not window._thread.isRunning()
+        assert window._runner.wait(0), "a job was still running after close"
 
     def test_the_progress_timer_does_not_outlive_the_tab_that_armed_it(self, qtbot):
         """Solve arms a 150 ms timer holding the tab's progress bar. If the
@@ -936,14 +971,14 @@ class TestOrderPanel:
         from gratinglab.gui.qt.scalar_tab import _ORDER_ROLE
 
         scalar_tab = win.tabs["scalar"]
-        token_before = win._tokens.current
+        job_before = win._runner.job
         item = scalar_tab._order_list.item(0)
         order = item.data(_ORDER_ROLE)
         assert order in scalar_tab._visible_orders
 
         item.setCheckState(QtCoreQt.CheckState.Unchecked)
 
-        assert win._tokens.current == token_before, "toggling an order must not trigger a solve"
+        assert win._runner.job is job_before, "toggling an order must not trigger a solve"
         assert order not in scalar_tab._visible_orders
 
     def test_the_none_button_hides_every_curve(self, win):
@@ -1017,11 +1052,12 @@ class TestCancellationReallyStops:
         """A scan slow enough that Cancel lands mid-flight."""
         win.geometry._fields["wavelength_count"].setText(points)
 
-    def test_cancel_sets_the_event_the_solver_reads(self, win):
+    def test_cancel_sets_the_flag_the_solver_reads(self, win):
         win.solve("scalar")
-        assert not win._cancel.is_set()
+        job = win._runner.job
+        assert not job.cancelling
         win.cancel()
-        assert win._cancel.is_set()
+        assert job.cancelling
 
     def test_and_the_worker_stops_where_it_was_told(self, qtbot, win):
         """The measured half: it stops *mid-flight*, not merely before it
@@ -1034,8 +1070,8 @@ class TestCancellationReallyStops:
         """
         reached = []
         stopped = []
-        win._worker.progress.connect(lambda t, d, n: reached.append(d))
-        win._worker.cancelled.connect(lambda t, m: stopped.append(t))
+        watch(win, progress=lambda d, n: reached.append(d),
+              cancelled=lambda: stopped.append(True))
 
         self._long_solve(win)
         win.solve("scalar")
@@ -1056,7 +1092,7 @@ class TestCancellationReallyStops:
         """Non-vacuity for the test above: without it, a solver that stopped
         early for some entirely different reason would pass."""
         reached = []
-        win._worker.progress.connect(lambda t, d, n: reached.append(d))
+        watch(win, progress=lambda d, n: reached.append(d))
         resolve(qtbot, win)
         assert max(reached) == 200
 
@@ -1064,8 +1100,8 @@ class TestCancellationReallyStops:
         """A stop the user asked for is not an error, and rendering it as one
         would be the category mistake M8 fixed for the no-coating default."""
         events = []
-        win._worker.cancelled.connect(lambda t, m: events.append("cancelled"))
-        win._worker.failed.connect(lambda t, m, msg: events.append("failed"))
+        watch(win, cancelled=lambda: events.append("cancelled"),
+              failed=lambda msg: events.append("failed"))
 
         self._long_solve(win)
         win.solve("scalar")
@@ -1078,22 +1114,20 @@ class TestCancellationReallyStops:
     def test_but_a_real_solver_failure_still_is(self, win):
         """Non-vacuity: the distinction only means something if `failed` can
         still happen."""
-        seen = []
-        win._worker.failed.connect(lambda t, m, msg: seen.append(msg))
         win._active_name = "scalar"
-        win._on_failed(win._tokens.current, "scalar", "ValueError: boom")
+        win._on_failed("scalar", "ValueError: boom")
         assert "solve failed" in win.tabs["scalar"]._provenance.toPlainText()
 
-    def test_each_solve_gets_its_own_event(self, win):
-        """A worker-owned event cleared at the top of `run` loses a Cancel
-        clicked between the request and the clear. A fresh one per solve
-        cannot."""
+    def test_each_solve_gets_its_own_cancel_flag(self, win):
+        """A flag shared between solves and cleared at the start of each
+        would lose a Cancel clicked between the request and the clear. Each
+        job carries its own."""
         win.solve("scalar")
-        first = win._cancel
+        first = win._runner.job
         win.cancel()
         win.solve("scalar")
-        assert win._cancel is not first
-        assert not win._cancel.is_set()
+        assert win._runner.job is not first
+        assert first.cancelling and not win._runner.job.cancelling
 
 
 class TestTheProgressBar:
@@ -1113,20 +1147,23 @@ class TestTheProgressBar:
         """200 queued cross-thread signals for a bar with ~100 visible states
         is 100 of them nobody could have seen."""
         seen = []
-        win._worker.progress.connect(lambda t, d, n: seen.append(d))
+        watch(win, progress=lambda d, n: seen.append(d))
         resolve(qtbot, win)
         assert len(seen) <= 101
         assert len(seen) > 1, "and it does report"
 
-    def test_a_stale_report_does_not_move_the_bar(self, win):
+    def test_a_stale_report_does_not_move_the_bar(self, qtbot, win):
         """A cancelled solve keeps reporting for the wavelength it is in.
         Letting that walk the bar over a result the window has moved on from
-        would be the same staleness the token exists to catch."""
-        win._active_name = "scalar"
+        would be the staleness the runner drops."""
+        win.solve("scalar")
+        job = win._runner.job
+        win.cancel()
         bar = win.tabs["scalar"]._progress
         bar.setRange(0, 100)
         bar.setValue(50)
-        win._on_progress(win._tokens.current - 1, 7, 100)
+        job.signals.progress.emit(7, 100)
+        qtbot.wait(20)
         assert bar.value() == 50
 
 
@@ -1172,14 +1209,14 @@ class TestTheConvergenceButton:
         assert win.tabs["scalar"]._converge_button.isEnabled()
 
     def test_it_shares_the_one_at_a_time_rule(self, win):
-        """Same token, same event, same window-wide lock as an ordinary solve
-        -- it is the same kind of thing, only longer."""
+        """Same runner, same Cancel, same window-wide lock as an ordinary
+        solve -- it is the same kind of thing, only longer."""
         win.solve("scalar", sweep=True)
         assert win._running
         assert not win.tabs["scalar"]._solve_button.isEnabled()
-        token = win._tokens.current
+        job = win._runner.job
         win.solve("scalar")  # ignored while one is in flight
-        assert win._tokens.current == token
+        assert win._runner.job is job
 
     def test_the_bar_counts_rungs_not_wavelengths(self, qtbot, win):
         """`check_convergence` reports per rung: the numbers a bar can show
@@ -1190,8 +1227,8 @@ class TestTheConvergenceButton:
     def test_cancelling_a_sweep_stops_it(self, qtbot, win):
         stopped = []
         rungs = []
-        win._worker.cancelled.connect(lambda t, m: stopped.append(t))
-        win._worker.progress.connect(lambda t, d, n: rungs.append(d))
+        watch(win, cancelled=lambda: stopped.append(True),
+              progress=lambda d, n: rungs.append(d))
 
         win.solve("scalar", sweep=True)
         qtbot.waitUntil(lambda: bool(rungs), timeout=SOLVE_TIMEOUT_MS)
@@ -1377,12 +1414,12 @@ class TestGeometryTab:
         """The geometry is already known; nothing here depends on a solver."""
         tab = win.geometry_tab
         before = tab._diagram.wavelength
-        token = win._tokens.current
+        job = win._runner.job
 
         tab._slider.setValue(tab._slider.value() + 20)
 
         assert tab._diagram.wavelength != before
-        assert win._tokens.current == token, "moving the slider must not trigger a solve"
+        assert win._runner.job is job, "moving the slider must not trigger a solve"
 
     def test_the_blaze_button_jumps_to_the_blaze_wavelength(self, win):
         """At the shipped defaults lambda_b(m=2) = 4.05 nm, inside the 1-5 nm
@@ -1632,9 +1669,9 @@ class TestLiveGeometry:
     def test_and_does_not_solve(self, qtbot, win):
         """The distinction the whole step rests on. A redraw that quietly
         started a solve would be the live re-solve ruled out of scope."""
-        token = win._tokens.current
+        job = win._runner.job
         self._edit(qtbot, win, "period", "480")
-        assert win._tokens.current == token
+        assert win._runner.job is job
         assert not win._running
 
     def test_the_3d_scene_follows_too(self, qtbot, win):

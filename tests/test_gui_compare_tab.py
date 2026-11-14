@@ -27,6 +27,16 @@ from gratinglab.gui.theme import DARK, LIGHT, order_colors
 
 SOLVE_TIMEOUT_MS = 60_000
 
+
+def watch(window, **slots):
+    """Connect ``slots`` to the raw signals of every job the window starts;
+    see the same helper in test_gui_qt.py."""
+    def wire(job):
+        for name, slot in slots.items():
+            getattr(job.signals, name).connect(slot)
+
+    window._runner.started.connect(wire)
+
 #: Smooth, classical, two wavelengths: the C-method and scalar solve it in
 #: well under a second, so a comparison test is quick.
 SMOOTH = dict(
@@ -334,7 +344,7 @@ class TestItCompares:
         set_geometry(win, **SMOOTH)
         compare(qtbot, win, "scalar", "cmethod")
         solves = []
-        win._worker.compared.connect(lambda *a: solves.append(a))
+        watch(win, finished=lambda outcome: solves.append(outcome))
         tab.set_reference("scalar")
         assert tab._difference_axes.get_title(loc="left") == "Difference from Scalar"
         tab.set_reference("cmethod")
@@ -460,10 +470,10 @@ class TestRunning:
         C-method, so a Cancel after the first progress report lands inside
         the first solver's block and the second never starts."""
         reached, events = [], []
-        win._worker.progress.connect(lambda t, d, n: reached.append((d, n)))
-        win._worker.cancelled.connect(lambda t, m: events.append(("cancelled", m)))
-        win._worker.failed.connect(lambda t, m, msg: events.append(("failed", m)))
-        win._worker.compared.connect(lambda t, o: events.append(("compared", None)))
+        watch(win, progress=lambda d, n: reached.append((d, n)),
+              cancelled=lambda: events.append("cancelled"),
+              failed=lambda msg: events.append("failed"),
+              finished=lambda outcome: events.append("compared"))
 
         tab.set_selected(("cmethod", "scalar"))
         win.compare()
@@ -471,7 +481,7 @@ class TestRunning:
         win.cancel()
         qtbot.waitUntil(lambda: bool(events), timeout=SOLVE_TIMEOUT_MS)
 
-        assert events == [("cancelled", "compare")]
+        assert events == ["cancelled"]
         done, total = max(reached)
         assert total == 400, "one bar over both solvers' wavelengths"
         assert done < 200, f"reached {done} of {total} despite Cancel"
@@ -488,26 +498,27 @@ class TestRunning:
         assert tab._outcome is previous
         assert "showing the previous one" in tab._panel.toPlainText()
 
-    def test_a_stale_outcome_is_dropped_when_it_arrives(self, win, tab):
+    def test_a_stale_outcome_is_dropped_when_it_arrives(self, qtbot, win, tab):
         tab.set_selected(("scalar",))
         win.compare()
-        stale = win._tokens.current
+        job = win._runner.job
         win.cancel()
-        win._on_compared(stale, object())  # would crash if accepted
+        win._runner.wait(SOLVE_TIMEOUT_MS)
+        job.signals.finished.emit(object())  # would crash if accepted
+        qtbot.wait(50)
         assert tab._outcome is None
 
     def test_a_failure_of_the_whole_run_is_a_message_not_a_crash(self, win, tab):
-        win._tokens.invalidate()
         win._active_name = tab.name
         win._set_running(True)
-        win._on_failed(win._tokens.current, "compare", "ValueError: contrived")
+        win._on_failed(tab.name, "ValueError: contrived")
         assert "comparison failed" in tab._panel.toPlainText()
         assert tab._compare_button.isEnabled()
 
     def test_progress_reaches_this_tabs_bar(self, win, tab):
         tab.set_selected(("scalar",))
         win.compare()
-        win._on_progress(win._tokens.current, 3, 10)
+        win._on_progress(3, 10)
         assert tab._progress.maximum() == 10
         assert tab._progress.value() == 3
         win.cancel()
