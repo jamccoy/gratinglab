@@ -7,7 +7,7 @@ authors:
     given-names: Jake
   - family-names: Gangadharan
     given-names: Aditi
-version: 0.3.9
+version: 0.3.10
 license: BSD-3-Clause
 repository-code: "https://github.com/jamccoy/gratinglab"
 keywords:
