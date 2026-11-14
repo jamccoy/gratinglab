@@ -23,6 +23,7 @@ What is drawn, and what the panel says, is decided in
 
 from __future__ import annotations
 
+from endstation.qt.canvas import restyle_toolbar
 from endstation.qt.progress_bar import DelayedProgressBar
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -232,7 +233,8 @@ class CompareTab(QWidget):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(NavigationToolbar2QT(self._canvas, panel))
+        self._toolbar = NavigationToolbar2QT(self._canvas, panel)
+        layout.addWidget(self._toolbar)
         layout.addWidget(self._canvas)
         return panel
 
@@ -414,6 +416,8 @@ class CompareTab(QWidget):
         )
 
     def _on_theme(self, theme) -> None:
+        # matplotlib colours a toolbar's icons only when it builds them.
+        restyle_toolbar(self._toolbar, theme)
         style_figure(self._figure, theme)
         self._redraw()
         if self._lines:

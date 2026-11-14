@@ -195,6 +195,46 @@ class TestSwitching:
         win.set_theme("system")
         assert theming.current().key in ("light", "dark")
 
+    def test_every_toolbar_redraws_its_icons_on_a_switch(self, win, qapp, monkeypatch):
+        """
+        Each tab's plot toolbar is readable after a switch to dark.
+
+        matplotlib before 3.11 colours a toolbar's icons once, when it builds
+        it, and each tab redraws them with endstation's restyle_toolbar. The
+        patch takes that path on whatever matplotlib is installed; from 3.11
+        the icons follow the palette by themselves.
+        """
+        import warnings
+
+        from endstation.qt import canvas
+        from matplotlib.backends.backend_qtagg import NavigationToolbar2QT
+
+        monkeypatch.setattr(canvas, "_icons_follow_palette", lambda: False)
+
+        def brightness(toolbar):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", DeprecationWarning)
+                image = toolbar._actions["home"].icon().pixmap(24, 24).toImage()
+            total = weight = 0.0
+            for y in range(image.height()):
+                for x in range(image.width()):
+                    colour = image.pixelColor(x, y)
+                    total += colour.value() * colour.alphaF()
+                    weight += colour.alphaF()
+            return total / weight
+
+        win.set_theme("light")
+        qapp.processEvents()
+        toolbars = win.findChildren(NavigationToolbar2QT)
+        assert len(toolbars) >= 6, f"found only {len(toolbars)} toolbars"
+        on_light = [brightness(t) for t in toolbars]
+
+        win.set_theme("dark")
+        on_dark = [brightness(t) for t in toolbars]
+        stuck = [i for i, (a, b) in enumerate(zip(on_light, on_dark)) if b < a + 100]
+        assert not stuck, [(toolbars[i].parent().__class__.__name__,
+                            on_light[i], on_dark[i]) for i in stuck]
+
     def test_an_unknown_theme_is_refused(self, win):
         from gratinglab.gui.qt import theming
 

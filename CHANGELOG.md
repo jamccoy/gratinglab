@@ -14,6 +14,11 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Changed
 
+- **Plot toolbars follow a theme switched while the window is open.**
+  matplotlib before 3.11 colours a toolbar's icons only when it builds
+  them, so after View > Theme they stayed dark on dark, or pale on light,
+  until the next launch. Each tab now redraws them with endstation's
+  `restyle_toolbar`. Requires `endstation>=0.7.1`.
 - **The solver tabs' progress bars are endstation's `DelayedProgressBar`**,
   replacing five copies of the same show/hide/range code and the window's
   150 ms timer. Nothing changes on screen: a quick solve still shows no bar,

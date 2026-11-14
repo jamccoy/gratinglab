@@ -9,6 +9,7 @@ is the same in either case), not once per tab.
 
 from __future__ import annotations
 
+from endstation.qt.canvas import restyle_toolbar
 from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 __all__ = ["ProfilePlotPanel"]
@@ -37,12 +38,15 @@ class ProfilePlotPanel(QWidget):
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(NavigationToolbar2QT(self._canvas, self))
+        self._toolbar = NavigationToolbar2QT(self._canvas, self)
+        layout.addWidget(self._toolbar)
         layout.addWidget(self._canvas)
 
     def _on_theme(self, theme) -> None:
         from ..theme import style_figure
 
+        # matplotlib colours a toolbar's icons only when it builds them.
+        restyle_toolbar(self._toolbar, theme)
         style_figure(self._figure, theme)
         if self._parsed is not None:
             self.draw(self._parsed)

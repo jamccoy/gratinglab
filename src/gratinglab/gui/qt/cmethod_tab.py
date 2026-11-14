@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Sequence
 
 from endstation.files import atomic_open
+from endstation.qt.canvas import restyle_toolbar
 from endstation.qt.progress_bar import DelayedProgressBar
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
@@ -232,7 +233,8 @@ class CMethodTab(QWidget):
         panel = QWidget()
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(NavigationToolbar2QT(self._canvas, panel))
+        self._toolbar = NavigationToolbar2QT(self._canvas, panel)
+        layout.addWidget(self._toolbar)
         layout.addWidget(self._canvas)
         return panel
 
@@ -411,6 +413,8 @@ class CMethodTab(QWidget):
         )
 
     def _on_theme(self, theme) -> None:
+        # matplotlib colours a toolbar's icons only when it builds them.
+        restyle_toolbar(self._toolbar, theme)
         style_figure(self._figure, theme)
         if self._scan is not None:
             self._draw_efficiency(self._scan)

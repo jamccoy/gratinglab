@@ -18,6 +18,7 @@ geometry is known as soon as the form parses.
 from __future__ import annotations
 
 import numpy as np
+from endstation.qt.canvas import restyle_toolbar
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QPalette
 from PySide6.QtWidgets import (
@@ -156,7 +157,8 @@ class GeometryTab(QWidget):
         panel.setMinimumHeight(200)
         layout = QVBoxLayout(panel)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(NavigationToolbar2QT(self._canvas, panel))
+        self._toolbar = NavigationToolbar2QT(self._canvas, panel)
+        layout.addWidget(self._toolbar)
         layout.addWidget(self._canvas)
         return panel
 
@@ -339,6 +341,8 @@ class GeometryTab(QWidget):
         )
 
     def _on_theme(self, theme) -> None:
+        # matplotlib colours a toolbar's icons only when it builds them.
+        restyle_toolbar(self._toolbar, theme)
         style_figure(self._figure, theme)
         if self._caption_lines:
             self._set_captions(self._caption_lines)
