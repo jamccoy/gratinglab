@@ -1,492 +1,57 @@
-r"""Render theory pages as rich text, with markdown structure and typeset math.
+"""What gratinglab adds to endstation's rendering of a Help page.
 
-M7 made the equations render but left tables and bullet lists as literal pipes
-and dashes, because real column layout in a `tkinter.Text` widget (the toolkit
-at the time) required a great deal of engineering for content that was
-readable enough without it. That compromise has since become untenable:
-`docs/theory/scalar.md` carries the three-way tension table and the
-shallow-limit evidence table, and `docs/conventions.md` carries the angle
-reconciliation and the errata table. The tables are now central content, on
-the one page a user consults to understand what the solver does.
-
-Qt's rich-text engine parses a small HTML subset, which makes the conversion
-inexpensive. This module therefore converts a page to HTML, and the widget
-layer only displays it.
-
-The following points should be understood before this module is edited.
-
-Math is split out before anything is escaped. Four math spans in the real
-docs contain `<` or `>` (`$t < w$`, `$\zeta < \theta_c$`, `$\lambda > 32 ...$`,
-`$k > 0$`). Escaping first would pass mathtext the string `t &lt; w`, which it
-renders literally. :func:`~gratinglab.gui.mathtext.split_segments` therefore
-runs on the raw source, and only the text spans are escaped; the LaTeX never
-is.
-
-Images are referenced by key instead of being embedded.
-`QTextDocument.loadResource` does not handle `data:` URLs, so each image is
-given a `gratinglab-math:N` src and the viewer registers the bytes with
-`addResource`. This also spares the module from base64 encoding that would
-only have to be undone.
-
-A render failure does not crash the viewer, as was also the case for the Tk
-viewer: the raw `$...$` source appears in a distinct colour, so a future edit
-that uses an unsupported macro is easy to diagnose and the rest of the page
-still renders.
-
-Some constructs are not supported, because the two real pages do not use them
-and guessing their rendering would be worse than a visible gap: nested lists,
-ordered lists inside blockquotes, inline HTML, reference-style links, and
-setext (`===`) headings. A standalone `---` is always treated as a horizontal
-rule, never as a setext underline.
+The markdown and the equations are rendered by :mod:`endstation.docs.markdown`,
+which began as this module. Two things stay here because they are about
+gratinglab's pages rather than markdown: the banner above the page of a
+solver that approximates, and the escaping a page title needs to become a
+menu entry.
 """
 
 from __future__ import annotations
 
-import html
-import re
-from dataclasses import dataclass, field
-from functools import lru_cache
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
-from . import mathtext
+from endstation.docs.markdown import RichPage, render_markdown
 
 if TYPE_CHECKING:  # pragma: no cover - imports for type checkers only
     from .docs import TheoryPage
 
-__all__ = [
-    "MathImage",
-    "RichPage",
-    "render_markdown",
-    "to_html",
-    "png_size",
-    "math_dpi",
-    "inline_metrics",
-    "menu_label",
-    "INLINE_DPI",
-    "DISPLAY_DPI",
-]
+__all__ = ["BANNER_COLOR", "banner", "menu_label", "to_html"]
 
-#: Base rasterisation DPI. Display equations render larger than inline ones,
-#: roughly as a printed page distinguishes a headline equation from a symbol in
-#: running text. Both are scaled by the device pixel ratio at render time.
-INLINE_DPI = 130
-DISPLAY_DPI = 170
-
-#: Colour for a math span mathtext could not parse. Same signal the Tk viewer's
-#: `unrendered` tag gave.
-UNRENDERED_COLOR = "#a5370d"
-
-#: Colour for the approximate-method banner. Its own constant even
-#: though it currently matches: "this solver approximates" and "this equation
-#: failed to render" are unrelated facts, and a test that cannot tell them
-#: apart is a test that will one day pass for the wrong reason.
+#: Colour of the approximate-method banner. The same as endstation's colour
+#: for an equation that failed to render, and kept as its own constant: the
+#: two facts are unrelated, and a test that cannot tell them apart could one
+#: day pass for the wrong reason.
 BANNER_COLOR = "#a5370d"
 
-#: `# Title` through `###### h6`. The Tk viewer matched `#{2,6}` and so left a
-#: literal `#` on the first line of every page, both of which open with a
-#: level-1 heading.
-_HEADING_RE = re.compile(r"^(#{1,6})\s+(.*)$")
-_RULE_RE = re.compile(r"^(?:-{3,}|_{3,}|\*{3,})$")
-_BULLET_RE = re.compile(r"^\s*[-*+]\s+(.*)$")
-_TABLE_DELIMITER_RE = re.compile(r"^\|[\s:|-]+\|$")
-_FENCE_RE = re.compile(r"^```")
 
-_BOLD_RE = re.compile(r"\*\*(.+?)\*\*")
-_ITALIC_RE = re.compile(r"(?<![\w*])\*([^*\s][^*]*?)\*(?![\w*])")
-_CODE_RE = re.compile(r"`([^`]+)`")
-_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
-_PLACEHOLDER_RE = re.compile(r"\x00(\d+)\x00")
+def banner(page: "TheoryPage") -> str:
+    """The HTML placed above the page, empty for a rigorous solver.
 
-
-@dataclass(frozen=True, slots=True)
-class MathImage:
-    """One rasterised equation, ready to register with a `QTextDocument`.
-
-    ``width`` and ``height`` are logical pixels, i.e. the PNG's own dimensions
-    divided by the device pixel ratio it was rendered at, so that a 2x image
-    is downsampled into a correctly sized box on a Retina panel instead of
-    rendering at double size.
+    A solver whose ``Capabilities.rigorous`` is False says so at the top, so a
+    reader learns about the approximation before section 7 rather than in it.
     """
-
-    key: str
-    png: bytes
-    width: int
-    height: int
-
-
-@dataclass(frozen=True, slots=True)
-class RichPage:
-    """A page's HTML, plus the images its `<img src>` keys refer to."""
-
-    html: str
-    images: tuple[MathImage, ...] = ()
-
-
-@dataclass
-class _Collector:
-    """Accumulates images while the inline pass walks a page."""
-
-    inline_dpi: int
-    display_dpi: int
-    device_pixel_ratio: float
-    color: str
-    render: Callable[..., bytes | None]
-    axis_pt: float | None = None
-    min_height_pt: float = 0.0
-    images: list[MathImage] = field(default_factory=list)
-
-    def add(self, latex: str, *, display: bool) -> str:
-        """Render one math span; return the HTML that stands for it."""
-        base = self.display_dpi if display else self.inline_dpi
-        dpi = max(1, round(base * self.device_pixel_ratio))
-        # Only inline math is set against a line of text. A display
-        # equation sits on its own line, so there is no baseline to meet.
-        centred = not display and self.axis_pt is not None
-        extra = (
-            {"axis_pt": self.axis_pt, "min_height_pt": self.min_height_pt}
-            if centred
-            else {}
-        )
-        png = self.render(latex, dpi=dpi, color=self.color, **extra)
-
-        if png is None:
-            delimiter = "$$" if display else "$"
-            source = html.escape(f"{delimiter}{latex}{delimiter}")
-            return f'<span style="color:{UNRENDERED_COLOR}">{source}</span>'
-
-        pixels = png_size(png)
-        if pixels is None:  # pragma: no cover - only a truncated PNG gets here
-            return ""
-        width, height = pixels
-        key = f"gratinglab-math:{len(self.images)}"
-        self.images.append(
-            MathImage(
-                key=key,
-                png=png,
-                width=max(1, round(width / self.device_pixel_ratio)),
-                height=max(1, round(height / self.device_pixel_ratio)),
-            )
-        )
-        align = ' style="vertical-align:middle"' if centred else ""
-        image = (
-            f'<img src="{key}" width="{self.images[-1].width}" '
-            f'height="{self.images[-1].height}"{align}>'
-        )
-        return f"<br>{image}<br>" if display else image
-
-
-def render_markdown(
-    markdown: str,
-    *,
-    inline_dpi: int = INLINE_DPI,
-    display_dpi: int = DISPLAY_DPI,
-    device_pixel_ratio: float = 1.0,
-    color: str = "black",
-    render: Callable[..., bytes | None] | None = None,
-    axis_pt: float | None = None,
-    min_height_pt: float = 0.0,
-) -> RichPage:
-    """Convert markdown with `$...$` math to Qt-displayable HTML.
-
-    ``render`` is injectable so the whole pipeline can be tested without
-    rasterising anything, including the degradation path where it returns
-    ``None``. It defaults to a cached
-    :func:`~gratinglab.gui.mathtext.render_math_png`. A page carries roughly
-    forty equations, and the cache allows the viewer to reopen immediately.
-
-    ``axis_pt`` and ``min_height_pt`` put inline math on the text's
-    baseline; see :func:`~gratinglab.gui.mathtext.render_math_png` and
-    :func:`inline_metrics`. Left ``None``, an inline equation's bottom edge
-    sits on the baseline instead.
-    """
-    collector = _Collector(
-        inline_dpi=inline_dpi,
-        display_dpi=display_dpi,
-        device_pixel_ratio=device_pixel_ratio,
-        color=color,
-        render=render if render is not None else _cached_render,
-        axis_pt=axis_pt,
-        min_height_pt=min_height_pt,
-    )
-    parts = [_block_html(block, collector) for block in _blocks(markdown)]
-    return RichPage(html="\n".join(p for p in parts if p), images=tuple(collector.images))
-
-
-def to_html(
-    page: "TheoryPage",
-    **kwargs,
-) -> RichPage:
-    """Render a theory page, banner included.
-
-    A solver whose `Capabilities.rigorous` is False is announced at the top,
-    following the project's practice of stating an approximation up front
-    instead of leaving a reader to discover it in section 7.
-    """
-    rendered = render_markdown(page.text, **kwargs)
     if page.rigorous:
-        return rendered
-    banner = (
+        return ""
+    return (
         f'<p style="color:{BANNER_COLOR}"><b>'
         "⚠ Approximate method: see Limits below."
         "</b></p>"
     )
-    return RichPage(html=banner + "\n" + rendered.html, images=rendered.images)
 
 
-# -- block structure -----------------------------------------------------
-
-
-@dataclass(frozen=True, slots=True)
-class _Block:
-    kind: str
-    lines: tuple[str, ...] = ()
-    rows: tuple[tuple[str, ...], ...] = ()
-    level: int = 0
-
-
-def _blocks(markdown: str) -> tuple[_Block, ...]:
-    """Split a page into block-level structures.
-
-    The split takes one pass with no lookbehind, because every block kind in
-    the markdown these docs use is identified by its first line.
-    """
-    lines = markdown.split("\n")
-    blocks: list[_Block] = []
-    i, n = 0, len(lines)
-
-    while i < n:
-        line = lines[i]
-
-        if not line.strip():
-            i += 1
-            continue
-
-        if _FENCE_RE.match(line):
-            i += 1
-            body: list[str] = []
-            while i < n and not _FENCE_RE.match(lines[i]):
-                body.append(lines[i])
-                i += 1
-            i += 1  # closing fence, or end of page
-            blocks.append(_Block("code", tuple(body)))
-            continue
-
-        heading = _HEADING_RE.match(line)
-        if heading:
-            blocks.append(
-                _Block("heading", (heading.group(2),), level=len(heading.group(1)))
-            )
-            i += 1
-            continue
-
-        if _RULE_RE.match(line.strip()):
-            blocks.append(_Block("rule"))
-            i += 1
-            continue
-
-        if line.lstrip().startswith("|"):
-            rows: list[tuple[str, ...]] = []
-            while i < n and lines[i].lstrip().startswith("|"):
-                if not _TABLE_DELIMITER_RE.match(lines[i].strip()):
-                    rows.append(_table_cells(lines[i]))
-                i += 1
-            blocks.append(_Block("table", rows=tuple(rows)))
-            continue
-
-        if line.lstrip().startswith(">"):
-            quoted: list[str] = []
-            while i < n and lines[i].strip():
-                stripped = lines[i].lstrip()
-                quoted.append(
-                    stripped[1:].strip() if stripped.startswith(">") else stripped
-                )
-                i += 1
-            blocks.append(_Block("quote", (" ".join(quoted),)))
-            continue
-
-        bullet = _BULLET_RE.match(line)
-        if bullet:
-            items: list[str] = []
-            while i < n and lines[i].strip():
-                match = _BULLET_RE.match(lines[i])
-                if match:
-                    items.append(match.group(1))
-                elif items:
-                    # An indented continuation of the item above. Markdown
-                    # soft-wraps, and these docs wrap at about 80 columns.
-                    items[-1] += " " + lines[i].strip()
-                else:  # pragma: no cover - unreachable: the loop starts on a bullet
-                    break
-                i += 1
-            blocks.append(_Block("bullets", tuple(items)))
-            continue
-
-        paragraph: list[str] = []
-        while i < n and lines[i].strip() and not _starts_a_block(lines[i]):
-            paragraph.append(lines[i].strip())
-            i += 1
-        blocks.append(_Block("paragraph", (" ".join(paragraph),)))
-
-    return tuple(blocks)
-
-
-def _starts_a_block(line: str) -> bool:
-    """Whether this line begins something other than more paragraph text."""
-    stripped = line.lstrip()
-    return bool(
-        _HEADING_RE.match(line)
-        or _RULE_RE.match(line.strip())
-        or _FENCE_RE.match(line)
-        or stripped.startswith("|")
-        or stripped.startswith(">")
-        or _BULLET_RE.match(line)
+def to_html(page: "TheoryPage", **kwargs) -> RichPage:
+    """A page rendered by :func:`endstation.docs.markdown.render_markdown`,
+    banner included. ``kwargs`` go to ``render_markdown``."""
+    rendered = render_markdown(page.text, **kwargs)
+    notice = banner(page)
+    if not notice:
+        return rendered
+    return RichPage(
+        html=notice + "\n" + rendered.html,
+        images=rendered.images,
+        unrendered=rendered.unrendered,
     )
-
-
-def _table_cells(line: str) -> tuple[str, ...]:
-    """Cells of one table row, outer pipes discarded."""
-    return tuple(cell.strip() for cell in line.strip().strip("|").split("|"))
-
-
-def _block_html(block: _Block, collector: _Collector) -> str:
-    if block.kind == "heading":
-        level = min(block.level, 6)
-        return f"<h{level}>{_inline(block.lines[0], collector)}</h{level}>"
-
-    if block.kind == "paragraph":
-        return f"<p>{_inline(block.lines[0], collector)}</p>"
-
-    if block.kind == "bullets":
-        items = "".join(f"<li>{_inline(item, collector)}</li>" for item in block.lines)
-        return f"<ul>{items}</ul>"
-
-    if block.kind == "quote":
-        return f"<blockquote><p>{_inline(block.lines[0], collector)}</p></blockquote>"
-
-    if block.kind == "rule":
-        return "<hr>"
-
-    if block.kind == "code":
-        # Escaped and left literal: code is the one place markdown and math
-        # syntax must not be interpreted.
-        body = html.escape("\n".join(block.lines))
-        return f'<pre style="white-space:pre">{body}</pre>'
-
-    if block.kind == "table":
-        if not block.rows:
-            return ""
-        header, *body = block.rows
-        cells = "".join(f"<th>{_inline(c, collector)}</th>" for c in header)
-        out = [f"<tr>{cells}</tr>"]
-        for row in body:
-            cells = "".join(f"<td>{_inline(c, collector)}</td>" for c in row)
-            out.append(f"<tr>{cells}</tr>")
-        return (
-            '<table border="1" cellpadding="4" cellspacing="0">'
-            + "".join(out)
-            + "</table>"
-        )
-
-    raise AssertionError(f"unhandled block kind {block.kind!r}")  # pragma: no cover
-
-
-# -- inline structure ----------------------------------------------------
-
-
-def _inline(raw: str, collector: _Collector) -> str:
-    """Render one run of markdown text, math spans included.
-
-    Math is separated before escaping, because several math spans in the real
-    docs contain `<` or `>`, and passing mathtext `&lt;` would render it
-    literally.
-    """
-    out: list[str] = []
-    for segment in mathtext.split_segments(raw):
-        if segment.kind == "math":
-            out.append(collector.add(segment.content, display=segment.display))
-        else:
-            out.append(_markup(html.escape(segment.content)))
-    return "".join(out)
-
-
-def _markup(escaped: str) -> str:
-    """Bold, italic, code and links, applied to already-escaped text.
-
-    The order of the steps is significant. Code spans are extracted first, so
-    that markup characters inside them stay literal, and links are handled
-    before emphasis, so that a link's text can be emphasised without the URL
-    being scanned for asterisks.
-    """
-    placeholders: list[str] = []
-
-    def stash(html_fragment: str) -> str:
-        placeholders.append(html_fragment)
-        return f"\x00{len(placeholders) - 1}\x00"
-
-    text = _CODE_RE.sub(lambda m: stash(f"<code>{m.group(1)}</code>"), escaped)
-    text = _LINK_RE.sub(
-        lambda m: stash(f'<a href="{m.group(2)}">{_emphasis(m.group(1))}</a>'), text
-    )
-    text = _emphasis(text)
-
-    # Repeatedly, because placeholders nest: scalar.md's first line is
-    # [`scalar.py`](../../src/gratinglab/solvers/scalar.py), so the link's
-    # placeholder contains the code span's. `re.sub` does not rescan what it
-    # substituted, and a single pass left the inner one as a raw null byte.
-    # Terminates because a placeholder can only ever contain lower indices.
-    while _PLACEHOLDER_RE.search(text):
-        text = _PLACEHOLDER_RE.sub(lambda m: placeholders[int(m.group(1))], text)
-    return text
-
-
-def _emphasis(text: str) -> str:
-    text = _BOLD_RE.sub(r"<b>\1</b>", text)
-    return _ITALIC_RE.sub(r"<i>\1</i>", text)
-
-
-# -- helpers -------------------------------------------------------------
-
-
-def png_size(data: bytes) -> tuple[int, int] | None:
-    """Pixel dimensions from a PNG's IHDR chunk, without a decoder.
-
-    The layout is fixed by the format: an 8-byte signature, a 4-byte chunk
-    length, the literal ``IHDR``, then width and height as big-endian uint32.
-    Reading these fields directly keeps the size calculation pure, so the
-    HiDPI arithmetic can be tested without Qt or a display.
-    """
-    if len(data) < 24 or data[12:16] != b"IHDR":
-        return None
-    return (
-        int.from_bytes(data[16:20], "big"),
-        int.from_bytes(data[20:24], "big"),
-    )
-
-
-def inline_metrics(font_pixel_size: float, x_height: float) -> dict[str, float]:
-    """``axis_pt`` and ``min_height_pt`` for inline math beside this font.
-
-    Qt puts a middle-aligned image's centre a quarter of the x-height above
-    the baseline, provided the image is at least three x-heights tall. Both
-    are returned in points of the math render: mathtext renders at 10 pt and
-    :func:`math_dpi` scales that to the font's pixel size, so a pixel of the
-    text is ``10 / font_pixel_size`` points.
-    """
-    points = 10.0 / font_pixel_size
-    return {"axis_pt": x_height / 4.0 * points, "min_height_pt": 3.0 * x_height * points}
-
-
-def math_dpi(font_pixel_size: float, *, display: bool = False) -> int:
-    """DPI at which mathtext output matches text of the given size.
-
-    matplotlib renders mathtext at ``rcParams["font.size"]`` (10 pt by
-    default), so 72 dpi would give ten-pixel-tall glyphs. Scaling by the
-    viewer's actual font size gives equations the same visual weight as the
-    surrounding prose at any zoom level or platform default, whereas the fixed
-    130/170 constants achieve this only on the machine they were chosen on.
-    """
-    base = 72.0 * font_pixel_size / 10.0
-    return max(1, round(base * (1.3 if display else 1.0)))
 
 
 def menu_label(title: str, suffix: str = "") -> str:
@@ -494,25 +59,6 @@ def menu_label(title: str, suffix: str = "") -> str:
 
     Qt reads ``&`` in an action's text as "underline the next character", so
     the page titled "Grating Geometry & Conventions" would appear as "Grating
-    Geometry Conventions" with a stray underline. Doubling the character
-    escapes it.
+    Geometry Conventions" with a stray underline. Doubling it escapes it.
     """
     return (title + suffix).replace("&", "&&")
-
-
-@lru_cache(maxsize=512)
-def _cached_render(
-    latex: str,
-    *,
-    dpi: int,
-    color: str,
-    axis_pt: float | None = None,
-    min_height_pt: float = 0.0,
-) -> bytes | None:
-    """Rasterise with caching.
-
-    Without the cache, reopening the viewer would re-render every equation on
-    the page, roughly forty of them, and more at 2x."""
-    return mathtext.render_math_png(
-        latex, dpi=dpi, color=color, axis_pt=axis_pt, min_height_pt=min_height_pt
-    )

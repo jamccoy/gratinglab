@@ -1999,12 +1999,13 @@ class TestTheoryViewer:
     def test_the_equations_are_registered_as_images(self, qtbot, win):
         """The `Text.dump()` image count this replaces, expressed against the
         document's own resources."""
+        from endstation.docs.markdown import MATH_URL_PREFIX
         from PySide6.QtCore import QUrl
         from PySide6.QtGui import QTextDocument
 
         document = self._open(qtbot, win)._browser.document()
         loaded = document.resource(
-            QTextDocument.ResourceType.ImageResource, QUrl("gratinglab-math:0")
+            QTextDocument.ResourceType.ImageResource, QUrl(f"{MATH_URL_PREFIX}0")
         )
         assert not loaded.isNull()
 

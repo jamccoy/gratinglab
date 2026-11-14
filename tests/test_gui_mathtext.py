@@ -1,190 +1,15 @@
-r"""LaTeX splitting and rendering.
+"""Every equation in gratinglab's pages renders.
 
-Headless -- matplotlib's Agg backend needs no display, so this whole pipeline
-down to PNG bytes is testable in CI. Turning those bytes into an image a
-widget can show is `gui/richtext.py`'s job, tested in
-test_gui_richtext.py -- also headless, since Qt's rich-text engine takes
-HTML and `QImage.fromData` needs no display either.
+The renderer is endstation's (``endstation.docs.mathtext``) and is tested
+there. What is tested here is the pages: the spans are parsed out of the real
+files, so an edit that adds a macro mathtext cannot draw fails here rather
+than showing up as raw source in the app.
 """
 
 import pytest
+from endstation.docs.mathtext import render_math_png, split_segments
 
-from gratinglab.gui.docs import find_theory_root
-from gratinglab.gui.mathtext import (
-    Segment,
-    render_math_png,
-    split_segments,
-    strip_boxed,
-)
-
-
-class TestSplitSegments:
-    def test_plain_text_is_a_single_segment(self):
-        segments = split_segments("no math here at all")
-        assert segments == (Segment(kind="text", content="no math here at all"),)
-
-    def test_inline_math(self):
-        segments = split_segments("the value $\\alpha$ is an angle")
-        assert segments == (
-            Segment(kind="text", content="the value "),
-            Segment(kind="math", content="\\alpha", display=False),
-            Segment(kind="text", content=" is an angle"),
-        )
-
-    def test_display_math(self):
-        segments = split_segments("before\n\n$$x = 1$$\n\nafter")
-        math = [s for s in segments if s.kind == "math"]
-        assert len(math) == 1
-        assert math[0].display is True
-        assert math[0].content == "x = 1"
-
-    def test_adjacent_math_spans_preserve_order_and_text_between(self):
-        segments = split_segments("$a$ and $b$")
-        assert [s.content for s in segments] == ["a", " and ", "b"]
-
-    def test_escaped_dollar_is_literal_not_a_delimiter(self):
-        segments = split_segments("costs \\$5 total")
-        assert segments == (Segment(kind="text", content="costs $5 total"),)
-
-    def test_escaped_dollar_inside_surrounding_text_of_real_math(self):
-        segments = split_segments("\\$5 then $x$ then \\$10")
-        assert [s.content for s in segments] == ["$5 then ", "x", " then $10"]
-
-    def test_unterminated_dollar_is_literal_text_not_an_exception(self):
-        segments = split_segments("oops $unterminated")
-        assert segments == (Segment(kind="text", content="oops $unterminated"),)
-
-    def test_unterminated_display_math_is_literal_text(self):
-        segments = split_segments("oops $$unterminated")
-        assert segments == (Segment(kind="text", content="oops $$unterminated"),)
-
-    def test_empty_string(self):
-        assert split_segments("") == ()
-
-    def test_math_at_the_very_start_or_end(self):
-        segments = split_segments("$x$ trailing")
-        assert segments[0] == Segment(kind="math", content="x", display=False)
-        segments = split_segments("leading $x$")
-        assert segments[-1] == Segment(kind="math", content="x", display=False)
-
-    def test_display_and_inline_do_not_confuse_each_other(self):
-        """A display block right after inline math must not be misparsed as
-        an empty inline span plus stray dollars."""
-        segments = split_segments("inline $a$ then display $$b$$ done")
-        kinds_and_display = [(s.kind, s.display) for s in segments if s.kind == "math"]
-        assert kinds_and_display == [("math", False), ("math", True)]
-
-
-class TestStripBoxed:
-    def test_no_boxed_is_unchanged(self):
-        assert strip_boxed("x = 1") == "x = 1"
-
-    def test_simple_boxed(self):
-        assert strip_boxed(r"\boxed{x = 1}") == "x = 1"
-
-    def test_boxed_with_nested_braces(self):
-        latex = r"\boxed{G_m = \int_0^1 e^{i\Phi_m(t)}\, dt}"
-        assert strip_boxed(latex) == r"G_m = \int_0^1 e^{i\Phi_m(t)}\, dt"
-
-    def test_two_boxed_expressions_side_by_side(self):
-        """The exact shape used in scalar.md section 3."""
-        latex = r"\boxed{\;G_m = \int_0^1 e^{i\Phi_m(t)}\,dt\;} \qquad \boxed{\;\mathscr{E}_m = |G_m|^2\;}"
-        stripped = strip_boxed(latex)
-        assert "\\boxed" not in stripped
-        assert stripped == r"\;G_m = \int_0^1 e^{i\Phi_m(t)}\,dt\; \qquad \;\mathscr{E}_m = |G_m|^2\;"
-
-    def test_unmatched_boxed_is_left_untouched(self):
-        assert strip_boxed(r"\boxed{unterminated") == r"\boxed{unterminated"
-
-    def test_text_outside_boxed_is_preserved(self):
-        assert strip_boxed(r"before \boxed{x} after") == "before x after"
-
-
-class TestRenderMathPng:
-    def test_a_simple_expression_renders(self):
-        png = render_math_png(r"\alpha + \beta")
-        assert png is not None
-        assert png[:8] == b"\x89PNG\r\n\x1a\n"
-
-    def test_boxed_expressions_render_via_stripping(self):
-        """The two headline equations in scalar.md must not silently fail."""
-        png = render_math_png(r"\boxed{G_m = \int_0^1 e^{i\Phi_m(t)}\,dt}")
-        assert png is not None
-
-    def test_operatorname_text_and_qquad_all_render(self):
-        """Confirmed by direct testing to be the macros scalar.md actually uses."""
-        for latex in [
-            r"\operatorname{sinc}(x)",
-            r"\text{hello}",
-            r"a \qquad b",
-            r"\Phi_m(x) = k\,g(x)\,\sin\gamma\left[\cos\alpha + \cos\beta_m\right]",
-        ]:
-            assert render_math_png(latex) is not None, latex
-
-    def test_an_unsupported_macro_returns_none_not_an_exception(self):
-        assert render_math_png(r"\definitelynotarealmacro{x}") is None
-
-    def test_render_is_deterministic(self):
-        a = render_math_png(r"\alpha")
-        b = render_math_png(r"\alpha")
-        assert a == b
-
-
-def _alpha(png):
-    """The PNG's alpha channel as rows of floats."""
-    import io
-
-    from matplotlib.image import imread
-
-    return imread(io.BytesIO(png), format="png")[..., 3]
-
-
-def _baseline_below_centre(png):
-    """How far the bottom of an 'x' in the image sits below its centre, in px.
-
-    Every expression measured here starts with an x, whose bottom is on the
-    baseline; its first few columns are read so later glyphs cannot reach.
-    """
-    alpha = _alpha(png)
-    first = alpha[:, : max(2, alpha.shape[1] // 8)]
-    bottom = [i for i, row in enumerate(first) if row.max() > 0.4][-1] + 1
-    return bottom - alpha.shape[0] / 2
-
-
-class TestInlinePadding:
-    """Inline math is padded so Qt's middle alignment puts it on the baseline."""
-
-    DPI = 101
-    AXIS_PT = 1.3
-    MIN_PT = 15.6
-
-    def render(self, latex):
-        return render_math_png(
-            latex, dpi=self.DPI, axis_pt=self.AXIS_PT, min_height_pt=self.MIN_PT
-        )
-
-    def test_the_background_is_transparent(self):
-        assert _alpha(self.render("x"))[0, 0] == 0
-
-    def test_the_image_is_at_least_the_minimum_height(self):
-        assert _alpha(self.render("x")).shape[0] >= round(self.MIN_PT * self.DPI / 72)
-
-    def test_the_baseline_sits_the_axis_below_the_centre(self):
-        axis_px = self.AXIS_PT * self.DPI / 72
-        assert _baseline_below_centre(self.render("x")) == pytest.approx(axis_px, abs=1)
-
-    def test_every_expression_puts_its_baseline_in_the_same_place(self):
-        """mathtext's box depth is not the glyphs' baseline, and trusting it put
-        `x = 0` a pixel or two higher than `x` beside the same text."""
-        offsets = {
-            latex: _baseline_below_centre(self.render(latex))
-            for latex in ["x", "x = 0", r"x_{y,m}", r"x = 2\pi/\lambda", r"x \frac{a}{b}"]
-        }
-        assert max(offsets.values()) - min(offsets.values()) <= 1, offsets
-
-    def test_an_unsupported_macro_still_returns_none(self):
-        assert self.render(r"\definitelynotarealmacro{x}") is None
-
+from gratinglab.gui.docs import find_theory_root, general_pages, theory_pages
 
 THEORY_ROOT = find_theory_root()
 requires_theory_docs = pytest.mark.skipif(
@@ -192,25 +17,24 @@ requires_theory_docs = pytest.mark.skipif(
 )
 
 
+def _failures(text):
+    spans = [s.content for s in split_segments(text) if s.kind == "math"]
+    return spans, [s for s in spans if render_math_png(s) is None]
+
+
 @requires_theory_docs
-class TestAgainstTheRealDocs:
-    """Parsed out of the actual files, not hand-copied -- so an edit that
-    introduces an unsupported macro fails here, not silently in the app."""
+def test_every_math_span_in_scalar_md_renders():
+    spans, failures = _failures((THEORY_ROOT / "scalar.md").read_text(encoding="utf-8"))
+    assert len(spans) > 10, "sanity check: did the file load correctly?"
+    assert not failures, f"{len(failures)} span(s) failed to render: {failures}"
 
-    def test_every_math_span_in_scalar_md_renders(self):
-        text = (THEORY_ROOT / "scalar.md").read_text(encoding="utf-8")
-        math_segments = [s for s in split_segments(text) if s.kind == "math"]
-        assert len(math_segments) > 10, "sanity check: did the file load correctly?"
 
-        failures = [s.content for s in math_segments if render_math_png(s.content) is None]
-        assert not failures, f"{len(failures)} span(s) failed to render: {failures}"
-
-    def test_every_math_span_in_conventions_md_renders(self):
-        conventions = THEORY_ROOT.parent / "conventions.md"
-        if not conventions.is_file():
-            pytest.skip("conventions.md not found")
-        text = conventions.read_text(encoding="utf-8")
-        math_segments = [s for s in split_segments(text) if s.kind == "math"]
-
-        failures = [s.content for s in math_segments if render_math_png(s.content) is None]
-        assert not failures, f"{len(failures)} span(s) failed to render: {failures}"
+@requires_theory_docs
+@pytest.mark.parametrize(
+    "page",
+    [p for p in (*theory_pages(), *general_pages()) if p.available],
+    ids=lambda p: p.name,
+)
+def test_every_math_span_in_every_help_page_renders(page):
+    _, failures = _failures(page.text)
+    assert not failures, f"{page.name}: {len(failures)} span(s) failed: {failures}"

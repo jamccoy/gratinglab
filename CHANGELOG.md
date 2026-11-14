@@ -10,6 +10,18 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- **Help pages are rendered by endstation 0.4.0**, which took gratinglab's
+  renderer and reading pane so other applications share them. Equations
+  render exactly as before, and every page but one is unchanged. The
+  exception is the Groove Metrology page, whose numbered steps are now a
+  numbered list rather than run-on paragraphs. gratinglab keeps the
+  approximate-method banner, menu labels and links between pages.
+  Requires `endstation>=0.4.0`.
+
 ## 0.3.9 (2026-11-13)
 
 ### Changed
