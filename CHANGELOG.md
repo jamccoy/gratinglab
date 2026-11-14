@@ -21,6 +21,10 @@ entries under "Unreleased" into a section named for the new version;
   numbered list rather than run-on paragraphs. gratinglab keeps the
   approximate-method banner, menu labels and links between pages.
   Requires `endstation>=0.4.0`.
+- **The metrology window's Wiki tab uses the same reading pane as the Help
+  pages**, in place of Qt's built-in markdown view: the reading font, a
+  centred column of readable width, and tables with room around them. A
+  theme change re-renders the page and keeps your place in it.
 
 ## 0.3.9 (2026-11-13)
 

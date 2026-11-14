@@ -6,24 +6,31 @@ ordering, and this module only displays what it is given, so the pages stay
 testable without a window and a command-line ``--explain`` could print the
 same text.
 
-Markdown is rendered by Qt itself (`QTextBrowser.setMarkdown`), which handles
-headings, tables, lists, code spans and emphasis, covering everything these
-pages use. gratinglab carries a LaTeX rasteriser for its theory pages because
-diffraction algebra needs typesetting; the formulas here are one-liners and
-read well as text, so that machinery would not justify the ~670 lines it would
-add here.
+A page is shown in endstation's reading pane (`endstation.qt.reading`), the
+same pane and renderer as the Help menu's theory pages, so the two read alike:
+a reading font, a column of readable width, and tables with room around them.
 """
 from __future__ import annotations
 
 from . import *  # noqa: F401,F403 - sets QT_API before matplotlib's shim loads
 
-from PySide6.QtWidgets import (
-    QHBoxLayout, QListWidget, QListWidgetItem, QTextBrowser, QWidget,
-)
+from endstation.qt.reading import ReadingBrowser, render_into, text_color
+from PySide6.QtWidgets import QHBoxLayout, QListWidget, QListWidgetItem, QWidget
+
+from gratinglab.gui.qt import theming
 
 from ...wiki import pages
 
 __all__ = ["WikiView"]
+
+#: Shown when the pages are missing, so an installed copy without its package
+#: data says so rather than presenting an empty panel.
+NO_PAGES = (
+    "# No wiki pages found\n\n"
+    "The markdown files that ship with `gratinglab.metrology.wiki` could not "
+    "be located. In an installed copy this means the package data "
+    "was not included."
+)
 
 
 class WikiView(QWidget):
@@ -42,7 +49,7 @@ class WikiView(QWidget):
             self._contents.addItem(item)
         self._contents.currentRowChanged.connect(self._show_row)
 
-        self._browser = QTextBrowser()
+        self._browser = ReadingBrowser()
         # These pages cross-reference each other by title in prose rather than by
         # link, so there is nothing for a click to resolve. Opening links would
         # only ever blank the view.
@@ -58,14 +65,11 @@ class WikiView(QWidget):
         if self._pages:
             self._contents.setCurrentRow(0)
         else:
-            # A checkout missing its package data should say so rather than
-            # presenting an empty panel that looks like a rendering bug.
-            self._browser.setMarkdown(
-                "# No wiki pages found\n\n"
-                "The markdown files that ship with `gratinglab.metrology.wiki` could not "
-                "be located. In an installed copy this means the package data "
-                "was not included."
-            )
+            self._render(NO_PAGES)
+
+        # Any equation is an image in the text colour, so a theme change
+        # re-renders the page rather than only repainting it.
+        theming.subscribe(self._on_theme)
 
     # ── State, for tests and callers ─────────────────────────────────────────
 
@@ -95,7 +99,25 @@ class WikiView(QWidget):
 
     # ── Internals ────────────────────────────────────────────────────────────
 
+    def _render(self, markdown: str) -> None:
+        render_into(
+            self._browser,
+            markdown,
+            device_pixel_ratio=self.devicePixelRatioF(),
+            text_color=text_color(self),
+        )
+
     def _show_row(self, row: int) -> None:
         if 0 <= row < len(self._pages):
-            self._browser.setMarkdown(self._pages[row].markdown)
+            self._render(self._pages[row].markdown)
             self._browser.verticalScrollBar().setValue(0)
+
+    def _on_theme(self, _theme) -> None:
+        # A bound method, so Qt disconnects it when the view is destroyed.
+        # The reader keeps their place: only the colours changed.
+        row = self._contents.currentRow()
+        if 0 <= row < len(self._pages):
+            scroll = self._browser.verticalScrollBar()
+            position = scroll.value()
+            self._render(self._pages[row].markdown)
+            scroll.setValue(position)

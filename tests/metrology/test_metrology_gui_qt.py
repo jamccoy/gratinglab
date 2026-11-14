@@ -409,6 +409,54 @@ class TestWikiTab:
         window.wiki.show_page('icc-correction')
         assert '<table' in window.wiki.rendered_html()
 
+    def test_pages_are_shown_in_the_reading_pane(self, qtbot, window):
+        """The same pane as the Help menu's theory pages."""
+        from endstation.qt.reading import ReadingBrowser
+
+        assert isinstance(window.wiki._browser, ReadingBrowser)
+
+    def test_no_raw_markdown_reaches_any_page(self, qtbot, window):
+        for slug in window.wiki.slugs:
+            window.wiki.show_page(slug)
+            text = window.wiki._browser.toPlainText()
+            for marker in ("**", "|---", "| ---", "\n## ", "`"):
+                assert marker not in text, f"{slug} shows {marker!r}"
+
+    def test_numbered_steps_are_a_list(self, qtbot, window):
+        window.wiki.show_page('flattening')
+        assert '<ol' in window.wiki.rendered_html()
+
+    def test_a_theme_change_keeps_the_reader_s_place(self, qtbot):
+        """A view subscribes to the manager that exists when it is built, as
+        in the app, where the theme is installed before any window."""
+        from PySide6.QtWidgets import QApplication
+
+        from gratinglab.gui.qt import theming
+        from gratinglab.metrology.gui.qt.wiki_view import WikiView
+
+        manager = theming.install(QApplication.instance())
+        view = WikiView()
+        qtbot.addWidget(view)
+        view.show_page('reading-outputs')
+        view.resize(900, 500)
+        view.show()
+        qtbot.waitExposed(view)
+        scroll = view._browser.verticalScrollBar()
+        qtbot.waitUntil(lambda: scroll.maximum() > 0)
+        scroll.setValue(scroll.maximum() // 2)
+        position = scroll.value()
+        assert position > 0
+        before = manager.choice
+        renders = []
+        render = view._render
+        view._render = lambda markdown: (renders.append(markdown), render(markdown))
+        try:
+            manager.set_choice("dark" if before != "dark" else "light")
+            assert renders, "the page was not re-rendered"
+            assert scroll.value() == position
+        finally:
+            manager.set_choice(before)
+
     def test_switching_tabs_leaves_a_result_intact(self, qtbot, window):
         """The tab move must not disturb analysis state"""
         window.load(SAMPLE)
