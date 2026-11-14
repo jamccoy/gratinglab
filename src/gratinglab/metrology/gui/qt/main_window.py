@@ -14,8 +14,8 @@ import os
 
 from . import *  # noqa: F401,F403 - sets QT_API before matplotlib's shim loads
 
-from endstation.qt.tokens import StaleGuard
-from PySide6.QtCore import Qt, QThread, Signal
+from endstation.qt.jobs import JobRunner
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QFont, QKeySequence
 from PySide6.QtWidgets import (
     QCheckBox, QComboBox, QDoubleSpinBox, QGroupBox, QHBoxLayout, QLabel, QMainWindow, QPushButton, QSpinBox, QStatusBar, QTabWidget, QVBoxLayout, QWidget,
@@ -31,15 +31,13 @@ from .canvas import PlotCanvas
 from .boundary_view import BoundaryView
 from .import_view import ImportView
 from .wiki_view import WikiView
-from .worker import AnalysisWorker
+from .worker import analyse
 
 __all__ = ["MainWindow"]
 
 
 class MainWindow(QMainWindow):
     """Interactive blaze-angle analysis of a single AFM scan."""
-
-    _request_analysis = Signal(str, object, int)
 
     TITLE = "AFM Blaze Angle Analysis"
 
@@ -61,29 +59,21 @@ class MainWindow(QMainWindow):
         self._filename = None
         self._result = None
         self._settings = None
-        self._tokens = StaleGuard()  # abandons an in-flight result
+        # One worker thread with the stack LAPACK needs; a newer run
+        # supersedes one in flight. Failures read as the analysis worded
+        # them, which is what this window has always shown.
+        self._runner = JobRunner(self, describe=str)
 
         self._build_ui()
-        self._start_worker()
 
-    # ── Worker ───────────────────────────────────────────────────────────────
-
-    def _start_worker(self):
-        self._thread = QThread(self)
-        self._worker = AnalysisWorker()
-        self._worker.moveToThread(self._thread)
-        self._request_analysis.connect(self._worker.run)
-        self._worker.finished.connect(self._on_finished)
-        self._worker.failed.connect(self._on_failed)
-        self._thread.start()
+    # ── Shutdown ─────────────────────────────────────────────────────────────
 
     def closeEvent(self, event):
         from gratinglab.gui.qt import recent
 
         recent.save_layout(self, "metrology")
-        self._tokens.invalidate()
-        self._thread.quit()
-        self._thread.wait(3000)
+        self._runner.cancel()
+        self._runner.wait(3000)
         super().closeEvent(event)
 
     # ── UI construction ──────────────────────────────────────────────────────
@@ -558,14 +548,16 @@ class MainWindow(QMainWindow):
             self._set_status("Fix the highlighted settings and try again.")
             return
 
-        token = self._tokens.issue()
+        # A run still in flight is superseded: cancelled, its result dropped
+        # when it arrives, and this one queued behind it.
+        self._runner.cancel()
         self.run_btn.setEnabled(False)
         self._set_status("Running analysis…")
-        self._request_analysis.emit(self._filename, settings, token)
+        self._runner.start(analyse, self._filename, settings, report_progress=False,
+                           on_done=self._on_finished, on_fail=self._on_failed)
 
-    def _on_finished(self, result, settings, token):
-        if self._tokens.is_stale(token):
-            return  # a later run superseded this one
+    def _on_finished(self, outcome):
+        result, settings = outcome
         self.run_btn.setEnabled(True)
 
         if result is None:
@@ -591,9 +583,7 @@ class MainWindow(QMainWindow):
         self._set_status(f"Analysis complete: {result['n_grooves']} measurements, "
                          f"mean {result['mean_angle']:.2f}°")
 
-    def _on_failed(self, message, token):
-        if self._tokens.is_stale(token):
-            return
+    def _on_failed(self, message):
         self.run_btn.setEnabled(True)
         self._result = self._settings = None
         self.results_label.setText(f"Analysis failed:\n{message}")

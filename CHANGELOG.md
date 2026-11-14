@@ -10,6 +10,18 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- **The metrology window runs its analysis on endstation's `JobRunner`**
+  instead of a `QThread` of its own. Its worker now gets the 8 MiB stack
+  LAPACK needs, which the efficiency window was given after a segfault on
+  macOS and this window never had. A run started while another is in flight
+  still supersedes it, and the earlier result is still never drawn; the
+  runner does that now, not a token in the window. Requires
+  `endstation>=0.5.0`.
+
 ## 0.3.10 (2026-11-14)
 
 ### Changed

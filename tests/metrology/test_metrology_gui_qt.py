@@ -109,6 +109,36 @@ class TestTheNumbersOnScreen:
             "control is not reaching the analysis")
 
 
+class TestTheWorker:
+    """The analysis runs on endstation's JobRunner."""
+
+    def test_the_worker_has_the_stack_lapack_needs(self, qtbot, window):
+        """A QThread's default stack is 512 KiB on macOS; the efficiency
+        window met a LAPACK segfault there. This window had no stack set."""
+        from endstation.qt.jobs import DEFAULT_STACK_BYTES
+
+        assert window._runner.stack_size == DEFAULT_STACK_BYTES
+
+    def test_a_newer_run_supersedes_one_in_flight(self, qtbot, window):
+        """The first run's result is dropped; the screen shows the second's."""
+        window.load(SAMPLE)
+        taken = []
+        on_finished = window._on_finished
+        window._on_finished = lambda outcome: (taken.append(outcome[1]), on_finished(outcome))
+        window.trim_spin.setValue(0.10)
+        window.run_analysis()
+        window.trim_spin.setValue(0.20)
+        window.run_analysis()
+        qtbot.waitUntil(lambda: window._result is not None and not window._runner.busy(),
+                        timeout=60000)
+        window._runner.wait(60000)
+        qtbot.wait(100)                  # any late delivery would land by now
+        assert [s.facet_trim for s in taken] == [pytest.approx(0.20)], (
+            "the window drew the superseded run's result as well")
+        assert window._settings.facet_trim == pytest.approx(0.20)
+        assert window.run_btn.isEnabled()
+
+
 class TestViews:
     def test_every_view_draws_without_error(self, qtbot, window):
         window.load(SAMPLE)
