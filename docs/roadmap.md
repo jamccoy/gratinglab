@@ -654,6 +654,111 @@ What is still undecided, and would be settled by writing it:
   something has to carry them together — which is a decision about the
   metrology's own interfaces and not about this section.
 
+#### More sections: a design section, a groove modeler, appearance and 3D
+
+**Proposed, not started (2026-11-14).** The desktop app has two sections,
+*Measure a scan* and *Compute efficiency*, and is now built to take more: each
+is one entry in `gratinglab.gui.launcher.MODES`, which supplies its chooser
+card, its Go menu entry and its Help submenu. This records what the next
+sections are, the order they depend on each other in, and the decisions that
+are a person's to make rather than the code's.
+
+**1. Handoffs between sections, first, because everything below needs it.**
+A section that produces a groove and one that uses it are wired by name today:
+`metrology/gui/qt/boundary_view.py`'s `send_to_efficiency` opens the efficiency
+window and calls its `open_boundary(path)`. A third section that produces or
+uses a groove would need edits in both existing windows. Instead, a `Mode`
+declares the kinds of thing it accepts (`accepts=("boundary-profile",)`) and
+its window implements `receive(kind, path)`. A *Send to* menu is then built
+from the sections that accept that kind, so the sender never names the
+receiver and no section imports another. The payload stays a file, a
+boundary `.json`, because that is what crosses today and it leaves the user a
+file the period travels with. Done looks like this: metrology's Send button
+lists every section that takes a profile, and the efficiency window loads one
+through `receive`, with no `mode("efficiency")` left in the metrology package.
+
+**2. A design section, *Design a grating*, built on the description above.**
+The `Design` and `Tolerance` types sketched in "A design description" are its
+model; this section is their window. It lives in `gratinglab.design`, shaped
+like `gratinglab.metrology` (its own `gui/qt`), which is the convention for a
+section from here on; efficiency stays in `gratinglab.gui`, since moving it
+would touch imports across the package for nothing a user sees.
+
+Its centre is **a groove boundary modeler**, in 2D first, because a
+cross-section is what every solver reads:
+
+- **Starting points.** A parametric profile from the existing union (`Blazed`,
+  `Lamellar`, `Sinusoidal`, `Trapezoidal`), or a measured groove received from
+  *Measure a scan* through the handoff above.
+- **Editing.** By the profile's parameters, and by moving the vertices of the
+  polyline that `profiles/_polyline.py` already builds.
+- **What it hands on.** *Predict* sends the groove to *Compute efficiency*.
+  *Check* receives a measured profile and shows `Design.check`'s conformance,
+  with the measurement's own uncertainty beside each deviation and a refusal
+  where there is none (see the two conditions on `check` above). *Export*
+  writes TEXTLIB through `io/txl.py`, which exists.
+- **3D, second.** The groove extruded along the patterned area at its groove
+  angle. No solver needs it, since the solvers read the cross-section, but it
+  is the visual check that `groove_angle` and `area_nm` say what was meant.
+
+One question this raises is the design description's own, sharpened. A design's
+profile excludes `FromProfileData` above, because a measured groove is not an
+intention. A groove that started from a measurement and was then edited by
+hand is an intention, though, and fits none of the parametric shapes. Either
+the design union gains a free polyline, with tolerances defined on it
+differently (a band about the curve rather than per-parameter half-widths), or
+an edited groove can be predicted but not checked. That is a decision for a
+person before the modeler is written, because it decides what *Check* can
+promise.
+
+**3. Appearance: what the grating looks like, in colour.** The iOS app
+(`magmacrunch/apps/gratinglab`) has an *eye* view that computes the colour a
+person sees on the grating held in the hand, from CIE 1931 colour matching
+functions, with a chromaticity chart of where those colours fall
+(`src/js/eye.js`, `colour.js`, `chroma.js`; the physics is its
+`docs/physics.md`, "What the grating looks like to the eye"). Two facts make it
+exact rather than a model: the eye receives light only from its own cone,
+since k_z is conserved, and radiance passes through times Eₘ, since étendue is
+conserved. So the colour is a line integral over one cone of incoming light.
+
+On the desktop this is a view of a solved grating, so it belongs in *Compute
+efficiency* as a tab, and in the design section as a preview. Two things need
+checking before it is promised:
+
+- **Visible-light materials.** The app uses no coating, so every efficiency it
+  shows is relative. Here the built-in `materials.typical` model covers 30 eV
+  to 30 keV and refuses the visible, and the repository commits no tabulated
+  constants (`materials/data/SOURCES.md`). An absolute colour for an
+  aluminium, gold or silver coating therefore needs a refractiveindex.info
+  file for it, which `materials` already reads; without one, the view says
+  its colours are relative, as the app does.
+- **The colour tables.** The app embeds adenosine-spectrum's CIE 1931 data and
+  checks it. The Python side needs the same tables as package data and a test
+  that its XYZ agrees with the app's on shared cases, so the two products
+  cannot disagree about what a grating looks like.
+
+The app's three light sources come with it: the sun (D65, a 0.533° disc), a
+bulb (illuminant A) and a tube along the grooves, which is the one that
+lights the whole card.
+
+**4. 3D, extending what exists.** The efficiency window already has a 3D
+conical-diffraction view (`gui/diagram3d.py`, `gui/qt/scene3d_panel.py`), and
+the app has its *sky* view. Compare the two before adding anything: the work
+may be no more than carrying over what the app shows that this panel does not,
+beside the modeler's extrusion in step 2.
+
+**What is a person's to decide**, so that none of it is settled by default:
+
+- the free-polyline question in step 2;
+- how editing feels in the modeler: dragging vertices, typed parameters, or
+  both, and with what snapping;
+- where Appearance sits in *Compute efficiency*, and whether the design
+  section shows it live as the groove changes;
+- the design section's name on the chooser.
+
+Each step is its own pull request, in this order, and each visual one goes to
+a person as screenshots before it merges.
+
 #### The groove residual's two follow-ups
 
 The boundary pipeline measures the groove residual,
