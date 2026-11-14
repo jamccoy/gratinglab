@@ -71,10 +71,32 @@ jobs:
       # omitting it here still produced a green run while never once resolving
       # the extra the package declares. That is the kind of break that surfaces
       # first for a user rather than for CI.
+      # A dependency released minutes ago can be missing from the index this
+      # runner sees: PyPI's CDN serves a stale page for a while, so pip says
+      # "No matching distribution" for a version that exists. Four runs failed
+      # that way on 2026-11-14, each straight after an endstation release and
+      # each fixed by a rerun. So an install that fails for that reason, and
+      # only that, is retried every 30 s for about five minutes, past pip's
+      # own cache; any other failure fails at once.
       - name: Install
         run: |
           python -m pip install --upgrade pip
-          python -m pip install -e ".[dev,gui,metrology,refractiveindex]"
+          log="$RUNNER_TEMP/pip-install.log"
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if python -m pip install -e ".[dev,gui,metrology,refractiveindex]" 2> "$log"; then
+              cat "$log" >&2
+              exit 0
+            fi
+            cat "$log" >&2
+            if ! grep -q "No matching distribution found" "$log"; then
+              exit 1
+            fi
+            echo "::warning::attempt $attempt: no matching distribution, which straight after a release is the index not listing it yet; retrying in 30 s"
+            sleep 30
+            export PIP_NO_CACHE_DIR=1
+          done
+          echo "::error::still no matching distribution after 10 attempts over about five minutes"
+          exit 1
 
       # A floor in `dev` that this job has already outgrown is how the pytest
       # 9.2 change got in: `pytest>=7` was satisfied by the 9.1.1 a developer
