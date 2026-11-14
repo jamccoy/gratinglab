@@ -14,6 +14,15 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Changed
 
+- **The Help menu has a submenu per section**: About, then *Measure a scan*
+  and *Compute efficiency*, titled and ordered as on the chooser. The
+  metrology wiki's eleven pages, until now only in that window's Wiki tab,
+  are in Help in every window, the chooser's included, and open in the same
+  viewer as the theory pages. A section added later brings its pages with it:
+  each section names its own Help pages in `gratinglab.gui.launcher.MODES`.
+- The chooser's opening sentence and its hint are built from the list of
+  sections rather than written for two, so a third joins them ("…, or …") and
+  the hint says the Go menu switches to *another* window, not *the other*.
 - **The metrology window runs its analysis on endstation's `JobRunner`**
   instead of a `QThread` of its own. Its worker now gets the 8 MiB stack
   LAPACK needs, which the efficiency window was given after a segfault on

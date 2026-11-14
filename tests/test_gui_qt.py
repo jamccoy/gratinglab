@@ -1973,9 +1973,10 @@ class TestHelpMenu:
     """
 
     def _labels(self, win, *, separators=False):
+        """The efficiency section's entries, where the solver pages are."""
         return [
             action.text()
-            for action in win._help_menu.actions()
+            for action in win._gratinglab_help_sections["efficiency"].actions()
             if separators or not action.isSeparator()
         ]
 

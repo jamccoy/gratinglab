@@ -41,6 +41,14 @@ class Mode:
     so this module stays free of Qt and of the cost of importing either
     window. ``script`` is the console script that opens the same window
     directly, which the chooser shows so that a reader learns the shortcut.
+
+    ``summary`` is the clause the chooser's opening sentence uses for this
+    window, lower case and without a full stop; the sentence joins every
+    window's, so a new one joins it too, and one without a summary is left
+    out of it. ``help`` names, as
+    ``"module:function"``, the function returning this window's Help pages:
+    groups of ``(label, page)`` pairs, which the Help menu shows as one
+    submenu titled ``title``. Empty means the window has no pages yet.
     """
 
     key: str
@@ -48,10 +56,22 @@ class Mode:
     blurb: str
     window: str
     script: str
+    summary: str = ""
+    help: str = ""
+
+    def help_groups(self) -> tuple:
+        """This window's Help pages, imported only when asked for."""
+        if not self.help:
+            return ()
+        from importlib import import_module
+
+        module_name, _, attribute = self.help.partition(":")
+        return tuple(getattr(import_module(module_name), attribute)())
 
 
 #: The metrology window comes first because it is the half in regular use.
-#: Adding a third window is one entry here and nothing else.
+#: Adding a third window is one entry here and nothing else: the chooser's
+#: card and sentence, the Go menu and the Help submenu are all built from it.
 MODES = (
     Mode(
         key="metrology",
@@ -61,6 +81,8 @@ MODES = (
               "profile to export.",
         window="gratinglab.metrology.gui.qt.main_window:MainWindow",
         script="gratinglab-metrology-gui",
+        summary="measure a grating's grooves from an AFM scan",
+        help="gratinglab.gui.docs:wiki_help_groups",
     ),
     Mode(
         key="efficiency",
@@ -70,6 +92,8 @@ MODES = (
               "results.",
         window="gratinglab.gui.qt.main_window:MainWindow",
         script="gratinglab-gui",
+        summary="compute its diffraction efficiency",
+        help="gratinglab.gui.docs:help_groups",
     ),
 )
 

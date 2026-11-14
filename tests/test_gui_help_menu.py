@@ -37,6 +37,16 @@ def labels_of(menu, *, separators=False):
     ]
 
 
+def page_labels(window, key):
+    """Every page entry in one section's submenu."""
+    return labels_of(window._gratinglab_help_sections[key])
+
+
+def page_action(window, key, label):
+    return next(a for a in window._gratinglab_help_sections[key].actions()
+                if a.text() == label)
+
+
 @pytest.mark.gui
 class TestEveryWindowOffersIt:
     @pytest.fixture(params=sorted(WINDOWS), ids=sorted(WINDOWS))
@@ -62,9 +72,27 @@ class TestEveryWindowOffersIt:
         """The same pages in both windows: the menu is built from
         `gratinglab.gui.docs`, so a page added there appears in both at once
         and neither window holds its own list."""
-        shown = labels_of(window._help_menu)
+        shown = page_labels(window, "efficiency")
         for page in (*general_pages(), *theory_pages()):
             assert any(menu_label(page.title) in label for label in shown), page.title
+
+    def test_after_about_comes_one_submenu_per_section(self, window):
+        """Titled as the chooser titles each window, in its order, so a
+        section added to MODES brings its pages to every window's Help."""
+        from gratinglab.gui.launcher import MODES
+
+        sections = window._gratinglab_help_sections
+        assert list(sections) == [m.key for m in MODES]
+        submenus = [a.menu() for a in window._help_menu.actions() if a.menu()]
+        assert [m.title() for m in submenus] == [menu_label(m.title) for m in MODES]
+
+    def test_the_metrology_wiki_is_in_help_too(self, window):
+        """It was only in the AFM window's Wiki tab, so the efficiency window
+        and the chooser had no way to it."""
+        from gratinglab.metrology.wiki import pages
+
+        shown = page_labels(window, "metrology")
+        assert shown == [menu_label(page.title) for page in pages()]
 
     def test_about_reports_the_real_version(self, window, monkeypatch):
         from gratinglab import __version__
@@ -111,11 +139,7 @@ class TestOpeningAPageFromTheAfmWindow:
         window = MainWindow()
         qtbot.addWidget(window)
         try:
-            wanted = menu_label(general_pages()[0].title)
-            action = next(
-                a for a in window._help_menu.actions() if a.text() == wanted
-            )
-            action.trigger()
+            page_action(window, "efficiency", menu_label(general_pages()[0].title)).trigger()
 
             viewers = window.findChildren(TheoryViewer)
             assert len(viewers) == 1, "the menu entry opened no page"
@@ -123,3 +147,28 @@ class TestOpeningAPageFromTheAfmWindow:
             assert viewers[0].isVisible()
         finally:
             window.close()
+
+
+@pytest.mark.gui
+class TestOpeningAWikiPageFromTheEfficiencyWindow:
+    """The other way round: an AFM page, from the window that never had one."""
+
+    def test_the_overview_opens_with_its_text(self, qtbot):
+        from gratinglab.gui.qt.main_window import MainWindow
+        from gratinglab.gui.qt.theory_viewer import TheoryViewer
+        from gratinglab.metrology.wiki import pages
+
+        overview = pages()[0]
+        window = MainWindow()
+        qtbot.addWidget(window)
+        try:
+            page_action(window, "metrology", menu_label(overview.title)).trigger()
+            viewers = window.findChildren(TheoryViewer)
+            assert len(viewers) == 1, "the menu entry opened no page"
+            qtbot.addWidget(viewers[0])
+            text = viewers[0]._browser.toPlainText()
+            assert overview.title in text
+            assert "Approximate method" not in text, "a measurement page is not a solver's"
+        finally:
+            window.close()
+

@@ -220,6 +220,42 @@ def general_pages() -> tuple[TheoryPage, ...]:
     )
 
 
+def help_groups() -> tuple[tuple[tuple[str, TheoryPage], ...], ...]:
+    """The efficiency window's Help pages, as ``(label, page)`` groups.
+
+    The solver-independent reference first (the generalized grating equation
+    and the angle conventions), then one page per method. A page that has not
+    been written yet still appears, and says so.
+    """
+
+    def missing(page: TheoryPage) -> str:
+        return "" if page.available else " (not written yet)"
+
+    return (
+        tuple((page.title + missing(page), page) for page in general_pages()),
+        tuple((page.title + " Theory" + missing(page), page) for page in theory_pages()),
+    )
+
+
+def wiki_help_groups() -> tuple[tuple[tuple[str, TheoryPage], ...], ...]:
+    """The metrology window's wiki pages, as one Help group.
+
+    The same pages the window's Wiki tab shows, in its order, as pages the
+    theory viewer can open. They describe a measurement rather than a solver,
+    so none carries the approximate-method banner, and they link to nothing,
+    so they need no file behind them.
+    """
+    from ..metrology.wiki import pages
+
+    return (
+        tuple(
+            (page.title, TheoryPage(name=page.slug, title=page.title, available=True,
+                                    path=None, text=page.markdown, rigorous=True))
+            for page in pages()
+        ),
+    )
+
+
 def resolve_link(
     page: TheoryPage, href: str, pages: tuple[TheoryPage, ...] | None = None
 ) -> TheoryPage | str | None:

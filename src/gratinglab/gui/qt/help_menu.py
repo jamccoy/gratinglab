@@ -9,9 +9,12 @@ half itself. A user measuring a scan was the one user who could not read
 either.
 
 So the menu lives here and each window installs it, the same arrangement as
-the Go menu in :mod:`gratinglab.gui.qt.launcher`: neither window knows the
-other has it, and a page added to :mod:`gratinglab.gui.docs` appears in both
-at once.
+the Go menu in :mod:`gratinglab.gui.qt.launcher`: no window knows the others
+have it. After About, it holds one submenu per window in
+:data:`gratinglab.gui.launcher.MODES`, titled as the chooser titles it and
+filled from that window's ``help`` pages, so every window's pages are a
+submenu away from every window, and a window added to ``MODES`` brings its
+pages with it.
 
 ``menu_bar`` exists because the chooser is a plain ``QWidget`` and has no
 ``menuBar()`` of its own; it hands in the one it put in its layout. The
@@ -56,6 +59,15 @@ def show_theory(page, parent=None):
     return viewer
 
 
+def _opener(page, window):
+    """A callback taking no arguments, so Qt passes no `checked` to it.
+
+    A lambda with a default argument would receive `checked` in that
+    argument's place, which is why the page is bound here instead.
+    """
+    return lambda: show_theory(page, window)
+
+
 def install_help_menu(window, menu_bar=None):
     """Add the Help menu to ``window`` and return it.
 
@@ -66,26 +78,30 @@ def install_help_menu(window, menu_bar=None):
     is also stored on the window, so a caller that forgets still cannot lose
     it.
     """
-    from ..docs import general_pages, theory_pages
+    from ..launcher import MODES
     from ..richtext import menu_label
 
-    def entry(page, suffix):
-        return (menu_label(page.title, suffix), lambda: show_theory(page, window))
-
-    def missing(page):
-        return "" if page.available else " (not written yet)"
-
-    # Foundational, solver-independent reference first -- the generalized
-    # grating equation and the angle conventions -- then one page per method.
     menu = _install(
         window,
         about_title="About gratinglab",
         about_text=_about_text,
-        pages=[
-            [entry(page, missing(page)) for page in general_pages()],
-            [entry(page, " Theory" + missing(page)) for page in theory_pages()],
-        ],
         menu_bar=menu_bar,
     )
+    menu.addSeparator()
+    # Held on the window: under PySide6 a QMenu reached back through its
+    # parent is not reliably usable, so whatever builds one keeps it.
+    sections = {}
+    for mode in MODES:
+        groups = [list(group) for group in mode.help_groups() if group]
+        if not groups:
+            continue
+        section = menu.addMenu(menu_label(mode.title))
+        for index, group in enumerate(groups):
+            if index:
+                section.addSeparator()
+            for label, page in group:
+                section.addAction(menu_label(label), _opener(page, window))
+        sections[mode.key] = section
+    window._gratinglab_help_sections = sections
     window._gratinglab_help_menu = menu
     return menu

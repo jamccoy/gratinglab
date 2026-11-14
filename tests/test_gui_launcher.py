@@ -197,7 +197,7 @@ class TestTheChooser:
         qtbot.addWidget(window)
 
         wanted = menu_label(general_pages()[0].title)
-        action = next(a for a in window._help_menu.actions()
+        action = next(a for a in window._gratinglab_help_sections['efficiency'].actions()
                       if a.text() == wanted)
         action.trigger()
 
@@ -219,6 +219,33 @@ class TestTheChooser:
         shown = ' '.join(label.text() for label in window.findChildren(QLabel))
         shown += ' '.join(b.text() for b in window.buttons.values())
         assert 'AFM' in shown
+
+    def test_the_opening_sentence_names_every_window(self, qtbot):
+        from PySide6.QtWidgets import QLabel
+
+        window = qt_launcher.LauncherWindow()
+        qtbot.addWidget(window)
+        shown = ' '.join(label.text() for label in window.findChildren(QLabel))
+        assert ("Measure a grating's grooves from an AFM scan or compute its "
+                "diffraction efficiency.") in shown
+
+    def test_a_third_window_joins_the_wording(self, qtbot, monkeypatch):
+        """No sentence on the chooser may assume there are two windows."""
+        from PySide6.QtWidgets import QLabel
+
+        from gratinglab.gui import launcher
+
+        third = launcher.Mode(key='fabrication', title='Plan a ruling',
+                              blurb='Plan it.', window='x:Y', script='gratinglab-fab',
+                              summary='plan how to rule it')
+        monkeypatch.setattr(qt_launcher, 'MODES', (*launcher.MODES, third))
+        window = qt_launcher.LauncherWindow()
+        qtbot.addWidget(window)
+        shown = ' '.join(label.text() for label in window.findChildren(QLabel))
+        assert ("Measure a grating's grooves from an AFM scan, compute its "
+                "diffraction efficiency, or plan how to rule it.") in shown
+        assert 'another window' in shown and 'the other window' not in shown
+        assert '<code>gratinglab-fab</code>' in shown
 
     def test_clicking_opens_that_mode_and_closes_the_chooser(self, qtbot,
                                                              monkeypatch):
@@ -608,3 +635,16 @@ class TestPrewarming:
         with pytest.raises(ImportError):
             qt_launcher.open_window(broken)
         assert QApplication.overrideCursor() is None
+
+
+@pytest.mark.parametrize("items, joined", [
+    (["a"], "a"),
+    (["a", "b"], "a or b"),
+    (["a", "b", "c"], "a, b, or c"),
+])
+def test_alternatives_read_as_a_list(items, joined):
+    pytest.importorskip("PySide6")
+    from gratinglab.gui.qt.launcher import _either
+
+    assert _either(items) == joined
+

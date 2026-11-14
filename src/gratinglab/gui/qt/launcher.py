@@ -225,6 +225,14 @@ def show_chooser():
     return shown
 
 
+def _either(items):
+    """``a``, ``a or b``, ``a, b, or c``: a list read as alternatives."""
+    items = list(items)
+    if len(items) < 3:
+        return " or ".join(items)
+    return ", ".join(items[:-1]) + ", or " + items[-1]
+
+
 class LauncherWindow(QWidget):
     """Two buttons and a sentence each, so neither half can be missed.
 
@@ -256,10 +264,9 @@ class LauncherWindow(QWidget):
         heading.setFont(font)
         layout.addWidget(heading)
 
-        subtitle = QLabel(
-            "Measure a grating's grooves from an AFM scan, or compute its "
-            "diffraction efficiency."
-        )
+        opening = _either([m.summary for m in MODES if m.summary])
+        # Only the first letter: str.capitalize() would lower "AFM" too.
+        subtitle = QLabel(opening[:1].upper() + opening[1:] + ".")
         subtitle.setWordWrap(True)
         subtitle.setStyleSheet("color: palette(mid);")
         layout.addWidget(subtitle)
@@ -271,9 +278,9 @@ class LauncherWindow(QWidget):
         layout.addStretch(1)
 
         hint = QLabel(
-            "The <b>Go</b> menu in either window switches to the other window "
-            "or back to this one. To open a window directly, run "
-            + " or ".join(f"<code>{m.script}</code>" for m in MODES)
+            "The <b>Go</b> menu in each window switches to another window or "
+            "back to this one. To open a window directly, run "
+            + _either([f"<code>{m.script}</code>" for m in MODES])
             + "."
         )
         hint.setWordWrap(True)
