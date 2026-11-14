@@ -5,8 +5,8 @@ the only solver tab, and defining the structure that every solver tab must have
 from a sample of one would have been a guess presented as an interface. The
 integral tab has since followed the same small set of methods without one. `MainWindow` calls a small, duck-typed set of methods on
 whatever lives in its `_tabs` dict (`build_options`, `set_running`,
-`show_progress`, `show_result`, `show_error`, `show_field_errors`,
-`show_cancelled`); see the comment at `_build_tabs` in `main_window.py` for
+`show_solving`, `show_progress_value`, `show_result`, `show_error`,
+`show_field_errors`, `show_cancelled`); see the comment at `_build_tabs` in `main_window.py` for
 the documented contract. A base class should be formalized once RCWA's tab
 exists and the common structure is known from evidence.
 """
@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Sequence
 
 from endstation.files import atomic_open
+from endstation.qt.progress_bar import DelayedProgressBar
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -32,7 +33,6 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QScrollArea,
     QSplitter,
@@ -242,12 +242,11 @@ class ScalarTab(QWidget):
         )
         self._converge_button.clicked.connect(self.convergence_requested)
 
-        self._progress = QProgressBar()
-        # Starts indeterminate and becomes determinate on the first report, so
-        # a backend that declares no `reports_progress` still looks alive
-        # rather than stuck at 0%.
-        self._progress.setRange(0, 0)
-        self._progress.hide()
+        # Hidden until a solve has run long enough to need it. It starts
+        # indeterminate and becomes determinate on the first report, so a
+        # backend that declares no `reports_progress` still looks alive rather
+        # than stuck at 0%. See endstation.qt.progress_bar.
+        self._progress = DelayedProgressBar()
 
         row = QHBoxLayout()
         row.addWidget(self._solve_button)
@@ -324,22 +323,17 @@ class ScalarTab(QWidget):
         # a control that looks like it does something and does not.
         self._fields["quadrature_points"].setEnabled(not running)
         if not running:
-            self._progress.hide()
-
-    def show_progress(self) -> None:
-        self._progress.show()
+            self._progress.end()
 
     def show_progress_value(self, done: int, total: int) -> None:
         """Advance the bar, switching it to determinate on the first report."""
-        if self._progress.maximum() != total:
-            self._progress.setRange(0, total)
-        self._progress.setValue(done)
+        self._progress.report(done, total)
 
     def show_solving(self, wavelength_count: int) -> None:
-        # Back to indeterminate for each new run: the previous run's range is
-        # meaningless here, and leaving it would show a full bar for a solve
-        # that has not started.
-        self._progress.setRange(0, 0)
+        # Arms the bar's delay and puts it back to indeterminate: the previous
+        # run's range is meaningless here, and leaving it would show a full bar
+        # for a solve that has not started.
+        self._progress.begin()
         self._paint(provenance.solving_lines(self.name, wavelength_count))
 
     def show_result(self, scan, energy, lambda_over_period: float) -> None:

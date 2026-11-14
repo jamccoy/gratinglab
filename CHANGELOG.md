@@ -10,6 +10,16 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- **The solver tabs' progress bars are endstation's `DelayedProgressBar`**,
+  replacing five copies of the same show/hide/range code and the window's
+  150 ms timer. Nothing changes on screen: a quick solve still shows no bar,
+  a slow one shows it on its own tab only, indeterminate until the solver
+  first reports. Requires `endstation>=0.6.0`.
+
 ## 0.3.11 (2026-11-14)
 
 ### Changed

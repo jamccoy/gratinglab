@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Sequence
 
 from endstation.files import atomic_open
+from endstation.qt.progress_bar import DelayedProgressBar
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -35,7 +36,6 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QMessageBox,
-    QProgressBar,
     QPushButton,
     QScrollArea,
     QSplitter,
@@ -203,9 +203,9 @@ class CMethodTab(QWidget):
         )
         self._converge_button.clicked.connect(self.convergence_requested)
 
-        self._progress = QProgressBar()
-        self._progress.setRange(0, 0)
-        self._progress.hide()
+        # Hidden until a solve has run long enough to need it, indeterminate
+        # until the solver's first report: see endstation.qt.progress_bar.
+        self._progress = DelayedProgressBar()
 
         row = QHBoxLayout()
         row.addWidget(self._solve_button)
@@ -270,18 +270,13 @@ class CMethodTab(QWidget):
         # sweep untouched, so it stays live, like scalar's model selectors.
         self._fields["truncation"].setEnabled(not running)
         if not running:
-            self._progress.hide()
-
-    def show_progress(self) -> None:
-        self._progress.show()
+            self._progress.end()
 
     def show_progress_value(self, done: int, total: int) -> None:
-        if self._progress.maximum() != total:
-            self._progress.setRange(0, total)
-        self._progress.setValue(done)
+        self._progress.report(done, total)
 
     def show_solving(self, wavelength_count: int) -> None:
-        self._progress.setRange(0, 0)
+        self._progress.begin()
         self._paint(provenance.solving_lines(self.name, wavelength_count))
 
     def show_result(self, scan, energy, lambda_over_period: float) -> None:

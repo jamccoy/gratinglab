@@ -59,11 +59,6 @@ __all__ = ["MainWindow"]
 #: and LAPACK expects the stack the main thread has. See `__init__`.
 _WORKER_STACK_BYTES = 8 * 1024 * 1024
 
-#: A solve faster than this never shows a progress bar. The scalar solver takes
-#: about 70 ms, and flashing a bar on and off within one frame reads as a
-#: glitch rather than as feedback.
-_PROGRESS_DELAY_MS = 150
-
 #: How long typing must pause before the geometry redraws. Long enough that a
 #: burst of keystrokes costs one redraw rather than six, short enough that the
 #: picture feels attached to the field you are editing.
@@ -80,8 +75,7 @@ _REDRAW_DEBOUNCE_MS = 120
 #: why): a `name` class attribute matching its registry key; `solve_requested`
 #: and `cancel_requested` signals; `build_options(problem, illumination,
 #: wavelengths) -> dict` (raising `FormErrors`); `set_running(bool)`;
-#: `show_progress()`; `show_progress_value(done, total)`;
-#: `show_solving(wavelength_count)`; `show_result(scan, energy,
+#: `show_progress_value(done, total)`; `show_solving(wavelength_count)`; `show_result(scan, energy,
 #: lambda_over_period)`; `show_cancelled()`; `show_error(message)`;
 #: `show_field_errors(errors)`. Optionally a `convergence_requested` signal and
 #: `show_convergence(scan, energy, lambda_over_period, report)` -- optional
@@ -430,16 +424,9 @@ class MainWindow(QMainWindow):
         self._active_name = name
         self._parsed = geometry
         self._set_running(True)
+        # The tab's bar appears only if the solve is still running after its
+        # delay, and only on this tab; `_set_running(False)` ends every tab's.
         tab.show_solving(len(geometry.wavelengths))
-        # `tab` as the context object, not a bare singleShot: Qt then cancels
-        # the timer if the tab is destroyed first. Without it, closing the
-        # window inside the 150 ms delay leaves the timer holding a deleted
-        # QProgressBar, and an exception escaping a slot under PySide6 can
-        # abort the process rather than surfacing. Found by macOS CI, where the
-        # timing landed the stale timer inside the *next* test's setup.
-        QTimer.singleShot(
-            _PROGRESS_DELAY_MS, tab, lambda: self._show_progress_if_still_running(tab)
-        )
         if sweep:
             self._start(worker.converge, name, geometry, options,
                         on_done=partial(self._on_converged, name))
@@ -494,9 +481,6 @@ class MainWindow(QMainWindow):
         self._parsed = geometry
         self._set_running(True)
         tab.show_solving(tuple(options), len(geometry.wavelengths))
-        QTimer.singleShot(
-            _PROGRESS_DELAY_MS, tab, lambda: self._show_progress_if_still_running(tab)
-        )
         self._start(worker.compare, geometry, names, options, refused,
                     on_done=self._on_compared)
 
@@ -598,16 +582,6 @@ class MainWindow(QMainWindow):
         for tab in self.tabs.values():
             tab.set_running(running)
         self.compare_tab.set_running(running)
-
-    def _show_progress_if_still_running(self, tab) -> None:
-        """Show progress, but only on the tab that started the solve.
-
-        Showing it on an idle tab would imply that the tab is computing
-        something when it is not, which is the same kind of false statement
-        that a provenance warning must never make.
-        """
-        if self._running:
-            tab.show_progress()
 
     def show_about(self) -> None:
         """The About box. The menu calls `help_menu.show_about` directly; this

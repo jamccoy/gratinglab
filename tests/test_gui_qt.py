@@ -932,11 +932,12 @@ class TestBackgroundSolve:
         Caught by macOS CI, where the stale timer landed in the *next* test's
         setup; the race is timing-dependent and does not reproduce reliably
         here, so this exercises the path rather than pinning the crash. The
-        fix is the context-object overload of `QTimer.singleShot`, which Qt
-        cancels when the context dies -- verified directly: a timer whose
-        context is destroyed does not fire.
+        timer is a child of endstation's `DelayedProgressBar` now, so it dies
+        with the bar.
         """
-        from gratinglab.gui.qt.main_window import _PROGRESS_DELAY_MS, MainWindow
+        from endstation.qt.progress_bar import DEFAULT_DELAY_MS
+
+        from gratinglab.gui.qt.main_window import MainWindow
 
         window = MainWindow()
         qtbot.addWidget(window)
@@ -944,7 +945,7 @@ class TestBackgroundSolve:
         window.close()
         window.deleteLater()
         # pytest-qt fails the test if any slot raises during this wait.
-        qtbot.wait(_PROGRESS_DELAY_MS * 3)
+        qtbot.wait(DEFAULT_DELAY_MS * 3)
 
 
 class TestOrderPanel:
@@ -1165,6 +1166,22 @@ class TestTheProgressBar:
         job.signals.progress.emit(7, 100)
         qtbot.wait(20)
         assert bar.value() == 50
+
+    def test_a_slow_run_shows_the_bar_on_its_own_tab_only(self, qtbot, win):
+        """Driven through the tab contract with no solver behind it, so the
+        run is as slow as the test wants. The bar waits out its delay, then
+        appears on the tab that started the work and on no other, and the
+        end of the run hides it."""
+        scalar, others = win.tabs["scalar"], [
+            t for n, t in win.tabs.items() if n != "scalar"
+        ]
+        win._set_running(True)
+        scalar.show_solving(5)
+        assert scalar._progress.isHidden(), "not before the delay"
+        qtbot.waitUntil(lambda: not scalar._progress.isHidden(), timeout=2000)
+        assert all(t._progress.isHidden() for t in others)
+        win._set_running(False)
+        assert scalar._progress.isHidden()
 
 
 class TestTheConvergenceButton:

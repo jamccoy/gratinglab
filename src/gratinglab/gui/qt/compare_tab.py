@@ -23,6 +23,7 @@ What is drawn, and what the panel says, is decided in
 
 from __future__ import annotations
 
+from endstation.qt.progress_bar import DelayedProgressBar
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QAbstractItemView,
@@ -34,7 +35,6 @@ from PySide6.QtWidgets import (
     QLabel,
     QListWidget,
     QListWidgetItem,
-    QProgressBar,
     QPushButton,
     QScrollArea,
     QSplitter,
@@ -205,9 +205,9 @@ class CompareTab(QWidget):
         self._cancel_button.clicked.connect(self.cancel_requested)
         self._cancel_button.setEnabled(False)
 
-        self._progress = QProgressBar()
-        self._progress.setRange(0, 0)
-        self._progress.hide()
+        # Hidden until a solve has run long enough to need it, indeterminate
+        # until the solver's first report: see endstation.qt.progress_bar.
+        self._progress = DelayedProgressBar()
 
         row = QHBoxLayout()
         row.addWidget(self._compare_button)
@@ -281,20 +281,15 @@ class CompareTab(QWidget):
         for box in self._checks.values():
             box.setEnabled(not running)
         if not running:
-            self._progress.hide()
-
-    def show_progress(self) -> None:
-        self._progress.show()
+            self._progress.end()
 
     def show_progress_value(self, done: int, total: int) -> None:
-        if self._progress.maximum() != total:
-            self._progress.setRange(0, total)
-        self._progress.setValue(done)
+        self._progress.report(done, total)
 
     def show_solving(self, names, wavelength_count: int) -> None:
         from ..docs import short_title
 
-        self._progress.setRange(0, 0)
+        self._progress.begin()
         self._paint((provenance.Line(
             f"comparing: {', '.join(short_title(n) for n in names)}, "
             f"{wavelength_count} wavelengths each…\n", "dim",
