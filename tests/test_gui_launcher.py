@@ -96,6 +96,13 @@ from PySide6.QtWidgets import QLabel  # noqa: E402
 from gratinglab.gui.qt import launcher as qt_launcher  # noqa: E402
 
 
+def _stub_mode(key='stub'):
+    """A mode whose window is a bare QMainWindow: the bookkeeping, not a window."""
+    return Mode(key=key, title=f'Stub {key}', blurb='x' * 50,
+                window='PySide6.QtWidgets:QMainWindow',
+                script='gratinglab-app')
+
+
 @pytest.fixture(autouse=True)
 def _no_leaked_windows():
     """
@@ -249,8 +256,8 @@ class TestTheChooser:
         assert 'another window' in shown and 'the other window' not in shown
         assert '<code>gratinglab-fab</code>' in shown
 
-    def test_clicking_opens_that_mode_and_closes_the_chooser(self, qtbot,
-                                                             monkeypatch):
+    def test_clicking_opens_that_mode_and_the_menu_stays(self, qtbot,
+                                                         monkeypatch):
         opened = []
         monkeypatch.setattr(qt_launcher, 'open_window', opened.append)
 
@@ -261,33 +268,55 @@ class TestTheChooser:
         window.buttons['metrology'].click()
 
         assert [m.key for m in opened] == ['metrology']
-        assert not window.isVisible(), "the chooser should get out of the way"
+        assert window.isVisible(), "the main menu stays open, as Gwiddion's does"
 
-    def test_the_chooser_closes_only_after_the_window_is_up(self, qtbot,
-                                                           monkeypatch):
-        """
-        Order matters: Qt quits when the last window closes.
+    def test_a_second_click_raises_the_same_window(self, qtbot):
+        """One window per mode: the card reopens it rather than adding one."""
+        chooser = qt_launcher.LauncherWindow()
+        qtbot.addWidget(chooser)
+        chooser.show()
 
-        Closing the chooser first would end the process before the window it
-        was asked for existed, which is a blank launch rather than an error.
-        """
-        order = []
-        monkeypatch.setattr(qt_launcher, 'open_window',
-                            lambda chosen: order.append('opened'))
+        first = chooser.choose(_stub_mode('one'))
+        qtbot.addWidget(first)
+        first.close()
+        again = chooser.choose(_stub_mode('one'))
 
-        window = qt_launcher.LauncherWindow()
-        qtbot.addWidget(window)
-        window.show()
-        original_close = window.close
+        assert again is first and again.isVisible()
+        assert len(qt_launcher._OPEN_WINDOWS) == 1
 
-        def recording_close():
-            order.append('closed')
-            return original_close()
+    def test_closing_the_menu_closes_every_window(self, qtbot):
+        chooser = qt_launcher.LauncherWindow()
+        qtbot.addWidget(chooser)
+        chooser.show()
+        windows = [chooser.choose(_stub_mode(k)) for k in ('one', 'two')]
+        for window in windows:
+            qtbot.addWidget(window)
+        assert all(w.isVisible() for w in windows)
 
-        monkeypatch.setattr(window, 'close', recording_close)
-        window.buttons['efficiency'].click()
+        assert chooser.close()
 
-        assert order == ['opened', 'closed']
+        assert not chooser.isVisible()
+        assert not any(w.isVisible() for w in windows)
+
+    def test_a_window_that_refuses_keeps_the_menu_open(self, qtbot):
+        """The menu is never gone while a window it opened is still up."""
+        from PySide6.QtWidgets import QMainWindow
+
+        class Refusing(QMainWindow):
+            def closeEvent(self, event):  # noqa: N802
+                event.ignore()
+
+        chooser = qt_launcher.LauncherWindow()
+        qtbot.addWidget(chooser)
+        chooser.show()
+        stubborn = Refusing()
+        qtbot.addWidget(stubborn)
+        stubborn.show()
+        qt_launcher._OPEN_WINDOWS.append(stubborn)
+
+        assert not chooser.close()
+        assert chooser.isVisible() and stubborn.isVisible()
+        qt_launcher._OPEN_WINDOWS.remove(stubborn)
 
     def test_an_opened_window_is_kept_alive(self, qtbot):
         """
@@ -365,7 +394,7 @@ class TestItReallyOpensTheRealWindows:
             opened = qt_launcher._OPEN_WINDOWS[-1]
             qtbot.addWidget(opened)
             assert isinstance(opened, MetrologyWindow)
-            assert not chooser.isVisible()
+            assert chooser.isVisible()
         finally:
             opened = qt_launcher._OPEN_WINDOWS.pop()
             opened.close()
@@ -378,13 +407,8 @@ class TestGettingBackAndSwitching:
     other one or back. Each window now carries a Go menu.
     """
 
-    def _stub_mode(self, key='stub'):
-        return Mode(key=key, title=f'Stub {key}', blurb='x' * 50,
-                    window='PySide6.QtWidgets:QMainWindow',
-                    script='gratinglab-app')
-
     def test_every_opened_window_gets_the_menu(self, qtbot):
-        window = qt_launcher.open_window(self._stub_mode())
+        window = qt_launcher.open_window(_stub_mode())
         qtbot.addWidget(window)
 
         menu = window._gratinglab_switch_menu
@@ -413,7 +437,7 @@ class TestGettingBackAndSwitching:
         The metrology window holds a loaded scan and its settings. A switch
         that produced an empty second copy would read as the scan being gone.
         """
-        chosen = self._stub_mode()
+        chosen = _stub_mode()
         first = qt_launcher.open_window(chosen)
         qtbot.addWidget(first)
 
@@ -423,7 +447,7 @@ class TestGettingBackAndSwitching:
 
     def test_a_closed_window_comes_back_with_its_state(self, qtbot):
         """Closing is not destroying while a reference is held."""
-        chosen = self._stub_mode()
+        chosen = _stub_mode()
         window = qt_launcher.open_window(chosen)
         qtbot.addWidget(window)
         window.close()
@@ -453,14 +477,14 @@ class TestGettingBackAndSwitching:
         chooser = qt_launcher.show_chooser()
         qtbot.addWidget(chooser)
 
-        first = qt_launcher.open_window(self._stub_mode('one'))
+        first = qt_launcher.open_window(_stub_mode('one'))
         qtbot.addWidget(first)
         chooser.close()
 
         back = qt_launcher.show_chooser()
         assert back is chooser and back.isVisible()
 
-        second = qt_launcher.open_window(self._stub_mode('two'))
+        second = qt_launcher.open_window(_stub_mode('two'))
         qtbot.addWidget(second)
 
         assert first is not second
@@ -468,7 +492,7 @@ class TestGettingBackAndSwitching:
 
     def test_the_main_menu_action_actually_shows_it(self, qtbot):
         """Triggering the menu action, not calling the function behind it."""
-        window = qt_launcher.open_window(self._stub_mode())
+        window = qt_launcher.open_window(_stub_mode())
         qtbot.addWidget(window)
 
         assert not qt_launcher._CHOOSER

@@ -6,10 +6,11 @@ window it opens (see :data:`_OPEN_WINDOWS`), and importing both windows off
 the GUI thread while the chooser is on screen (see :func:`prewarm`, which
 exists because the first open used to freeze the application).
 
-It also carries the View and Help menus the two windows carry, built by the
-same code. The chooser is where a session starts and where it returns, and it
-was the one place from which the theme -- an application-wide setting -- could
-not be changed and no page could be read.
+It also carries the View and Help menus the windows carry, built by the
+same code. The chooser is the main menu: it stays open while the windows it
+opened are up, as Gwiddion's toolbox does, and closing it closes them all.
+There is one window per mode, so a second click on a card raises the window
+already open rather than opening another.
 """
 
 from __future__ import annotations
@@ -57,14 +58,14 @@ SWITCH_MENU_TITLE = "&Go"
 #:
 #: A top-level Qt window with no Python reference is garbage collected and
 #: vanishes a moment after it appears, which reads as "the button did nothing".
-#: The list cannot live on the chooser, because the chooser closes itself as
-#: soon as a window is up and would take the only reference with it.
+#: The list is not on the chooser, because a window opened from a Go menu,
+#: in a session started by a direct script, has no chooser to hold it.
 _OPEN_WINDOWS: list[QWidget] = []
 
 
 #: The chooser, kept so that "Main Menu" shows the same one rather than a
 #: second copy. Closing a window does not destroy it while a reference is
-#: held, so this one can be shown again after it closed itself.
+#: held, so this one can be shown again after it was closed.
 _CHOOSER: list = []
 
 #: The background import started by :func:`prewarm`, at most one per process.
@@ -234,14 +235,14 @@ def _either(items):
 
 
 class LauncherWindow(QWidget):
-    """Two buttons and a sentence each, so neither half can be missed.
+    """A button and a sentence per window, so none of them can be missed.
 
-    It carries the same View and Help menus the two windows do. The chooser
-    is where a session starts and, after "Main Menu", where it pauses, so it
-    was the one place from which the theme could not be changed and no page
-    could be read -- both of which had to be done by opening a window first
-    and then coming back. The theme in particular is a setting for the whole
-    application, not for whichever window happens to be open.
+    It carries the same View and Help menus the windows do, since the theme
+    is a setting for the whole application and not for whichever window
+    happens to be open.
+
+    It is the main menu, and stays open while windows are: see `choose` and
+    `closeEvent`.
 
     A plain ``QWidget`` has no ``menuBar()``, so the bar is built here and put
     at the top of the layout. `install_help_menu` takes one for exactly this
@@ -339,11 +340,28 @@ class LauncherWindow(QWidget):
         return frame
 
     def choose(self, chosen):
-        """Open a mode's window, then close the chooser.
+        """Open a mode's window, or raise it if it is open, and stay open.
 
-        In that order: Qt quits when the last window closes, so closing first
-        would end the process before the window it was asked for exists.
+        The main menu stays up so it is where any window is reopened from,
+        as Gwiddion's toolbox is. A window covering it is brought back with
+        Go > Main Menu.
         """
-        window = open_window(chosen)
-        self.close()
-        return window
+        return open_window(chosen)
+
+    def closeEvent(self, event):  # noqa: N802 - Qt's spelling
+        """Closing the main menu closes every window it opened.
+
+        Each window gets its own close, so it saves its layout and stops a
+        job in flight as it would if closed by hand. A window that refuses
+        keeps the main menu open too, so the menu is never gone while a
+        window is still up. Nothing calls quit: once the last window is
+        closed, Qt's quit-on-last-window ends the application, which also
+        leaves a test's other widgets alone.
+        """
+        for window in list(_OPEN_WINDOWS):
+            if not shiboken6.isValid(window) or not window.isVisible():
+                continue
+            if not window.close():
+                event.ignore()
+                return
+        super().closeEvent(event)

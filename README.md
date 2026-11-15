@@ -268,9 +268,11 @@ gratinglab-geometry            # straight to the geometry, with no solver
 gratinglab-metrology-gui       # straight to AFM import, blaze angles, boundary profiles
 ```
 
-`gratinglab-app` opens a chooser for the three windows. Each window has a **Go** menu
-that switches to another window or back to the chooser (`Ctrl+Shift+M`), and
-switching reuses a window that is already open. The chooser has the same
+`gratinglab-app` opens a chooser for the three windows, which stays open as the main
+menu while you work, as Gwiddion's toolbox does; closing it closes every window. Each
+window has a **Go** menu that switches to another window or back to the chooser
+(`Ctrl+Shift+M`). There is one window of each kind, so opening one that is already
+open brings it forward. The chooser has the same
 **View → Theme** and **Help** menus as the windows, so the theme, which applies to the
 whole application, and the theory pages can be reached without opening a window
 first. While the chooser is on screen it imports both windows on a background thread,

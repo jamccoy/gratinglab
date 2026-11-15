@@ -10,6 +10,16 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- **The chooser stays open as the main menu**, as Gwiddion's toolbox does,
+  rather than closing once a window is up. Its cards open a window, or bring
+  forward the one already open, since there is still one window of each
+  kind. Closing it closes every window it opened; a window that refuses to
+  close keeps it open.
+
 ## 0.3.13 (2026-11-14)
 
 ### Added
