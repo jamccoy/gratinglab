@@ -93,6 +93,17 @@ class TestTheWindow:
         window.refresh()
         assert window.geometry_tab._parsed is before
 
+    def test_the_send_button_sits_under_the_form(self, window, qapp):
+        """Just below the last field, not at the foot of a tall dock."""
+        window.resize(1280, 820)
+        window.show()
+        qapp.processEvents()
+        panel, button = window.geometry, window.send_button
+        form_bottom = panel.mapTo(window, panel.rect().topLeft()).y() + panel.sizeHint().height()
+        gap = button.mapTo(window, button.rect().topLeft()).y() - form_bottom
+        assert 0 <= gap < 20, f"the button is {gap} px below the form"
+        assert window.geometry_dock.height() - gap > 400, "the dock was too short to tell"
+
     def test_the_go_menu_reaches_the_efficiency_window(self, window):
         titles = [a.text() for a in window._gratinglab_switch_actions]
         assert "Compute efficiency" in titles

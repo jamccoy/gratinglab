@@ -93,8 +93,12 @@ class GeometryWindow(QMainWindow):
         column = QWidget()
         layout = QVBoxLayout(column)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(self.geometry)
+        # The button sits just under the last field, and the spare height
+        # goes below it: the panel ends in a stretch of its own, which with
+        # equal shares would push the button to the foot of the dock.
+        layout.addWidget(self.geometry, 0)
         layout.addWidget(self.send_button)
+        layout.addStretch(1)
 
         scroller = QScrollArea()
         scroller.setWidget(column)

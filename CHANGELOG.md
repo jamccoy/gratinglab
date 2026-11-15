@@ -10,6 +10,14 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- **The geometry window's "Send to efficiency window" sits just under the
+  form**, rather than at the foot of the dock, where it was far below the
+  last field in a tall window.
+
 ## 0.3.16 (2026-11-14)
 
 ### Fixed
