@@ -12,6 +12,14 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+### Added
+
+- **The AFM window sends a measured groove to the geometry window** as it
+  does to the efficiency window: **Send to geometry window** writes the
+  groove to a gratinglab `.json`, so the measured period arrives with the
+  shape, and the geometry window draws it without solving. From there,
+  **Send to efficiency window** carries the same file on.
+
 ### Changed
 
 - **The chooser is a compact toolbox**, 260 px wide rather than 460, since

@@ -334,10 +334,12 @@ class TestBoundaryTab:
         assert not window.boundary.export_btn.isEnabled()
         assert not window.boundary.efficiency_btn.isEnabled()
         assert not window.boundary.send_btn.isEnabled()
+        assert not window.boundary.geometry_btn.isEnabled()
         window.load(SAMPLE)
         assert window.boundary.export_btn.isEnabled()
         assert window.boundary.efficiency_btn.isEnabled()
         assert window.boundary.send_btn.isEnabled()
+        assert window.boundary.geometry_btn.isEnabled()
 
     def test_a_json_export_keeps_the_measured_period(self, qtbot, window, tmp_path):
         from gratinglab.io.boundary import read_boundary_json
@@ -390,6 +392,29 @@ class TestBoundaryTab:
         with qtbot.waitSignal(efficiency.solved, timeout=60_000):
             again = window.boundary.send_to_efficiency()
         assert again is efficiency, "a second send reuses the window"
+        assert len(launcher._OPEN_WINDOWS) == 1
+
+    def test_send_to_geometry_draws_the_groove_with_its_period(
+            self, qtbot, window, launcher):
+        """The geometry window takes the measured groove and draws it, and a
+        second send reuses that window."""
+        from gratinglab.gui.launcher import mode
+        from gratinglab.gui.qt.geometry_window import GeometryWindow
+        window.load(SAMPLE)
+
+        opened = window.boundary.send_to_geometry()
+        assert isinstance(opened, GeometryWindow)
+        assert opened is launcher.window_for(mode("geometry"))
+        form = opened.geometry.read_form()
+        assert form.profile_kind == "From file"
+        assert float(form.period) == pytest.approx(window.boundary.profile.period_nm, rel=1e-5)
+        drawn = opened.geometry_tab._parsed
+        assert drawn is not None, "the groove was loaded but nothing drawn"
+        from gratinglab.io.boundary import read_profile_file
+        assert type(drawn.problem.profile) is type(read_profile_file(form.profile_path))
+
+        again = window.boundary.send_to_geometry()
+        assert again is opened, "a second send reuses the window"
         assert len(launcher._OPEN_WINDOWS) == 1
 
     def test_a_destroyed_efficiency_window_is_replaced(self, qtbot, window, launcher):

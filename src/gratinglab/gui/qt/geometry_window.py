@@ -161,6 +161,17 @@ class GeometryWindow(QMainWindow):
             return
         self.geometry_tab.show_geometry(build(form))
 
+    def open_boundary(self, path) -> None:
+        """Load a boundary profile file as the grating, as if chosen by hand.
+
+        The metrology window's "Send to geometry window" calls this with a
+        gratinglab ``.json``, so the measured period arrives with the shape.
+        Loading it redraws, and nothing is solved, since nothing here can.
+        """
+        self.geometry.load_boundary_file(path)
+        if not self.geometry_dock.isVisible():
+            self.geometry_dock.show()
+
     def send_to_efficiency(self):
         """Copy this geometry into the efficiency window, and return that window.
 

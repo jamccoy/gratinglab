@@ -163,6 +163,16 @@ class BoundaryView(QWidget):
         self.send_btn.clicked.connect(self.send_to_efficiency)
         layout.addWidget(self.send_btn)
 
+        # The same hand-over, to the window that draws the grating without
+        # solving: a look at the measured groove in 3D before any solve.
+        self.geometry_btn = QPushButton("Send to geometry window")
+        self.geometry_btn.setEnabled(False)
+        self.geometry_btn.setToolTip(
+            "Open this groove in the geometry window, with the period this\n"
+            "scan measured, to see it and its beams before solving anything.")
+        self.geometry_btn.clicked.connect(self.send_to_geometry)
+        layout.addWidget(self.geometry_btn)
+
         self.swaths_btn = QPushButton("Swath statistics…")
         self.swaths_btn.setEnabled(False)
         self.swaths_btn.setToolTip(
@@ -343,10 +353,11 @@ class BoundaryView(QWidget):
             self._show_placeholder(self._placeholder)
 
     def _set_actions_enabled(self, enabled: bool) -> None:
-        """All four actions need only a profile, so they are enabled together."""
+        """Every action needs only a profile, so they are enabled together."""
         self.export_btn.setEnabled(enabled)
         self.efficiency_btn.setEnabled(enabled)
         self.send_btn.setEnabled(enabled)
+        self.geometry_btn.setEnabled(enabled)
         self.swaths_btn.setEnabled(enabled)
 
     # ── Out to a solver ──────────────────────────────────────────────────────
@@ -450,26 +461,35 @@ class BoundaryView(QWidget):
         return path, metrics_path
 
     def send_to_efficiency(self):
-        """Open this groove in the main efficiency window, period included.
+        """Open this groove in the main efficiency window, period included."""
+        return self._send("efficiency", "Efficiency window")
+
+    def send_to_geometry(self):
+        """Open this groove in the geometry window, period included."""
+        return self._send("geometry", "Geometry window")
+
+    def _send(self, key, name):
+        """Hand this groove to the window a mode names, and return that window.
 
         The groove is written to a gratinglab .json in the temporary directory
-        first, because the efficiency window's form takes a profile file. That
-        also leaves the user a file the period travels with, should they want
-        to keep it. The window is the one the Go menu opens
+        first, because both windows' forms take a profile file. That also
+        leaves the user a file the period travels with, should they want to
+        keep it. The window is the one the Go menu opens
         (:func:`gratinglab.gui.qt.launcher.open_window`), so sending and
-        switching never leave two efficiency windows open.
+        switching never leave two of one window open. Both windows take the
+        file through ``open_boundary``.
         """
         if self._profile is None:
-            return
+            return None
         try:
             from gratinglab.gui.launcher import mode
             from gratinglab.gui.qt.launcher import open_window
         except ImportError as exc:
             QMessageBox.warning(
-                self, "Efficiency window unavailable",
-                f"The efficiency window could not be loaded:\n{exc}\n\n"
+                self, f"{name} unavailable",
+                f"The {name.lower()} could not be loaded:\n{exc}\n\n"
                 'It needs the gui extra: pip install "gratinglab[gui]"')
-            return
+            return None
 
         import tempfile
 
@@ -478,6 +498,6 @@ class BoundaryView(QWidget):
         os.makedirs(folder, exist_ok=True)
         path, _ = self.write_profile(os.path.join(folder, f"{stem}_boundary.json"))
 
-        window = open_window(mode("efficiency"))
+        window = open_window(mode(key))
         window.open_boundary(path)
         return window
