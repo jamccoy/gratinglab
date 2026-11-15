@@ -1631,6 +1631,29 @@ class TestRimFocusAndPresets:
             for b in boxes[i + 1:]:
                 assert not a.intersects(b) or a.intersected(b).isEmpty()
 
+    def test_no_label_covers_another_tip(self, win):
+        """At grazing incidence the order tips land in one knot, and labels
+        set round each tip filled it, over the rays and the tip markers. A
+        crowd's labels now stand in a column beside it."""
+        from gratinglab.gui import camera3d, label_layout
+
+        panel = self._panel(win)
+        panel.render_image()
+        canvas = panel._canvas
+        tips = []
+        for tail, head, text, _tag in canvas._labels():
+            (_, xy), _ = camera3d.project(canvas.frame, [tail, head])
+            tips.append((text, (float(xy[0]), float(xy[1]))))
+        for point in canvas.scene.points:
+            (xy,), _ = camera3d.project(canvas.frame, [(point.x, point.y, point.z)])
+            tips.append(("", (float(xy[0]), float(xy[1]))))
+        crowded = label_layout.crowds([xy for _t, xy in tips])
+        assert crowded, "the default geometry no longer crowds; this test needs one that does"
+        covering = [(text, other) for text, box in canvas.label_boxes
+                    for other, xy in tips
+                    if other != text and label_layout.covers(box.getRect(), xy)]
+        assert not covering
+
     def test_every_propagating_order_is_named(self, win):
         """The scene names m = 0 only; this view names the rest from each
         ray's own order, so the names are the scene's numbers."""

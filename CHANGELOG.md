@@ -10,6 +10,18 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Fixed
+
+- **The 3D view's labels no longer crowd at the ray tips.** At grazing
+  incidence every order's tip lands within a few pixels of the others, and
+  labels set round each tip filled that knot, over the rays and the tip
+  markers. Labels whose tips crowd together now stand in a column beside
+  the crowd, in the order the tips run, each joined to its tip by a leader
+  line, and the column keeps off the rays. No label covers another label's
+  tip or a tip marker any more; the layout is `gui/label_layout.py`.
+
 ## 0.3.15 (2026-11-14)
 
 ### Added

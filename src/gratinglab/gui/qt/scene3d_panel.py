@@ -43,7 +43,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from .. import camera3d, diagram3d
+from .. import camera3d, diagram3d, label_layout
 from ..camera3d import Camera
 from . import recent, theming
 
@@ -300,19 +300,59 @@ class SceneCanvas(QWidget):
         return out
 
     def _paint_labels(self, painter, frame, colors, theme, width, height) -> None:
-        """Place each label at the first of several spots round its anchor
-        that overlaps no label already placed and stays in the frame. Orders
-        go last, since there are many and they are the ones that crowd."""
+        """Name everything, covering no other label and no other tip.
+
+        Labels whose tips crowd together go in a column beside the crowd,
+        laid out by :mod:`gratinglab.gui.label_layout`: at grazing incidence
+        every order's tip lands in one knot, and labels set round each tip
+        filled it. The rest go at the first of several spots round their tip
+        that is free, orders last, since there are many of them."""
         font = QFont(painter.font())
         font.setPointSizeF(8.5)
         painter.setFont(font)
         metrics = QFontMetricsF(font)
         bounds = QRectF(2, 2, width - 4, height - 4)
+
+        labels = []
+        for tail, world, text, tag in self._labels():
+            (t_xy, xy), _ = camera3d.project(frame, [tail, world])
+            size = (metrics.horizontalAdvance(text) + 4, metrics.height())
+            labels.append((t_xy, (float(xy[0]), float(xy[1])), text, tag, size))
+        tips = [lab[1] for lab in labels]
+        markers = []
+        for point in self.scene.points:
+            (xy,), _ = camera3d.project(frame, [(point.x, point.y, point.z)])
+            markers.append((float(xy[0]), float(xy[1])))
+        keep_clear = tips + markers
+        # Every labelled line as drawn on screen, tail to tip, for a column
+        # to keep out of.
+        lines = [((float(lab[0][0]), float(lab[0][1])), lab[1]) for lab in labels]
+
+        # --- crowds first, each as one column, while there is room for it.
         placed: list[QRectF] = []
-        ordered = sorted(self._labels(), key=lambda lab: lab[3] in ("order", "zero"))
-        for tail, world, text, tag in ordered:
-            (t_xy, (x, y)), _ = camera3d.project(frame, [tail, world])
-            w, h = metrics.horizontalAdvance(text) + 4, metrics.height()
+        done: set[int] = set()
+        frame_rect = bounds.getRect()
+        on_screen = [i for i, tip in enumerate(tips) if bounds.contains(QPointF(*tip))]
+        for crowd in label_layout.crowds([tips[i] for i in on_screen]):
+            members = [on_screen[k] for k in crowd]
+            rects = label_layout.column(
+                members, tips, [lab[4] for lab in labels], frame_rect,
+                keep_clear, [b.getRect() for b in placed], lines,
+            )
+            if rects is None:
+                continue  # no room for a column; each takes its own chance below
+            for i, rect in rects.items():
+                box = QRectF(*rect)
+                self._draw_label(painter, colors, labels[i], box, leader=True)
+                placed.append(box)
+                done.add(i)
+
+        # --- everything else, round its own tip.
+        rest = sorted((i for i in range(len(labels)) if i not in done),
+                      key=lambda i: labels[i][3] in ("order", "zero"))
+        for i in rest:
+            t_xy, (x, y), text, tag, (w, h) = labels[i]
+            others = [p for k, p in enumerate(keep_clear) if k != i]
             # First choice: just past the tip, continuing the line, where the
             # label reads as the line's own and covers none of it.
             dx, dy = x - t_xy[0], y - t_xy[1]
@@ -332,22 +372,29 @@ class SceneCanvas(QWidget):
             box, leader = None, False
             for n, (dx, dy) in enumerate(spots):
                 candidate = QRectF(x + dx, y + dy, w, h)
-                if bounds.contains(candidate) and not any(candidate.intersects(b) for b in placed):
+                if bounds.contains(candidate) \
+                        and not any(candidate.intersects(b) for b in placed) \
+                        and not any(label_layout.covers(candidate.getRect(), p) for p in others):
                     box, leader = candidate, n >= 9
                     break
             if box is None or not bounds.contains(QPointF(x, y)):
                 continue  # nowhere free, or its tip is off screen
-            if leader:
-                lead = QColor(colors[tag])
-                lead.setAlphaF(0.5)
-                painter.setPen(QPen(lead, 0.8))
-                # To the nearest point of the box, which a ring keeps clear of the tip.
-                painter.drawLine(QPointF(x, y), QPointF(
-                    min(max(x, box.left()), box.right()), min(max(y, box.top()), box.bottom())))
+            self._draw_label(painter, colors, labels[i], box, leader)
             placed.append(box)
-            self.label_boxes.append((text, box))
-            painter.setPen(QColor(colors[tag]))
-            painter.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
+
+    def _draw_label(self, painter, colors, label, box, leader) -> None:
+        """One label in its box, joined to its tip when it is set apart."""
+        _tail, (x, y), text, tag, _size = label
+        if leader:
+            lead = QColor(colors[tag])
+            lead.setAlphaF(0.5)
+            painter.setPen(QPen(lead, 0.8))
+            # To the nearest point of the box, which keeps clear of the tip.
+            painter.drawLine(QPointF(x, y), QPointF(
+                min(max(x, box.left()), box.right()), min(max(y, box.top()), box.bottom())))
+        self.label_boxes.append((text, box))
+        painter.setPen(QColor(colors[tag]))
+        painter.drawText(box, Qt.AlignmentFlag.AlignCenter, text)
 
     def _paint_title(self, painter, theme, width) -> None:
         font = QFont(painter.font())
