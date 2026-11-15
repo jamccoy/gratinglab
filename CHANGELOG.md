@@ -22,6 +22,10 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Changed
 
+- **The 0.2 metrology milestone is closed**, by the maintainer's decision
+  rather than the graduate students' sign-off it was waiting on; see
+  `docs/roadmap.md`, "Versioning".
+
 - **The chooser is a compact toolbox**, 260 px wide rather than 460, since
   it now stays open beside the windows. One sentence naming every window,
   and a button for each; what a window is for, and the command that opens

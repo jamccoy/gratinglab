@@ -803,14 +803,17 @@ The intended milestones are as follows.
 - **0.2**: the AFM metrology is complete for the group's own analysis. Its
   components are in place: groove averaging that excludes partial grooves, tip
   correction with real probe shapes, swath statistics, and the boundary JSON
-  format that carries the period. The release is due once the graduate students
-  using it confirm that it covers their analysis.
+  format that carries the period. The release was to wait until the graduate
+  students using it confirmed that it covers their analysis.
 
   **0.2.0 was released on 2026-10-27 before that sign-off**, because the RCWA
   and C-method backends and a change to what `absorption` means each call for
-  a minor release under this policy. The metrology milestone is still open,
-  and the students' confirmation is still what closes it; it will be recorded
-  here and in the CHANGELOG of whichever release follows it.
+  a minor release under this policy.
+
+  **Closed on 2026-11-14 without the sign-off, by the maintainer's decision.**
+  The metrology was judged complete for the group's analysis as it stands,
+  so the students' confirmation is no longer a condition. Gaps they find are
+  issues like any other rather than a gate on the milestone.
 - **0.3 and later minor versions**: the efficiency solvers lose their
   experimental status. The criterion is the one stated in the README: use on a
   real problem, with the integral solver compared against measured
