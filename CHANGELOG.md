@@ -17,6 +17,10 @@ entries under "Unreleased" into a section named for the new version;
 - **The geometry window's "Send to efficiency window" sits just under the
   form**, rather than at the foot of the dock, where it was far below the
   last field in a tall window.
+- **The groove profile plot's title and axis label fit their pane.** The
+  title ran past the right edge at the default window size. It is now two
+  lines at 9 pt, the x label is "position along d̂ (nm)", and a measured
+  profile is named "From file" as in the form rather than by its class.
 
 ## 0.3.16 (2026-11-14)
 

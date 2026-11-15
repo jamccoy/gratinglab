@@ -14,6 +14,9 @@ from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 __all__ = ["ProfilePlotPanel"]
 
+#: A profile class named as the geometry form names it, where they differ.
+_KIND_NAMES = {"FromProfileData": "From file"}
+
 
 class ProfilePlotPanel(QWidget):
     """A single matplotlib axes, embedded with its own navigation toolbar."""
@@ -81,12 +84,19 @@ class ProfilePlotPanel(QWidget):
         height = parsed.problem.height_nm(t)
         axes.plot(x, height, color=surface, lw=1.8)
         axes.fill_between(x, 0, height, color=surface, alpha=0.12)
-        axes.set_xlabel("position along d̂ (nm), two periods shown")
+        # Short lines, at 9 pt, centred on the figure: constrained layout
+        # shrinks the axes to fit the panel but never the text, and an axes
+        # title centres on the axes, which the y label pushes right. One long
+        # 10 pt axes title ran past the edge of a pane 324 px wide; this fits
+        # the dock's narrowest, 280 px, with about 20 px either side.
+        axes.set_xlabel("position along d̂ (nm)")
         axes.set_ylabel("height (nm)")
-        axes.set_title(
-            f"{type(parsed.problem.profile).__name__}: "
+        kind = type(parsed.problem.profile).__name__
+        self._figure.suptitle(
+            f"{_KIND_NAMES.get(kind, kind)}, two periods\n"
             f"period {parsed.problem.period:g} nm, depth {parsed.problem.depth:.4g} nm",
-            fontsize=10,
+            fontsize=9,
+            color=theme.ink,
         )
         axes.grid(alpha=0.25)
         self._canvas.draw_idle()

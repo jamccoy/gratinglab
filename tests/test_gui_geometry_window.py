@@ -104,6 +104,23 @@ class TestTheWindow:
         assert 0 <= gap < 20, f"the button is {gap} px below the form"
         assert window.geometry_dock.height() - gap > 400, "the dock was too short to tell"
 
+    def test_the_profile_plot_text_fits_a_narrow_window(self, window, qapp):
+        """The groove profile's title and x label stay inside its figure at
+        the dock's narrowest; one long title used to run off its right edge."""
+        window.resize(1000, 700)
+        window.show()
+        qapp.processEvents()
+        panel = window.geometry_tab.profile_panel
+        figure, axes = panel._figure, panel._axes
+        figure.canvas.draw()
+        renderer = figure.canvas.get_renderer()
+        assert figure.bbox.width < 300, "the pane was too wide to tell"
+        title = figure.get_suptitle()
+        assert "two periods" in title and "period" in title.splitlines()[1]
+        for text in (figure._suptitle, axes.title, axes.xaxis.label):
+            extent = text.get_window_extent(renderer)
+            assert extent.x0 >= 0 and extent.x1 <= figure.bbox.width, text.get_text()
+
     def test_the_go_menu_reaches_the_efficiency_window(self, window):
         titles = [a.text() for a in window._gratinglab_switch_actions]
         assert "Compute efficiency" in titles
