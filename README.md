@@ -262,20 +262,27 @@ pipeline recovers the period and blaze angle used to generate it.
 
 ```bash
 .venv/bin/python -m pip install -e ".[gui,metrology]"
-gratinglab-app                 # the chooser: one place to start, both windows
+gratinglab-app                 # the chooser: one place to start, every window
 gratinglab-gui                 # straight to geometry, solvers, comparison
+gratinglab-geometry            # straight to the geometry, with no solver
 gratinglab-metrology-gui       # straight to AFM import, blaze angles, boundary profiles
 ```
 
-`gratinglab-app` opens a chooser for the two windows. Each window has a **Go** menu
-that switches to the other window or back to the chooser (`Ctrl+Shift+M`), and
+`gratinglab-app` opens a chooser for the three windows. Each window has a **Go** menu
+that switches to another window or back to the chooser (`Ctrl+Shift+M`), and
 switching reuses a window that is already open. The chooser has the same
 **View → Theme** and **Help** menus as the windows, so the theme, which applies to the
 whole application, and the theory pages can be reached without opening a window
 first. While the chooser is on screen it imports both windows on a background thread,
 so the first window opens in about a fifth of a second; the matplotlib and scipy
-imports otherwise take several seconds. `gratinglab-gui` and
+imports otherwise take several seconds. `gratinglab-gui`, `gratinglab-geometry` and
 `gratinglab-metrology-gui` open one window directly.
+
+The geometry window (**Explore a geometry**) is the efficiency window's geometry form
+and Grating Geometry tab on their own: the 3D view, the cross-section and the sin β
+ladder, redrawn as the form changes, with no solver. **Send to efficiency window**
+(`Ctrl+E`) copies its form into the efficiency window, opening it if need be, and
+solves nothing; the efficiency window keeps its own Grating Geometry tab.
 
 The windows are built with Qt (PySide6), so `pip install "gratinglab[gui]"` needs no
 system toolkit to be installed first. PySide6 is licensed under the LGPLv3 and is an

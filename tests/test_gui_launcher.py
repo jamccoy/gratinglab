@@ -26,8 +26,9 @@ class TestTheModeTable:
 
     def test_both_halves_are_offered(self):
         keys = [m.key for m in MODES]
-        assert keys == ['metrology', 'efficiency'], (
-            "the metrology window comes first, being the half in regular use")
+        assert keys == ['metrology', 'geometry', 'efficiency'], (
+            "the metrology window comes first, being the half in regular use; "
+            "the geometry window sits between it and the solvers")
 
     def test_every_mode_is_fully_described(self):
         for chosen in MODES:
@@ -226,10 +227,10 @@ class TestTheChooser:
         window = qt_launcher.LauncherWindow()
         qtbot.addWidget(window)
         shown = ' '.join(label.text() for label in window.findChildren(QLabel))
-        assert ("Measure a grating's grooves from an AFM scan or compute its "
-                "diffraction efficiency.") in shown
+        assert ("Measure a grating's grooves from an AFM scan, look at its "
+                "geometry, or compute its diffraction efficiency.") in shown
 
-    def test_a_third_window_joins_the_wording(self, qtbot, monkeypatch):
+    def test_another_window_joins_the_wording(self, qtbot, monkeypatch):
         """No sentence on the chooser may assume there are two windows."""
         from PySide6.QtWidgets import QLabel
 
@@ -242,8 +243,9 @@ class TestTheChooser:
         window = qt_launcher.LauncherWindow()
         qtbot.addWidget(window)
         shown = ' '.join(label.text() for label in window.findChildren(QLabel))
-        assert ("Measure a grating's grooves from an AFM scan, compute its "
-                "diffraction efficiency, or plan how to rule it.") in shown
+        assert ("Measure a grating's grooves from an AFM scan, look at its "
+                "geometry, compute its diffraction efficiency, or plan how to "
+                "rule it.") in shown
         assert 'another window' in shown and 'the other window' not in shown
         assert '<code>gratinglab-fab</code>' in shown
 

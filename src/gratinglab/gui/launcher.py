@@ -70,6 +70,8 @@ class Mode:
 
 
 #: The metrology window comes first because it is the half in regular use.
+#: The geometry window sits between it and the efficiency window, in the
+#: order the work goes.
 #: Adding a third window is one entry here and nothing else: the chooser's
 #: card and sentence, the Go menu and the Help submenu are all built from it.
 MODES = (
@@ -83,6 +85,20 @@ MODES = (
         script="gratinglab-metrology-gui",
         summary="measure a grating's grooves from an AFM scan",
         help="gratinglab.gui.docs:wiki_help_groups",
+    ),
+    # Between the two: a groove measured in the first is looked at here, and
+    # a geometry settled here is sent on to the third. No help of its own,
+    # since its tab is the efficiency window's and so are the pages.
+    Mode(
+        key="geometry",
+        title="Explore a geometry",
+        blurb="Turn a grating and its beams over in 3D, with the "
+              "cross-section and every order's sin β, without solving "
+              "anything. Send the geometry to the efficiency window when "
+              "it is settled.",
+        window="gratinglab.gui.qt.geometry_window:GeometryWindow",
+        script="gratinglab-geometry",
+        summary="look at its geometry",
     ),
     Mode(
         key="efficiency",

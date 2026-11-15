@@ -292,6 +292,28 @@ class GeometryPanel(QWidget):
     def read_form(self) -> FormState:
         return FormState(**{k: _value(w) for k, w in self._fields.items()})
 
+    def write_form(self, form: FormState) -> None:
+        """Set every field from ``form``, as `read_form` would read it back.
+
+        The geometry window's "Send to efficiency window" calls this. It
+        emits `changed`, so the window redraws its geometry, and not
+        `solve_requested`: a geometry arriving from elsewhere is solved when
+        the user asks. A coating that is not installed here falls back to
+        "(none)", the same as `refresh_coatings` does.
+        """
+        for key, value in dataclasses.asdict(form).items():
+            widget = self._fields[key]
+            if isinstance(widget, QComboBox):
+                index = widget.findData(value)
+                if index < 0:
+                    index = widget.findText(value)
+                widget.setCurrentIndex(max(index, 0))
+            else:
+                widget.setText(value)
+        path = form.profile_path
+        self._path_label.setText(Path(path).name if path else "")
+        self.changed.emit()
+
     def load_profile(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self, "Load boundary profile", recent.start_in("profiles"),

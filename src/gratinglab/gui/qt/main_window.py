@@ -349,6 +349,17 @@ class MainWindow(QMainWindow):
         if not self.geometry_dock.isVisible():
             self.geometry_dock.show()
 
+    def open_geometry(self, form) -> None:
+        """Take a whole geometry form, as the geometry window sends it.
+
+        The form is copied in and drawn, and nothing is solved: which solver
+        to spend time on is the user's choice, and the integral one takes
+        minutes.
+        """
+        self.geometry.write_form(form)
+        if not self.geometry_dock.isVisible():
+            self.geometry_dock.show()
+
     def _geometry_edited(self) -> None:
         """Schedule a redraw after a field was edited, without solving.
 

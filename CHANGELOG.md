@@ -10,6 +10,19 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- **A geometry window, "Explore a geometry" in the chooser.** The geometry
+  form and the Grating Geometry tab on their own, with no solver, as a
+  reference to turn a grating over in. **Send to efficiency window**
+  (`Ctrl+E`) copies the whole form into the efficiency window, opening it
+  if none is open, and does not solve; a form that does not parse is not
+  sent. Also `gratinglab-geometry` to open it directly.
+  `GeometryPanel.write_form` and `MainWindow.open_geometry` are the two new
+  methods behind the send.
+
 ## 0.3.12 (2026-11-14)
 
 ### Changed

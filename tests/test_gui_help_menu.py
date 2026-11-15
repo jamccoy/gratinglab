@@ -82,9 +82,11 @@ class TestEveryWindowOffersIt:
         from gratinglab.gui.launcher import MODES
 
         sections = window._gratinglab_help_sections
-        assert list(sections) == [m.key for m in MODES]
+        # A window with no pages of its own, like the geometry window,
+        # adds no section.
+        assert list(sections) == [m.key for m in MODES if m.help]
         submenus = [a.menu() for a in window._help_menu.actions() if a.menu()]
-        assert [m.title() for m in submenus] == [menu_label(m.title) for m in MODES]
+        assert [m.title() for m in submenus] == [menu_label(m.title) for m in MODES if m.help]
 
     def test_the_metrology_wiki_is_in_help_too(self, window):
         """It was only in the AFM window's Wiki tab, so the efficiency window

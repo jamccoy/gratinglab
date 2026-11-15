@@ -72,5 +72,28 @@ def main() -> int:
     return app.exec()
 
 
+def geometry_main() -> int:
+    """Console-script entry point for ``gratinglab-geometry``.
+
+    The geometry window alone. Its "Send to efficiency window" opens the
+    efficiency window in the same process when it is used.
+    """
+    QApplication = _require_qt()
+    from .qt.geometry_window import GeometryWindow
+    from .qt.launcher import open_window
+    from .launcher import mode
+
+    app = QApplication(sys.argv)
+    from .qt.theming import install
+
+    install(app)
+    # Through the launcher, so the window gets its Go menu and is the one
+    # the efficiency window's Go menu finds, as from the chooser.
+    window = open_window(mode("geometry"))
+    assert isinstance(window, GeometryWindow)
+    _bring_to_front(window)
+    return app.exec()
+
+
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())
