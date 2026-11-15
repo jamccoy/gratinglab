@@ -253,8 +253,27 @@ class TestTheChooser:
         assert ("Measure a grating's grooves from an AFM scan, look at its "
                 "geometry, compute its diffraction efficiency, or plan how to "
                 "rule it.") in shown
-        assert 'another window' in shown and 'the other window' not in shown
-        assert '<code>gratinglab-fab</code>' in shown
+        tips = ' '.join(w.toolTip() for w in
+                        [*window.findChildren(QLabel), *window.buttons.values()])
+        assert 'another window' in tips and 'the other window' not in tips
+        assert '<code>gratinglab-fab</code>' in window.buttons['fabrication'].toolTip()
+
+    def test_every_button_says_what_it_opens(self, qtbot):
+        """The blurbs left the face of the toolbox for the tooltips; they
+        must not have left altogether."""
+        window = qt_launcher.LauncherWindow()
+        qtbot.addWidget(window)
+        for chosen in MODES:
+            tip = window.buttons[chosen.key].toolTip()
+            assert chosen.blurb in tip and f'<code>{chosen.script}</code>' in tip
+
+    def test_it_is_a_compact_toolbox(self, qtbot):
+        """Narrow enough to sit beside the windows it stays open with."""
+        window = qt_launcher.LauncherWindow()
+        qtbot.addWidget(window)
+        window.show()
+        assert window.width() <= 300
+        assert window.sizeHint().height() <= 320
 
     def test_clicking_opens_that_mode_and_the_menu_stays(self, qtbot,
                                                          monkeypatch):

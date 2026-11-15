@@ -10,6 +10,16 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- **The chooser is a compact toolbox**, 260 px wide rather than 460, since
+  it now stays open beside the windows. One sentence naming every window,
+  and a button for each; what a window is for, and the command that opens
+  it directly, are in its button's tooltip, and the Go menu hint in the
+  sentence's.
+
 ## 0.3.14 (2026-11-14)
 
 ### Changed

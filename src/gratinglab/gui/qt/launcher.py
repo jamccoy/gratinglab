@@ -26,8 +26,6 @@ from PySide6.QtCore import Qt
 from PySide6.QtGui import QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
-    QFrame,
-    QHBoxLayout,
     QLabel,
     QMenuBar,
     QPushButton,
@@ -62,6 +60,13 @@ SWITCH_MENU_TITLE = "&Go"
 #: in a session started by a direct script, has no chooser to hold it.
 _OPEN_WINDOWS: list[QWidget] = []
 
+
+#: The toolbox's width, and its buttons' height. Wide enough for the
+#: sentence to wrap to three lines and the longest title to sit in its
+#: button with room either side; a toolbox wider than this crowds the
+#: windows it sits beside.
+_TOOLBOX_WIDTH = 260
+_BUTTON_HEIGHT = 34
 
 #: The chooser, kept so that "Main Menu" shows the same one rather than a
 #: second copy. Closing a window does not destroy it while a reference is
@@ -235,7 +240,12 @@ def _either(items):
 
 
 class LauncherWindow(QWidget):
-    """A button and a sentence per window, so none of them can be missed.
+    """A compact toolbox: one sentence, and a button per window.
+
+    Kept small because it stays open beside the windows, as Gwiddion's
+    toolbox does. What each window is for, and the command that opens it
+    directly, are in its button's tooltip; the sentence names every window
+    in a line, so none of them, the AFM half least of all, can be missed.
 
     It carries the same View and Help menus the windows do, since the theme
     is a setting for the whole application and not for whichever window
@@ -254,42 +264,28 @@ class LauncherWindow(QWidget):
         self.setWindowTitle("gratinglab")
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(28, 24, 28, 24)
-        layout.setSpacing(18)
+        layout.setContentsMargins(12, 8, 12, 12)
+        layout.setSpacing(6)
         layout.setMenuBar(self._build_menu())
-
-        heading = QLabel("gratinglab")
-        font = heading.font()
-        font.setPointSize(font.pointSize() + 8)
-        font.setBold(True)
-        heading.setFont(font)
-        layout.addWidget(heading)
 
         opening = _either([m.summary for m in MODES if m.summary])
         # Only the first letter: str.capitalize() would lower "AFM" too.
         subtitle = QLabel(opening[:1].upper() + opening[1:] + ".")
         subtitle.setWordWrap(True)
         subtitle.setStyleSheet("color: palette(mid);")
+        subtitle.setToolTip(
+            "The Go menu in each window switches to another window or back "
+            "to this one, and closing this one closes them all."
+        )
         layout.addWidget(subtitle)
+        layout.addSpacing(4)
 
         self.buttons = {}
         for chosen in MODES:
-            layout.addWidget(self._card(chosen))
+            layout.addWidget(self._button(chosen))
 
         layout.addStretch(1)
-
-        hint = QLabel(
-            "The <b>Go</b> menu in each window switches to another window or "
-            "back to this one. To open a window directly, run "
-            + _either([f"<code>{m.script}</code>" for m in MODES])
-            + "."
-        )
-        hint.setWordWrap(True)
-        hint.setTextFormat(Qt.RichText)
-        hint.setStyleSheet("color: palette(mid);")
-        layout.addWidget(hint)
-
-        self.setMinimumWidth(460)
+        self.setFixedWidth(_TOOLBOX_WIDTH)
 
     def _build_menu(self):
         """View > Theme and Help, held on the instance and returned.
@@ -315,29 +311,20 @@ class LauncherWindow(QWidget):
         self._help_menu = install_help_menu(self, self._menu_bar)
         return self._menu_bar
 
-    def _card(self, chosen):
-        """One mode: its button, and the sentence saying what it is for."""
-        frame = QFrame()
-        frame.setFrameShape(QFrame.StyledPanel)
-        inner = QVBoxLayout(frame)
-        inner.setContentsMargins(16, 14, 16, 14)
-        inner.setSpacing(6)
-
-        row = QHBoxLayout()
+    def _button(self, chosen):
+        """One mode's button, with what it is for and its command as a tooltip."""
         button = QPushButton(chosen.title)
         button.setDefault(chosen is MODES[0])
         button.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        button.setMinimumHeight(_BUTTON_HEIGHT)
+        button.setToolTip(
+            f"<p>{chosen.blurb}</p>"
+            f"<p>To open it directly, run <code>{chosen.script}</code>.</p>"
+        )
         button.clicked.connect(partial(self.choose, chosen))
         button.setObjectName(f"mode-{chosen.key}")
-        row.addWidget(button)
-        inner.addLayout(row)
-
-        blurb = QLabel(chosen.blurb)
-        blurb.setWordWrap(True)
-        inner.addWidget(blurb)
-
         self.buttons[chosen.key] = button
-        return frame
+        return button
 
     def choose(self, chosen):
         """Open a mode's window, or raise it if it is open, and stay open.
