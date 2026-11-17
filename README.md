@@ -295,14 +295,27 @@ ladder, redrawn as the form changes, with no solver. **Send to efficiency window
 (`Ctrl+E`) copies its form into the efficiency window, opening it if need be, and
 solves nothing; the efficiency window keeps its own Grating Geometry tab.
 
-The **Mirror** tab treats the dock's coating stack as a flat mirror, before any
-grooves: the Coating as substrate under its Layers (innermost first), with the
-Roughness at every interface. It plots the specular reflectivity against graze angle
+The efficiency window's dock describes the surface as a stack, in its **Surface**
+group: one row per coating layer, outermost at the top as the light meets them, each
+with a material and a thickness in nm, above the **Grating** material the grooves are
+cut into. Every material box lists your library and also takes a typed model name
+such as `typical:Au` or `factors:SiO2@2.2`.
+
+The **Materials** tab builds those names from a kind, a table name or formula and an
+optional density, plots the material's index against wavelength with the dock's scan
+shaded, and says whether it covers that scan. Two buttons send it to the stack, as the
+grating material or as a new top layer. Your library is listed there, with the buttons
+that add a table to it, rescan it and open its folder. The **Setup** tab is the
+reference page for what is installed and what a coating means to each solver.
+
+The **Mirror** tab treats that stack as a flat mirror, before any grooves, with the
+roughness at every interface. It plots the specular reflectivity against graze angle
 or wavelength, the 1/e penetration depth in each material, and the thickness the
 outermost layer needs before what lies beneath it changes the reflectivity by less
-than a tolerance, so you can see whether that layer may be modelled as bulk. The same
-is `gratinglab.mirror.Mirror` from Python. Coating and Layers both take model names
-such as `typical:Au` and `factors:SiO2@2.2`.
+than a tolerance. Its answer, whether that layer reads as bulk, is one line above the
+plots, and when it does a button makes the layer the grating material on its own. The
+tab recomputes as you type, and an angle scan marks the graze angles your mount puts
+light at. The same calculation is `gratinglab.mirror.Mirror` from Python.
 
 The windows are built with Qt (PySide6), so `pip install "gratinglab[gui]"` needs no
 system toolkit to be installed first. PySide6 is licensed under the LGPLv3 and is an

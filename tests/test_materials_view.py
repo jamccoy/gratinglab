@@ -106,6 +106,14 @@ class TestTheTab:
         tab._layer.click()
         assert win.geometry.read_form().layers == "typical:C@2.0"
 
+    def test_the_library_is_listed_and_a_click_previews_it(self, win):
+        tab = win.materials_tab
+        names = [tab._list.item(i).text() for i in range(tab._list.count())]
+        assert names == list(materials.available()) and "Au" in names
+        tab._list.itemClicked.emit(tab._list.item(names.index("Au")))
+        assert tab.coating_name() == "Au" and "CXRO/Henke export" in tab._panel.toPlainText()
+        assert "Scattering factors: none installed" in tab._elements.text()
+
     def test_it_follows_the_docks_scan(self, win):
         tab = win.materials_tab
         tab.set_fields("typical", "Au")

@@ -83,6 +83,7 @@ __all__ = [
     "UnknownMaterial",
     "available",
     "data_dir",
+    "factor_elements",
     "factors",
     "from_ari_file",
     "from_cxro_file",
@@ -277,6 +278,21 @@ def factors(formula: str, density: float | None = None) -> OpticalConstants:
     suffix = "" if density == DENSITIES.get(formula) else f"@{density:g}"
     name = f"{_factors.PREFIX}{formula}{suffix}"
     return _factors.factors(formula, density, tables, name=name)
+
+
+def factor_elements() -> tuple[str, ...]:
+    """The elements with a ``<Symbol>.nff`` in a library, by atomic number:
+    what a ``factors:`` formula may be made of on this machine."""
+    from .elements import ATOMIC_NUMBER
+
+    found = set()
+    for directory in library_dirs():
+        if directory.is_dir():
+            for path in directory.iterdir():
+                symbol = path.stem.capitalize()
+                if path.suffix.lower() == _factors.SUFFIX and symbol in ATOMIC_NUMBER:
+                    found.add(symbol)
+    return tuple(sorted(found, key=ATOMIC_NUMBER.__getitem__))
 
 
 def _factor_file(symbol: str) -> "Path | None":

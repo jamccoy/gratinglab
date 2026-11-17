@@ -1962,16 +1962,17 @@ class TestSetupTab:
     ):
         from gratinglab import materials
 
-        tab = win._setup_tab
+        tab = win.materials_tab.library
         self._answer(monkeypatch, tab, materials.data_dir() / "Au.txt", "Pt")
         assert "Pt" not in self._coatings(win)
-        mentions = tab._browser.toPlainText().count("Pt")
+        page = win._setup_tab._browser
+        mentions = page.toPlainText().count("Pt")
         tab.add_material()
         assert (library / "Pt.txt").is_file()
         assert "Pt" in self._coatings(win)
         # The page re-rendered with a row for it; "Pt" was already the
         # example name in the prose, so count rather than test presence.
-        assert tab._browser.toPlainText().count("Pt") > mentions
+        assert page.toPlainText().count("Pt") > mentions
         assert "Added Pt" in tab._status.text()
 
     def test_scattering_factors_are_filed_by_symbol_without_a_name(
@@ -1979,7 +1980,7 @@ class TestSetupTab:
     ):
         source = tmp_path / "ti.nff"
         source.write_text("E(eV)\tf1\tf2\n30\t20\t3\n5000\t22\t1\n", encoding="utf-8")
-        tab = win._setup_tab
+        tab = win.materials_tab.library
         self._answer(monkeypatch, tab, source, "never asked")
         monkeypatch.setattr(tab, "_choose_name", lambda default: pytest.fail("asked"))
         tab.add_material()
@@ -1991,9 +1992,9 @@ class TestSetupTab:
     ):
         broken = tmp_path / "Pt.txt"
         broken.write_text("not a CXRO export\n", encoding="utf-8")
-        self._answer(monkeypatch, win._setup_tab, broken, "Pt")
-        win._setup_tab.add_material()
-        assert "was not added" in win._setup_tab._status.text()
+        self._answer(monkeypatch, win.materials_tab.library, broken, "Pt")
+        win.materials_tab.library.add_material()
+        assert "was not added" in win.materials_tab.library._status.text()
         assert "Pt" not in self._coatings(win)
 
     def test_a_declined_replace_leaves_the_table_alone(
@@ -2001,7 +2002,7 @@ class TestSetupTab:
     ):
         from gratinglab import materials
 
-        tab = win._setup_tab
+        tab = win.materials_tab.library
         self._answer(monkeypatch, tab, materials.data_dir() / "Au.txt", "Pt")
         tab.add_material()
         before = (library / "Pt.txt").stat().st_mtime_ns
@@ -2010,7 +2011,7 @@ class TestSetupTab:
         assert (library / "Pt.txt").stat().st_mtime_ns == before
 
     def test_cancelling_either_dialog_does_nothing(self, win, library, monkeypatch):
-        tab = win._setup_tab
+        tab = win.materials_tab.library
         self._answer(monkeypatch, tab, "", "Pt")
         tab.add_material()
         monkeypatch.setattr(tab, "_choose_file", lambda: "Pt.txt")
@@ -2025,9 +2026,9 @@ class TestSetupTab:
         library.mkdir()
         (library / "Ni.txt").write_bytes((materials.data_dir() / "Au.txt").read_bytes())
         assert "Ni" not in self._coatings(win)
-        win._setup_tab.rescan()
+        win.materials_tab.library.rescan()
         assert "Ni" in self._coatings(win)
-        assert "Library read" in win._setup_tab._status.text()
+        assert "Library read" in win.materials_tab.library._status.text()
 
     def test_a_removed_coating_falls_back_to_none_and_says_so(
         self, win, library, qtbot
@@ -2037,19 +2038,19 @@ class TestSetupTab:
         library.mkdir()
         table = library / "Ni.txt"
         table.write_bytes((materials.data_dir() / "Au.txt").read_bytes())
-        win._setup_tab.rescan()
+        win.materials_tab.library.rescan()
         combo = win.geometry._fields["coating"]
         combo.setCurrentIndex(combo.findData("Ni"))
         table.unlink()
         with qtbot.waitSignal(win.geometry.changed, timeout=1000):
-            win._setup_tab.rescan()
+            win.materials_tab.library.rescan()
         assert combo.currentData() == ""
 
     def test_a_typed_model_name_is_the_coating_and_survives_a_rescan(self, win, library):
         combo = win.geometry._fields["coating"]
         combo.setEditText("typical:SiO2@2.0")
         assert win.geometry.read_form().coating == "typical:SiO2@2.0"
-        win._setup_tab.rescan()
+        win.materials_tab.library.rescan()
         assert win.geometry.read_form().coating == "typical:SiO2@2.0"
         combo.setCurrentIndex(0)
         assert win.geometry.read_form().coating == ""
@@ -2057,17 +2058,17 @@ class TestSetupTab:
     def test_a_kept_coating_stays_selected(self, win, library):
         combo = win.geometry._fields["coating"]
         combo.setCurrentIndex(combo.findData("Au"))
-        win._setup_tab.rescan()
+        win.materials_tab.library.rescan()
         assert combo.currentData() == "Au"
 
     def test_open_library_folder_creates_it(self, win, library, monkeypatch):
-        from gratinglab.gui.qt import setup_tab
+        from gratinglab.gui.qt import library_bar
 
         opened = []
         monkeypatch.setattr(
-            setup_tab.QDesktopServices, "openUrl", lambda url: opened.append(url) or True
+            library_bar.QDesktopServices, "openUrl", lambda url: opened.append(url) or True
         )
-        win._setup_tab.open_library_folder()
+        win.materials_tab.library.open_library_folder()
         assert library.is_dir()
         assert opened and opened[0].toLocalFile().endswith("library")
 

@@ -7,6 +7,9 @@ wavelength with the dock's scan shaded, where the numbers came from, and
 whether they cover that scan. Two buttons put the material into the dock's
 Surface stack, as the grating material or as a new top layer.
 
+The library is here too: a list of its tables, where a click previews one,
+above the three actions that change it (:mod:`.library_bar`).
+
 What is resolved, drawn and said is in :mod:`gratinglab.gui.materials_view`;
 this is widgets. Built by :class:`~gratinglab.gui.qt.main_window.MainWindow`,
 which hands it the dock.
@@ -22,6 +25,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QLineEdit,
+    QListWidget,
     QPushButton,
     QScrollArea,
     QSplitter,
@@ -34,6 +38,7 @@ from .. import provenance
 from ..materials_view import KINDS, MaterialPreview, draw, lines, material_name, preview
 from ..theme import provenance_colors, style_figure
 from . import theming
+from .library_bar import LibraryBar
 from .sizing import fit_width_to_contents
 
 __all__ = ["MaterialsTab"]
@@ -96,7 +101,21 @@ class MaterialsTab(QWidget):
         self._layer.clicked.connect(self._add_as_layer)
         column.addWidget(self._use)
         column.addWidget(self._layer)
-        column.addStretch(1)
+
+        shelf = QGroupBox("Your library")
+        shelf_column = QVBoxLayout(shelf)
+        self._list = QListWidget()
+        self._list.setToolTip("The tables in your library. Click one to preview it.")
+        self._list.itemClicked.connect(lambda item: self.set_fields("table", item.text()))
+        shelf_column.addWidget(self._list, 1)
+        self._elements = QLabel("")
+        self._elements.setWordWrap(True)
+        self._elements.setToolTip("The elements a scattering-factors formula can use here.")
+        shelf_column.addWidget(self._elements)
+        #: The library's actions; the window listens to its ``library_changed``.
+        self.library = LibraryBar()
+        shelf_column.addWidget(self.library)
+        column.addWidget(shelf, 1)
 
         scroller = QScrollArea()
         scroller.setWidget(controls)
@@ -161,6 +180,14 @@ class MaterialsTab(QWidget):
             self._library = available()
         except ValueError:  # two tables for one name; Setup reports it
             self._library = ()
+        self._list.clear()
+        self._list.addItems(self._library)
+        from ...materials import factor_elements
+
+        elements = factor_elements()
+        self._elements.setText(
+            "Scattering factors: " + (", ".join(elements) if elements else "none installed")
+        )
         self._on_kind_change()
 
     def coating_name(self) -> str:

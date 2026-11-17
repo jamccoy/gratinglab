@@ -149,6 +149,9 @@ class TestLookupByName:
         with pytest.raises(ValueError, match="factors:SiO@"):
             materials.lookup("factors:SiO")
 
+    def test_the_installed_elements_are_listed_by_atomic_number(self, library):
+        assert materials.factor_elements() == ("O", "Si")  # from O.nff and si.nff
+
     def test_install_files_it_under_the_symbol(self, library, tmp_path_factory):
         src = nff(tmp_path_factory.mktemp("dl") / "ti.nff", [30.0, 5000.0], [20, 22], [3, 1])
         assert materials.install(src).name == "Ti.nff"

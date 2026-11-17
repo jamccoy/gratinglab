@@ -217,13 +217,15 @@ class MainWindow(QMainWindow):
         # `_solve_active_tab`'s `getattr(..., "name", None)` skips both.
         self._setup_tab = SetupTab()
         self._tab_widget.addTab(self._setup_tab, "Setup")
-        # The dock is built first, so its dropdown can follow the library.
-        self._setup_tab.library_changed.connect(self.geometry.refresh_coatings)
 
         # Next to Setup, which holds the library it reads; like it, not in
         # `self.tabs`, having no solve contract.
         self.materials_tab = MaterialsTab(self.geometry)
-        self._setup_tab.library_changed.connect(self.materials_tab.refresh_library)
+        # Everything that lists materials follows the library's actions.
+        # The dock is built first, so its dropdowns can.
+        for follow in (self.geometry.refresh_coatings, self.materials_tab.refresh_library,
+                       self._setup_tab.refresh):
+            self.materials_tab.library.library_changed.connect(follow)
         index = self._tab_widget.addTab(self.materials_tab, "Materials")
         self._tab_widget.setTabToolTip(
             index, "Name a material, see its index, and send it to the surface stack"

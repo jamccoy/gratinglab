@@ -22,10 +22,14 @@ entries under "Unreleased" into a section named for the new version;
   material and n and k otherwise, and says where the numbers came from and
   whether they cover that scan, before a solve refuses them. Two buttons send
   the material to the dock's Surface stack, as the grating material or as a
-  new top layer.
+  new top layer. Your library is listed there, a click previewing a table,
+  with the three actions that change it.
 
 ### Changed
 
+- **"Add material", "Rescan library" and "Open library folder" moved from the
+  Setup tab to the Materials tab.** Setup is now the reference page alone, and
+  it lists the `.nk`, `.csv` and `.nff` files a library can hold.
 - **The Mirror tab answers first, and follows what you type.** Its verdict
   (whether the top layer reads as bulk) is one line above the plots, and when
   it does, "Model the top layer as bulk" makes that layer the dock's Grating

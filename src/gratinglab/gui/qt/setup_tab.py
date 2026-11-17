@@ -12,36 +12,21 @@ fields, so they belong in the geometry dock beside the period: one `Problem`
 feeds every solver tab, and a second place to set it would be a second source
 of truth for the same value.
 
-This tab instead owns the library: which materials are available, what they
-were derived from, and how to add one. That content suits a tab, since it is
-reference material and not an input, it duplicates no state, and it is what a
-user needs when the coating dropdown offers one entry and they wanted nickel.
-
-Its three buttons act on the library and never on the `Problem`: adding a
-table, re-reading the directories, and opening the one you own. Each change
-emits `library_changed`, which the window routes to the geometry dock's
-material dropdowns, so a table added here is a coating there without a restart.
+This tab is the reference page: which tables are installed and what they were
+derived from, what a coating means to each solver, and how a library is laid
+out. It is reading matter, not an input, and it has no controls. The actions
+on the library (adding a table, rescanning, opening the folder) are on the
+Materials tab, in :mod:`.library_bar`, beside the list they change; the
+window calls :meth:`SetupTab.refresh` when they do.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-
-from PySide6.QtCore import QUrl, Signal
+from PySide6.QtCore import QUrl
 from PySide6.QtGui import QDesktopServices
-from PySide6.QtWidgets import (
-    QFileDialog,
-    QHBoxLayout,
-    QInputDialog,
-    QLabel,
-    QMessageBox,
-    QPushButton,
-    QVBoxLayout,
-    QWidget,
-)
+from PySide6.QtWidgets import QVBoxLayout, QWidget
 
 from ..docs import TheoryPage
-from . import recent
 from .theory_viewer import ReadingBrowser, render_into
 
 #: What each reader's ``source`` string starts with, and what to cite for it.
@@ -119,8 +104,9 @@ def library_page() -> str:
     return f"""\
 # Materials
 
-Optical constants for the **Coating** dropdown in the geometry panel. On the
-Scalar tab, naming one applies its Fresnel reflectivity and makes the result
+Optical constants for the **Grating** material and the layers in the geometry
+panel's Surface group. The **Materials** tab previews any of them and adds
+new ones. On the Scalar tab, naming a grating material applies its Fresnel reflectivity and makes the result
 *absolute*; leaving it empty gives efficiency *relative* to a perfect
 reflector. The provenance panel on each solver tab shows which applies.
 
@@ -155,11 +141,12 @@ naming the number it needs.
 
 ## Adding a material
 
-**Add material…** above picks a table, asks the name it should have as a
-coating, reads it to prove it is usable, and copies it into your library; the
-dock's material dropdowns have it at once. **Rescan library** re-reads the directories
-after you add or remove a file yourself, and **Open library folder** opens the
-first of them, creating it if it does not exist yet.
+On the **Materials** tab, **Add material…** picks a table, asks the name it
+should have as a coating, reads it to prove it is usable, and copies it into
+your library; the dock's material dropdowns have it at once. **Rescan
+library** re-reads the directories after you add or remove a file yourself,
+and **Open library folder** opens the first of them, creating it if it does
+not exist yet.
 
 A library is a directory of tables, one material per file and named for it.
 Any of these, saved as `Pt` plus its suffix, is the coating `Pt`:
@@ -171,6 +158,13 @@ Any of these, saved as `Pt` plus its suffix, is the coating `Pt`:
   (`Au/nk/Johnson.yml`), so rename it to the material. Needs the
   `refractiveindex` extra.
 - `Pt.ari`: a PCGrate table.
+- `Pt.nk` or `Pt.csv`: your own columns of wavelength, n and k, whose header
+  names the wavelength unit (`wavelength (nm), n, k`).
+
+One element's atomic scattering factors, saved as `Si.nff` from CXRO's
+per-element tables, are not a coating by themselves: with a formula and a
+density they give one, as `factors:SiO2@2.2`. The Materials tab builds that
+name.
 
 These directories are searched in this order, so a table of your own replaces
 a bundled one of the same name:
@@ -223,15 +217,13 @@ is not mistaken for one passing off.
 
 
 class SetupTab(QWidget):
-    """Reference material, presented as a page, with three library actions.
+    """Reference material, presented as a page.
 
     It has no ``solve_requested`` or ``build_options``, because it is not
     part of the solve/cancel contract that every solver tab implements, and
-    ``MainWindow`` never routes a solve to it. ``library_changed`` fires
-    after any action that may have changed what is installed.
+    ``MainWindow`` never routes a solve to it. It has no controls either;
+    :meth:`refresh` redraws the page when the library changes.
     """
-
-    library_changed = Signal()
 
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
@@ -241,32 +233,8 @@ class SetupTab(QWidget):
         # Links leave for the system browser; the page itself never navigates.
         self._browser.anchorClicked.connect(self._follow)
 
-        self._add_button = QPushButton("Add material…")
-        self._add_button.setToolTip(
-            "Pick a CXRO .txt, refractiveindex.info .yml or PCGrate .ari "
-            "table, name it, and copy it into your library"
-        )
-        self._add_button.clicked.connect(self.add_material)
-        self._rescan_button = QPushButton("Rescan library")
-        self._rescan_button.setToolTip(
-            "Re-read the library directories, after adding or removing a file "
-            "outside this window"
-        )
-        self._rescan_button.clicked.connect(self.rescan)
-        self._folder_button = QPushButton("Open library folder")
-        self._folder_button.clicked.connect(self.open_library_folder)
-
-        buttons = QHBoxLayout()
-        for button in (self._add_button, self._rescan_button, self._folder_button):
-            buttons.addWidget(button)
-        buttons.addStretch(1)
-        self._status = QLabel("")
-        self._status.setWordWrap(True)
-
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
-        layout.addLayout(buttons)
-        layout.addWidget(self._status)
         layout.addWidget(self._browser)
         self._render()
         from . import theming
@@ -278,104 +246,9 @@ class SetupTab(QWidget):
         # widget is destroyed, and would keep calling a lambda into a corpse.
         self._render()
 
-    # -- library actions --------------------------------------------------
-
-    def rescan(self) -> None:
-        """Re-read every library directory into the page and the dropdown."""
-        from ...materials import available
-
+    def refresh(self) -> None:
+        """Rebuild the page from the library as it is now."""
         self._render()
-        try:
-            count = len(available())
-        except ValueError:
-            self._status.setText("A library could not be read; see below.")
-        else:
-            self._status.setText(
-                f"Library read: {count} material{'s' if count != 1 else ''}."
-            )
-        self.library_changed.emit()
-
-    def add_material(self) -> None:
-        """Pick a table, name it, validate it, and install it."""
-        from ...materials import install
-
-        chosen = self._choose_file()
-        if not chosen:
-            return
-        # One element's scattering factors are filed under its symbol, which
-        # the file name already gives, so there is no coating name to ask for.
-        factors = Path(chosen).suffix.lower() == ".nff"
-        name = Path(chosen).stem.capitalize() if factors else self._choose_name(Path(chosen).stem)
-        if not name:
-            return
-        try:
-            try:
-                written = install(chosen, name)
-            except FileExistsError:
-                if not self._confirm_replace(name):
-                    raise
-                written = install(chosen, name, overwrite=True)
-        except (OSError, ValueError, ImportError) as refused:
-            # A table that does not read is reported and never installed:
-            # the library is checked here rather than inside a later solve.
-            self._status.setText(f"{Path(chosen).name} was not added: {refused}")
-            return
-        self._render()
-        if factors:
-            self._status.setText(
-                f"Added {name}'s scattering factors as {written}. Use them as "
-                f"factors:<formula>@<density>, e.g. factors:{name}@<g/cm^3>."
-            )
-        else:
-            self._status.setText(
-                f"Added {name} from {Path(chosen).name} as {written}. It is in the "
-                "dock's material dropdowns now."
-            )
-        self.library_changed.emit()
-
-    def open_library_folder(self) -> None:
-        """Open your library directory, creating it first if need be."""
-        from ...materials import library_dirs
-
-        directory = library_dirs()[0]
-        try:
-            directory.mkdir(parents=True, exist_ok=True)
-        except OSError as refused:
-            self._status.setText(f"Could not create {directory}: {refused}")
-            return
-        if not QDesktopServices.openUrl(QUrl.fromLocalFile(str(directory))):
-            self._status.setText(f"Your library is {directory}")
-
-    # -- dialogs, one method each so a test can answer them ----------------
-
-    def _choose_file(self) -> str:
-        path, _filter = QFileDialog.getOpenFileName(
-            self,
-            "Add material",
-            recent.start_in("tables", fallback=str(Path.home())),
-            "Optical constants or scattering factors "
-            "(*.txt *.yml *.yaml *.ari *.nk *.csv *.nff);;All files (*)",
-        )
-        recent.remember("tables", path)
-        return path
-
-    def _choose_name(self, default: str) -> str:
-        name, accepted = QInputDialog.getText(
-            self,
-            "Material name",
-            "Name as a coating (refractiveindex.info files are named for "
-            "their author, so rename those):",
-            text=default,
-        )
-        return name.strip() if accepted else ""
-
-    def _confirm_replace(self, name: str) -> bool:
-        answer = QMessageBox.question(
-            self,
-            "Replace material",
-            f"Your library already has {name}. Replace it?",
-        )
-        return answer == QMessageBox.StandardButton.Yes
 
     # -- page -------------------------------------------------------------
 
