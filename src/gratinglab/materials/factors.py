@@ -22,6 +22,18 @@ this module takes them from per-element tables you supply instead, so it
 keeps the edge structure the model lacks. Both ignore chemical bonding, so
 near an edge a measured table of the actual film is still better.
 
+The absorption is photoabsorption only, because that is all :math:`f_2` holds.
+CXRO's own index calculator gives a larger :math:`\beta` at high energy for
+light elements, consistent with it also counting Compton scattering as loss.
+Checked against it on 2026-11-17 with CXRO's ``au.nff``, ``si.nff`` and
+``o.nff``: the decrement agrees to 1e-4 everywhere from 50 eV to 20 keV, and
+so does Au's absorption (median 9e-5, worst 0.7% at its M edges), while
+Si's absorption reads 3.4% low at 20 keV and O's 21% low, both under 0.5%
+below 7 keV. For a mirror the decrement dominates there: SiO2's grazing
+reflectivity (0.02 to 0.6 deg) differs from CXRO's by at most 0.23% at
+20 keV. A transmission or attenuation calculation for a light material above
+about 10 keV should not use this.
+
 The tables are read from your material library as ``<Symbol>.nff``, the
 three-column ``E(eV) f1 f2`` format CXRO publishes one element at a time
 (``https://henke.lbl.gov/optical_constants/asf.html``). A row whose
