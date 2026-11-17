@@ -344,10 +344,19 @@ def build(form: FormState) -> Parsed:
     roughness = _number(form.roughness, "roughness", errors, minimum=0.0)
     coating = form.coating.strip() or None
     if coating is not None and coating not in _material_names():
-        known = ", ".join(_material_names()) or "none installed"
-        errors.append(
-            FieldError("coating", f"unknown material {coating!r}; available: {known}")
-        )
+        # Not a library file, but `typical:`, `factors:` and `Au@17.5` names
+        # resolve without one, so ask the resolver rather than the list.
+        from ..materials import UnknownMaterial, lookup
+
+        try:
+            lookup(coating)
+        except UnknownMaterial:
+            known = ", ".join(_material_names()) or "none installed"
+            errors.append(
+                FieldError("coating", f"unknown material {coating!r}; available: {known}")
+            )
+        except (ValueError, KeyError, OSError) as refused:
+            errors.append(FieldError("coating", str(refused)))
 
     layers = _build_layers(form.layers, errors)
 

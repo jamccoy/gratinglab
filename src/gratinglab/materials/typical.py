@@ -113,6 +113,7 @@ from dataclasses import dataclass, field
 import numpy as np
 from numpy.typing import ArrayLike, NDArray
 
+from .factors import index as _factor_index
 from .optical import HC_EV_NM, OpticalConstants
 
 __all__ = [
@@ -124,10 +125,6 @@ __all__ = [
     "PREFIX",
 ]
 
-#: Classical electron radius, m (CODATA 2018).
-R_E = 2.8179403262e-15
-#: Avogadro constant, 1/mol (exact, SI 2019).
-N_A = 6.02214076e23
 
 #: The model's range, eV. Requests outside it are refused, as a table's are.
 LOW_EV, HIGH_EV = 30.0, 30000.0
@@ -328,15 +325,14 @@ def _index(composition, density, wavelength_nm):
     """``(decrement, absorption)`` for a composition at a density in g/cm^3."""
     energy = HC_EV_NM / wavelength_nm
     molar_mass = sum(el.weight * n for el, n in composition)
-    formula_units = density * 1e3 / (molar_mass * 1e-3) * N_A  # per m^3
     f1 = np.zeros_like(energy)
     f2 = np.zeros_like(energy)
     for el, n in composition:
         a, b = scattering_factors(el, energy)
         f1 += n * a
         f2 += n * b
-    scale = R_E * (wavelength_nm * 1e-9) ** 2 * formula_units / (2 * np.pi)
-    return scale * f1, scale * f2
+    # The same relation as tabulated factors use; only f1 and f2 differ.
+    return _factor_index(f1, f2, molar_mass, density, wavelength_nm)
 
 
 def typical(formula: str, density: float | None = None) -> TypicalConstants:

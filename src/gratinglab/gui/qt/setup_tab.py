@@ -302,7 +302,10 @@ class SetupTab(QWidget):
         chosen = self._choose_file()
         if not chosen:
             return
-        name = self._choose_name(Path(chosen).stem)
+        # One element's scattering factors are filed under its symbol, which
+        # the file name already gives, so there is no coating name to ask for.
+        factors = Path(chosen).suffix.lower() == ".nff"
+        name = Path(chosen).stem.capitalize() if factors else self._choose_name(Path(chosen).stem)
         if not name:
             return
         try:
@@ -318,10 +321,16 @@ class SetupTab(QWidget):
             self._status.setText(f"{Path(chosen).name} was not added: {refused}")
             return
         self._render()
-        self._status.setText(
-            f"Added {name} from {Path(chosen).name} as {written}. It is in the "
-            "Coating dropdown now."
-        )
+        if factors:
+            self._status.setText(
+                f"Added {name}'s scattering factors as {written}. Use them as "
+                f"factors:<formula>@<density>, e.g. factors:{name}@<g/cm^3>."
+            )
+        else:
+            self._status.setText(
+                f"Added {name} from {Path(chosen).name} as {written}. It is in the "
+                "Coating dropdown now."
+            )
         self.library_changed.emit()
 
     def open_library_folder(self) -> None:
@@ -344,7 +353,8 @@ class SetupTab(QWidget):
             self,
             "Add material",
             recent.start_in("tables", fallback=str(Path.home())),
-            "Optical constants (*.txt *.yml *.yaml *.ari);;All files (*)",
+            "Optical constants or scattering factors (*.txt *.yml *.yaml *.ari *.nff)"
+            ";;All files (*)",
         )
         recent.remember("tables", path)
         return path

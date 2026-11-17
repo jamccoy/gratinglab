@@ -35,6 +35,7 @@ See `materials/__init__.py`.
 |---|---|---|
 | CXRO/Henke export | <https://henke.lbl.gov/optical_constants/>, `getdb2.html`, one material, energy scan | X-ray |
 | refractiveindex.info | <https://refractiveindex.info>, the YAML file for a dataset | ultraviolet to infrared |
+| CXRO atomic scattering factors, one element per file, saved as `<Symbol>.nff` | <https://henke.lbl.gov/optical_constants/asf.html> | X-ray, for `coating="factors:<formula>@<density>"` |
 
 A table you add is governed by whoever published it, not by gratinglab's
 licence.

@@ -37,6 +37,7 @@ refuses to carry efficiency on a non-propagating order for the same reason.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -47,6 +48,7 @@ __all__ = [
     "HC_EV_NM",
     "NEAR_UNITY",
     "OpticalConstants",
+    "cxro_density",
     "read_cxro",
     "read_ari",
     "write_ari",
@@ -312,6 +314,21 @@ def read_cxro(path: "str | Path", name: str | None = None) -> OpticalConstants:
         absorption=absorption[order],
         source=f"CXRO/Henke export {path.name}",
     )
+
+
+def cxro_density(path: "str | Path") -> float | None:
+    """The density a CXRO export states in its header (``Au Density=19.32``),
+    in g/cm^3, or ``None`` when the file states none."""
+    for line in Path(path).read_text(encoding="utf-8").splitlines():
+        if _numeric_row(line) is not None:
+            return None
+        found = re.search(r"Density\s*=\s*([0-9.eE+-]+)", line)
+        if found:
+            try:
+                return float(found.group(1))
+            except ValueError:
+                return None
+    return None
 
 
 def read_ari(path: "str | Path", name: str | None = None) -> OpticalConstants:

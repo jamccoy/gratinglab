@@ -7,6 +7,8 @@ materials.available()          # every material in every library
 pt = materials.lookup("Pt")    # ~/.gratinglab/materials/Pt.txt, say
 mine = materials.from_cxro_file("Ni_CXRO.txt")   # any file, no library
 au = materials.typical("Au")   # a model, not a table: see typical.py
+sio2 = materials.lookup("factors:SiO2@2.2")   # from Si.nff and O.nff
+film = materials.lookup("Au@17.5")            # Au.txt rescaled to 17.5 g/cm^3
 ```
 
 A library is a directory of tables, one material per file, named for it:
@@ -22,6 +24,16 @@ A name beginning `typical:` (`coating="typical:Au"`) is not looked up in any
 library: it is the X-ray model in :mod:`.typical`, built from physical facts,
 approximate, and named so that a result says it used a model. A plain `"Au"`
 with no table still refuses rather than falling back to it.
+
+A name beginning `factors:` (`coating="factors:SiO2@2.2"`) is computed from a
+formula, a density and one tabulated scattering-factor file per element,
+`Si.nff` and `O.nff`, found in the libraries like any table: see
+:mod:`.factors`. The density after `@` is in g/cm^3 and may be left off where
+:data:`.typical.DENSITIES` has one.
+
+A plain name with a density, `coating="Au@17.5"`, is the `Au` table rescaled
+to that density, since the decrement and absorption are both proportional to
+it. Only a CXRO export states the density it was made at, so only those can.
 
 Lookup is by name, because that is what a
 :class:`~gratinglab.problem.Problem` carries: `coating="Au"` keeps a benchmark
@@ -44,14 +56,18 @@ from dataclasses import replace
 from functools import lru_cache
 from pathlib import Path
 
+from . import factors as _factors
+from .factors import ScatteringFactors, read_nff
 from .optical import (
     HC_EV_NM,
     OpticalConstants,
+    cxro_density,
     read_ari,
     read_cxro,
     write_ari,
 )
 from .refractiveindex import read_refractiveindex
+from .typical import DENSITIES
 from .typical import PREFIX as TYPICAL_PREFIX
 from .typical import TypicalConstants, from_name, typical
 
@@ -59,10 +75,12 @@ __all__ = [
     "HC_EV_NM",
     "LIBRARY_ENV",
     "OpticalConstants",
+    "ScatteringFactors",
     "TypicalConstants",
     "UnknownMaterial",
     "available",
     "data_dir",
+    "factors",
     "from_ari_file",
     "from_cxro_file",
     "from_refractiveindex_file",
@@ -71,6 +89,7 @@ __all__ = [
     "lookup",
     "read_ari",
     "read_cxro",
+    "read_nff",
     "read_refractiveindex",
     "typical",
     "user_dir",
@@ -181,10 +200,17 @@ def available() -> tuple[str, ...]:
 def lookup(name: str) -> OpticalConstants:
     """A material by name, e.g. ``"Au"``, from the first library that has it.
 
-    ``typical:<formula>[@<density>]`` is the model in :mod:`.typical` instead.
+    ``typical:<formula>[@<density>]`` is the model in :mod:`.typical` instead,
+    ``factors:<formula>[@<density>]`` is computed from tabulated scattering
+    factors (:func:`factors`), and ``<name>@<density>`` is a CXRO table
+    rescaled to that density.
     """
     if name.startswith(TYPICAL_PREFIX):
         return from_name(name)
+    if name.startswith(_factors.PREFIX):
+        return factors(*_split_density(name[len(_factors.PREFIX):], name))
+    if "@" in name:
+        return _rescaled(*_split_density(name, name), name)
     for directory in library_dirs():
         path = _tables(directory).get(name)
         if path is not None:
@@ -197,6 +223,93 @@ def lookup(name: str) -> OpticalConstants:
         f"file as {name}.yml, or a PCGrate {name}.ari, to {user_dir()} or to a "
         f"directory named in {LIBRARY_ENV}; or read one directly with "
         "materials.from_cxro_file(path)."
+    )
+
+
+def _split_density(body: str, name: str) -> "tuple[str, float | None]":
+    """``"SiO2@2.2"`` as ``("SiO2", 2.2)``, and ``"Au"`` as ``("Au", None)``."""
+    base, _, rho = body.partition("@")
+    if not rho:
+        return base, None
+    try:
+        return base, float(rho)
+    except ValueError:
+        raise ValueError(f"{name!r}: the density after @ must be a number in g/cm^3") from None
+
+
+def factors(formula: str, density: float | None = None) -> OpticalConstants:
+    """``formula`` at ``density`` g/cm^3 from the ``<Symbol>.nff`` files in
+    your libraries; see :mod:`.factors`. ``density`` defaults as
+    :func:`typical`'s does, and is required for anything else."""
+    if density is None:
+        if formula not in DENSITIES:
+            raise ValueError(
+                f"no default density for {formula!r}; write "
+                f"{_factors.PREFIX}{formula}@<g/cm^3> (defaults exist for "
+                f"{', '.join(DENSITIES)})"
+            )
+        density = DENSITIES[formula]
+    tables = {}
+    missing = []
+    for symbol, _ in _factors.parse_formula(formula):
+        path = _factor_file(symbol)
+        if path is None:
+            missing.append(symbol)
+        else:
+            tables[symbol] = _read_nff(path, path.stat().st_mtime_ns, symbol)
+    if missing:
+        searched = "; ".join(str(d) for d in library_dirs())
+        raise UnknownMaterial(
+            f"no scattering factors for {', '.join(missing)} in {formula!r}. "
+            "Download each element's table from "
+            "https://henke.lbl.gov/optical_constants/asf.html and save it as "
+            f"{missing[0]}{_factors.SUFFIX} in {user_dir()} or a directory "
+            f"named in {LIBRARY_ENV}. Searched: {searched}."
+        )
+    suffix = "" if density == DENSITIES.get(formula) else f"@{density:g}"
+    name = f"{_factors.PREFIX}{formula}{suffix}"
+    return _factors.factors(formula, density, tables, name=name)
+
+
+def _factor_file(symbol: str) -> "Path | None":
+    """The first library's ``<symbol>.nff``, matched without case, since CXRO
+    names its downloads ``au.nff``."""
+    want = f"{symbol}{_factors.SUFFIX}".lower()
+    for directory in library_dirs():
+        if directory.is_dir():
+            for path in sorted(directory.iterdir()):
+                if path.name.lower() == want and path.is_file():
+                    return path
+    return None
+
+
+@lru_cache(maxsize=None)
+def _read_nff(path: Path, mtime_ns: int, symbol: str) -> ScatteringFactors:
+    """Cached by file and modification time, as :func:`_read` is."""
+    table = read_nff(path, symbol)
+    return replace(table, source=f"{table.source} in {path.parent}")
+
+
+def _rescaled(base: str, density: "float | None", name: str) -> OpticalConstants:
+    """The CXRO table ``base`` at ``density`` instead of the one it states."""
+    if density is None or not density > 0:
+        raise ValueError(f"{name!r}: the density after @ must be positive")
+    table = lookup(base)  # raises the usual UnknownMaterial
+    path = next(t[base] for d in library_dirs() if base in (t := _tables(d)))
+    stated = cxro_density(path) if path.suffix.lower() == ".txt" else None
+    if stated is None:
+        raise ValueError(
+            f"{name!r}: {path.name} does not state the density it was made "
+            "at, so it cannot be rescaled. Only a CXRO export's header "
+            "(Au Density=19.32) does"
+        )
+    k = density / stated
+    return replace(
+        table,
+        name=name,
+        decrement=table.decrement * k,
+        absorption=table.absorption * k,
+        source=f"{table.source}, rescaled from {stated:g} to {density:g} g/cm^3",
     )
 
 
@@ -242,10 +355,12 @@ def install(
     """
     source = Path(path)
     suffix = source.suffix.lower()
+    if suffix == _factors.SUFFIX:
+        return _install_factors(source, name, overwrite)
     if suffix not in _READERS:
         raise ValueError(
             f"{source.name} is not a table this library reads; use one of "
-            f"{', '.join(sorted(_READERS))}"
+            f"{', '.join(sorted([*_READERS, _factors.SUFFIX]))}"
         )
     name = source.stem if name is None else name
     if not _NAME.fullmatch(name):
@@ -266,6 +381,23 @@ def install(
                 f"remove it to install {source.name} in its place, since a "
                 "library cannot hold two tables for one name"
             )
+        if existing.resolve() == source.resolve():
+            return existing
+        if not overwrite:
+            raise FileExistsError(f"{existing} already exists")
+        destination = existing
+    shutil.copyfile(source, destination)
+    return destination
+
+
+def _install_factors(source: Path, symbol: "str | None", overwrite: bool) -> Path:
+    """Copy one element's scattering factors in as ``<Symbol>.nff``."""
+    table = read_nff(source, symbol.capitalize() if symbol else None)
+    directory = library_dirs()[0]
+    directory.mkdir(parents=True, exist_ok=True)
+    existing = _factor_file(table.symbol)
+    destination = directory / f"{table.symbol}{_factors.SUFFIX}"
+    if existing is not None and existing.parent == directory:
         if existing.resolve() == source.resolve():
             return existing
         if not overwrite:

@@ -228,6 +228,14 @@ an absorption edge or at low energy, the result's provenance says so.
 [`docs/typical-materials.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/typical-materials.md)
 has the model and how far it agrees with real tables.
 
+With tabulated atomic scattering factors, `coating="factors:SiO2@2.2"` computes
+the index of any formula at any density from one `<Symbol>.nff` file per element
+in the library, as CXRO publishes them
+([henke.lbl.gov/optical_constants/asf.html](https://henke.lbl.gov/optical_constants/asf.html)),
+H to U. It keeps the edge structure the model lacks, and still ignores chemical
+bonding. `coating="Au@17.5"` rescales a CXRO export to another density, such as a
+sputtered film's.
+
 The core install does not include a plotting stack, so a user who only runs the solvers
 does not install one. A subpackage that needs an optional extra names it when it is
 missing, instead of failing with a bare `ModuleNotFoundError`.

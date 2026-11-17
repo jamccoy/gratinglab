@@ -10,6 +10,28 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- **An X-ray index from tabulated atomic scattering factors.**
+  `coating="factors:SiO2@2.2"`, or `materials.factors("C5H8O2", density=1.19)`,
+  sums each atom's f1 + i f2 from a `<Symbol>.nff` file per element in your
+  library (CXRO's per-element tables, H to U) and turns it into the decrement
+  and absorption at that density. Missing elements are named with where to
+  download them. "Add material" in the Setup tab installs an `.nff` too.
+- **A CXRO table at another density**: `coating="Au@17.5"` scales the `Au`
+  export's decrement and absorption from the density its header states.
+
+### Changed
+
+- **The coating field accepts any name the resolver does**, so `typical:`,
+  `factors:` and `Au@17.5` names can be typed there; it had accepted library
+  files only.
+- The typical-material model now goes through the same index function as
+  tabulated factors. Its numbers are unchanged (relative difference 0.0 over
+  0.05 to 40 nm for SiO2).
+
 ## 0.3.17 (2026-11-15)
 
 ### Changed

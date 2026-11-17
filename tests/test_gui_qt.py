@@ -1919,6 +1919,18 @@ class TestSetupTab:
         assert tab._browser.toPlainText().count("Pt") > mentions
         assert "Added Pt" in tab._status.text()
 
+    def test_scattering_factors_are_filed_by_symbol_without_a_name(
+        self, win, library, tmp_path, monkeypatch
+    ):
+        source = tmp_path / "ti.nff"
+        source.write_text("E(eV)\tf1\tf2\n30\t20\t3\n5000\t22\t1\n", encoding="utf-8")
+        tab = win._setup_tab
+        self._answer(monkeypatch, tab, source, "never asked")
+        monkeypatch.setattr(tab, "_choose_name", lambda default: pytest.fail("asked"))
+        tab.add_material()
+        assert (library / "Ti.nff").is_file()
+        assert "factors:Ti@" in tab._status.text()
+
     def test_an_unreadable_table_is_reported_and_not_added(
         self, win, library, tmp_path, monkeypatch
     ):
