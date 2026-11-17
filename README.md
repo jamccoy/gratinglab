@@ -403,10 +403,12 @@ icon --app gratinglab` regenerates the icon from the artwork in `gratinglab.gui.
 
 | Document | Contents |
 |---|---|
+| [`examples/`](https://github.com/jamccoy/gratinglab/tree/master/examples) | Short scripts that use gratinglab from your own code: an efficiency scan, two solvers compared, your own optical constants, a coating as a mirror, a parameter sweep; with a table of what to import for what |
 | [`docs/roadmap.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/roadmap.md) | The current state of the project, planned work and open questions; the place to start |
 | [`docs/conventions.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/conventions.md) | The normative definitions: signs, units, normalizations, and errata in the references |
 | [`docs/theory/scalar.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/theory/scalar.md) | The derivation of the scalar solver, its closed-form results and its limits |
 | [`docs/theory/integral.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/theory/integral.md) | The boundary-integral solver: conical formulation, perfect and finite conductivity |
+| [`docs/theory/mirror.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/theory/mirror.md) | The coating as a flat mirror: the recursion, what the penetration depth and bulk thickness mean, and what is and is not validated |
 | [`docs/theory/metrology.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/theory/metrology.md) | The assumptions of the AFM pipeline, what it measures and what it does not, including what tip erosion can recover |
 | [`docs/typical-materials.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/typical-materials.md) | The X-ray index model used without a table, what it is checked against, and its measured accuracy |
 | [`docs/findings.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/findings.md) | Empirical results, each with the evidence for it |

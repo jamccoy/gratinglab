@@ -10,6 +10,18 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- **Example scripts for using gratinglab from your own code**, in `examples/`:
+  an efficiency scan from scratch, the scalar solver against the RCWA, your
+  own optical constants and the four ways to name a material, a coating as a
+  flat mirror, and a blaze-angle and coating sweep. Each runs on a fresh
+  install with no tables, and `examples/README.md` lists what to import for
+  what. The test suite runs every one, so they match the version they ship
+  with.
+
 ## 0.5.0 (2026-11-17)
 
 ### Added
