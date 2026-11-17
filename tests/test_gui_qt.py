@@ -1408,6 +1408,39 @@ class TestGeometryTab:
         assert tab._depth_axes.get_lines()
         assert tab not in win.tabs.values()
 
+    def test_the_mirror_tab_waits_until_it_is_showing(self, win, qtbot):
+        tab = win.mirror_tab
+        win.geometry.set_grating_material("typical:Au")
+        tab.calculate()
+        before = tab._result
+        assert before is not None
+        win.geometry._fields["roughness"].setText("0.4")
+        win.geometry.changed.emit()
+        assert tab._stale and tab._result is before  # hidden: nothing computed
+        win._tab_widget.setCurrentWidget(tab)
+        win.show()
+        qtbot.waitUntil(lambda: not tab._stale, timeout=10_000)
+        assert tab._result.mirror.roughness == 0.4
+
+    def test_the_mirror_tab_hands_a_bulk_layer_to_the_dock(self, win):
+        import dataclasses
+
+        tab = win.mirror_tab
+        win.geometry.write_form(dataclasses.replace(
+            win.geometry.read_form(), coating="typical:Si", layers="typical:Au 10"
+        ))
+        tab._fields["graze_count"].setText("20")
+        tab.calculate()
+        assert not tab._hand_off.isEnabled()  # 10 nm is not bulk past grazing
+        win.geometry.write_form(dataclasses.replace(
+            win.geometry.read_form(), layers="typical:Au 400"
+        ))
+        tab.calculate()
+        assert tab._hand_off.isEnabled() and "reads as bulk" in tab._verdict.text()
+        tab._hand_off.click()
+        form = win.geometry.read_form()
+        assert form.coating == "typical:Au" and form.layers == ""
+
     def test_the_mirror_tab_reports_bad_fields_in_its_panel(self, win):
         tab = win.mirror_tab
         tab._fields["tolerance"].setText("-1")

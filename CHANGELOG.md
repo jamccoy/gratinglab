@@ -26,6 +26,14 @@ entries under "Unreleased" into a section named for the new version;
 
 ### Changed
 
+- **The Mirror tab answers first, and follows what you type.** Its verdict
+  (whether the top layer reads as bulk) is one line above the plots, and when
+  it does, "Model the top layer as bulk" makes that layer the dock's Grating
+  material and removes the layers. There is no Calculate button: the tab
+  recomputes a moment after its fields or the dock change, while it is
+  showing. A wavelength scan can use the tab's own range instead of the
+  dock's. An angle scan marks the graze angles the dock's mount puts light at,
+  on the grating plane and on the blaze facet.
 - **The dock's Surface group is a coating stack you can see.** Layers are rows,
   outermost at the top as the light meets them, each with a material dropdown,
   a thickness in nm, and buttons to move or remove it; "Add layer" puts one on

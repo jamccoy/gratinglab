@@ -279,6 +279,12 @@ class GeometryPanel(QWidget):
             combo.setEditText(name)
         self.changed.emit()
 
+    def replace_stack(self, name: str) -> None:
+        """``name`` as the Grating material with no layers on it: the Mirror
+        tab's hand-off, once it has shown a layer reads as bulk."""
+        self._fields["layers"].setText("")
+        self.set_grating_material(name)
+
     def add_top_layer(self, name: str) -> None:
         """A new outermost layer of ``name``, its thickness left to fill in."""
         self._fields["layers"].add_layer(name)

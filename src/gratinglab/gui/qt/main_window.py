@@ -234,7 +234,7 @@ class MainWindow(QMainWindow):
 
         # About the problem too, so it sits with Geometry rather than among
         # the solvers, and like it is not in `self.tabs`: no solve contract.
-        self.mirror_tab = MirrorTab(self.geometry.read_form)
+        self.mirror_tab = MirrorTab(self.geometry)
         index = self._tab_widget.addTab(self.mirror_tab, "Mirror")
         self._tab_widget.setTabToolTip(
             index, "The coating stack as a flat mirror: reflectivity and penetration depth"
