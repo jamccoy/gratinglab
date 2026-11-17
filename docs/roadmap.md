@@ -795,8 +795,8 @@ milestone and is also where an interface may change, provided the change is
 stated in [`CHANGELOG.md`](../CHANGELOG.md); 1.0 is a commitment that the public
 interface is stable until 2.0. Releases 0.1.1 to 0.1.13 were all patch
 releases, although two of them (swath statistics and asymmetric tips) added
-features that would justify a minor version under a stricter reading. 0.2.0
-and 0.3.0 were the first two minor releases, and 0.4.0 the third.
+features that would justify a minor version under a stricter reading. 0.2.0,
+0.3.0 and 0.4.0 were the first three minor releases, and 0.5.0 the fourth.
 
 The intended milestones are as follows.
 
@@ -862,6 +862,13 @@ The intended milestones are as follows.
   bulk. No public interface changed. Two behaviours did: a `.csv` in a
   material library is now read as an n, k table, and the Coating field is an
   editable dropdown, so model names can be typed in the GUI.
+- **0.5**: coatings as work of their own. **Released 2026-11-17.** Not planned
+  here in advance either: it is a minor release because it adds a window. The
+  main menu gains "Design a coating", a window holding the Materials and Mirror
+  tabs with a stack of its own, so a coating is worked out before, and apart
+  from, the grating it goes on; the efficiency window keeps the stack editor
+  and exchanges stacks with it by Send. 0.4.1 in between reorganised the GUI
+  around the stack and the materials. No public Python interface changed.
 - **1.0**: the public interface is declared stable. That covers `Problem`,
   `BoundaryProfile`, `AnalysisSettings`, the boundary JSON format and the solver
   plugin protocol. The preconditions are that the solvers have been validated
