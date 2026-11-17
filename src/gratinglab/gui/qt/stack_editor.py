@@ -89,13 +89,15 @@ class _Row(QWidget):
             "factors:SiO2@2.2, or Au@17.5 for a table at another density."
         )
         self.thickness = QLineEdit(thickness)
-        self.thickness.setPlaceholderText("nm")
-        self.thickness.setFixedWidth(52)
+        self.thickness.setFixedWidth(46)
         self.thickness.setToolTip("Thickness along the surface normal, nm.")
+        unit = QLabel("nm")
+        unit.setForegroundRole(QPalette.ColorRole.Mid)
 
         layout.addWidget(self.swatch)
         layout.addWidget(self.material, 1)
         layout.addWidget(self.thickness)
+        layout.addWidget(unit)
         self.buttons = {}
         for key, arrow, tip in (
             ("up", Qt.ArrowType.UpArrow, "Move towards the surface"),

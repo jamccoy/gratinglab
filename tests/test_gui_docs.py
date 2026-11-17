@@ -212,6 +212,11 @@ class TestGeneralPages:
         assert "package measures that σ" in page.text
         assert "not passed as the Névot–Croce σ by default" in page.text
 
+    def test_the_mirror_page_is_in_the_menu_and_says_what_bulk_means(self):
+        page = self._page("mirror")
+        assert page.available and page.title == "Flat Mirror & Coating Stacks"
+        assert "Parratt" in page.text and "When a layer may be taken as bulk" in page.text
+
     def test_general_pages_are_never_banner_flagged(self):
         """These are geometry references, not a solver's approximation --
         the approximate-method banner must never apply to them."""

@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QGroupBox,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPushButton,
     QScrollArea,
     QSplitter,
@@ -270,8 +271,23 @@ class MirrorTab(QWidget):
             self._fields[key].setEnabled(own)
 
     def _model_as_bulk(self) -> None:
-        if self._result is not None and is_bulk_throughout(self._result):
-            self._dock.replace_stack(self._result.mirror.layers[-1].material)
+        if self._result is None or not is_bulk_throughout(self._result):
+            return
+        mirror = self._result.mirror
+        top = mirror.layers[-1].material
+        if self._confirm_hand_off(top, len(mirror.layers), mirror.substrate):
+            self._dock.replace_stack(top)
+
+    def _confirm_hand_off(self, top: str, layers: int, substrate: str) -> bool:
+        """Its own method so a test can answer it. The dock has no undo."""
+        removed = "the layer" if layers == 1 else f"all {layers} layers"
+        answer = QMessageBox.question(
+            self,
+            "Model the top layer as bulk",
+            f"Make {top} the grating material, replacing {substrate}, and remove "
+            f"{removed} from the stack? This cannot be undone.",
+        )
+        return answer == QMessageBox.StandardButton.Yes
 
     def _paint(self, lines_) -> None:
         self._lines = tuple(lines_)

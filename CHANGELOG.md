@@ -25,8 +25,17 @@ entries under "Unreleased" into a section named for the new version;
   new top layer. Your library is listed there, a click previewing a table,
   with the three actions that change it.
 
+- **A theory page for the mirror**, in the Help menu as "Flat Mirror & Coating
+  Stacks" (`docs/theory/mirror.md`): the recursion, what the penetration depth
+  and the bulk thickness each mean, what a flat stack leaves out of a grating,
+  and what has and has not been validated.
+
 ### Changed
 
+- **Small fixes to the new tabs.** Every layer's thickness has "nm" beside it,
+  not only a placeholder while empty. The Materials panel writes the home
+  directory as `~` in a table's source. "Model the top layer as bulk" asks
+  before it removes the layers, since the dock has no undo.
 - **"Add material", "Rescan library" and "Open library folder" moved from the
   Setup tab to the Materials tab.** Setup is now the reference page alone, and
   it lists the `.nk`, `.csv` and `.nff` files a library can hold.

@@ -14,6 +14,7 @@ Called by :mod:`gratinglab.gui.qt.materials_tab`; tested in
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 
 import numpy as np
 
@@ -108,13 +109,19 @@ def draw(axes, p: MaterialPreview, theme) -> None:
     axes.legend(fontsize=8, loc="best")
 
 
+def _short(source: str) -> str:
+    """``source`` with the home directory written ``~``: the library a table
+    came from still shows, without a user's whole path in front of it."""
+    return source.replace(str(Path.home()), "~")
+
+
 def lines(p: MaterialPreview) -> tuple[Line, ...]:
     """Where it came from, what it covers, and whether that includes the scan."""
     c = p.constants
     low, high = c.range_nm
     out = [
         Line("name: ", "dim"), Line(f"{p.name}\n"),
-        Line("source: ", "dim"), Line(f"{c.source}\n"),
+        Line("source: ", "dim"), Line(f"{_short(c.source)}\n"),
         Line("covers: ", "dim"),
         Line(f"{low:.4g} to {high:.4g} nm ({HC_EV_NM / high:.4g} to {HC_EV_NM / low:.4g} eV)\n"),
     ]

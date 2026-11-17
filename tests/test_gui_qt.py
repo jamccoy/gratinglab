@@ -1437,6 +1437,12 @@ class TestGeometryTab:
         ))
         tab.calculate()
         assert tab._hand_off.isEnabled() and "reads as bulk" in tab._verdict.text()
+        asked = []
+        tab._confirm_hand_off = lambda *what: asked.append(what) or False
+        tab._hand_off.click()
+        assert asked == [("typical:Au", 1, "typical:Si")]
+        assert win.geometry.read_form().layers == "typical:Au 400"  # declined: untouched
+        tab._confirm_hand_off = lambda *what: True
         tab._hand_off.click()
         form = win.geometry.read_form()
         assert form.coating == "typical:Au" and form.layers == ""

@@ -46,6 +46,15 @@ class TestThePreview:
         # Gold's M edges sit near 0.56 nm; the model says so for a scan across them.
         assert any("absorption edge" in line.text for line in lines(preview("typical:Au", "0.5", "0.6")))
 
+    def test_the_source_writes_the_home_directory_short(self, tmp_path, monkeypatch):
+        monkeypatch.setattr("pathlib.Path.home", lambda: tmp_path)
+        monkeypatch.setenv(materials.LIBRARY_ENV, str(tmp_path / "lib"))
+        (tmp_path / "lib").mkdir()
+        (tmp_path / "lib" / "Glass.nk").write_text(
+            "wavelength (nm), n, k\n400, 1.53, 0\n700, 1.51, 0\n", encoding="utf-8")
+        said = text(preview("Glass"))
+        assert str(tmp_path) not in said and "~" in said and "lib" in said
+
     def test_an_unset_scan_is_not_checked(self):
         p = preview("typical:Au", "", "nonsense")
         assert covers_scan(p) is None and "not checked" in text(p)

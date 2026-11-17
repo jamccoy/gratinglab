@@ -71,6 +71,9 @@ _GENERAL_PAGES = (
     # made while producing that profile, and those are invisible in the curve.
     # It belongs beside the conventions for the same reason they do.
     ("metrology", "Groove Metrology", "theory/metrology.md"),
+    # Not a solver either: the coating as a flat stack, which is what the
+    # Mirror tab computes and what decides whether a layer may be taken as bulk.
+    ("mirror", "Flat Mirror & Coating Stacks", "theory/mirror.md"),
 )
 
 #: How many parent directories to search before giving up. gui/docs.py sits at
