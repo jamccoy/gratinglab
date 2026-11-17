@@ -22,6 +22,13 @@ entries under "Unreleased" into a section named for the new version;
   download them. "Add material" in the Setup tab installs an `.nff` too.
 - **A CXRO table at another density**: `coating="Au@17.5"` scales the `Au`
   export's decrement and absorption from the density its header states.
+- **Your own n and k as a plain table.** `<Name>.nk` or `<Name>.csv` in a
+  library is `coating="<Name>"`: two or three columns of wavelength (or photon
+  energy), n and optionally k, separated by commas, tabs or spaces, such as an
+  ellipsometry export. The header above the data must name the first column's
+  unit (`nm`, `um`, `A` or `eV`); a file that does not is refused rather than
+  read as nanometres. `materials.from_nk_file(path)` reads one directly, and
+  "Add material" takes them.
 
 ### Changed
 

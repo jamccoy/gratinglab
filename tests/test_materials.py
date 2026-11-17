@@ -522,7 +522,7 @@ class TestInstall:
         assert not library.exists()
 
     def test_an_unknown_suffix_is_refused(self, library, tmp_path):
-        stray = tmp_path / "Pt.csv"
+        stray = tmp_path / "Pt.xlsx"
         stray.write_text("1,2\n", encoding="utf-8")
         with pytest.raises(ValueError, match="not a table"):
             materials.install(stray)

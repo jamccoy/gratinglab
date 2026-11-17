@@ -6,6 +6,7 @@ from gratinglab import materials
 materials.available()          # every material in every library
 pt = materials.lookup("Pt")    # ~/.gratinglab/materials/Pt.txt, say
 mine = materials.from_cxro_file("Ni_CXRO.txt")   # any file, no library
+film = materials.from_nk_file("Ni_film.csv")     # wavelength, n, k columns
 au = materials.typical("Au")   # a model, not a table: see typical.py
 sio2 = materials.lookup("factors:SiO2@2.2")   # from Si.nff and O.nff
 film = materials.lookup("Au@17.5")            # Au.txt rescaled to 17.5 g/cm^3
@@ -13,7 +14,8 @@ film = materials.lookup("Au@17.5")            # Au.txt rescaled to 17.5 g/cm^3
 
 A library is a directory of tables, one material per file, named for it:
 `Pt.txt` (a CXRO export, X-ray), `Pt.yml` (a refractiveindex.info file,
-ultraviolet to infrared) or `Pt.ari` (PCGrate) is `coating="Pt"`. Yours is
+ultraviolet to infrared), `Pt.ari` (PCGrate) or `Pt.nk` / `Pt.csv` (plain
+wavelength, n, k columns, see :mod:`.nk`) is `coating="Pt"`. Yours is
 `~/.gratinglab/materials`, or whatever `GRATINGLAB_MATERIALS` names, and it is
 searched before the tables bundled with a checkout, so your own replaces a
 bundled one of the same name. Neither the repository nor a release bundles
@@ -66,6 +68,7 @@ from .optical import (
     read_cxro,
     write_ari,
 )
+from .nk import read_nk
 from .refractiveindex import read_refractiveindex
 from .typical import DENSITIES
 from .typical import PREFIX as TYPICAL_PREFIX
@@ -83,6 +86,7 @@ __all__ = [
     "factors",
     "from_ari_file",
     "from_cxro_file",
+    "from_nk_file",
     "from_refractiveindex_file",
     "install",
     "library_dirs",
@@ -90,6 +94,7 @@ __all__ = [
     "read_ari",
     "read_cxro",
     "read_nff",
+    "read_nk",
     "read_refractiveindex",
     "typical",
     "user_dir",
@@ -112,6 +117,8 @@ _READERS = {
     ".ari": read_ari,
     ".yml": read_refractiveindex,
     ".yaml": read_refractiveindex,
+    ".nk": read_nk,
+    ".csv": read_nk,
 }
 
 
@@ -220,7 +227,8 @@ def lookup(name: str) -> OpticalConstants:
     raise UnknownMaterial(
         f"no optical constants for {name!r}; available: {known}. Searched: "
         f"{searched}. Add a CXRO export as {name}.txt, a refractiveindex.info "
-        f"file as {name}.yml, or a PCGrate {name}.ari, to {user_dir()} or to a "
+        f"file as {name}.yml, a PCGrate {name}.ari, or wavelength, n, k columns as "
+        f"{name}.nk, to {user_dir()} or to a "
         f"directory named in {LIBRARY_ENV}; or read one directly with "
         "materials.from_cxro_file(path)."
     )
@@ -421,6 +429,12 @@ def from_refractiveindex_file(
     each kind of entry becomes, and which are refused.
     """
     return read_refractiveindex(path, name=name)
+
+
+def from_nk_file(path: "str | Path", name: str | None = None) -> OpticalConstants:
+    """Read a plain ``wavelength, n[, k]`` table, such as an ellipsometry
+    export; the header must name the first column's unit. See :mod:`.nk`."""
+    return read_nk(path, name=name)
 
 
 def from_ari_file(path: "str | Path", name: str | None = None) -> OpticalConstants:

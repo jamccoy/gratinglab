@@ -353,8 +353,8 @@ class SetupTab(QWidget):
             self,
             "Add material",
             recent.start_in("tables", fallback=str(Path.home())),
-            "Optical constants or scattering factors (*.txt *.yml *.yaml *.ari *.nff)"
-            ";;All files (*)",
+            "Optical constants or scattering factors "
+            "(*.txt *.yml *.yaml *.ari *.nk *.csv *.nff);;All files (*)",
         )
         recent.remember("tables", path)
         return path

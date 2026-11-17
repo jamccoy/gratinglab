@@ -27,7 +27,9 @@ with its source in `materials/typical.py`. See `docs/typical-materials.md`. Noth
 
 Put the table in your own library, `~/.gratinglab/materials` or a directory
 named in `GRATINGLAB_MATERIALS`, as `<Name>.txt` for a CXRO export, `<Name>.yml`
-for a refractiveindex.info file or `<Name>.ari` for PCGrate's format. That is
+for a refractiveindex.info file, `<Name>.ari` for PCGrate's format, or
+`<Name>.nk` / `<Name>.csv` for plain `wavelength, n, k` columns of your own,
+whose header names the wavelength unit (see `materials/nk.py`). That is
 searched before this directory, survives an upgrade, and is never published.
 See `materials/__init__.py`.
 

@@ -213,11 +213,12 @@ material per file, each named after its material:
 | `Pt.txt` | a [CXRO](https://henke.lbl.gov/optical_constants/) export | x-ray |
 | `Pt.yml` | a [refractiveindex.info](https://refractiveindex.info) file, renamed from its author's name | ultraviolet to infrared |
 | `Pt.ari` | a PCGrate table | whatever it covers |
+| `Pt.nk` or `Pt.csv` | your own `wavelength, n, k` columns, such as an ellipsometry export; the header names the unit (`wavelength (nm), n, k`) | whatever it covers |
 
 Saving one as `~/.gratinglab/materials/Pt.yml` makes `coating="Pt"` available.
 `GRATINGLAB_MATERIALS` points to a different directory, and
-`materials.from_cxro_file(path)` or `from_refractiveindex_file(path)` reads a single
-file without a library. The YAML files require the `refractiveindex` extra.
+`materials.from_cxro_file(path)`, `from_refractiveindex_file(path)` or
+`from_nk_file(path)` reads a single file without a library. The YAML files require the `refractiveindex` extra.
 [`SOURCES.md`](https://github.com/jamccoy/gratinglab/blob/master/src/gratinglab/materials/data/SOURCES.md)
 explains why none are distributed.
 
