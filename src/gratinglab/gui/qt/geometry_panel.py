@@ -269,6 +269,20 @@ class GeometryPanel(QWidget):
         if current and index < 0 and not _is_model_name(current):
             self.changed.emit()
 
+    def set_grating_material(self, name: str) -> None:
+        """Put ``name`` in the Grating row, as the Materials tab's button does."""
+        combo = self._fields["coating"]
+        index = combo.findData(name)
+        if index >= 0:
+            combo.setCurrentIndex(index)
+        else:
+            combo.setEditText(name)
+        self.changed.emit()
+
+    def add_top_layer(self, name: str) -> None:
+        """A new outermost layer of ``name``, its thickness left to fill in."""
+        self._fields["layers"].add_layer(name)
+
     def _check_fields_match_formstate(self) -> None:
         """Refuse to open rather than fail later on one code path.
 

@@ -45,6 +45,7 @@ from .cmethod_tab import CMethodTab
 from .compare_tab import CompareTab
 from .geometry_panel import GeometryPanel
 from .geometry_tab import GeometryTab
+from .materials_tab import MaterialsTab
 from .mirror_tab import MirrorTab
 from .integral_tab import IntegralTab
 from .rcwa_tab import RcwaTab
@@ -218,6 +219,15 @@ class MainWindow(QMainWindow):
         self._tab_widget.addTab(self._setup_tab, "Setup")
         # The dock is built first, so its dropdown can follow the library.
         self._setup_tab.library_changed.connect(self.geometry.refresh_coatings)
+
+        # Next to Setup, which holds the library it reads; like it, not in
+        # `self.tabs`, having no solve contract.
+        self.materials_tab = MaterialsTab(self.geometry)
+        self._setup_tab.library_changed.connect(self.materials_tab.refresh_library)
+        index = self._tab_widget.addTab(self.materials_tab, "Materials")
+        self._tab_widget.setTabToolTip(
+            index, "Name a material, see its index, and send it to the surface stack"
+        )
 
         self.geometry_tab = GeometryTab()
         self._tab_widget.addTab(self.geometry_tab, "Grating Geometry")

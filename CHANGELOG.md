@@ -12,6 +12,18 @@ entries under "Unreleased" into a section named for the new version;
 
 ## Unreleased
 
+### Added
+
+- **A Materials tab, beside Setup.** Three fields build a coating name (a
+  table in your library, scattering factors with a formula, or the typical
+  model, each with an optional density), so `factors:SiO2@2.2` need not be
+  typed from memory. It plots the index against wavelength with the dock's
+  scan shaded, the decrement and absorption on a log axis for an X-ray
+  material and n and k otherwise, and says where the numbers came from and
+  whether they cover that scan, before a solve refuses them. Two buttons send
+  the material to the dock's Surface stack, as the grating material or as a
+  new top layer.
+
 ### Changed
 
 - **The dock's Surface group is a coating stack you can see.** Layers are rows,

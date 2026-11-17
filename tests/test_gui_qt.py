@@ -1381,17 +1381,18 @@ class TestGeometryTab:
 
         titles = [win._tab_widget.tabText(i) for i in range(win._tab_widget.count())]
         assert titles[0] == "Setup"
-        assert titles[1] == "Grating Geometry"
+        assert titles[1] == "Materials"
+        assert titles[2] == "Grating Geometry"
         # The flat mirror is about the problem too, so it sits before the boundary.
-        assert titles[2] == "Mirror"
+        assert titles[3] == "Mirror"
         # Everything between the boundary and Compare is a solver tab -- however many
         # solvers are registered, and in whatever order.
         # Short labels on the tabs, so the bar does not overflow as solvers
         # are added; the full name is the tooltip, and the Help menu's.
         # The Compare tab closes the bar, after every solver it draws on.
-        assert titles[3:-1] == [short_title(name) for name in win.tabs]
+        assert titles[4:-1] == [short_title(name) for name in win.tabs]
         assert titles[-1] == "Compare"
-        tips = [win._tab_widget.tabToolTip(i) for i in range(3, win._tab_widget.count() - 1)]
+        tips = [win._tab_widget.tabToolTip(i) for i in range(4, win._tab_widget.count() - 1)]
         assert tips == [display_title(name) for name in win.tabs]
 
     def test_the_mirror_tab_reads_the_dock_and_answers(self, win):
