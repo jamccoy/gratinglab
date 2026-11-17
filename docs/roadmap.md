@@ -796,7 +796,7 @@ stated in [`CHANGELOG.md`](../CHANGELOG.md); 1.0 is a commitment that the public
 interface is stable until 2.0. Releases 0.1.1 to 0.1.13 were all patch
 releases, although two of them (swath statistics and asymmetric tips) added
 features that would justify a minor version under a stricter reading. 0.2.0
-and 0.3.0 are the two minor releases so far.
+and 0.3.0 were the first two minor releases, and 0.4.0 the third.
 
 The intended milestones are as follows.
 
@@ -851,6 +851,17 @@ The intended milestones are as follows.
 
   Integrating the in-house RCWA backend was to be a further minor release; it
   arrived first, in 0.2.0.
+- **0.4**: materials and coatings you supply, and the coating as a mirror.
+  **Released 2026-11-16.** Not planned here in advance: it is a minor release
+  because it adds a kind of calculation rather than a small feature. An X-ray
+  index from tabulated atomic scattering factors with a formula and a density
+  (`factors:SiO2@2.2`), checked against CXRO's own calculator; CXRO tables at
+  another density (`Au@17.5`); plain wavelength, n, k tables (`.nk`, `.csv`);
+  and the Mirror tab, which reflects the coating stack as a flat mirror and
+  says how far the light reaches and whether the top layer may be taken as
+  bulk. No public interface changed. Two behaviours did: a `.csv` in a
+  material library is now read as an n, k table, and the Coating field is an
+  editable dropdown, so model names can be typed in the GUI.
 - **1.0**: the public interface is declared stable. That covers `Problem`,
   `BoundaryProfile`, `AnalysisSettings`, the boundary JSON format and the solver
   plugin protocol. The preconditions are that the solvers have been validated
