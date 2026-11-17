@@ -403,6 +403,7 @@ icon --app gratinglab` regenerates the icon from the artwork in `gratinglab.gui.
 
 | Document | Contents |
 |---|---|
+| [`docs/python.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/python.md) | Using gratinglab from your own code: the objects, the result, materials, the mirror, and "Copy as Python" from the windows |
 | [`examples/`](https://github.com/jamccoy/gratinglab/tree/master/examples) | Short scripts that use gratinglab from your own code: an efficiency scan, two solvers compared, your own optical constants, a coating as a mirror, a parameter sweep; with a table of what to import for what |
 | [`docs/roadmap.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/roadmap.md) | The current state of the project, planned work and open questions; the place to start |
 | [`docs/conventions.md`](https://github.com/jamccoy/gratinglab/blob/master/docs/conventions.md) | The normative definitions: signs, units, normalizations, and errata in the references |

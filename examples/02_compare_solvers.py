@@ -9,10 +9,7 @@ Run it:  python examples/02_compare_solvers.py     (takes a few seconds)
 
 import numpy as np
 
-from gratinglab.compare import align, sweep
-from gratinglab.illumination import Illumination
-from gratinglab.problem import Problem
-from gratinglab.profiles import Blazed
+from gratinglab import Blazed, Illumination, Problem, align, sweep
 
 problem = Problem(period=160.0, profile=Blazed(blaze_angle=30.0), coating="typical:Au")
 light = Illumination.offplane(graze=1.5, azimuth=30.0)

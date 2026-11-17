@@ -9,11 +9,10 @@ Run it:  python examples/05_parameter_sweep.py
 
 import numpy as np
 
-from gratinglab.illumination import Illumination
-from gratinglab.problem import Problem
-from gratinglab.profiles import Blazed
-from gratinglab.solvers import get_solver
+from gratinglab import Blazed, Illumination, Problem, get_solver
 
+# get_solver gives the solver object, to call many times; solve() is the
+# one-call shorthand used in 01_efficiency_scan.py.
 solver = get_solver("scalar")
 wavelength = np.array([2.0])  # nm; a scan of one wavelength
 graze = 1.5  # degrees

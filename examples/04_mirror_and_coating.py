@@ -9,8 +9,7 @@ Run it:  python examples/04_mirror_and_coating.py
 
 import numpy as np
 
-from gratinglab.mirror import Mirror
-from gratinglab.problem import ConformalLayer
+from gratinglab import ConformalLayer, Mirror
 
 # 20 nm of gold on 5 nm of nickel on silicon. Layers are listed innermost
 # first, so the last one is the surface the light meets.

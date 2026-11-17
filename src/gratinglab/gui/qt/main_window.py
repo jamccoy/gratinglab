@@ -323,7 +323,11 @@ class MainWindow(QMainWindow):
         coat = self._file_menu.addAction("Send &coating to coatings window")
         coat.setShortcut(QKeySequence("Ctrl+K"))
         coat.triggered.connect(self.send_to_coatings)
-        self._file_actions = {"open": load, "solve": solve, "coatings": coat}
+        script = self._file_menu.addAction("Copy as &Python")
+        script.setShortcut(QKeySequence("Ctrl+Shift+C"))
+        script.setToolTip("Copy a script that rebuilds this problem and solves it as this tab would")
+        script.triggered.connect(self.copy_as_python)
+        self._file_actions = {"open": load, "solve": solve, "coatings": coat, "python": script}
 
         self._view_menu = self._menu_bar.addMenu("&View")
         toggle = self.geometry_dock.toggleViewAction()
@@ -388,6 +392,49 @@ class MainWindow(QMainWindow):
         window = open_window(mode("coatings"))
         window.open_stack(form, marks_text(mount_markers(form)))
         return window
+
+    def python_script(self) -> str:
+        """What this window is showing, as a script: the problem, and the
+        solve the showing tab would run. A solver tab gives that solver with
+        its settings, the Compare tab the ticked solvers compared, and the
+        Setup and Grating Geometry tabs the problem alone. Raises
+        `FormErrors` when the geometry or a tab's settings do not parse."""
+        from ..script import efficiency_script
+
+        form = self.geometry.read_form()
+        geometry = build(form)
+        current = self._tab_widget.currentWidget()
+        name = getattr(current, "name", None)
+        if name in self.tabs:
+            names = (name,)
+        elif current is self.compare_tab:
+            names = self.compare_tab.selected()
+        else:
+            names = ()
+        options = {
+            n: self.tabs[n].build_options(geometry.problem, geometry.illumination, geometry.wavelengths)
+            for n in names
+        }
+        return efficiency_script(geometry, names, options, profile_path=form.profile_path)
+
+    def copy_as_python(self) -> None:
+        """Put `python_script` on the clipboard, or say what stops it."""
+        from PySide6.QtWidgets import QApplication, QMessageBox
+
+        try:
+            script = self.python_script()
+        except FormErrors as exc:
+            QMessageBox.warning(
+                self,
+                "Nothing copied",
+                "Fix these before copying the problem as Python:\n\n"
+                + "\n".join(f"{e.field}: {e.message}" for e in exc.errors),
+            )
+            return
+        QApplication.clipboard().setText(script)
+        self.statusBar().showMessage(
+            f"Copied {len(script.splitlines())} lines of Python to the clipboard", 6000
+        )
 
     def _geometry_edited(self) -> None:
         """Schedule a redraw after a field was edited, without solving.

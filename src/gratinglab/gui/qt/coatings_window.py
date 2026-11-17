@@ -131,7 +131,11 @@ class CoatingsWindow(QMainWindow):
         send = self._file_menu.addAction("&Send to efficiency window")
         send.setShortcut(QKeySequence("Ctrl+E"))
         send.triggered.connect(self.send_to_efficiency)
-        self._file_actions = {"send": send}
+        script = self._file_menu.addAction("Copy mirror as &Python")
+        script.setShortcut(QKeySequence("Ctrl+Shift+C"))
+        script.setToolTip("Copy a script that builds this stack and reflects it as the Mirror tab does")
+        script.triggered.connect(self.copy_as_python)
+        self._file_actions = {"send": send, "python": script}
 
         self._view_menu = self._menu_bar.addMenu("&View")
         toggle = self.stack_dock.toggleViewAction()
@@ -157,6 +161,28 @@ class CoatingsWindow(QMainWindow):
         self.mirror_tab.set_marks(marks)
         if not self.stack_dock.isVisible():
             self.stack_dock.show()
+
+    def python_script(self) -> "str | None":
+        """The Mirror tab's calculation as a script, computed afresh from the
+        dock so it is what is on screen; ``None`` when it does not compute,
+        which the tab's own panel then explains."""
+        from ..script import mirror_script
+
+        self.mirror_tab.calculate()
+        result = self.mirror_tab._result
+        return None if result is None else mirror_script(result)
+
+    def copy_as_python(self) -> None:
+        """Put `python_script` on the clipboard, or show why there is none."""
+        script = self.python_script()
+        if script is None:
+            self.tabs.setCurrentWidget(self.mirror_tab)
+            self.statusBar().showMessage("Nothing copied: the Mirror tab says what to fix", 6000)
+            return
+        QApplication.clipboard().setText(script)
+        self.statusBar().showMessage(
+            f"Copied {len(script.splitlines())} lines of Python to the clipboard", 6000
+        )
 
     def send_to_efficiency(self):
         """Copy this stack into the efficiency window, and return that window.

@@ -21,6 +21,22 @@ entries under "Unreleased" into a section named for the new version;
   install with no tables, and `examples/README.md` lists what to import for
   what. The test suite runs every one, so they match the version they ship
   with.
+- **"Copy as Python" in the File menu** (`Ctrl+Shift+C`). In the efficiency
+  window it copies a script that rebuilds the problem on screen and solves it
+  as the showing tab would, with that tab's settings: one solver on a solver
+  tab, the ticked solvers compared on the Compare tab, the problem alone on
+  the others. In the coatings window it copies the Mirror tab's calculation.
+  The script is written from what the solver was given, and the tests run
+  each one against the window's own result.
+- **One import line for a script.** `from gratinglab import Problem, Blazed,
+  Illumination, solve, materials, Mirror` now works, with `ConformalLayer`,
+  the other profiles, `get_solver`, `available_solvers`, `sweep` and `align`
+  beside them. `solve(problem, illumination, wavelengths, method="scalar",
+  ...)` is new, a one-call shorthand for `get_solver(method).solve(...)`.
+  The solvers and the mirror load on first use, so `import gratinglab` costs
+  what it did. Every existing import path still works.
+- **A guide to using gratinglab from Python**, `docs/python.md`. Its code
+  blocks are run by the test suite.
 
 ## 0.5.0 (2026-11-17)
 

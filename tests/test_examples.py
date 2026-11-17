@@ -6,9 +6,11 @@ start to finish, and a line or two of its output is checked so that "it ran"
 also means "it computed something".
 """
 
+import re
 import runpy
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 EXAMPLES = Path(__file__).resolve().parents[1] / "examples"
@@ -38,6 +40,22 @@ def test_example_runs_and_reports(name, capsys, monkeypatch):
     out = capsys.readouterr().out
     for text in EXPECTED[name]:
         assert text in out, f"{name} did not print {text!r}"
+
+
+def test_the_guides_code_blocks_run(tmp_path, monkeypatch):
+    """`docs/python.md` is read as a reference, so its snippets are run too:
+    in order, in one namespace, as a reader following the page would."""
+    guide = EXAMPLES.parent / "docs" / "python.md"
+    blocks = re.findall(r"```python\n(.*?)```", guide.read_text(encoding="utf-8"), re.S)
+    assert len(blocks) >= 5
+    (tmp_path / "film.csv").write_text(
+        "wavelength (nm), n, k\n400, 1.5, 0\n500, 1.4, 0\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    namespace = {"wavelengths": np.linspace(1.0, 5.0, 5)}
+    for number, block in enumerate(blocks, 1):
+        exec(compile(block, f"<docs/python.md block {number}>", "exec"), namespace)
+    assert namespace["scan"].order(1).shape == (41,)
+    assert set(namespace["comparison"].methods) == {"scalar", "rcwa"}
 
 
 @pytest.mark.parametrize("name", sorted(EXPECTED))

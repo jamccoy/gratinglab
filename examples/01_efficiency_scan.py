@@ -15,10 +15,7 @@ with a table of your own in your library, write ``coating="Au"`` instead.
 
 import numpy as np
 
-from gratinglab.illumination import Illumination
-from gratinglab.problem import Problem
-from gratinglab.profiles import Blazed
-from gratinglab.solvers import get_solver
+from gratinglab import Blazed, Illumination, Problem, solve
 
 # A 160 nm period sawtooth with a 30 degree blaze, in gold. Lengths are nm.
 problem = Problem(
@@ -36,7 +33,7 @@ wavelengths = np.linspace(1.0, 5.0, 41)  # nm
 
 # "scalar" is the fast approximate solver. "rcwa", "integral" and "cmethod"
 # are the rigorous ones; see 02_compare_solvers.py.
-scan = get_solver("scalar").solve(problem, light, wavelengths)
+scan = solve(problem, light, wavelengths, method="scalar")
 
 # A scan is a table: one row per wavelength, one column per order.
 print(f"solved {len(scan)} wavelengths for orders {scan.orders.min()} to {scan.orders.max()}")

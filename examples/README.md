@@ -22,17 +22,34 @@ the built-in approximate X-ray model, so they run on a fresh install.
 
 ## Where things are
 
+What a script usually needs comes from the package itself:
+
+```python
+from gratinglab import Problem, Blazed, Illumination, solve, materials, Mirror
+```
+
+| You want | Name |
+|---|---|
+| The grating, and layers on it | `Problem`, `ConformalLayer` |
+| Groove shapes | `Blazed`, `Lamellar`, `Sinusoidal`, `Trapezoidal` |
+| The light | `Illumination` |
+| To solve in one call | `solve(problem, illumination, wavelengths, method="scalar", ...)` |
+| A solver object, and their names | `get_solver`, `available_solvers` |
+| Several solvers at once | `sweep`, `align` |
+| Materials | `materials` |
+| A flat mirror | `Mirror` |
+
+Two more are imported from their own modules:
+
 | You want | Import |
 |---|---|
-| The grating | `from gratinglab.problem import Problem, ConformalLayer` |
-| Groove shapes | `from gratinglab.profiles import Blazed, Lamellar, Sinusoidal` |
-| The light | `from gratinglab.illumination import Illumination` |
-| A solver | `from gratinglab.solvers import get_solver, available_solvers` |
-| Several solvers at once | `from gratinglab.compare import sweep, align` |
 | Whether a result has converged | `from gratinglab.convergence import check_convergence` |
-| Materials | `from gratinglab import materials` |
-| A flat mirror | `from gratinglab.mirror import Mirror` |
 | A grating from an AFM scan | `from gratinglab.metrology.boundary import build_boundary_profile` |
+
+The windows can write a script for you: **File, Copy as Python** in the
+efficiency window copies the problem on screen and the solve its tab would
+run, and in the coatings window it copies the Mirror tab's calculation.
+[`docs/python.md`](../docs/python.md) is the longer tour.
 
 Lengths are nanometres and angles are degrees throughout. Conventions for
 angles, orders and signs are in [`docs/conventions.md`](../docs/conventions.md),
