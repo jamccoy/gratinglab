@@ -29,12 +29,23 @@ entries under "Unreleased" into a section named for the new version;
   unit (`nm`, `um`, `A` or `eV`); a file that does not is refused rather than
   read as nanometres. `materials.from_nk_file(path)` reads one directly, and
   "Add material" takes them.
+- **A Mirror tab, and `gratinglab.mirror`, for the coating as a flat mirror.**
+  The dock's Coating is the substrate under its Layers, reflected by Parratt's
+  recursion with Névot–Croce roughness at each interface, scanned over graze
+  angle or wavelength. Beside the reflectivity it plots the 1/e depth in each
+  material and the thickness the outermost layer needs before the layers
+  beneath it change R by less than a tolerance, and says whether the layer as
+  deposited is that thick: whether a grating calculation can take it as bulk.
+  A bare substrate reproduces the single-interface Fresnel amplitudes, and a
+  stack agrees with a characteristic-matrix calculation to 1e-12.
 
 ### Changed
 
-- **The coating field accepts any name the resolver does**, so `typical:`,
-  `factors:` and `Au@17.5` names can be typed there; it had accepted library
-  files only.
+- **The Coating and Layers fields accept any name the resolver does**, so
+  `typical:`, `factors:` and `Au@17.5` names can be typed there. Coating is
+  now an editable dropdown: it still lists your library, and a typed name is
+  checked when the form is read. Until this change the dropdown could not be
+  typed in at all, so model names reached a solve only from Python.
 - The typical-material model now goes through the same index function as
   tabulated factors. Its numbers are unchanged (relative difference 0.0 over
   0.05 to 40 nm for SiO2).

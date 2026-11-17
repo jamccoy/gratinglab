@@ -45,6 +45,7 @@ from .cmethod_tab import CMethodTab
 from .compare_tab import CompareTab
 from .geometry_panel import GeometryPanel
 from .geometry_tab import GeometryTab
+from .mirror_tab import MirrorTab
 from .integral_tab import IntegralTab
 from .rcwa_tab import RcwaTab
 from .scalar_tab import ScalarTab
@@ -220,6 +221,14 @@ class MainWindow(QMainWindow):
 
         self.geometry_tab = GeometryTab()
         self._tab_widget.addTab(self.geometry_tab, "Grating Geometry")
+
+        # About the problem too, so it sits with Geometry rather than among
+        # the solvers, and like it is not in `self.tabs`: no solve contract.
+        self.mirror_tab = MirrorTab(self.geometry.read_form)
+        index = self._tab_widget.addTab(self.mirror_tab, "Mirror")
+        self._tab_widget.setTabToolTip(
+            index, "The coating stack as a flat mirror: reflectivity and penetration depth"
+        )
 
         for name in available_solvers():
             factory = _TAB_FACTORIES.get(name)

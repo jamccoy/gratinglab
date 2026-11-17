@@ -1382,15 +1382,36 @@ class TestGeometryTab:
         titles = [win._tab_widget.tabText(i) for i in range(win._tab_widget.count())]
         assert titles[0] == "Setup"
         assert titles[1] == "Grating Geometry"
+        # The flat mirror is about the problem too, so it sits before the boundary.
+        assert titles[2] == "Mirror"
         # Everything between the boundary and Compare is a solver tab -- however many
         # solvers are registered, and in whatever order.
         # Short labels on the tabs, so the bar does not overflow as solvers
         # are added; the full name is the tooltip, and the Help menu's.
         # The Compare tab closes the bar, after every solver it draws on.
-        assert titles[2:-1] == [short_title(name) for name in win.tabs]
+        assert titles[3:-1] == [short_title(name) for name in win.tabs]
         assert titles[-1] == "Compare"
-        tips = [win._tab_widget.tabToolTip(i) for i in range(2, win._tab_widget.count() - 1)]
+        tips = [win._tab_widget.tabToolTip(i) for i in range(3, win._tab_widget.count() - 1)]
         assert tips == [display_title(name) for name in win.tabs]
+
+    def test_the_mirror_tab_reads_the_dock_and_answers(self, win):
+        import dataclasses
+
+        win.geometry.write_form(dataclasses.replace(
+            win.geometry.read_form(), coating="typical:Si", layers="typical:Au 10"
+        ))
+        tab = win.mirror_tab
+        tab._fields["graze_count"].setText("20")
+        tab.calculate()
+        assert "typical:Au at 10 nm" in tab._panel.toPlainText()
+        assert tab._depth_axes.get_lines()
+        assert tab not in win.tabs.values()
+
+    def test_the_mirror_tab_reports_bad_fields_in_its_panel(self, win):
+        tab = win.mirror_tab
+        tab._fields["tolerance"].setText("-1")
+        tab.calculate()
+        assert "tolerance" in tab._panel.toPlainText()
 
     def test_it_is_not_in_the_solver_tab_registry(self, win):
         """It implements none of the solve/cancel contract, so it must never
@@ -1989,6 +2010,15 @@ class TestSetupTab:
         with qtbot.waitSignal(win.geometry.changed, timeout=1000):
             win._setup_tab.rescan()
         assert combo.currentData() == ""
+
+    def test_a_typed_model_name_is_the_coating_and_survives_a_rescan(self, win, library):
+        combo = win.geometry._fields["coating"]
+        combo.setEditText("typical:SiO2@2.0")
+        assert win.geometry.read_form().coating == "typical:SiO2@2.0"
+        win._setup_tab.rescan()
+        assert win.geometry.read_form().coating == "typical:SiO2@2.0"
+        combo.setCurrentIndex(0)
+        assert win.geometry.read_form().coating == ""
 
     def test_a_kept_coating_stays_selected(self, win, library):
         combo = win.geometry._fields["coating"]

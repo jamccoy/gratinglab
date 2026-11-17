@@ -136,21 +136,28 @@ class GeometryPanel(QWidget):
 
         surface = QGroupBox("Surface")
         surface_form = QFormLayout(surface)
-        # A dropdown, not a text field: the set of materials is finite and
-        # known, and a free-form string is what let `coating` mean nothing for
-        # four milestones. Empty entry first, because no coating is the
-        # ordinary default and gives relative efficiency -- a correct answer to
-        # a different question, not a missing input.
+        # A dropdown of the library, so an installed table is one click; and
+        # editable, because typical:, factors: and Au@17.5 names resolve with
+        # no file to list. A free-form string is what let `coating` mean
+        # nothing for four milestones, so a typed name is still resolved by
+        # `state.build` and refused there if nothing answers to it. Empty
+        # entry first, because no coating is the ordinary default and gives
+        # relative efficiency -- a correct answer to a different question.
         coating = QComboBox()
+        coating.setEditable(True)
+        coating.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
         coating.setToolTip(
             "With no coating, efficiencies are relative to a perfect "
             "reflector. Naming a material makes them absolute: the Scalar "
             "tab applies its Fresnel "
             "reflectivity, and the Integral tab reads its complex index when "
             'Conductivity is "tabulated" (and ignores it when "perfect"). '
-            "The provenance panel shows which applies."
+            "The provenance panel shows which applies.\n"
+            "Pick a table from your library, or type a model: typical:Au, "
+            "factors:SiO2@2.2, or Au@17.5 for a table at another density."
         )
         coating.activated.connect(lambda _i: self.changed.emit())
+        coating.lineEdit().editingFinished.connect(self.changed.emit)
         self._fields["coating"] = coating
         self.refresh_coatings()
         surface_form.addRow("Coating", coating)
@@ -227,7 +234,7 @@ class GeometryPanel(QWidget):
         from ...materials import available
 
         combo = self._fields["coating"]
-        current = combo.currentData() or ""
+        current = _value(combo)
         try:
             names = available()
         except ValueError:  # two tables for one name; Setup reports it
@@ -240,9 +247,11 @@ class GeometryPanel(QWidget):
                 combo.addItem(name, userData=name)
             index = combo.findData(current)
             combo.setCurrentIndex(max(index, 0))
+            if index < 0 and _is_model_name(current):
+                combo.setEditText(current)  # never in a library listing
         finally:
             combo.blockSignals(False)
-        if current and index < 0:
+        if current and index < 0 and not _is_model_name(current):
             self.changed.emit()
 
     def _check_fields_match_formstate(self) -> None:
@@ -308,6 +317,8 @@ class GeometryPanel(QWidget):
                 if index < 0:
                     index = widget.findText(value)
                 widget.setCurrentIndex(max(index, 0))
+                if index < 0 and value and widget.isEditable():
+                    widget.setEditText(value)
             else:
                 widget.setText(value)
         path = form.profile_path
@@ -363,6 +374,20 @@ def _value(widget: QWidget) -> str:
     unknown material name.
     """
     if isinstance(widget, QComboBox):
+        if widget.isEditable():
+            # A typed name leaves the current index where it was, so read
+            # the text, and map it back to its data when it names an item.
+            text = widget.currentText().strip()
+            index = widget.findText(text)
+            if index < 0:
+                return text
+            data = widget.itemData(index)
+            return text if data is None else str(data)
         data = widget.currentData()
         return widget.currentText() if data is None else str(data)
     return widget.text()
+
+
+def _is_model_name(name: str) -> bool:
+    """A coating that resolves without a library file, so no listing has it."""
+    return name.startswith(("typical:", "factors:")) or "@" in name

@@ -410,11 +410,21 @@ def _build_layers(text: str, errors: list[FieldError]) -> tuple[ConformalLayer, 
         if known is None:
             known = _material_names()
         if name not in known:
-            problems.append(
-                f"layer {position}: unknown material {name!r}; available: "
-                + (", ".join(known) or "none installed")
-            )
-            continue
+            # typical:, factors: and Au@17.5 names resolve with no library
+            # file, so ask the resolver rather than the list, as the coating does.
+            from ..materials import UnknownMaterial, lookup
+
+            try:
+                lookup(name)
+            except UnknownMaterial:
+                problems.append(
+                    f"layer {position}: unknown material {name!r}; available: "
+                    + (", ".join(known) or "none installed")
+                )
+                continue
+            except (ValueError, KeyError, OSError) as refused:
+                problems.append(f"layer {position}: {refused}")
+                continue
         layers.append(ConformalLayer(material=name, thickness=thickness))
     if problems:
         errors.append(FieldError("layers", "; ".join(problems)))

@@ -295,6 +295,15 @@ ladder, redrawn as the form changes, with no solver. **Send to efficiency window
 (`Ctrl+E`) copies its form into the efficiency window, opening it if need be, and
 solves nothing; the efficiency window keeps its own Grating Geometry tab.
 
+The **Mirror** tab treats the dock's coating stack as a flat mirror, before any
+grooves: the Coating as substrate under its Layers (innermost first), with the
+Roughness at every interface. It plots the specular reflectivity against graze angle
+or wavelength, the 1/e penetration depth in each material, and the thickness the
+outermost layer needs before what lies beneath it changes the reflectivity by less
+than a tolerance, so you can see whether that layer may be modelled as bulk. The same
+is `gratinglab.mirror.Mirror` from Python. Coating and Layers both take model names
+such as `typical:Au` and `factors:SiO2@2.2`.
+
 The windows are built with Qt (PySide6), so `pip install "gratinglab[gui]"` needs no
 system toolkit to be installed first. PySide6 is licensed under the LGPLv3 and is an
 optional, dynamically linked extra, so this package remains under the BSD-3 licence.
