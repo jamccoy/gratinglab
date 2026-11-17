@@ -269,12 +269,12 @@ class TestTheChooser:
 
     def test_it_is_a_compact_toolbox(self, qtbot):
         """Narrow enough to sit beside the windows it stays open with. The
-        banner widens it, to 376 px in Consolas; without a fixed-width face
-        there is no banner and it keeps its own width."""
+        banner widens it, to 400 px at most whatever the fixed-width face;
+        without one there is no banner and it keeps its own width."""
         window = qt_launcher.LauncherWindow()
         qtbot.addWidget(window)
         window.show()
-        assert window.width() <= (300 if window.banner is None else 420)
+        assert window.width() <= (300 if window.banner is None else 400)
         assert window.sizeHint().height() <= 320
 
     def test_clicking_opens_that_mode_and_the_menu_stays(self, qtbot,

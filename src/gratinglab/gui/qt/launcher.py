@@ -23,7 +23,7 @@ from importlib import import_module
 
 import shiboken6
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QFontInfo, QKeySequence
+from PySide6.QtGui import QFont, QFontInfo, QFontMetrics, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -82,9 +82,14 @@ BANNER = "\n".join((
 ))
 _BANNER_COLUMNS = max(len(line) for line in BANNER.splitlines())
 
-#: The banner's type, px. Small, because the chooser is a toolbox that sits
-#: beside the windows, and it widens to fit the banner at this size.
+#: The banner's type, px, at most; and the width it may take, px. Small,
+#: because the chooser is a toolbox that sits beside the windows. Fixed-width
+#: faces differ in how wide they are (Consolas is 4 px a character at 8 px,
+#: DejaVu Sans Mono and Menlo nearer 4.8), so the type steps down from the
+#: first until the banner fits the second, and the toolbox is at most 400 px
+#: wide on every platform.
 _BANNER_PX = 8
+_BANNER_MAX_WIDTH = 376
 #: Fixed-width faces to draw it in, the first one installed winning.
 _BANNER_FONTS = ["Consolas", "Menlo", "DejaVu Sans Mono", "Courier New", "monospace"]
 
@@ -323,10 +328,14 @@ class LauncherWindow(QWidget):
         font.setFamilies(_BANNER_FONTS)
         font.setStyleHint(QFont.StyleHint.TypeWriter)
         font.setFixedPitch(True)
-        font.setPixelSize(_BANNER_PX)
         self.banner = None
         if not QFontInfo(font).fixedPitch():
             return None
+        widest = max(BANNER.splitlines(), key=len)
+        for size in range(_BANNER_PX, 4, -1):
+            font.setPixelSize(size)
+            if QFontMetrics(font).horizontalAdvance(widest) <= _BANNER_MAX_WIDTH:
+                break
         banner = QLabel(BANNER)
         banner.setFont(font)
         banner.setObjectName("banner")

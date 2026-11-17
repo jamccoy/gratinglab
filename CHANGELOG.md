@@ -15,7 +15,7 @@ entries under "Unreleased" into a section named for the new version;
 ### Added
 
 - **The main menu carries the name in block capitals**, drawn in characters
-  at its head. The menu is wider for it, 376 px where it was 260.
+  at its head. The menu is wider for it, up to 400 px where it was 260.
 - **A Materials tab, beside Setup.** Three fields build a coating name (a
   table in your library, scattering factors with a formula, or the typical
   model, each with an optional density), so `factors:SiO2@2.2` need not be
