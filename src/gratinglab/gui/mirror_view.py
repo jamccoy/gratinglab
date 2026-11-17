@@ -63,7 +63,7 @@ def compute(form: FormState, settings: MirrorSettings) -> MirrorResult:
     errors: list[FieldError] = []
     substrate = form.coating.strip()
     if not substrate:
-        errors.append(FieldError("coating", "a mirror needs a substrate: set Coating"))
+        errors.append(FieldError("coating", "a mirror needs a substrate: set the Grating material"))
     roughness = _number(form.roughness, "roughness", errors, minimum=0.0)
     layers = _build_layers(form.layers, errors)
     tolerance = _number(settings.tolerance, "tolerance", errors, minimum=0.0, exclusive_min=True, maximum=1.0)

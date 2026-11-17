@@ -20,7 +20,7 @@ user needs when the coating dropdown offers one entry and they wanted nickel.
 Its three buttons act on the library and never on the `Problem`: adding a
 table, re-reading the directories, and opening the one you own. Each change
 emits `library_changed`, which the window routes to the geometry dock's
-Coating dropdown, so a table added here is a coating there without a restart.
+material dropdowns, so a table added here is a coating there without a restart.
 """
 
 from __future__ import annotations
@@ -157,7 +157,7 @@ naming the number it needs.
 
 **Add material…** above picks a table, asks the name it should have as a
 coating, reads it to prove it is usable, and copies it into your library; the
-Coating dropdown has it at once. **Rescan library** re-reads the directories
+dock's material dropdowns have it at once. **Rescan library** re-reads the directories
 after you add or remove a file yourself, and **Open library folder** opens the
 first of them, creating it if it does not exist yet.
 
@@ -329,7 +329,7 @@ class SetupTab(QWidget):
         else:
             self._status.setText(
                 f"Added {name} from {Path(chosen).name} as {written}. It is in the "
-                "Coating dropdown now."
+                "dock's material dropdowns now."
             )
         self.library_changed.emit()
 

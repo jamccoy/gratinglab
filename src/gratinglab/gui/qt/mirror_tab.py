@@ -61,7 +61,7 @@ class MirrorTab(QWidget):
         column.setContentsMargins(0, 0, 0, 0)
         column.addWidget(self._build_scan_group())
         self._calculate = QPushButton("Calculate")
-        self._calculate.setToolTip("Reflect from the dock's Coating, Layers and Roughness as a flat mirror.")
+        self._calculate.setToolTip("Reflect from the dock's Surface stack as a flat mirror.")
         self._calculate.clicked.connect(self.calculate)
         column.addWidget(self._calculate)
         column.addStretch(1)
@@ -160,8 +160,8 @@ class MirrorTab(QWidget):
         layout.addWidget(heading)
         layout.addWidget(self._panel)
         self._paint((provenance.Line(
-            "The dock's Coating is the substrate, under its Layers (innermost "
-            "first). Press Calculate to see how far the light goes in, and "
+            "The dock's Surface stack, taken flat: its Grating material is the "
+            "substrate. Press Calculate to see how far the light goes in, and "
             "whether the top layer can be treated as bulk.\n", "dim",
         ),))
         return panel

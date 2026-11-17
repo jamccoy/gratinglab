@@ -10,6 +10,18 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Changed
+
+- **The dock's Surface group is a coating stack you can see.** Layers are rows,
+  outermost at the top as the light meets them, each with a material dropdown,
+  a thickness in nm, and buttons to move or remove it; "Add layer" puts one on
+  top. The material the grooves are cut into sits at the foot, labelled
+  Grating (it was "Coating"), with a colour swatch per material. It replaces
+  the Layers text field, where `Au 20, Cr 5` had to be typed innermost first.
+  The form, saved geometries and `Problem` are unchanged.
+
 ## 0.4.0 (2026-11-16)
 
 ### Added

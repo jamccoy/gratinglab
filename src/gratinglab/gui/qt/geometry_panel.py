@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QGroupBox,
+    QHBoxLayout,
     QLabel,
     QLineEdit,
     QPushButton,
@@ -29,6 +30,7 @@ from PySide6.QtWidgets import (
 )
 
 from . import recent
+from .stack_editor import StackEditor, Swatch
 from ..state import ANGLE_LABELS, MOUNTS, PROFILE_FIELDS, PROFILE_KINDS, FormState
 
 __all__ = ["GeometryPanel"]
@@ -134,8 +136,16 @@ class GeometryPanel(QWidget):
             mount_form.addRow(label, widget)
             self._angle_labels[key] = label
 
+        # The surface reads top-down, as the light meets it: vacuum, the
+        # layers (outermost first), then the material the grating is cut
+        # into. The form still carries the layers as text; see stack_editor.
         surface = QGroupBox("Surface")
         surface_form = QFormLayout(surface)
+        stack = StackEditor()
+        stack.changed.connect(self.changed)
+        stack.solve_requested.connect(self.solve_requested)
+        self._fields["layers"] = stack
+        surface_form.addRow(stack)
         # A dropdown of the library, so an installed table is one click; and
         # editable, because typical:, factors: and Au@17.5 names resolve with
         # no file to list. A free-form string is what let `coating` mean
@@ -160,21 +170,25 @@ class GeometryPanel(QWidget):
         coating.lineEdit().editingFinished.connect(self.changed.emit)
         self._fields["coating"] = coating
         self.refresh_coatings()
-        surface_form.addRow("Coating", coating)
+        # The foot of the stack, in the rows' own layout so it reads as the
+        # last of them. The field is still `coating`, which is what a Problem
+        # calls the material the profile is cut into.
+        base = QWidget()
+        base_row = QHBoxLayout(base)
+        base_row.setContentsMargins(0, 0, 0, 0)
+        base_row.setSpacing(3)
+        self._base_swatch = Swatch()
+        coating.editTextChanged.connect(
+            lambda text: self._base_swatch.show_material("" if text == "(none)" else text)
+        )
+        base_label = QLabel("Grating")
+        base_label.setToolTip("The material the grooves are cut into, beneath any layers.")
+        base_row.addWidget(self._base_swatch)
+        base_row.addWidget(base_label)
+        base_row.addWidget(coating, 1)
+        surface_form.addRow(base)
 
         entry(surface_form, "Roughness σ (nm)", "roughness")
-
-        layers = entry(surface_form, "Layers", "layers")
-        layers.setPlaceholderText("none, e.g. Au 20, Cr 5")
-        layers.setToolTip(
-            "Conformal layers on the grating, innermost first: a material\n"
-            "and a thickness in nm each, separated by commas. Each follows the\n"
-            "surface beneath it as its true offset, so convex corners are\n"
-            "rounded and concave ones stay sharp. The grating itself is cut\n"
-            "into the Coating material.\n"
-            "Only the RCWA tab models layers; the other solvers report an\n"
-            "error if any are set."
-        )
 
         scan = QGroupBox("Wavelengths (nm)")
         scan_form = QFormLayout(scan)
@@ -224,7 +238,7 @@ class GeometryPanel(QWidget):
             label.setFixedWidth(width)
 
     def refresh_coatings(self) -> None:
-        """Re-read the material library into the Coating dropdown.
+        """Re-read the material library into the material dropdowns.
 
         The choice is kept when its material is still installed. When it is
         not, the dropdown falls back to "(none)" and emits ``changed``, since
@@ -251,6 +265,7 @@ class GeometryPanel(QWidget):
                 combo.setEditText(current)  # never in a library listing
         finally:
             combo.blockSignals(False)
+        self._fields["layers"].set_materials(names)
         if current and index < 0 and not _is_model_name(current):
             self.changed.emit()
 
