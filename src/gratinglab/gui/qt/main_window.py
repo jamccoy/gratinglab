@@ -45,8 +45,7 @@ from .cmethod_tab import CMethodTab
 from .compare_tab import CompareTab
 from .geometry_panel import GeometryPanel
 from .geometry_tab import GeometryTab
-from .materials_tab import MaterialsTab
-from .mirror_tab import MirrorTab
+from .library_bar import library_events
 from .integral_tab import IntegralTab
 from .rcwa_tab import RcwaTab
 from .scalar_tab import ScalarTab
@@ -218,29 +217,14 @@ class MainWindow(QMainWindow):
         self._setup_tab = SetupTab()
         self._tab_widget.addTab(self._setup_tab, "Setup")
 
-        # Next to Setup, which holds the library it reads; like it, not in
-        # `self.tabs`, having no solve contract.
-        self.materials_tab = MaterialsTab(self.geometry)
-        # Everything that lists materials follows the library's actions.
-        # The dock is built first, so its dropdowns can.
-        for follow in (self.geometry.refresh_coatings, self.materials_tab.refresh_library,
-                       self._setup_tab.refresh):
-            self.materials_tab.library.library_changed.connect(follow)
-        index = self._tab_widget.addTab(self.materials_tab, "Materials")
-        self._tab_widget.setTabToolTip(
-            index, "Name a material, see its index, and send it to the surface stack"
-        )
+        # The library is the application's, and its actions are in the
+        # coatings window: follow it from wherever it changed. The dock is
+        # built first, so its dropdowns can.
+        library_events.changed.connect(self.geometry.refresh_coatings)
+        library_events.changed.connect(self._setup_tab.refresh)
 
         self.geometry_tab = GeometryTab()
         self._tab_widget.addTab(self.geometry_tab, "Grating Geometry")
-
-        # About the problem too, so it sits with Geometry rather than among
-        # the solvers, and like it is not in `self.tabs`: no solve contract.
-        self.mirror_tab = MirrorTab(self.geometry)
-        index = self._tab_widget.addTab(self.mirror_tab, "Mirror")
-        self._tab_widget.setTabToolTip(
-            index, "The coating stack as a flat mirror: reflectivity and penetration depth"
-        )
 
         for name in available_solvers():
             factory = _TAB_FACTORIES.get(name)
@@ -336,7 +320,10 @@ class MainWindow(QMainWindow):
         solve = self._file_menu.addAction("&Solve this tab")
         solve.setShortcut(QKeySequence("Ctrl+Return"))
         solve.triggered.connect(self._solve_active_tab)
-        self._file_actions = {"open": load, "solve": solve}
+        coat = self._file_menu.addAction("Send &coating to coatings window")
+        coat.setShortcut(QKeySequence("Ctrl+K"))
+        coat.triggered.connect(self.send_to_coatings)
+        self._file_actions = {"open": load, "solve": solve, "coatings": coat}
 
         self._view_menu = self._menu_bar.addMenu("&View")
         toggle = self.geometry_dock.toggleViewAction()
@@ -380,6 +367,27 @@ class MainWindow(QMainWindow):
         self.geometry.write_form(form)
         if not self.geometry_dock.isVisible():
             self.geometry_dock.show()
+
+    def open_surface(self, coating: str, layers: str, roughness: str) -> None:
+        """Take a coating stack, as the coatings window sends it: the Surface
+        group alone. The grating, the mount and the wavelengths stay, and
+        nothing is solved."""
+        self.geometry.write_surface(coating, layers, roughness)
+        if not self.geometry_dock.isVisible():
+            self.geometry_dock.show()
+
+    def send_to_coatings(self):
+        """Copy this window's Surface group and wavelengths into the coatings
+        window, with the graze angles this mount puts light at for its
+        Mirror tab to mark, and return that window."""
+        from ..launcher import mode
+        from ..mirror_view import marks_text, mount_markers
+        from .launcher import open_window
+
+        form = self.geometry.read_form()
+        window = open_window(mode("coatings"))
+        window.open_stack(form, marks_text(mount_markers(form)))
+        return window
 
     def _geometry_edited(self) -> None:
         """Schedule a redraw after a field was edited, without solving.

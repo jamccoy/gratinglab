@@ -11,8 +11,9 @@ The library is here too: a list of its tables, where a click previews one,
 above the three actions that change it (:mod:`.library_bar`).
 
 What is resolved, drawn and said is in :mod:`gratinglab.gui.materials_view`;
-this is widgets. Built by :class:`~gratinglab.gui.qt.main_window.MainWindow`,
-which hands it the dock.
+this is widgets. Built by
+:class:`~gratinglab.gui.qt.coatings_window.CoatingsWindow`, which hands it the
+dock.
 """
 
 from __future__ import annotations
@@ -49,7 +50,7 @@ class MaterialsTab(QWidget):
 
     def __init__(self, dock, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        #: The geometry dock: read for its scan, written by the two buttons.
+        #: The window's dock: read for its scan, written by the two buttons.
         self._dock = dock
         self._preview: MaterialPreview | None = None
         self._lines: tuple = ()
@@ -93,8 +94,8 @@ class MaterialsTab(QWidget):
         form.addRow("Coating name", self._result)
         column.addWidget(group)
 
-        self._use = QPushButton("Use as grating material")
-        self._use.setToolTip("Set the dock's Grating row to this material.")
+        self._use = QPushButton("Use as substrate")
+        self._use.setToolTip("Set the dock's Substrate row to this material.")
         self._use.clicked.connect(self._use_as_grating)
         self._layer = QPushButton("Add as top layer")
         self._layer.setToolTip("Add a layer of this material on top of the dock's stack.")

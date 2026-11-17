@@ -162,6 +162,17 @@ def _await_solve(qtbot, window, trigger=None, *, what):
         raise AssertionError(_why_no_solve(getattr(window, "_runner", None), probe, what))
 
 
+def _library_bar(window):
+    """The library's actions, as the coatings window's Materials tab holds
+    them. One per window, so a test's calls all reach the same bar. The
+    efficiency window follows `library_events`, not any one bar."""
+    from gratinglab.gui.qt.library_bar import LibraryBar
+
+    if not hasattr(window, "_test_library_bar"):
+        window._test_library_bar = LibraryBar(window)
+    return window._test_library_bar
+
+
 @pytest.fixture
 def win(qtbot):
     """A constructed window with its first solve already drawn."""
@@ -1381,77 +1392,18 @@ class TestGeometryTab:
 
         titles = [win._tab_widget.tabText(i) for i in range(win._tab_widget.count())]
         assert titles[0] == "Setup"
-        assert titles[1] == "Materials"
-        assert titles[2] == "Grating Geometry"
-        # The flat mirror is about the problem too, so it sits before the boundary.
-        assert titles[3] == "Mirror"
+        assert titles[1] == "Grating Geometry"
+        # Materials and Mirror are the coatings window's, not this one's.
+        assert "Materials" not in titles and "Mirror" not in titles
         # Everything between the boundary and Compare is a solver tab -- however many
         # solvers are registered, and in whatever order.
         # Short labels on the tabs, so the bar does not overflow as solvers
         # are added; the full name is the tooltip, and the Help menu's.
         # The Compare tab closes the bar, after every solver it draws on.
-        assert titles[4:-1] == [short_title(name) for name in win.tabs]
+        assert titles[2:-1] == [short_title(name) for name in win.tabs]
         assert titles[-1] == "Compare"
-        tips = [win._tab_widget.tabToolTip(i) for i in range(4, win._tab_widget.count() - 1)]
+        tips = [win._tab_widget.tabToolTip(i) for i in range(2, win._tab_widget.count() - 1)]
         assert tips == [display_title(name) for name in win.tabs]
-
-    def test_the_mirror_tab_reads_the_dock_and_answers(self, win):
-        import dataclasses
-
-        win.geometry.write_form(dataclasses.replace(
-            win.geometry.read_form(), coating="typical:Si", layers="typical:Au 10"
-        ))
-        tab = win.mirror_tab
-        tab._fields["graze_count"].setText("20")
-        tab.calculate()
-        assert "typical:Au at 10 nm" in tab._panel.toPlainText()
-        assert tab._depth_axes.get_lines()
-        assert tab not in win.tabs.values()
-
-    def test_the_mirror_tab_waits_until_it_is_showing(self, win, qtbot):
-        tab = win.mirror_tab
-        win.geometry.set_grating_material("typical:Au")
-        tab.calculate()
-        before = tab._result
-        assert before is not None
-        win.geometry._fields["roughness"].setText("0.4")
-        win.geometry.changed.emit()
-        assert tab._stale and tab._result is before  # hidden: nothing computed
-        win._tab_widget.setCurrentWidget(tab)
-        win.show()
-        qtbot.waitUntil(lambda: not tab._stale, timeout=10_000)
-        assert tab._result.mirror.roughness == 0.4
-
-    def test_the_mirror_tab_hands_a_bulk_layer_to_the_dock(self, win):
-        import dataclasses
-
-        tab = win.mirror_tab
-        win.geometry.write_form(dataclasses.replace(
-            win.geometry.read_form(), coating="typical:Si", layers="typical:Au 10"
-        ))
-        tab._fields["graze_count"].setText("20")
-        tab.calculate()
-        assert not tab._hand_off.isEnabled()  # 10 nm is not bulk past grazing
-        win.geometry.write_form(dataclasses.replace(
-            win.geometry.read_form(), layers="typical:Au 400"
-        ))
-        tab.calculate()
-        assert tab._hand_off.isEnabled() and "reads as bulk" in tab._verdict.text()
-        asked = []
-        tab._confirm_hand_off = lambda *what: asked.append(what) or False
-        tab._hand_off.click()
-        assert asked == [("typical:Au", 1, "typical:Si")]
-        assert win.geometry.read_form().layers == "typical:Au 400"  # declined: untouched
-        tab._confirm_hand_off = lambda *what: True
-        tab._hand_off.click()
-        form = win.geometry.read_form()
-        assert form.coating == "typical:Au" and form.layers == ""
-
-    def test_the_mirror_tab_reports_bad_fields_in_its_panel(self, win):
-        tab = win.mirror_tab
-        tab._fields["tolerance"].setText("-1")
-        tab.calculate()
-        assert "tolerance" in tab._panel.toPlainText()
 
     def test_it_is_not_in_the_solver_tab_registry(self, win):
         """It implements none of the solve/cancel contract, so it must never
@@ -1968,7 +1920,7 @@ class TestSetupTab:
     ):
         from gratinglab import materials
 
-        tab = win.materials_tab.library
+        tab = _library_bar(win)
         self._answer(monkeypatch, tab, materials.data_dir() / "Au.txt", "Pt")
         assert "Pt" not in self._coatings(win)
         page = win._setup_tab._browser
@@ -1986,7 +1938,7 @@ class TestSetupTab:
     ):
         source = tmp_path / "ti.nff"
         source.write_text("E(eV)\tf1\tf2\n30\t20\t3\n5000\t22\t1\n", encoding="utf-8")
-        tab = win.materials_tab.library
+        tab = _library_bar(win)
         self._answer(monkeypatch, tab, source, "never asked")
         monkeypatch.setattr(tab, "_choose_name", lambda default: pytest.fail("asked"))
         tab.add_material()
@@ -1998,9 +1950,9 @@ class TestSetupTab:
     ):
         broken = tmp_path / "Pt.txt"
         broken.write_text("not a CXRO export\n", encoding="utf-8")
-        self._answer(monkeypatch, win.materials_tab.library, broken, "Pt")
-        win.materials_tab.library.add_material()
-        assert "was not added" in win.materials_tab.library._status.text()
+        self._answer(monkeypatch, _library_bar(win), broken, "Pt")
+        _library_bar(win).add_material()
+        assert "was not added" in _library_bar(win)._status.text()
         assert "Pt" not in self._coatings(win)
 
     def test_a_declined_replace_leaves_the_table_alone(
@@ -2008,7 +1960,7 @@ class TestSetupTab:
     ):
         from gratinglab import materials
 
-        tab = win.materials_tab.library
+        tab = _library_bar(win)
         self._answer(monkeypatch, tab, materials.data_dir() / "Au.txt", "Pt")
         tab.add_material()
         before = (library / "Pt.txt").stat().st_mtime_ns
@@ -2017,7 +1969,7 @@ class TestSetupTab:
         assert (library / "Pt.txt").stat().st_mtime_ns == before
 
     def test_cancelling_either_dialog_does_nothing(self, win, library, monkeypatch):
-        tab = win.materials_tab.library
+        tab = _library_bar(win)
         self._answer(monkeypatch, tab, "", "Pt")
         tab.add_material()
         monkeypatch.setattr(tab, "_choose_file", lambda: "Pt.txt")
@@ -2032,9 +1984,9 @@ class TestSetupTab:
         library.mkdir()
         (library / "Ni.txt").write_bytes((materials.data_dir() / "Au.txt").read_bytes())
         assert "Ni" not in self._coatings(win)
-        win.materials_tab.library.rescan()
+        _library_bar(win).rescan()
         assert "Ni" in self._coatings(win)
-        assert "Library read" in win.materials_tab.library._status.text()
+        assert "Library read" in _library_bar(win)._status.text()
 
     def test_a_removed_coating_falls_back_to_none_and_says_so(
         self, win, library, qtbot
@@ -2044,19 +1996,19 @@ class TestSetupTab:
         library.mkdir()
         table = library / "Ni.txt"
         table.write_bytes((materials.data_dir() / "Au.txt").read_bytes())
-        win.materials_tab.library.rescan()
+        _library_bar(win).rescan()
         combo = win.geometry._fields["coating"]
         combo.setCurrentIndex(combo.findData("Ni"))
         table.unlink()
         with qtbot.waitSignal(win.geometry.changed, timeout=1000):
-            win.materials_tab.library.rescan()
+            _library_bar(win).rescan()
         assert combo.currentData() == ""
 
     def test_a_typed_model_name_is_the_coating_and_survives_a_rescan(self, win, library):
         combo = win.geometry._fields["coating"]
         combo.setEditText("typical:SiO2@2.0")
         assert win.geometry.read_form().coating == "typical:SiO2@2.0"
-        win.materials_tab.library.rescan()
+        _library_bar(win).rescan()
         assert win.geometry.read_form().coating == "typical:SiO2@2.0"
         combo.setCurrentIndex(0)
         assert win.geometry.read_form().coating == ""
@@ -2064,7 +2016,7 @@ class TestSetupTab:
     def test_a_kept_coating_stays_selected(self, win, library):
         combo = win.geometry._fields["coating"]
         combo.setCurrentIndex(combo.findData("Au"))
-        win.materials_tab.library.rescan()
+        _library_bar(win).rescan()
         assert combo.currentData() == "Au"
 
     def test_open_library_folder_creates_it(self, win, library, monkeypatch):
@@ -2074,7 +2026,7 @@ class TestSetupTab:
         monkeypatch.setattr(
             library_bar.QDesktopServices, "openUrl", lambda url: opened.append(url) or True
         )
-        win.materials_tab.library.open_library_folder()
+        _library_bar(win).open_library_folder()
         assert library.is_dir()
         assert opened and opened[0].toLocalFile().endswith("library")
 

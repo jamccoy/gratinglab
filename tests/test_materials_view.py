@@ -85,12 +85,10 @@ class TestTheTab:
     @pytest.fixture
     def win(self, qtbot):
         pytest.importorskip("PySide6")
-        from gratinglab.gui.qt.main_window import MainWindow
+        from gratinglab.gui.qt.coatings_window import CoatingsWindow
 
-        window = MainWindow()
+        window = CoatingsWindow()
         qtbot.addWidget(window)
-        with qtbot.waitSignal(window.solved, timeout=60_000):
-            pass
         return window
 
     def test_it_previews_as_the_fields_change(self, win):
@@ -110,10 +108,10 @@ class TestTheTab:
         tab = win.materials_tab
         tab.set_fields("typical", "Si")
         tab._use.click()
-        assert win.geometry.read_form().coating == "typical:Si"
+        assert win.stack.read_form().coating == "typical:Si"
         tab.set_fields("typical", "C", "2.0")
         tab._layer.click()
-        assert win.geometry.read_form().layers == "typical:C@2.0"
+        assert win.stack.read_form().layers == "typical:C@2.0"
 
     def test_the_library_is_listed_and_a_click_previews_it(self, win):
         tab = win.materials_tab
@@ -126,6 +124,6 @@ class TestTheTab:
     def test_it_follows_the_docks_scan(self, win):
         tab = win.materials_tab
         tab.set_fields("typical", "Au")
-        win.geometry.write_form(dataclasses.replace(
-            win.geometry.read_form(), wavelength_start="30", wavelength_stop="80"))
+        win.stack.write_form(dataclasses.replace(
+            win.stack.read_form(), wavelength_start="30", wavelength_stop="80"))
         assert "Does not cover" in tab._panel.toPlainText()

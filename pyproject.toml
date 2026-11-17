@@ -130,6 +130,7 @@ mut = ["mutmut>=3.2,<3.3"]
 gratinglab-app = "gratinglab.gui.launcher:main"
 gratinglab-gui = "gratinglab.gui.app:main"
 gratinglab-geometry = "gratinglab.gui.app:geometry_main"
+gratinglab-coatings = "gratinglab.gui.app:coatings_main"
 gratinglab-metrology-gui = "gratinglab.metrology.gui:main"
 # The metrology CLI, carried over unchanged. It still takes no arguments and
 # dispatches on `config.ANALYSIS_MODE`; reconciling that with the rest of the

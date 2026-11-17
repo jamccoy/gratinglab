@@ -95,5 +95,25 @@ def geometry_main() -> int:
     return app.exec()
 
 
+def coatings_main() -> int:
+    """Console-script entry point for ``gratinglab-coatings``.
+
+    The coatings window alone. Its "Send to efficiency window" opens the
+    efficiency window in the same process when it is used.
+    """
+    QApplication = _require_qt()
+    from .launcher import mode
+    from .qt.launcher import open_window
+
+    app = QApplication(sys.argv)
+    from .qt.theming import install
+
+    install(app)
+    # Through the launcher, for the Go menu, as `geometry_main` does.
+    window = open_window(mode("coatings"))
+    _bring_to_front(window)
+    return app.exec()
+
+
 if __name__ == "__main__":  # pragma: no cover
     sys.exit(main())

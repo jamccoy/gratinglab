@@ -10,6 +10,31 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## Unreleased
+
+### Added
+
+- **A coatings window, "Design a coating" on the main menu**
+  (`gratinglab-coatings`). It holds the Materials and Mirror tabs, with a dock
+  of its own for the stack, over a Substrate, and a wavelength range: a
+  coating can be worked out with no grating in sight. "Send to efficiency
+  window" copies the stack into the efficiency window's Surface group and
+  leaves its grating, mount and wavelengths alone.
+
+### Changed
+
+- **The efficiency window no longer has Materials and Mirror tabs.** It keeps
+  the stack editor in its dock and the Setup reference page, and gains "Send
+  coating to coatings window" (`Ctrl+K`) in its File menu, which takes its
+  stack and wavelengths across.
+- **The Mirror tab's marked angles are a field of its own**, Mark angles,
+  taking angles in degrees with optional labels. It read them from the
+  efficiency window's mount, which it no longer shares a window with; that
+  window fills the field when it sends a coating over.
+- **The material library's actions reach every window.** Adding a table or
+  rescanning in the coatings window updates the efficiency window's dropdowns
+  and Setup page too.
+
 ## 0.4.1 (2026-11-17)
 
 ### Added

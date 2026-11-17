@@ -6,9 +6,11 @@ one place whether it is about to be ruled or only reflected from. The tab's
 own settings choose the scan: graze angle at one wavelength, or wavelength at
 one graze, over the dock's wavelengths or the tab's own. :func:`compute`
 returns a :class:`MirrorResult`; :func:`verdict` is the one-line answer,
-:func:`draw` and :func:`lines` the two plots and the panel text. The dock's
-mount is drawn on an angle scan as markers (:func:`mount_markers`), so the
-angles the grating will actually be used at can be read off the curve.
+:func:`draw` and :func:`lines` the two plots and the panel text. An angle
+scan marks the graze angles named in the tab's own Mark angles field, so the
+angles a grating will actually be used at can be read off the curve. The
+efficiency window fills that field from its mount when it sends a coating
+over (:func:`mount_markers`, :func:`marks_text`).
 
 Called by :mod:`gratinglab.gui.qt.mirror_tab`; tested in
 ``tests/test_mirror_view.py``.
@@ -30,7 +32,7 @@ from .theme import order_colors, set_titles, style_axes
 
 __all__ = [
     "MirrorSettings", "MirrorResult", "compute", "draw", "lines", "verdict",
-    "is_bulk_throughout", "mount_markers",
+    "is_bulk_throughout", "mount_markers", "marks_text", "parse_marks",
 ]
 
 #: Most points one scan evaluates; each one sweeps a thickness for the bulk test.
@@ -54,6 +56,9 @@ class MirrorSettings:
     wavelength_start: str = "1.0"
     wavelength_stop: str = "5.0"
     wavelength_count: str = "200"
+    #: Graze angles to mark on an angle scan: ``"1.5"`` or
+    #: ``"grating plane 1.36, blaze facet 1.5"``.
+    marks: str = ""
 
 
 @dataclass(frozen=True)
@@ -88,13 +93,44 @@ def mount_markers(form: FormState) -> tuple[tuple[str, float], ...]:
     return tuple(out)
 
 
+def marks_text(markers) -> str:
+    """Markers as the Mark angles field holds them."""
+    return ", ".join(f"{label} {graze:.4g}" for label, graze in markers)
+
+
+def parse_marks(text: str, errors: list[FieldError]) -> tuple[tuple[str, float], ...]:
+    """``"grating plane 1.36, 2"`` as ``(("grating plane", 1.36), ("marked", 2.0))``.
+
+    Each entry is one angle in degrees, with a label before or after it if
+    you want one. A bad entry is an error on the ``marks`` field.
+    """
+    out = []
+    for entry in (part.strip() for part in text.split(",")):
+        if not entry:
+            continue
+        words = entry.split()
+        numbers = []
+        for word in words:
+            try:
+                numbers.append((word, float(word)))
+            except ValueError:
+                pass
+        if len(numbers) != 1 or not 0 < numbers[0][1] <= 90:
+            errors.append(FieldError("marks", f"{entry!r} should be one graze angle in "
+                                              "degrees, with a label if you like"))
+            continue
+        label = " ".join(w for w in words if w != numbers[0][0]) or "marked"
+        out.append((label, numbers[0][1]))
+    return tuple(out)
+
+
 def compute(form: FormState, settings: MirrorSettings) -> MirrorResult:
     """Build the mirror and evaluate it, raising :class:`FormErrors` for
     every bad field at once."""
     errors: list[FieldError] = []
     substrate = form.coating.strip()
     if not substrate:
-        errors.append(FieldError("coating", "a mirror needs a substrate: set the Grating material"))
+        errors.append(FieldError("coating", "a mirror needs a substrate"))
     roughness = _number(form.roughness, "roughness", errors, minimum=0.0)
     layers = _build_layers(form.layers, errors)
     tolerance = _number(settings.tolerance, "tolerance", errors, minimum=0.0, exclusive_min=True, maximum=1.0)
@@ -113,6 +149,7 @@ def compute(form: FormState, settings: MirrorSettings) -> MirrorResult:
         fixed = _number(settings.graze, "graze", errors, minimum=0.0, exclusive_min=True, maximum=90.0)
     else:
         raise ValueError(f"scan must be 'angle' or 'wavelength', got {settings.scan!r}")
+    markers = parse_marks(settings.marks, errors) if settings.scan == "angle" else ()
     if start is not None and stop is not None and stop <= start:
         errors.append(FieldError(f"{'graze' if settings.scan == 'angle' else 'wavelength'}_stop", "must exceed the start"))
     if errors:
@@ -128,7 +165,6 @@ def compute(form: FormState, settings: MirrorSettings) -> MirrorResult:
         bulk = np.array([
             mirror.bulk_thickness(g, w, tolerance, settings.polarization) for g, w in zip(graze, wl)
         ])
-    markers = mount_markers(form) if settings.scan == "angle" else ()
     return MirrorResult(mirror, settings.scan, x, fixed, reflectivity, depths, bulk, tolerance,
                         settings.polarization, markers)
 
@@ -233,5 +269,5 @@ def lines(result: MirrorResult) -> tuple[Line, ...]:
     out.append(Line(f"1/e depth in {top.material}: {np.nanmin(depth):.3g} to {np.nanmax(depth):.3g} nm "
                     "over the scan.\n", "dim"))
     for label, graze in result.markers:
-        out.append(Line(f"The dock's mount puts light on the {label} at {graze:.3g} deg graze.\n", "dim"))
+        out.append(Line(f"Marked: {label} at {graze:.3g} deg graze.\n", "dim"))
     return tuple(out)

@@ -16,8 +16,8 @@ This tab is the reference page: which tables are installed and what they were
 derived from, what a coating means to each solver, and how a library is laid
 out. It is reading matter, not an input, and it has no controls. The actions
 on the library (adding a table, rescanning, opening the folder) are on the
-Materials tab, in :mod:`.library_bar`, beside the list they change; the
-window calls :meth:`SetupTab.refresh` when they do.
+coatings window's Materials tab, in :mod:`.library_bar`, beside the list they
+change; the window calls :meth:`SetupTab.refresh` when they do.
 """
 
 from __future__ import annotations
@@ -105,8 +105,8 @@ def library_page() -> str:
 # Materials
 
 Optical constants for the **Grating** material and the layers in the geometry
-panel's Surface group. The **Materials** tab previews any of them and adds
-new ones. On the Scalar tab, naming a grating material applies its Fresnel reflectivity and makes the result
+panel's Surface group. The coatings window (**Design a coating** on the main
+menu) previews any of them on its **Materials** tab and adds new ones. On the Scalar tab, naming a grating material applies its Fresnel reflectivity and makes the result
 *absolute*; leaving it empty gives efficiency *relative* to a perfect
 reflector. The provenance panel on each solver tab shows which applies.
 
@@ -141,7 +141,7 @@ naming the number it needs.
 
 ## Adding a material
 
-On the **Materials** tab, **Add material…** picks a table, asks the name it
+On the coatings window's **Materials** tab, **Add material…** picks a table, asks the name it
 should have as a coating, reads it to prove it is usable, and copies it into
 your library; the dock's material dropdowns have it at once. **Rescan
 library** re-reads the directories after you add or remove a file yourself,
@@ -163,8 +163,8 @@ Any of these, saved as `Pt` plus its suffix, is the coating `Pt`:
 
 One element's atomic scattering factors, saved as `Si.nff` from CXRO's
 per-element tables, are not a coating by themselves: with a formula and a
-density they give one, as `factors:SiO2@2.2`. The Materials tab builds that
-name.
+density they give one, as `factors:SiO2@2.2`. The coatings window's Materials
+tab builds that name.
 
 These directories are searched in this order, so a table of your own replaces
 a bundled one of the same name:

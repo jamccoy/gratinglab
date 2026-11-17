@@ -26,9 +26,10 @@ class TestTheModeTable:
 
     def test_both_halves_are_offered(self):
         keys = [m.key for m in MODES]
-        assert keys == ['metrology', 'geometry', 'efficiency'], (
+        assert keys == ['metrology', 'geometry', 'coatings', 'efficiency'], (
             "the metrology window comes first, being the half in regular use; "
-            "the geometry window sits between it and the solvers")
+            "the geometry and coatings windows sit between it and the solvers, "
+            "in the order the work goes")
 
     def test_every_mode_is_fully_described(self):
         for chosen in MODES:
@@ -235,7 +236,8 @@ class TestTheChooser:
         qtbot.addWidget(window)
         shown = ' '.join(label.text() for label in window.findChildren(QLabel))
         assert ("Measure a grating's grooves from an AFM scan, look at its "
-                "geometry, or compute its diffraction efficiency.") in shown
+                "geometry, design its coating, or compute its diffraction "
+                "efficiency.") in shown
 
     def test_another_window_joins_the_wording(self, qtbot, monkeypatch):
         """No sentence on the chooser may assume there are two windows."""
@@ -251,8 +253,8 @@ class TestTheChooser:
         qtbot.addWidget(window)
         shown = ' '.join(label.text() for label in window.findChildren(QLabel))
         assert ("Measure a grating's grooves from an AFM scan, look at its "
-                "geometry, compute its diffraction efficiency, or plan how to "
-                "rule it.") in shown
+                "geometry, design its coating, compute its diffraction "
+                "efficiency, or plan how to rule it.") in shown
         tips = ' '.join(w.toolTip() for w in
                         [*window.findChildren(QLabel), *window.buttons.values()])
         assert 'another window' in tips and 'the other window' not in tips

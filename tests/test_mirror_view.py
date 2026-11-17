@@ -10,6 +10,7 @@ from gratinglab.gui.mirror_view import (
     draw,
     is_bulk_throughout,
     lines,
+    marks_text,
     mount_markers,
     verdict,
 )
@@ -88,10 +89,10 @@ class TestTheScanAndTheMount:
         assert result.x[0] == 2.0 and result.x[-1] == 4.0 and len(result.x) == 9
         assert result.markers == ()  # angles mean nothing on a wavelength axis
 
-    def test_the_mount_is_marked_on_an_angle_scan(self):
+    def test_a_mounts_angles_are_worked_out_for_the_marks(self):
         # Off-plane at gamma = 1.5, alpha = 25 on a 29.5 degree blaze:
         # sin(graze) = sin(gamma) cos(delta - alpha), with delta = 0 for the plane.
-        markers = dict(compute(AU_ON_SI, MirrorSettings(graze_count="5")).markers)
+        markers = dict(mount_markers(AU_ON_SI))
         gamma, alpha, blaze = np.radians([1.5, 25.0, 29.5])
         assert markers["grating plane"] == pytest.approx(np.degrees(np.arcsin(np.sin(gamma) * np.cos(alpha))))
         assert markers["blaze facet"] == pytest.approx(np.degrees(np.arcsin(np.sin(gamma) * np.cos(blaze - alpha))))
@@ -103,10 +104,29 @@ class TestTheScanAndTheMount:
     def test_a_form_that_is_not_a_grating_has_no_markers(self):
         assert mount_markers(FormState(period="nonsense")) == ()
 
+    def test_marks_are_read_from_the_tabs_field(self):
+        marked = MirrorSettings(graze_count="5", marks="grating plane 1.36, 2, 1.5 blaze facet")
+        assert compute(AU_ON_SI, marked).markers == (
+            ("grating plane", 1.36), ("marked", 2.0), ("blaze facet", 1.5))
+        assert compute(AU_ON_SI, MirrorSettings(graze_count="5")).markers == ()
+
+    def test_the_efficiency_windows_marks_round_trip(self):
+        text = marks_text(mount_markers(AU_ON_SI))
+        got = compute(AU_ON_SI, MirrorSettings(graze_count="5", marks=text)).markers
+        assert [label for label, _ in got] == ["grating plane", "blaze facet"]
+        assert got[1][1] == pytest.approx(mount_markers(AU_ON_SI)[1][1], rel=1e-3)
+
+    @pytest.mark.parametrize("bad", ["plane", "1.2 3.4", "95", "0"])
+    def test_a_bad_mark_is_a_field_error(self, bad):
+        with pytest.raises(FormErrors) as caught:
+            compute(AU_ON_SI, MirrorSettings(graze_count="5", marks=bad))
+        assert [e.field for e in caught.value.errors] == ["marks"]
+
     def test_markers_inside_the_scan_are_drawn(self):
         figure = Figure()
         r_axes, depth_axes = figure.subplots(2, 1)
-        draw(r_axes, depth_axes, compute(AU_ON_SI, MirrorSettings(graze_count="20")), LIGHT)
+        marked = MirrorSettings(graze_count="20", marks="grating plane 1.36, blaze facet 1.5, far 80")
+        draw(r_axes, depth_axes, compute(AU_ON_SI, marked), LIGHT)
         assert sorted(t.get_text().split()[0] for t in r_axes.texts) == ["blaze", "grating"]
 
 

@@ -1,10 +1,10 @@
 """The Mirror tab: the coating stack as a flat mirror, before any grooves.
 
-Reads the stack from the geometry dock's Surface group and its own fields for
-the scan, and shows the reflectivity, how deep the field reaches into each
+Reads the stack from the coatings window's dock and its own fields for the
+scan, and shows the reflectivity, how deep the field reaches into each
 material, and whether the outermost layer is thick enough to treat as bulk.
 The answer to that is one line above the plots; when it is yes, a button
-makes the layer the grating material and drops the layers beneath it, which
+makes the layer the substrate and drops the layers beneath it, which
 is the simplification the tab exists to justify. Everything it computes and
 says is in :mod:`gratinglab.gui.mirror_view`; this is widgets.
 
@@ -13,8 +13,8 @@ fields or the dock changes, and only while it is showing: a scan takes about a
 second in the GUI thread, which is too long to spend on every keystroke made
 in another tab. It is not a solver and has no worker.
 
-Built by :class:`~gratinglab.gui.qt.main_window.MainWindow`, which hands it
-the dock.
+Built by :class:`~gratinglab.gui.qt.coatings_window.CoatingsWindow`, which
+hands it the dock.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ __all__ = ["MirrorTab"]
 #: How long after the last edit the tab recomputes, ms.
 _SETTLE_MS = 300
 
-_ANGLE_FIELDS = ("graze_start", "graze_stop", "graze_count", "wavelength")
+_ANGLE_FIELDS = ("graze_start", "graze_stop", "graze_count", "wavelength", "marks")
 _OWN_WAVELENGTHS = ("wavelength_start", "wavelength_stop", "wavelength_count")
 
 
@@ -66,8 +66,8 @@ class MirrorTab(QWidget):
 
     def __init__(self, dock, parent: QWidget | None = None) -> None:
         super().__init__(parent)
-        #: The geometry dock: read for the stack and the mount, written by
-        #: the hand-off button.
+        #: The window's dock: read for the stack, written by the hand-off
+        #: button.
         self._dock = dock
         self._result: MirrorResult | None = None
         self._lines: tuple = ()
@@ -89,7 +89,7 @@ class MirrorTab(QWidget):
         column.addWidget(self._build_scan_group())
         self._hand_off = QPushButton("Model the top layer as bulk")
         self._hand_off.setToolTip(
-            "Make the outermost layer the dock's Grating material and remove\n"
+            "Make the outermost layer the Substrate and remove\n"
             "the layers. Offered when that layer reads as bulk across the scan,\n"
             "so what lies beneath it does not change the reflectivity."
         )
@@ -143,6 +143,11 @@ class MirrorTab(QWidget):
         entry("Points", "graze_count", "Angles in the scan, at most 1000.")
         entry("At wavelength (nm)", "wavelength", "The one wavelength an angle scan uses.")
         entry("At graze (deg)", "graze", "The one graze angle a wavelength scan uses.")
+        entry("Mark angles (deg)", "marks",
+              "Graze angles to mark on an angle scan, separated by commas, each\n"
+              "with a label if you like: 'grating plane 1.36, blaze facet 1.5'.\n"
+              "The efficiency window fills this from its mount when it sends\n"
+              "a coating here.")
 
         self._dock_wavelengths = QCheckBox("Use the grating's wavelengths")
         self._dock_wavelengths.setChecked(defaults.dock_wavelengths)
@@ -223,6 +228,12 @@ class MirrorTab(QWidget):
             **values,
         )
 
+    def set_marks(self, text: str) -> None:
+        """Fill the Mark angles field, as a coating sent from the efficiency
+        window does with its mount's angles."""
+        self._fields["marks"].setText(text)
+        self.schedule()
+
     def schedule(self, *_args) -> None:
         """Something changed: recompute once the edits settle, if showing."""
         self._stale = True
@@ -284,7 +295,7 @@ class MirrorTab(QWidget):
         answer = QMessageBox.question(
             self,
             "Model the top layer as bulk",
-            f"Make {top} the grating material, replacing {substrate}, and remove "
+            f"Make {top} the substrate, replacing {substrate}, and remove "
             f"{removed} from the stack? This cannot be undone.",
         )
         return answer == QMessageBox.StandardButton.Yes

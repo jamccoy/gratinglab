@@ -100,6 +100,20 @@ MODES = (
         script="gratinglab-geometry",
         summary="look at its geometry",
     ),
+    # Before the solvers, in the order the work goes: what the coating does
+    # as a flat mirror decides how it is modelled on the grating. No help of
+    # its own; the mirror page is among the efficiency window's.
+    Mode(
+        key="coatings",
+        title="Design a coating",
+        blurb="Name a material and see its index, build a stack of layers, "
+              "and reflect it as a flat mirror to see how deep the light "
+              "goes. Send the stack to the efficiency window when it is "
+              "settled.",
+        window="gratinglab.gui.qt.coatings_window:CoatingsWindow",
+        script="gratinglab-coatings",
+        summary="design its coating",
+    ),
     Mode(
         key="efficiency",
         title="Compute efficiency",

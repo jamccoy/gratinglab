@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QUrl, Signal
+from PySide6.QtCore import QObject, QUrl, Signal
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -31,7 +31,22 @@ from PySide6.QtWidgets import (
 
 from . import recent
 
-__all__ = ["LibraryBar"]
+__all__ = ["LibraryBar", "library_events"]
+
+
+class _LibraryEvents(QObject):
+    """One ``changed`` signal for the whole application.
+
+    The library is the same for every window, and the bar that changes it is
+    in the coatings window while the efficiency window's dropdowns list it
+    too. A window connects to this rather than to a bar it may not hold.
+    """
+
+    changed = Signal()
+
+
+#: Connect to ``library_events.changed`` to follow the library.
+library_events = _LibraryEvents()
 
 
 class LibraryBar(QWidget):
@@ -56,6 +71,7 @@ class LibraryBar(QWidget):
         self._rescan_button.clicked.connect(self.rescan)
         self._folder_button = QPushButton("Open library folder")
         self._folder_button.clicked.connect(self.open_library_folder)
+        self.library_changed.connect(library_events.changed)
         self._status = QLabel("")
         self._status.setWordWrap(True)
 

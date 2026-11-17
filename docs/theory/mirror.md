@@ -1,7 +1,7 @@
 # The coating as a flat mirror
 
 Implemented in [`mirror.py`](../../src/gratinglab/mirror.py), and shown by the
-Mirror tab. Symbols and sign conventions follow
+coatings window's Mirror tab. Symbols and sign conventions follow
 [`conventions.md`](../conventions.md). This page says what the calculation is,
 what its three outputs mean, and what has been checked; the section numbers
 are for citing.
@@ -16,7 +16,7 @@ layers under it can be left out of the grating calculation?
 
 A stack of flat, parallel, homogeneous layers under vacuum, on a substrate
 that is taken as infinitely thick. The stack is the one a grating `Problem`
-carries: `coating` (the dock's **Grating** material) is the substrate here,
+carries: `coating` (the efficiency window's **Grating** material) is the substrate here,
 and `layers` sit on it, innermost first, so the last layer is the surface the
 light meets.
 
@@ -30,7 +30,7 @@ What a flat stack leaves out is everything the grooves do. On a grating a
 layer is conformal: it follows the groove and rounds its convex corners, and
 the light meets each facet at its own angle. Only the
 [RCWA](rcwa.md) models that (its §6). The mirror tells you about the material
-stack at one angle at a time, which is why the Mirror tab marks the angles
+stack at one angle at a time, which is why the Mirror tab can mark the angles
 your mount actually uses (§5).
 
 ## 2. Reflectivity: Parratt's recursion
@@ -129,7 +129,8 @@ mirror at that tolerance, and the tolerance is yours to set.
 ## 5. What it means for a grating
 
 The mirror's angle is a graze angle onto a flat surface. A grating meets the
-light at two such angles, and the Mirror tab draws both on an angle scan:
+light at two such angles. The efficiency window works both out from its mount
+and sends them with a coating, and the Mirror tab marks them on an angle scan:
 
 - onto the **grating plane**, `sin ζ = sin γ cos α`, and
 - onto the **blaze facet**, `sin ζ = sin γ cos(δ − α)`, for a blazed profile

@@ -33,7 +33,10 @@ from . import recent
 from .stack_editor import StackEditor, Swatch
 from ..state import ANGLE_LABELS, MOUNTS, PROFILE_FIELDS, PROFILE_KINDS, FormState
 
-__all__ = ["GeometryPanel"]
+__all__ = ["GeometryPanel", "SECTIONS"]
+
+#: The dock's four groups, in order, as the keys ``sections`` takes.
+SECTIONS = ("grating", "mount", "surface", "scan")
 
 
 class GeometryPanel(QWidget):
@@ -60,8 +63,21 @@ class GeometryPanel(QWidget):
     #: `_on_mount_change` set fields. Only a real edit should schedule work.
     changed = Signal()
 
-    def __init__(self, parent: QWidget | None = None) -> None:
+    def __init__(
+        self,
+        parent: QWidget | None = None,
+        *,
+        sections: tuple[str, ...] = SECTIONS,
+        base_label: str = "Grating",
+    ) -> None:
+        """``sections`` picks the groups shown, from :data:`SECTIONS`; the
+        coatings window shows the surface and the wavelengths alone. A hidden
+        group keeps its fields at their defaults, so `read_form` is whole.
+        ``base_label`` names the material at the foot of the stack, which is
+        the grating here and a substrate on a mirror."""
         super().__init__(parent)
+        self._sections = tuple(sections)
+        self._base_label = base_label
         self._fields: dict[str, QWidget] = {}
         self._build()
         self._on_mount_change()
@@ -181,8 +197,8 @@ class GeometryPanel(QWidget):
         coating.editTextChanged.connect(
             lambda text: self._base_swatch.show_material("" if text == "(none)" else text)
         )
-        base_label = QLabel("Grating")
-        base_label.setToolTip("The material the grooves are cut into, beneath any layers.")
+        base_label = QLabel(self._base_label)
+        base_label.setToolTip("The material beneath any layers: what the grooves are cut into.")
         base_row.addWidget(self._base_swatch)
         base_row.addWidget(base_label)
         base_row.addWidget(coating, 1)
@@ -196,8 +212,9 @@ class GeometryPanel(QWidget):
         entry(scan_form, "Stop", "wavelength_stop")
         entry(scan_form, "Points", "wavelength_count")
 
-        for group in (grating, mount, surface, scan):
+        for key, group in zip(SECTIONS, (grating, mount, surface, scan)):
             column.addWidget(group)
+            group.setVisible(key in self._sections)
         column.addStretch(1)
         self._forms = (grating_form, mount_form, surface_form, scan_form)
         self._align_forms()
@@ -278,6 +295,13 @@ class GeometryPanel(QWidget):
         else:
             combo.setEditText(name)
         self.changed.emit()
+
+    def write_surface(self, coating: str, layers: str, roughness: str) -> None:
+        """Set the Surface group alone, as a stack sent from another window
+        arrives: the grating, the mount and the wavelengths stay as they are."""
+        self._fields["layers"].setText(layers)
+        self._fields["roughness"].setText(roughness)
+        self.set_grating_material(coating)
 
     def replace_stack(self, name: str) -> None:
         """``name`` as the Grating material with no layers on it: the Mirror

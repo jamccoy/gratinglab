@@ -274,10 +274,11 @@ pipeline recovers the period and blaze angle used to generate it.
 gratinglab-app                 # the chooser: one place to start, every window
 gratinglab-gui                 # straight to geometry, solvers, comparison
 gratinglab-geometry            # straight to the geometry, with no solver
+gratinglab-coatings            # straight to materials and the coating as a mirror
 gratinglab-metrology-gui       # straight to AFM import, blaze angles, boundary profiles
 ```
 
-`gratinglab-app` opens a chooser for the three windows, which stays open as the main
+`gratinglab-app` opens a chooser for the four windows, which stays open as the main
 menu while you work, as Gwiddion's toolbox does; closing it closes every window. Each
 window has a **Go** menu that switches to another window or back to the chooser
 (`Ctrl+Shift+M`). There is one window of each kind, so opening one that is already
@@ -286,8 +287,8 @@ open brings it forward. The chooser has the same
 whole application, and the theory pages can be reached without opening a window
 first. While the chooser is on screen it imports both windows on a background thread,
 so the first window opens in about a fifth of a second; the matplotlib and scipy
-imports otherwise take several seconds. `gratinglab-gui`, `gratinglab-geometry` and
-`gratinglab-metrology-gui` open one window directly.
+imports otherwise take several seconds. `gratinglab-gui`, `gratinglab-geometry`,
+`gratinglab-coatings` and `gratinglab-metrology-gui` open one window directly.
 
 The geometry window (**Explore a geometry**) is the efficiency window's geometry form
 and Grating Geometry tab on their own: the 3D view, the cross-section and the sin β
@@ -301,21 +302,31 @@ with a material and a thickness in nm, above the **Grating** material the groove
 cut into. Every material box lists your library and also takes a typed model name
 such as `typical:Au` or `factors:SiO2@2.2`.
 
-The **Materials** tab builds those names from a kind, a table name or formula and an
-optional density, plots the material's index against wavelength with the dock's scan
-shaded, and says whether it covers that scan. Two buttons send it to the stack, as the
-grating material or as a new top layer. Your library is listed there, with the buttons
-that add a table to it, rescan it and open its folder. The **Setup** tab is the
-reference page for what is installed and what a coating means to each solver.
+The efficiency window's **Setup** tab is the reference page for what is installed
+and what a coating means to each solver.
 
-The **Mirror** tab treats that stack as a flat mirror, before any grooves, with the
-roughness at every interface. It plots the specular reflectivity against graze angle
-or wavelength, the 1/e penetration depth in each material, and the thickness the
-outermost layer needs before what lies beneath it changes the reflectivity by less
-than a tolerance. Its answer, whether that layer reads as bulk, is one line above the
-plots, and when it does a button makes the layer the grating material on its own. The
-tab recomputes as you type, and an angle scan marks the graze angles your mount puts
-light at. The same calculation is `gratinglab.mirror.Mirror` from Python.
+The coatings window (**Design a coating**) is for the stack on its own, with no
+grooves and no solver. Its dock holds the same stack, over a **Substrate**, and a
+wavelength range. **Send to efficiency window** (`Ctrl+E`) copies the stack into the
+efficiency window's Surface group and leaves its grating, mount and wavelengths
+alone; the efficiency window's **Send coating to coatings window** (`Ctrl+K`) is the
+way back. It has two tabs.
+
+**Materials** builds a material's name from a kind, a table name or formula and an
+optional density, plots its index against wavelength with the dock's scan shaded, and
+says whether it covers that scan. Two buttons put it in the stack, as the substrate
+or as a new top layer. Your library is listed there, with the buttons that add a
+table to it, rescan it and open its folder.
+
+**Mirror** treats the stack as a flat mirror, with the roughness at every interface.
+It plots the specular reflectivity against graze angle or wavelength, the 1/e
+penetration depth in each material, and the thickness the outermost layer needs
+before what lies beneath it changes the reflectivity by less than a tolerance. Its
+answer, whether that layer reads as bulk, is one line above the plots, and when it
+does a button makes the layer the substrate on its own. The tab recomputes as you
+type. An angle scan marks the graze angles named in **Mark angles**, which the
+efficiency window fills with the angles its mount puts light at when it sends a
+coating over. The same calculation is `gratinglab.mirror.Mirror` from Python.
 
 The windows are built with Qt (PySide6), so `pip install "gratinglab[gui]"` needs no
 system toolkit to be installed first. PySide6 is licensed under the LGPLv3 and is an
