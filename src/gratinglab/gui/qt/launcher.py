@@ -23,7 +23,7 @@ from importlib import import_module
 
 import shiboken6
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QKeySequence
+from PySide6.QtGui import QFont, QFontInfo, QKeySequence
 from PySide6.QtWidgets import (
     QApplication,
     QLabel,
@@ -67,6 +67,26 @@ _OPEN_WINDOWS: list[QWidget] = []
 #: windows it sits beside.
 _TOOLBOX_WIDTH = 260
 _BUTTON_HEIGHT = 34
+
+#: The name, drawn in characters, at the head of the chooser. Every line is
+#: the same width, trailing spaces included, so it stays aligned in whatever
+#: fixed-width font the platform has; a test holds it to that.
+BANNER = "\n".join((
+    " _______  ______    _______  _______  ___   __    _  _______  ___      _______  _______ ",
+    "|       ||    _ |  |   _   ||       ||   | |  |  | ||       ||   |    |   _   ||  _    |",
+    "|    ___||   | ||  |  |_|  ||_     _||   | |   |_| ||    ___||   |    |  |_|  || |_|   |",
+    "|   | __ |   |_||_ |       |  |   |  |   | |       ||   | __ |   |    |       ||       |",
+    "|   ||  ||    __  ||       |  |   |  |   | |  _    ||   ||  ||   |___ |       ||  _   | ",
+    "|   |_| ||   |  | ||   _   |  |   |  |   | | | |   ||   |_| ||       ||   _   || |_|   |",
+    "|_______||___|  |_||__| |__|  |___|  |___| |_|  |__||_______||_______||__| |__||_______|",
+))
+_BANNER_COLUMNS = max(len(line) for line in BANNER.splitlines())
+
+#: The banner's type, px. Small, because the chooser is a toolbox that sits
+#: beside the windows, and it widens to fit the banner at this size.
+_BANNER_PX = 8
+#: Fixed-width faces to draw it in, the first one installed winning.
+_BANNER_FONTS = ["Consolas", "Menlo", "DejaVu Sans Mono", "Courier New", "monospace"]
 
 #: The chooser, kept so that "Main Menu" shows the same one rather than a
 #: second copy. Closing a window does not destroy it while a reference is
@@ -268,6 +288,10 @@ class LauncherWindow(QWidget):
         layout.setSpacing(6)
         layout.setMenuBar(self._build_menu())
 
+        banner = self._banner()
+        if banner is not None:
+            layout.addWidget(banner, 0, Qt.AlignmentFlag.AlignHCenter)
+
         opening = _either([m.summary for m in MODES if m.summary])
         # Only the first letter: str.capitalize() would lower "AFM" too.
         subtitle = QLabel(opening[:1].upper() + opening[1:] + ".")
@@ -285,7 +309,36 @@ class LauncherWindow(QWidget):
             layout.addWidget(self._button(chosen))
 
         layout.addStretch(1)
-        self.setFixedWidth(_TOOLBOX_WIDTH)
+        # The toolbox's own width, or the banner's with the margins if wider.
+        wanted = 0 if banner is None else banner.sizeHint().width() + 24
+        self.setFixedWidth(max(_TOOLBOX_WIDTH, wanted))
+
+    def _banner(self):
+        """The name in characters, in a fixed-width face, or ``None`` where
+        the platform has none: in a proportional face the art is noise, and
+        nearly twice as wide."""
+        # Named faces before the generic hint: the system's "fixed font" is
+        # not always fixed-width, and a banner in a proportional face is noise.
+        font = QFont()
+        font.setFamilies(_BANNER_FONTS)
+        font.setStyleHint(QFont.StyleHint.TypeWriter)
+        font.setFixedPitch(True)
+        font.setPixelSize(_BANNER_PX)
+        self.banner = None
+        if not QFontInfo(font).fixedPitch():
+            return None
+        banner = QLabel(BANNER)
+        banner.setFont(font)
+        banner.setObjectName("banner")
+        # Left-aligned text in a label of its own width, and the label
+        # centred by the layout. Centring the text instead centres each line
+        # by itself, without its trailing spaces, and the lines end at
+        # different columns, so every one would shift by a different amount.
+        banner.setAlignment(Qt.AlignmentFlag.AlignLeft)
+        banner.setTextFormat(Qt.TextFormat.PlainText)
+        banner.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Fixed)
+        self.banner = banner
+        return banner
 
     def _build_menu(self):
         """View > Theme and Help, held on the instance and returned.

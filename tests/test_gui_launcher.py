@@ -268,11 +268,13 @@ class TestTheChooser:
             assert chosen.blurb in tip and f'<code>{chosen.script}</code>' in tip
 
     def test_it_is_a_compact_toolbox(self, qtbot):
-        """Narrow enough to sit beside the windows it stays open with."""
+        """Narrow enough to sit beside the windows it stays open with. The
+        banner widens it, to 376 px in Consolas; without a fixed-width face
+        there is no banner and it keeps its own width."""
         window = qt_launcher.LauncherWindow()
         qtbot.addWidget(window)
         window.show()
-        assert window.width() <= 300
+        assert window.width() <= (300 if window.banner is None else 420)
         assert window.sizeHint().height() <= 320
 
     def test_clicking_opens_that_mode_and_the_menu_stays(self, qtbot,
@@ -692,4 +694,41 @@ def test_alternatives_read_as_a_list(items, joined):
     from gratinglab.gui.qt.launcher import _either
 
     assert _either(items) == joined
+
+
+class TestTheBanner:
+    """The name in characters at the head of the chooser."""
+
+    def test_every_line_is_the_same_width(self):
+        """Ragged lines are how character art comes apart, and a paste loses
+        leading spaces without a trace."""
+        widths = {len(line) for line in qt_launcher.BANNER.splitlines()}
+        assert len(widths) == 1, widths
+
+    def test_it_is_drawn_whole_in_a_fixed_width_face(self, qtbot):
+        from PySide6.QtCore import Qt
+        from PySide6.QtGui import QFontInfo, QFontMetrics
+
+        window = qt_launcher.LauncherWindow()
+        qtbot.addWidget(window)
+        banner = window.banner
+        if banner is None:
+            pytest.skip("no fixed-width face on this platform, so no banner")
+        assert banner.text() == qt_launcher.BANNER
+        assert QFontInfo(banner.font()).fixedPitch()
+        # Left-aligned: centred text is centred a line at a time, without its
+        # trailing spaces, which shifts every line by a different amount.
+        assert banner.alignment() & Qt.AlignmentFlag.AlignLeft
+        widest = max(qt_launcher.BANNER.splitlines(), key=len)
+        needed = QFontMetrics(banner.font()).horizontalAdvance(widest)
+        assert window.width() >= needed + 24  # the toolbox grew to hold it
+
+    def test_without_a_fixed_width_face_there_is_no_banner(self, qtbot, monkeypatch):
+        """In a proportional face the art is unreadable and 728 px wide."""
+        monkeypatch.setattr(qt_launcher, "_BANNER_FONTS", ["No Such Face At All"])
+        monkeypatch.setattr(qt_launcher.QFontInfo, "fixedPitch", lambda self: False)
+        window = qt_launcher.LauncherWindow()
+        qtbot.addWidget(window)
+        assert window.banner is None
+        assert window.width() == qt_launcher._TOOLBOX_WIDTH
 
