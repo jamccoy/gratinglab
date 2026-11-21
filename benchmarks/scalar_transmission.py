@@ -11,18 +11,24 @@ the light is transmitted into the glass at 500 nm, TE, in plane. The table is
 written to a temporary folder named by ``GRATINGLAB_MATERIALS``, so your own
 library is not read or changed.
 
-Neither phase is in the package yet. Both are computed here:
+Neither phase is in the package yet. Both are computed here, in
+ScalarSolver's own form G_m = mean(exp(+i Phi) exp(-2 pi i m t)):
 
-``thin``
-    order-free, k g(t) (n cos b0 - cos a) with b0 the zero order's Snell angle.
 ``refr``
-    order-dependent, k g(t) (n cos b_m - cos a), the transmissive twin of
-    ScalarSolver's reflective k g (cos a + cos b_m).
+    order-dependent, Phi_m = k g(t) (cos a + n cos b_m), ScalarSolver's
+    reflective phase with the substrate index put in.
+``thin``
+    order-free, Phi = k g(t) (cos a + n cos b_0), with b_0 the zero order.
+
+Angles follow ``docs/conventions.md``: the grating equation of §4 inside the
+glass, n sin b_m = m lambda / p - sin a, from ``geometry.sin_beta``, and the
+transmitted branch of §4, cos b_m < 0, from ``geometry.cos_beta``. The glass
+lies below the surface (§3, y <= g), which is why the same expression that
+gives reflection gives transmission once cos b_m is negative: a raised surface
+lengthens the path in the glass and shortens it in vacuum.
 
 Both carry the flat-interface TE Fresnel flux factor
-4 cos a n cos b_m / (cos a + n cos b_m)^2. The phase enters with a negative
-sign, which puts a blazed grating's peak on the same order as the RCWA's; that
-was matched by which order peaks, not derived from ``docs/conventions.md``.
+4 cos a n |cos b_m| / (cos a + n |cos b_m|)^2.
 """
 
 from __future__ import annotations
@@ -42,18 +48,22 @@ SAMPLES = 4096
 
 def scalar_efficiency(problem, alpha_deg: float, m: int, model: str) -> float:
     """Transmitted efficiency of order ``m`` under one of the two phases."""
+    from gratinglab.geometry import cos_beta, sin_beta
+
     t = (np.arange(SAMPLES) + 0.5) / SAMPLES
     g = np.asarray(problem.height_nm(t), float)
     k = 2 * np.pi / WL
     ca, sa = np.cos(np.radians(alpha_deg)), np.sin(np.radians(alpha_deg))
-    s = (sa + m * WL / problem.period) / N
+    s = float(sin_beta(m, WL, problem.period, sa)) / N
     if abs(s) >= 1:
         return 0.0  # evanescent in the glass
-    cb = np.sqrt(1 - s * s)
-    cb0 = np.sqrt(1 - (sa / N) ** 2)
-    phase = k * g * ((N * cb0 - ca) if model == "thin" else (N * cb - ca))
-    amplitude = np.mean(np.exp(-1j * phase) * np.exp(-2j * np.pi * m * t))
-    return float(abs(amplitude) ** 2 * 4 * ca * N * cb / (ca + N * cb) ** 2)
+    cb = float(cos_beta(s, transmitted=True))
+    cb0 = float(
+        cos_beta(float(sin_beta(0, WL, problem.period, sa)) / N, transmitted=True)
+    )
+    phase = k * g * (ca + N * (cb0 if model == "thin" else cb))
+    amplitude = np.mean(np.exp(1j * phase) * np.exp(-2j * np.pi * m * t))
+    return float(abs(amplitude) ** 2 * 4 * ca * N * abs(cb) / (ca + N * abs(cb)) ** 2)
 
 
 def klein_cook(problem) -> float:
