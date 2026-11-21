@@ -127,8 +127,8 @@ grating as well as a phase grating, the transmissive counterpart of the
 Run on 2026-11-20 against `rcwa` (truncation 40 at Λ = 2.5 µm, 90 at 10 µm):
 λ = 500 nm, TE, a relief cut into a lossless n = 1.5 table, transmitted into
 the glass. "Thin" is the order-free phase and "refr" the order-dependent one,
-both with the §3 factor. The scripts are in the session scratchpad and are
-not committed.
+both with the §3 factor. `python benchmarks/scalar_transmission.py`
+reproduces both tables in under a minute.
 
 Normal incidence, efficiency of the orders named:
 
@@ -164,12 +164,14 @@ What these say:
   way the reflective solver's energy deviation scales with phase excursion.
 - **The oblique rows are not yet evidence for either phase.** RCWA's ±30°
   asymmetry is small (0.60 against 0.62). The two scalar phases split by
-  more and in the opposite direction, but the mapping of my α sign onto
-  RCWA's convention was matched by which order peaks, not checked against
-  `docs/conventions.md`. Settle that before reading anything into those rows.
-- The order sign of the scalar result came out mirrored against RCWA (scalar
-  +1 where RCWA has −1). This is a convention to take from the reflective
-  solver when implementing, not a physics result.
+  more and in the opposite direction. But the benchmark's sign conventions
+  for α and for the phase were set by which order peaks, to agree with
+  RCWA's, and were not checked against `docs/conventions.md`. Settle that
+  before reading anything into those rows.
+- The benchmark puts a negative sign on the phase, which puts the scalar blaze
+  peak on the RCWA's order (−1). With a positive sign it lands on +1. The
+  sign is a convention to take from the reflective solver when implementing,
+  not a physics result.
 
 ## 6. What the API needs
 
