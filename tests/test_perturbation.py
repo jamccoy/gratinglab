@@ -230,6 +230,70 @@ class TestTheOracleItself:
         )
 
 
+class TestTheOracleAgainstARigorousSolver:
+    """The oracle is itself checked here, against the perfect-conductor
+    integral solver, which is validated on its own against Maystre & Popov
+    and Marechal-Stroke (test_integral_core.py). Without this, the scalar
+    solver's absolute normalisation would rest on a first-order formula that
+    nothing outside this file confirms.
+
+    In plane only. In a conical mount the formula uses k sin(gamma), from the
+    perfect conductor's exact split into two transverse problems, and the
+    integral solver is built on that same split, so a conical comparison
+    would not be independent.
+
+    The Neumann (TM) result is checked too, because the module docstring and
+    scalar.md section 3 use the TE/TM spread as the measure of where scalar
+    theory stops meaning anything. Measured 2026-11-20 at 1 nm: TE within
+    1e-5 of the solver, TM within 2.2e-4, both shrinking with depth."""
+
+    PERIOD, WAVELENGTH = 1000.0, 800.0
+    DEPTHS = (4.0, 1.0)  # nm
+
+    @staticmethod
+    def _neumann(illumination, sines, depth):
+        k = 2.0 * np.pi / TestTheOracleAgainstARigorousSolver.WAVELENGTH
+        sa, ca = illumination.sin_alpha, illumination.cos_alpha
+        cb = cos_beta(sines)
+        return 4.0 * k**2 * (1.0 + sa * sines) ** 2 / (ca * cb) * (depth / 4.0) ** 2
+
+    @pytest.mark.parametrize("polarization, limit", [("TE", 5e-5), ("TM", 5e-4)])
+    def test_first_order_theory_matches_the_integral_solver(self, polarization, limit):
+        from gratinglab.solvers.integral._boundary import physical_boundary
+        from gratinglab.solvers.integral._core import solve_transverse
+
+        illumination = Illumination(alpha_deg=10.0, gamma_deg=90.0, polarization=UNPOL)
+        orders = np.array([-1, 1])
+        errors = []
+        for depth in self.DEPTHS:
+            problem = Problem(
+                period=self.PERIOD, profile=Sinusoidal(depth_fraction=depth / self.PERIOD)
+            )
+            if polarization == "TE":
+                live, exact = first_order_efficiency(
+                    problem, illumination, self.WAVELENGTH, orders,
+                    lambda m, h=depth: sinusoid_coefficient(h, m),
+                )
+                assert live.all()
+            else:
+                sines = sin_beta(
+                    orders, self.WAVELENGTH, self.PERIOD, illumination.sin_alpha, 1.0
+                )
+                exact = self._neumann(illumination, sines, depth)
+            solution = solve_transverse(
+                physical_boundary(problem, 256),
+                wavelength=self.WAVELENGTH, period=self.PERIOD,
+                sin_alpha=illumination.sin_alpha, polarization=polarization, terms=40,
+            )
+            got = dict(zip(solution.orders.tolist(), solution.efficiencies))
+            ratios = np.array([got[int(m)] for m in orders]) / exact
+            errors.append(np.abs(ratios - 1.0).max())
+        # Order -1 leaves at -76.8 deg, far from Littrow, where O_m = 0.61, so
+        # a missing or wrong flux factor in the oracle could not pass.
+        assert errors[-1] < limit, f"{polarization}: {errors}"
+        assert errors[-1] < errors[0], f"{polarization}: not converging, {errors}"
+
+
 class TestAgainstFirstOrderPerturbationTheory:
     """The check that constrains the absolute normalisation."""
 
