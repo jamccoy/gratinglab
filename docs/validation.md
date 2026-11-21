@@ -8,8 +8,14 @@ disclosure can point at.
 
 It was compiled by reading the tests, fixtures and docs. No test was run to
 produce it. Five of its sharpest claims were checked by hand against the code
-(marked ✓). The rest are as read from the tests, and §8 says what was not
+(marked ✓). The rest are as read from the tests, and §9 says what was not
 looked at.
+
+**Updated later on 2026-11-20** for three checks added since, each in its own
+pull request and none merged when this was written: the conical grating
+equation (#87), the perturbation oracle behind the obliquity factor (#88),
+and the coated scalar reflectivity models (#90). A row that cites one of
+them describes the check as proposed there.
 
 ## 1. Tiers
 
@@ -32,7 +38,9 @@ it tests.
   error in the angle convention, order bookkeeping, normalisation or material
   lookup. Only the published and analytic checks can. The in-plane grating
   equation has one textbook point (`test_geometry.py::TestGratingEquation::test_in_plane_reduces_correctly`).
-  The conical λ csc γ form is checked only against itself.
+  The conical λ csc γ form was checked only against itself. #87 adds a test
+  that derives it from ISSI §2.1 by Floquet, without calling `sin_beta`, and
+  holds `sin_beta` to it to 1e-12 over 2000 mounts.
 - **The strongest external evidence never runs in CI.** Tests on the PCGrate
   corpus (`GRATINGLAB_REF_DIR`), the AFM archive (`GRATINGLAB_AFM_DIR`) and the
   ALS beamline tree skip without their data. CI only confirms they skip
@@ -76,13 +84,14 @@ it tests.
 
 | feature | tier | evidence | notes |
 |---|---|---|---|
-| Absolute normalisation, obliquity factor | **independent** | `test_perturbation.py::TestAgainstFirstOrderPerturbationTheory`, Rayleigh first order, rtol 2 to 5e-3 | one depth (1e-5), TE-like only. The strongest model check here |
+| Conical grating equation, propagation test | independent (#87) | `test_geometry.py::TestGratingEquationFromFloquet`: ISSI Eq. 5–6 and Floquet, 2000 seeded mounts, `sin_beta` to 1e-12 | fails under the mirrored sign on sin α and under a dropped sin γ, both checked |
+| Absolute normalisation, obliquity factor | **independent** | `test_perturbation.py::TestAgainstFirstOrderPerturbationTheory`, Rayleigh first order, rtol 2 to 5e-3; the oracle itself against the perfect-conductor integral solver, `::TestTheOracleAgainstARigorousSolver` (#88): TE within 1e-5, TM within 2.2e-4 at 1 nm depth | in plane only; the conical form rests on the transverse split the integral solver is built on. Using TE as the scalar's polarization is still a judgement, not a check. The strongest model check here |
 | Fourier quadrature: sawtooth, lamellar, sinusoid | independent (numerics only) | `test_scalar.py::TestSawtoothAgainstClosedForm` (1e-8), `::TestBinaryPhaseGratingAgainstClosedForm`, `::TestSinusoidAgainstBesselForm` | the closed forms share the scalar model, so they check the quadrature, not the physics |
 | Agreement with the integral solver | independent (cross-method) | `test_cross_method.py::TestAgreementInTheOverlapRegime` (2e-3), `::TestAgreementOnAnAsymmetricGroove` | divergence tests assert a trend, not a size |
 | Littrow angles | independent | `test_littrow.py::TestAgainstPyXFocus` | PyXFocus is the same author's |
 | Facet graze, two-facet depth | independent, weak | single thesis values (Chapter-2.tex:1046, :1022) | |
 | Reciprocity, energy behaviour | self-consistent | `test_checks.py::test_scalar_solver_is_reciprocal`, with a negative control | |
-| **Coated scalar: groove-resolved reflectivity** (`"local"`, `"average"`) | self-consistent ✓ | `test_scalar.py::TestAbsoluteEfficiency` re-implements the model | the only rigorous comparison is a factor-of-two bound (`test_four_way.py:152`). This is what makes coated scalar numbers absolute |
+| **Coated scalar: groove-resolved reflectivity** (`"local"`, `"average"`) | independent, **mixed** (#90) | `benchmarks/coated_scalar_reflectivity.py` against the C-method and the integral solver, converged; `findings.md`, "The groove-resolved reflectivity model against the rigorous solvers" | in regime and past the critical angle, `local` follows the per-order reflectivity. Straddling the critical angle it is 45% low on specular, worse than `facet`. Outside the regime no model follows the orders. A benchmark, not a test: CI does not hold it |
 | Measured or sampled profiles | self-consistent / unchecked | `::test_a_sampled_sawtooth_reproduces_the_analytic_sawtooth`; `::test_runs_on_a_measured_boundary` checks finite output only | |
 | Validity guards (reduced ratio, Fraunhofer, critical angle) | unchecked as physics | `::TestProvenance` checks that they fire | thresholds are choices |
 | Resolving power | independent / self-consistent | `test_resolution.py::test_r_is_order_times_n` (textbook); profile and Rayleigh checks are internal | |
@@ -124,13 +133,16 @@ it tests.
 
 Ranked by what an error would cost and how little stands behind it now.
 
-1. **The conical grating equation and the obliquity factor.** Every solver and
-   every oracle shares `sin_beta`, and the obliquity factor rests on one
-   perturbation file at one depth. A hand check against ISSI §2.1 or Werner,
-   and of `4 k_z0 k_zm |ĝ|²`, covers the base the whole package stands on.
-2. **The groove-resolved reflectivity model** (`scalar.md` §9,
-   `_scalar_groove.py`). It is what makes coated scalar numbers absolute, and
-   nothing independent supports it.
+1. **The coated scalar default, now that it has been checked** (#90). `local`
+   fails where the groove straddles the critical angle, and the solver's
+   critical-angle warning cannot tell that case from one where it works.
+   Decide whether the default should change there, or a guard should say so,
+   and whether the benchmark should become a test.
+2. **The two judgements left after #87 and #88.** The conical grating
+   equation and the first-order oracle are now checked, so what remains is
+   physics, not verification: TE as the scalar's polarization, and the
+   conical obliquity, which rests on the same transverse split as the
+   integral solver.
 3. **The TASTE comparison is not in any test.** It is the evidence for "not
    experimental since 0.3". Commit it as a gated test, or record the run that
    produced it.
