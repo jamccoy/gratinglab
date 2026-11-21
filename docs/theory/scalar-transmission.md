@@ -58,17 +58,23 @@ the groove region, not the bend at the boundary. §2 is about that bend.
 ## 2. Which phase: does the order's direction enter?
 
 Two thin-element phases are available for a relief between vacuum and a
-substrate of index n, for order m leaving at β_m inside the substrate
-(n sin β_m = sin α + mλ/Λ):
+substrate of index n. Order m leaves at β_m inside the substrate, from the
+grating equation of [`conventions.md`](../conventions.md) §4 with the index
+put in, n sin β_m = mλ/(Λ sin γ) − sin α, on the transmitted branch of the
+same section, cos β_m < 0. In `ScalarSolver`'s own form,
+G_m = ∫ e^{+iΦ_m(t)} e^{−2πimt} dt:
 
-- **order-free**: Φ(t) = k g(t) (n cos β₀ − cos α), with β₀ the Snell angle of
-  the zero order. One transmittance function, so a single FFT, and the sum of
+- **order-dependent**: Φ_m(t) = k g(t) sin γ (cos α + n cos β_m). This is
+  `ScalarSolver`'s reflective phase with nothing changed but the index and
+  the branch. A raised surface (§3 puts the material at y ≤ g) shortens the
+  path in vacuum by g cos α and lengthens the path in the glass by g n |cos β_m|.
+  With cos β_m negative, both are in the one expression, so reflection and
+  transmission share a formula. It is symmetric under swapping the incident
+  and diffracted waves, so it is reciprocal, and it puts the blaze where a
+  refracting prism facet sends the light at every α, not only at one angle.
+- **order-free**: Φ(t) = k g(t) sin γ (cos α + n cos β₀), with β₀ the zero
+  order. One transmittance function, so a single FFT, and the sum of
   efficiencies conserves energy (Parseval).
-- **order-dependent**: Φ_m(t) = k g(t) (n cos β_m − cos α). This is the
-  transmissive twin of `ScalarSolver`'s reflective k g (cos α + cos β_m). It is
-  symmetric under swapping the incident and diffracted waves, so it is
-  reciprocal, and it puts the blaze where a refracting prism facet sends the
-  light at every α, not only at one angle.
 
 This is the same three-way conflict as in [`scalar.md`](scalar.md) §5, carried
 over unchanged: energy conservation, reciprocity and blaze direction cannot
@@ -80,16 +86,19 @@ and is left open in §7.
 
 At normal incidence the two phases differ only through cos β_m against
 cos β₀, and the measurements below cannot tell them apart. At α = ±30° they
-can: they differ by up to 0.13 on the blaze peak. That comparison is not
-conclusive yet (§5).
+can, and in the thin case the order-dependent phase is the one that matches
+RCWA's change with angle (§5).
 
 ## 3. The flux factor
 
 Proposed: the flat-interface TE Fresnel transmittance,
 
 ```
-O_m = 4 cos α · n cos β_m / (cos α + n cos β_m)²
+O_m = 4 cos α · n |cos β_m| / (cos α + n |cos β_m|)²
 ```
+
+with the magnitude taken, because cos β_m < 0 on the transmitted branch
+(conventions §6: signed components in the fields, magnitudes in the ratio).
 
 It has the same form as the reflective solver's symmetric obliquity and is
 reciprocal for the same reason. In the shallow-groove limit it gives the
@@ -147,10 +156,11 @@ Blaze peak at α = ±30°, same blazed gratings:
 
 | Λ | α | RCWA | thin | refr |
 |---|---|---|---|---|
-| 2.5 µm | −30° | 0.6014 | 0.9270 | 0.9365 |
-| 2.5 µm | +30° | 0.6161 | 0.9050 | 0.8085 |
-| 10 µm | −30° | 0.8231 | 0.9167 | 0.9344 |
-| 10 µm | +30° | 0.8669 | 0.9112 | 0.8886 |
+| 2.5 µm | −30° | 0.6014 | 0.9050 | 0.8085 |
+| 2.5 µm | +30° | 0.6161 | 0.9270 | 0.9365 |
+| 10 µm | −30° | 0.8231 | 0.9112 | 0.8886 |
+| 10 µm | +30° | 0.8669 | 0.9167 | 0.9344 |
+| 10 µm | change, −30° to +30° | +0.044 | +0.006 | +0.046 |
 
 What these say:
 
@@ -162,16 +172,22 @@ What these say:
   that is invisible or perfectly blazed and the real edges scatter. A
   warning threshold therefore wants Q and the phase excursion together, the
   way the reflective solver's energy deviation scales with phase excursion.
-- **The oblique rows are not yet evidence for either phase.** RCWA's ±30°
-  asymmetry is small (0.60 against 0.62). The two scalar phases split by
-  more and in the opposite direction. But the benchmark's sign conventions
-  for α and for the phase were set by which order peaks, to agree with
-  RCWA's, and were not checked against `docs/conventions.md`. Settle that
-  before reading anything into those rows.
-- The benchmark puts a negative sign on the phase, which puts the scalar blaze
-  peak on the RCWA's order (−1). With a positive sign it lands on +1. The
-  sign is a convention to take from the reflective solver when implementing,
-  not a physics result.
+- **In the thin case, the oblique rows favour the order-dependent phase.**
+  At Λ = 10 µm (Q = 0.021) RCWA's blaze peak rises by 0.044 from −30° to
+  +30°. The order-dependent phase gives 0.046, and the order-free phase
+  0.006. Both sit a near-constant 0.05 to 0.09 above RCWA, the 2π-depth
+  excess of the previous point, so it is the change with angle that tells
+  them apart. At Λ = 2.5 µm (Q = 0.34) both are 0.2 to 0.3 above RCWA,
+  so their changes with angle carry no weight either way.
+- **The signs come from `docs/conventions.md`** (checked 2026-11-20). The angles
+  come from `geometry.sin_beta` and `geometry.cos_beta(transmitted=True)`, so
+  they are the package's §4. The phase is `ScalarSolver`'s e^{+iΦ} with the
+  substrate index put in (§2 above), and it puts the blaze peak on the same
+  order as RCWA without being fitted to it. An earlier version of the
+  benchmark wrote n sin β_m = sin α + mλ/Λ, the mirrored form that §4 of
+  the conventions warns about. It left normal incidence unchanged and
+  swapped the scalar columns of the ±30° rows, which had made the
+  order-dependent phase look wrong.
 
 ## 6. What the API needs
 
