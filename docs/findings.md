@@ -573,6 +573,10 @@ finite-conductivity reference run or the RCWA backend. This limitation is
 significant because the model changes individual orders by up to 51% and is
 now the default.
 
+The RCWA and the C-method now handle finite conductivity, and the first
+rigorous comparison is recorded in "The groove-resolved reflectivity model
+against the rigorous solvers" (2026-11-20).
+
 ---
 
 ## The measured groove is rounded rather than faceted, and the solver uses its depth
@@ -3128,3 +3132,86 @@ per rung that implies, and it is memory rather than arithmetic that ends it. The
 practical convergence ceiling for `conductivity="tabulated"` on this hardware is
 therefore 1024 nodes, which happens to be sufficient here and would not be for a
 deeper groove or a shorter wavelength.
+
+---
+
+## The groove-resolved reflectivity model against the rigorous solvers
+
+**The first rigorous check of the coated scalar models (2026-11-20).** It
+answers the question left open in "The corpus can test the diffraction but
+not the reflectivity". `benchmarks/coated_scalar_reflectivity.py` reproduces
+every number here.
+
+Each model is isolated by dividing out the groove's diffraction: scalar
+efficiency coated over uncoated, against rigorous efficiency coated over a
+perfect conductor, averaged over TE and TM. Most of Kirchhoff's shape error
+cancels in the ratio, and what is left is how each model handles the coating
+across the groove. The coating is `typical:Au` on both sides. All rigorous
+numbers are converged: the C-method agrees at truncation 80, 120 and 180 to
+three decimals, and the integral solver at 512 and 1536 boundary points to
+about 1e-4.
+
+**Past the critical angle, in regime: `local` tracks the rigorous result.**
+In plane, α = 80°, a shallow sinusoid (period 100 nm, depth fraction 0.02),
+λ/p ≤ 0.04. The local graze runs from about 1° to 19°. `average` and `facet`
+give every order the same number; `local` follows the orders:
+
+| λ | m | rigorous | `local` | `average` | `facet` |
+|---|---:|---:|---:|---:|---:|
+| 2 nm | 0 | 0.0081 | 0.0107 | 0.0220 | 0.0083 |
+| 2 nm | +1 | 0.0029 | 0.0025 | 0.0220 | 0.0083 |
+| 4 nm | 0 | 0.0710 | 0.0785 | 0.2031 | 0.0658 |
+| 4 nm | +1 | 0.0103 | 0.0076 | 0.2031 | 0.0658 |
+
+**Straddling the critical angle, still in regime: `local` fails.** In plane,
+α = 87°, period 50 nm, depth fraction 0.01, λ/p ≤ 0.032. The local graze, 1.2°
+to 4.8°, straddles gold's critical angle (3.6° at 1.2 nm). The specular order
+carries 92 to 95% of the power:
+
+| λ | rigorous | `local` | `average` | `facet` |
+|---|---:|---:|---:|---:|
+| 0.8 nm | 0.0563 | 0.0628 | 0.3180 | 0.0524 |
+| 1.2 nm | 0.5463 | **0.2994** | 0.4532 | 0.5152 |
+| 1.6 nm | 0.4983 | 0.4050 | 0.4676 | 0.4757 |
+
+At 1.2 nm `local` is 45% low and the single-angle `facet` is 6% low. The
+solver warns ("facet graze ... exceeds the critical angle ... reflectivity
+collapses"), but it gives the same warning in the α = 80° case, where `local`
+works, so the warning does not separate the two. A hypothesis, not tested:
+near the critical angle the reflected field samples the surface over a lateral
+distance longer than the 50 nm period, so reflectivity stops being local to
+each point of the groove.
+
+**Outside the regime, gold redistributes power between orders.** The geometry
+of `theory/scalar.md` §9: Blazed 29.5°/70.5°, period 315.15 nm, γ = 1.25°,
+α = 19.99°, against the integral solver. Its reduced ratio λ/(p sin γ) is
+0.22 to 0.65, against the solver's own warning threshold of 0.1. Both scalar
+runs use `visibility="horizon"`, so shadowing cancels in the ratio:
+
+| λ | m | rigorous | `local` | `facet` |
+|---|---:|---:|---:|---:|
+| 4.5 nm | 0 | 0.0835 | 0.9587 | 0.9503 |
+| 4.5 nm | +1 | 1.3972 | 0.9505 | 0.9503 |
+| 4.5 nm | +2 | 0.2730 | 0.9575 | 0.9503 |
+| 3 nm | +2 | 0.8918 | 0.8369 | 0.8379 |
+| 3 nm | +3 | 0.3089 | 0.8602 | 0.8379 |
+
+The rigorous coating multiplies one order by 1.40 and another by 0.08, which
+no reflectivity factor can do. Every scalar model gives about 0.95. The
+**totals agree**: rigorous coated/PEC 0.7945, 0.8271 and 0.9445 at 1.5, 3 and
+4.5 nm, against `local` 0.8047, 0.8400 and 0.9523. (At 4.5 nm order −1 reads
+`nan` in the benchmark: the horizon mask zeroes it in both scalar runs.)
+
+**What it means for coated scalar results.** The total coated/uncoated ratio
+is not reliable in general: it agrees to about 1.5% at the reference
+geometry, but `local` gives 0.0074 and 0.0692 against rigorous 0.0059 and
+0.0611 in the grazing case (25% and 13% high), and 0.294 against 0.514 near
+the critical angle. Per-order coated results were close only in regime and
+well past the critical angle, on the strong orders. Near the critical
+angle the default `local` was the worst of the three models here. `local`
+became the default for reciprocity, which it still uniquely preserves; this is
+the first evidence on its accuracy, and it supports it only in part.
+
+Not covered: the integral solver's reference case was run only at the
+`theory/scalar.md` §9 geometry; no in-regime conical case was run; and the
+cause of the near-critical failure is not established.
