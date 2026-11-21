@@ -55,6 +55,68 @@ class TestGratingEquation:
             sin_beta(1, wavelength=1.0, period=1.0, sin_alpha=0.0, sin_gamma=0.0)
 
 
+class TestGratingEquationFromFloquet:
+    """The conical grating equation derived here from ISSI §2.1, not read off
+    `sin_beta`. Every solver and every analytic oracle in this suite takes its
+    order directions from `sin_beta`, so agreement between them cannot catch
+    a fault in it. This can.
+
+    The derivation uses only ISSI Eq. 6's incident wave vector, Eq. 5's
+    Floquet condition k_x,m = k_x,i + m 2 pi / p along +d, conservation of
+    k_z and |k_m| = k. Gamma and beta_m are then read back off Eq. 6's
+    diffracted form."""
+
+    @staticmethod
+    def _mounts():
+        rng = np.random.default_rng(20261120)
+        for _ in range(2000):
+            yield (
+                rng.uniform(-89.0, 89.0), rng.uniform(0.5, 90.0),
+                rng.uniform(0.1, 1000.0), rng.uniform(100.0, 5000.0),
+                int(rng.integers(-6, 7)),
+            )
+
+    def test_the_incident_vector_is_issi_eq_6(self):
+        from gratinglab.illumination import Illumination
+
+        for alpha, gamma, *_ in self._mounts():
+            a, g = np.radians(alpha), np.radians(gamma)
+            expected = [-np.sin(a) * np.sin(g), -np.cos(a) * np.sin(g), np.cos(g)]
+            got = Illumination(alpha_deg=alpha, gamma_deg=gamma).direction_cosines
+            assert np.allclose(got, expected, rtol=0.0, atol=1e-15)
+
+    def test_sin_beta_and_the_propagation_test_follow_from_floquet(self):
+        propagating = 0
+        for alpha, gamma, lam, period, m in self._mounts():
+            a, g = np.radians(alpha), np.radians(gamma)
+            k_x = -np.sin(a) * np.sin(g) + m * lam / period  # Eq. 5, units of k
+            k_z = np.cos(g)  # conserved
+            k_y_squared = 1.0 - k_x**2 - k_z**2
+            code = sin_beta(m, lam, period, np.sin(a), np.sin(g))
+            assert bool(is_propagating(code)) == (k_y_squared >= 0.0)
+            if k_y_squared < 0.0:
+                continue
+            propagating += 1
+            gamma_m = np.arccos(k_z)  # Eq. 6: k_z = k cos(gamma)
+            assert gamma_m == pytest.approx(g, abs=1e-14)
+            assert code == pytest.approx(k_x / np.sin(gamma_m), abs=1e-12)
+        # A sample that propagated nothing would pass by checking nothing.
+        assert propagating > 500
+
+    def test_the_conical_constructor_is_its_documented_vector(self):
+        """`Illumination.conical(theta, phi)`: polar theta from the normal,
+        azimuth phi from -d, arriving."""
+        from gratinglab.illumination import Illumination
+
+        rng = np.random.default_rng(1)
+        for _ in range(500):
+            theta, phi = rng.uniform(0.0, 89.0), rng.uniform(0.5, 179.5)
+            t, f = np.radians(theta), np.radians(phi)
+            expected = [-np.sin(t) * np.cos(f), -np.cos(t), np.sin(t) * np.sin(f)]
+            got = Illumination.conical(theta, phi).direction_cosines
+            assert np.allclose(got, expected, rtol=0.0, atol=1e-14)
+
+
 class TestOrderBookkeeping:
     def test_always_contains_zero(self):
         orders = order_range(wavelength=2.4, period=160.0, sin_alpha=0.42, sin_gamma=0.026)
