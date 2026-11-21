@@ -586,9 +586,9 @@ has no masks, refuses the combination instead of ignoring it.
 
 Two caveats apply. The mask is based on ray optics, so near passing-off it
 overestimates blocking, because diffraction bends around the apex; the
-vanishing flux obliquity already suppresses those orders. In addition, like the
-geometric mean, it has not yet been validated against a rigorous
-finite-conductivity method. It moved the blaze order from 0.69 toward the
+vanishing flux obliquity already suppresses those orders. In addition, it has
+not been validated against a rigorous finite-conductivity method; the geometric
+mean has since been compared, with mixed results (§9 above). It moved the blaze order from 0.69 toward the
 rigorous 0.21 of the (out-of-regime) perfect-conductor comparison, which is
 suggestive but not proof. It ships as an opt-in so that existing results
 reproduce bit-for-bit; the default will change once a finite-conductivity A/B
@@ -614,11 +614,16 @@ The `facet` column is flat by construction. The `local` column is not, and the
 blaze order changes least, which is how the reduction to $r(\zeta)$ at specular
 appears in the results.
 
-This model has not yet been validated against a rigorous method. The geometric
-mean is a symmetrisation chosen because it preserves the invariant around which
-this solver is built, and not because a vector calculation confirmed it. The
-corpus A/B comparison in [`findings.md`](../findings.md) is the means by which
-it will be judged.
+The geometric mean is a symmetrisation chosen because it preserves the
+invariant around which this solver is built, not because a vector calculation
+confirmed it. It was first checked against the rigorous solvers on 2026-11-20
+([`findings.md`](../findings.md), "The groove-resolved reflectivity model
+against the rigorous solvers"). Well past the critical angle and in regime,
+`local` tracks the rigorous per-order reflectivity where `average` and `facet`
+cannot. Where the groove's local graze straddles the critical angle it is 45%
+low on the specular order, worse than `facet`. Outside the regime, at the
+reference geometry above, no scalar model follows the orders, though the total
+agrees to about 1.5%.
 
 The reflectivity is always computed for unpolarized light, whatever
 polarization the illumination specifies. The $s$ and $p$ of a Fresnel
