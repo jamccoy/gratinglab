@@ -129,8 +129,12 @@ class Illumination(BaseModel):
         Parameters
         ----------
         graze
-            Half-cone opening angle :math:`\\gamma`, degrees, which is the graze
-            angle of the incident wave onto the grating surface.
+            Half-cone opening angle :math:`\\gamma`, degrees: the angle between
+            the incident wave and the grooves (ISSI §2.1). It is the graze onto
+            the grating surface only at ``azimuth = 0``. In general that graze
+            is :math:`\\arcsin(\\cos\\alpha\\sin\\gamma)`, 1.41 degrees for
+            ``graze = 1.5`` at ``azimuth = 20``, so a measured surface graze
+            is not this argument.
         azimuth
             Azimuthal angle :math:`\\alpha`, degrees. Near-Littrow blazed
             operation has ``azimuth`` close to the facet angle.
