@@ -1,10 +1,12 @@
 r"""Optical constants: the readers, the range guard, and the lookup.
 
-The reference values here come from **outside this repo** -- published Henke
-constants and the analytic definition of the critical angle -- because a reader
-checked only against its own output verifies the parser and nothing else. That
-is the same reasoning that put `check_reciprocity` in `checks.py` rather than
-more closed-form tests in `test_scalar.py`.
+The reference values here come from **outside the reader**: the closed form
+that generated the suite's gold table (`tests/data/materials/make_au.py`) and
+the analytic definition of the critical angle. A reader checked only against
+its own output verifies the parser and nothing else. They are not published
+constants: the repository carries none since 2026-11-11, and the Au table is
+invented (`src/gratinglab/materials/data/SOURCES.md`). So these tests catch a
+misread column, unit or sign, and say nothing about real gold.
 """
 
 import os
@@ -158,8 +160,10 @@ class TestTheRangeIsEnforced:
         assert not gold.covers([low - 1e-9, high + 1e-9]).any()
 
 
-class TestAgainstPublishedValues:
-    """Checked outside this repo, so the reader is not merely self-consistent."""
+class TestAgainstTheGeneratorAndTheDefinitions:
+    """Checked against the table's generating formula and the analytic
+    definitions, not against the reader's own output. The table is invented,
+    so nothing here is a published value."""
 
     def test_gold_at_1_nm(self, gold):
         """At 1239.84 eV the suite's table is its generator's closed form,
@@ -222,7 +226,10 @@ class TestLookup:
     def test_the_vendored_table_is_there(self):
         assert "Au" in materials.available()
 
-    def test_and_is_a_real_table(self, gold):
+    def test_and_is_read_as_a_cxro_format_table(self, gold):
+        """The invented table is in CXRO's export layout, so the reader labels
+        its source by that format. The label names the file format, not where
+        the numbers came from."""
         assert len(gold.wavelength_nm) > 100
         assert "CXRO" in gold.source
 

@@ -1408,7 +1408,7 @@ outcomes:
 | R + A = 1 with A from the independent boundary integral (their eq. 26, re-derived; reduces exactly to 1−|r|² on a flat interface, verified analytically before any code ran) | 1e-5 flat; ~1e-4 smooth sinusoid; 1.2e-4 for Au at 2 nm, 1.5° graze, P = 256 |
 | R + T = 1, lossless substrate; boundary integral equals the transmitted Rayleigh sum | few 1e-4; A−T ≤ 9e-5 |
 | Perfect-conductor limit, n = 100i, in-plane and conical | 1.3e-3 (TE) / 7.4e-4 (TM) worst order; the residual is the ~1 nm field penetration, i.e. physics, not error; absorption at numerical zero |
-| G&S Table 3 (dielectric sinusoid, conical, pure E_z; cross-method against Li's CM) | within 6e-5 of every tabulated order, reflected and transmitted, at half their collocation count |
+| G&S Table 3 (dielectric sinusoid, conical, pure E_z; cross-method against Li's CM) | within 7e-5 of every tabulated order (6.5e-5 at worst), reflected and transmitted, at half their collocation count |
 | Lorentz reciprocity, lossy conical Au at X-ray graze | ~5e-5, through `check_reciprocity` unchanged |
 
 Two facts about the regime were established:

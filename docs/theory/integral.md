@@ -312,7 +312,7 @@ Finite conductivity adds its own ladder of tests (`tests/test_integral_finite.py
   monotonically toward the conductor.
 - **Goray & Schmidt Table 3** (dielectric sinusoid, conical, pure E_z incidence;
   itself a cross-method comparison against Li's CM): every tabulated order,
-  reflected and transmitted, reproduced within 6e-5. Their Table 4 was found to
+  reflected and transmitted, reproduced within 7e-5 (6.5e-5 at worst). Their Table 4 was found to
   be a publisher's duplication of Table 3 (`docs/findings.md`).
 - **Lorentz reciprocity survives absorption**: measured at ~5e-5 for Au at X-ray
   grazing incidence through `checks.check_reciprocity`, unchanged.

@@ -172,7 +172,7 @@ The remaining integral milestones, in order, are:
   reference run (see the narrowed open question below): a flat interface
   reproduces Fresnel exactly, the energy theorems hold two-sided, the
   perfect-conductor limit agrees with the integral-method agreement already
-  established, and Goray & Schmidt's own Table 3 is reproduced within 6e-5 per
+  established, and Goray & Schmidt's own Table 3 is reproduced within 7e-5 per
   order. The last of these also showed their Table 4 to be a publisher's
   duplication ([`findings.md`](findings.md)).
 - ~~**Graded corner mesh**~~ (M&P §4.6.6): done for perfect conductivity, as

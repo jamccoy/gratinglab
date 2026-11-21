@@ -320,8 +320,9 @@ class TestGorayShmidtTable3:
     against Li's coordinate transformation method. Their theta = 60 deg,
     phi = 15 deg map to sin_alpha = sin 60, cos_gamma = sin 15, and their
     order n is this project's m = -n (opposite Bloch-phase sign). Measured
-    agreement at these settings: within 6e-5 of every tabulated order,
-    reflected and transmitted (the table itself is quoted to ~1e-4)."""
+    agreement at these settings (2026-11-20): within 7e-5 of every tabulated
+    order, reflected and transmitted, the worst 6.5e-5 in transmitted m = -1.
+    The table is quoted to about 1e-4, which is the tolerance asserted."""
 
     # G&S Table 3 / Li's CM, in fractional units, keyed by our order m.
     REFLECTED = {0: 0.1033, 1: 0.03873, 2: 0.03741, 3: 0.01121}
@@ -348,7 +349,7 @@ class TestGorayShmidtTable3:
         )
         got_r = dict(zip(solution.orders.tolist(), solution.efficiencies))
         for m, expected in self.REFLECTED.items():
-            assert got_r[m] == pytest.approx(expected, abs=2e-3), f"R m={m}"
+            assert got_r[m] == pytest.approx(expected, abs=1e-4), f"R m={m}"
         got_t = dict(
             zip(
                 solution.transmitted_orders.tolist(),
@@ -357,7 +358,7 @@ class TestGorayShmidtTable3:
         )
         assert len(got_t) == len(self.TRANSMITTED)
         for m, expected in self.TRANSMITTED.items():
-            assert got_t[m] == pytest.approx(expected, abs=2e-3), f"T m={m}"
+            assert got_t[m] == pytest.approx(expected, abs=1e-4), f"T m={m}"
         assert solution.total + solution.transmitted_total == pytest.approx(
             1.0, abs=2e-4
         )
