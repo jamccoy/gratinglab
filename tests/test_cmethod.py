@@ -350,22 +350,41 @@ class TestPerfectConductorBenchmarks:
         assert got[1] == pytest.approx(1.0, abs=1e-12)
         assert got[0] == pytest.approx(0.0, abs=1e-12)
 
-    @pytest.mark.parametrize("polarization", ["TE", "TM"])
-    def test_maystre_popov_table_4_1(self, polarization):
-        """Sinusoid 600 nm, depth 180 nm, Littrow at 600 nm. TM matches the
-        printed 0.9579. TE does not match the printed 0.4659: this solver
-        and the integral solver both give 0.466441 (the integral at every
-        mesh from 110 to 512 points), so the gap is in the table, and the
-        pin is the cross-method value."""
+    @staticmethod
+    def _maystre_popov_littrow(polarization):
+        """Sinusoid 600 nm, depth 180 nm, Littrow at 600 nm: the +1 order."""
         problem = Problem(period=600.0, profile=Sinusoidal(depth_fraction=0.3))
         solution = solve_perfect(
             harmonics(problem, 16),
             wavelength=600.0, period=600.0, sin_alpha=0.5, sin_gamma=1.0,
             polarization=polarization,
         )
-        got = by_order(solution.orders, solution.efficiencies)
-        expected = {"TE": 0.466441, "TM": 0.9579}[polarization]
-        assert got[1] == pytest.approx(expected, abs=1e-5 if polarization == "TE" else 1e-4)
+        return by_order(solution.orders, solution.efficiencies)[1]
+
+    def test_maystre_popov_table_4_1_tm(self):
+        """TM matches the printed 0.9579."""
+        assert self._maystre_popov_littrow("TM") == pytest.approx(0.9579, abs=1e-4)
+
+    def test_maystre_popov_table_4_1_te_is_not_reproduced(self):
+        """TE does not match the printed 0.4659. It is held to the integral
+        solver, solved here rather than pinned, and the gap to the table is
+        asserted so that it stays visible. The integral solver gives 0.466441
+        to 0.466443 from 110 to 512 points. The two share geometry and
+        plumbing, so their agreement does not by itself show the table is
+        wrong; that question is open."""
+        from gratinglab.solvers.integral._core import solve_transverse
+
+        got = self._maystre_popov_littrow("TE")
+        boundary = physical_boundary(
+            Problem(period=600.0, profile=Sinusoidal(depth_fraction=0.3)), 256
+        )
+        other = solve_transverse(
+            boundary, wavelength=600.0, period=600.0, sin_alpha=0.5,
+            polarization="TE", terms=50,
+        )
+        integral_te = by_order(other.orders, other.efficiencies)[1]
+        assert got == pytest.approx(integral_te, abs=1e-5)
+        assert 4e-4 < got - 0.4659 < 7e-4
 
 
 class TestEnergyTheorem:
