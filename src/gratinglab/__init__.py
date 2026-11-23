@@ -65,7 +65,7 @@ def __getattr__(name: str):
 def __dir__() -> list[str]:
     return sorted({*globals(), *_LAZY})
 
-__version__ = "0.5.1"
+__version__ = "0.5.2"
 
 #: The day this version was released, ISO 8601. It sits beside the version
 #: rather than being read from CHANGELOG.md at run time because the changelog
@@ -75,7 +75,7 @@ __version__ = "0.5.1"
 #: the `## <version>` heading, so the release commit that forgets to move it
 #: fails at the point where it is cheapest to fix, the same arrangement as
 #: the version's own section.
-__version_date__ = "2026-11-17"
+__version_date__ = "2026-11-23"
 
 __all__ = [
     "Problem",

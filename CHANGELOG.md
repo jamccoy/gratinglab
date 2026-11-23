@@ -10,6 +10,56 @@ version is read from `gratinglab.__version__`, and a release commit moves the
 entries under "Unreleased" into a section named for the new version;
 `tests/test_changelog.py` fails if it does not.
 
+## 0.5.2 (2026-11-23)
+
+A patch release: a docstring fix, new checks and benchmarks, and design
+documents. Nothing a calculation returns has changed.
+
+### Added
+
+- **The conical grating equation is checked from first principles.**
+  `tests/test_geometry.py::TestGratingEquationFromFloquet` derives it from
+  ISSI §2.1 by Floquet, without calling `geometry.sin_beta`, and holds
+  `sin_beta`, the propagation test and the diffraction cone to it over 2000
+  seeded mounts. Every solver takes its order directions from `sin_beta`, so
+  agreement between solvers could not have caught a fault there.
+- **The first-order oracle behind the scalar obliquity factor is checked
+  against the perfect-conductor integral solver**,
+  `tests/test_perturbation.py::TestTheOracleAgainstARigorousSolver`: the
+  Dirichlet (TE) result to 1e-5 and the Neumann (TM) result to 2.2e-4 on a
+  shallow in-plane sinusoid.
+- **`benchmarks/coated_scalar_reflectivity.py`** compares the scalar solver's
+  `local`, `average` and `facet` reflectivity models with the C-method and the
+  integral solver. `local`, the default, follows the per-order reflectivity
+  past the critical angle, but is 45% low on the specular order where a
+  groove's local graze straddles it. `docs/findings.md` and
+  `docs/theory/scalar.md` §9 record the results.
+- **`benchmarks/scalar_transmission.py`**, two candidate scalar transmission
+  phases against the RCWA.
+- **Design proposals, with nothing implemented**:
+  `docs/theory/scalar-transmission.md` (#83) and
+  `docs/theory/groove-map.md`, for curved and variable-line-space grooves on
+  curved substrates. They ship in the wheel with the other theory pages and
+  are not in the Help menu.
+- **`docs/validation.md`**, a draft inventory of the evidence behind each part
+  of the package, sorted by how independent it is.
+
+### Changed
+
+- Three tests say what they check. `test_materials.py` no longer calls its
+  invented gold table published Henke constants. The Goray & Schmidt Table 3
+  test asserts 1e-4 instead of 2e-3, and the documents now say the agreement
+  is within 7e-5. The C-method's Maystre & Popov Table 4.1 TE test compares
+  against the integral solver, solved in the test, and asserts the gap to the
+  printed value, instead of pinning its own number.
+
+### Fixed
+
+- **`Illumination.offplane`'s docstring** said `graze` is the graze onto the
+  grating surface. It is γ, the angle to the grooves, and equals the surface
+  graze only at `azimuth = 0`; in general that graze is
+  arcsin(cos α sin γ). The code always used γ; only the description was wrong.
+
 ## 0.5.1 (2026-11-17)
 
 ### Added
